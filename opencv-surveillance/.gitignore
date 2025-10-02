@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+
+# Database
+*.db
+*.sqlite3
+surveillance.db
+
+# Logs
+*.log
+backend.log
+frontend.log
+
+# Environment variables
+.env
+
+# Frontend
+node_modules/
+dist/
+.DS_Store
+
+# Recordings
+recordings/
+
+# Verification scripts
+jules-scratch/
