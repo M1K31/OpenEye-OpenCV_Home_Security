@@ -1,3 +1,5 @@
+# Copyright (c) 2025 Mikel Smart
+# This file is part of OpenEye.
 from passlib.context import CryptContext
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

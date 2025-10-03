@@ -1,3 +1,5 @@
+// Copyright (c) 2025 Mikel Smart
+// This file is part of OpenEye.
 import React from 'react';
 
 const DashboardPage = ({ onLogout }) => {
