@@ -1,12 +1,21 @@
+# Copyright (c) 2025 Mikel Smart
+# This file is part of OpenEye.
+"""
+Camera Manager - MODIFIED to include face detection
+This replaces your existing camera_manager.py
+"""
+
 import cv2
 import numpy as np
 import time
 from abc import ABC, abstractmethod
 from .motion_detector import MotionDetector
 from .recorder import Recorder
+from .face_detector import FaceDetector  # NEW IMPORT
+
 
 class Camera(ABC):
-    def __init__(self, source):
+    def __init__(self, source, enable_face_detection=True):  # MODIFIED: Added face detection param
         self.source = source
         self.capture = None
         self.is_running = False
@@ -15,6 +24,10 @@ class Camera(ABC):
         self.recorder = Recorder()
         self.last_motion_time = 0
         self.post_motion_cooldown = 5  # seconds to record after motion stops
+
+        # NEW: Face detection integration
+        self.face_detector = FaceDetector(enabled=enable_face_detection)
+        self.last_faces_detected = []
 
     @abstractmethod
     def start(self):
@@ -28,9 +41,19 @@ class Camera(ABC):
     def get_frame(self):
         pass
 
+    # NEW METHODS for face detection
+    def enable_face_detection(self, enabled: bool):
+        """Enable or disable face detection for this camera"""
+        self.face_detector.set_enabled(enabled)
+
+    def get_face_statistics(self):
+        """Get face detection statistics"""
+        return self.face_detector.get_statistics()
+
+
 class MockCamera(Camera):
-    def __init__(self, source="mock"):
-        super().__init__(source)
+    def __init__(self, source="mock", enable_face_detection=True):  # MODIFIED
+        super().__init__(source, enable_face_detection)
         self.width = 640
         self.height = 480
         self.frame = np.zeros((self.height, self.width, 3), dtype=np.uint8)
@@ -62,8 +85,18 @@ class MockCamera(Camera):
         cv2.circle(self.frame, (x, y), 20, (0, 255, 0), -1)
 
         clean_frame = self.frame.copy()
+
+        # Motion detection
         processed_frame, self.motion_detected = self.motion_detector.detect(self.frame.copy())
 
+        # NEW: Face detection
+        if self.face_detector.enabled:
+            processed_frame, self.last_faces_detected = self.face_detector.process_frame(
+                processed_frame,
+                self.motion_detected
+            )
+
+        # Recording logic
         if self.motion_detected:
             self.last_motion_time = time.time()
             if not self.recorder.is_recording:
@@ -79,9 +112,10 @@ class MockCamera(Camera):
 
         return processed_frame, self.motion_detected
 
+
 class RTSPCamera(Camera):
-    def __init__(self, source):
-        super().__init__(source)
+    def __init__(self, source, enable_face_detection=True):  # MODIFIED
+        super().__init__(source, enable_face_detection)
 
     def start(self):
         print(f"Connecting to RTSP stream: {self.source}")
@@ -110,8 +144,17 @@ class RTSPCamera(Camera):
             print("Error: Failed to grab frame from RTSP stream.")
             return None, False
 
+        # Motion detection
         processed_frame, self.motion_detected = self.motion_detector.detect(frame.copy())
 
+        # NEW: Face detection
+        if self.face_detector.enabled:
+            processed_frame, self.last_faces_detected = self.face_detector.process_frame(
+                processed_frame,
+                self.motion_detected
+            )
+
+        # Recording logic
         if self.motion_detected:
             self.last_motion_time = time.time()
             if not self.recorder.is_recording:
@@ -129,6 +172,7 @@ class RTSPCamera(Camera):
 
         return processed_frame, self.motion_detected
 
+
 class CameraManager:
     _instance = None
 
@@ -138,15 +182,15 @@ class CameraManager:
             cls._instance.cameras = {}
         return cls._instance
 
-    def add_camera(self, camera_id, camera_type, source):
+    def add_camera(self, camera_id, camera_type, source, enable_face_detection=True):  # MODIFIED
         if camera_id in self.cameras:
             print(f"Camera with ID '{camera_id}' already exists.")
             return
 
         if camera_type == "rtsp":
-            camera = RTSPCamera(source)
+            camera = RTSPCamera(source, enable_face_detection)
         elif camera_type == "mock":
-            camera = MockCamera(source)
+            camera = MockCamera(source, enable_face_detection)
         else:
             print(f"Unknown camera type: {camera_type}")
             return
@@ -154,7 +198,7 @@ class CameraManager:
         camera.start()
         if camera.is_running:
             self.cameras[camera_id] = camera
-            print(f"Camera '{camera_id}' added and started.")
+            print(f"Camera '{camera_id}' added and started (face detection: {enable_face_detection}).")
         else:
             print(f"Failed to start camera '{camera_id}'.")
 
@@ -166,5 +210,17 @@ class CameraManager:
             self.cameras[camera_id].stop()
             del self.cameras[camera_id]
             print(f"Camera '{camera_id}' removed.")
+
+    # NEW METHOD
+    def get_all_face_detections(self):
+        """Get face detections from all cameras"""
+        all_detections = {}
+        for camera_id, camera in self.cameras.items():
+            all_detections[camera_id] = {
+                'recent_faces': camera.last_faces_detected,
+                'statistics': camera.get_face_statistics()
+            }
+        return all_detections
+
 
 manager = CameraManager()

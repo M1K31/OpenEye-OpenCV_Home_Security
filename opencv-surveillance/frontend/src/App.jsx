@@ -1,3 +1,5 @@
+// Copyright (c) 2025 Mikel Smart
+// This file is part of OpenEye.
 import React, { useState } from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
