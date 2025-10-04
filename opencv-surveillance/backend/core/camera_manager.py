@@ -11,7 +11,7 @@ import time
 from abc import ABC, abstractmethod
 from .motion_detector import MotionDetector
 from .recorder import Recorder
-from .face_detector import FaceDetector  # NEW IMPORT
+from .face_detection import FaceDetector  # NEW IMPORT
 
 
 class Camera(ABC):
