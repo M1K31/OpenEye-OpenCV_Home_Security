@@ -1,25 +1,316 @@
 // Copyright (c) 2025 Mikel Smart
 // This file is part of OpenEye.
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import FaceManagementPage from './FaceManagementPage';
 
 const DashboardPage = ({ onLogout }) => {
+  const [showFaceManagement, setShowFaceManagement] = useState(false);
+  const [recentDetections, setRecentDetections] = useState([]);
+  const [statistics, setStatistics] = useState({});
   const streamUrl = "/api/cameras/mock_cam_1/stream";
+
+  // Load face detection data
+  useEffect(() => {
+    const loadDetections = async () => {
+      try {
+        const response = await axios.get('/api/faces/detections');
+        setRecentDetections(response.data);
+      } catch (error) {
+        console.error('Error loading detections:', error);
+      }
+    };
+
+    const loadStats = async () => {
+      try {
+        const response = await axios.get('/api/faces/statistics');
+        setStatistics(response.data);
+      } catch (error) {
+        console.error('Error loading statistics:', error);
+      }
+    };
+
+    // Initial load
+    loadDetections();
+    loadStats();
+
+    // Refresh every 5 seconds
+    const interval = setInterval(() => {
+      loadDetections();
+      loadStats();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  if (showFaceManagement) {
+    return <FaceManagementPage onBack={() => setShowFaceManagement(false)} />;
+  }
 
   return (
     <div>
-      <h1>Surveillance Dashboard</h1>
-      <div className="video-container">
-        <img src={streamUrl} alt="Live camera stream" className="video-stream" />
+      <header style={styles.header}>
+        <h1>OpenEye Surveillance Dashboard</h1>
+        <div style={styles.headerButtons}>
+          <button onClick={() => setShowFaceManagement(true)} style={styles.faceButton}>
+            👤 Manage Faces
+          </button>
+          <button onClick={onLogout} style={styles.logoutButton}>
+            Logout
+          </button>
+        </div>
+      </header>
+
+      {/* Face Recognition Stats Banner */}
+      {statistics.total_people > 0 && (
+        <div style={styles.statsBanner}>
+          <div style={styles.statItem}>
+            <span style={styles.statLabel}>Known People:</span>
+            <span style={styles.statValue}>{statistics.total_people}</span>
+          </div>
+          <div style={styles.statItem}>
+            <span style={styles.statLabel}>Recognitions Today:</span>
+            <span style={styles.statValue}>{statistics.recognitions_today || 0}</span>
+          </div>
+          <div style={styles.statItem}>
+            <span style={styles.statLabel}>Last Recognition:</span>
+            <span style={styles.statValue}>
+              {statistics.last_recognition 
+                ? new Date(statistics.last_recognition).toLocaleTimeString()
+                : 'Never'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Video Stream */}
+      <div className="video-container" style={styles.videoContainer}>
+        <h2>Live Camera Feed</h2>
+        <img 
+          src={streamUrl} 
+          alt="Live camera stream" 
+          className="video-stream" 
+          style={styles.videoStream}
+        />
+        <div style={styles.streamInfo}>
+          <span style={styles.liveIndicator}>🔴 LIVE</span>
+          <span>Mock Camera 1</span>
+        </div>
       </div>
-      <div style={{ marginTop: '1rem' }}>
-        <Link to="/face-management" style={{ marginRight: '1rem' }}>
-          <button>Manage Faces</button>
-        </Link>
-        <button onClick={onLogout}>Logout</button>
+
+      {/* Recent Face Detections */}
+      <div style={styles.detectionsContainer}>
+        <h2>Recent Face Detections</h2>
+        {Object.keys(recentDetections).length === 0 ? (
+          <p style={styles.noDetections}>
+            No recent face detections. Faces will appear here when detected.
+          </p>
+        ) : (
+          <div style={styles.detectionsGrid}>
+            {Object.entries(recentDetections).map(([cameraId, data]) => (
+              <div key={cameraId} style={styles.cameraDetections}>
+                <h3 style={styles.cameraTitle}>{cameraId}</h3>
+                {data.recent_faces && data.recent_faces.length > 0 ? (
+                  <div style={styles.facesList}>
+                    {data.recent_faces.slice(0, 5).map((face, index) => (
+                      <div 
+                        key={index} 
+                        style={{
+                          ...styles.faceItem,
+                          ...(face.name === 'Unknown' ? styles.faceUnknown : styles.faceKnown)
+                        }}
+                      >
+                        <div style={styles.faceName}>{face.name}</div>
+                        <div style={styles.faceInfo}>
+                          Confidence: {(face.confidence * 100).toFixed(1)}%
+                        </div>
+                        <div style={styles.faceTime}>
+                          {new Date(face.timestamp).toLocaleTimeString()}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={styles.noFaces}>No faces detected on this camera</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Info Section */}
+      <div style={styles.infoSection}>
+        <h3>Features Active:</h3>
+        <ul style={styles.featuresList}>
+          <li>✓ Motion Detection</li>
+          <li>✓ Automatic Recording</li>
+          <li>{statistics.total_people > 0 ? '✓' : '○'} Face Recognition {statistics.total_people === 0 && '(Add people to enable)'}</li>
+          <li>✓ OpenCV Processing</li>
+        </ul>
       </div>
     </div>
   );
+};
+
+const styles = {
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '20px',
+    paddingBottom: '15px',
+    borderBottom: '2px solid #e0e0e0',
+  },
+  headerButtons: {
+    display: 'flex',
+    gap: '10px',
+  },
+  faceButton: {
+    backgroundColor: '#6f42c1',
+    color: 'white',
+    padding: '10px 20px',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontWeight: 'bold',
+  },
+  logoutButton: {
+    backgroundColor: '#dc3545',
+    color: 'white',
+    padding: '10px 20px',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontWeight: 'bold',
+  },
+  statsBanner: {
+    display: 'flex',
+    justifyContent: 'space-around',
+    backgroundColor: '#f8f9fa',
+    padding: '15px',
+    borderRadius: '8px',
+    marginBottom: '20px',
+    border: '1px solid #dee2e6',
+  },
+  statItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+  },
+  statLabel: {
+    fontSize: '0.9em',
+    color: '#6c757d',
+    marginBottom: '5px',
+  },
+  statValue: {
+    fontSize: '1.5em',
+    fontWeight: 'bold',
+    color: '#495057',
+  },
+  videoContainer: {
+    marginBottom: '30px',
+    backgroundColor: '#fff',
+    padding: '20px',
+    borderRadius: '8px',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+  },
+  videoStream: {
+    width: '100%',
+    maxWidth: '800px',
+    border: '2px solid #dee2e6',
+    borderRadius: '8px',
+  },
+  streamInfo: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: '10px',
+    marginTop: '10px',
+    color: '#6c757d',
+  },
+  liveIndicator: {
+    color: '#dc3545',
+    fontWeight: 'bold',
+  },
+  detectionsContainer: {
+    backgroundColor: '#fff',
+    padding: '20px',
+    borderRadius: '8px',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+    marginBottom: '30px',
+  },
+  noDetections: {
+    textAlign: 'center',
+    color: '#6c757d',
+    fontStyle: 'italic',
+    padding: '20px',
+  },
+  detectionsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+    gap: '20px',
+  },
+  cameraDetections: {
+    border: '1px solid #dee2e6',
+    borderRadius: '8px',
+    padding: '15px',
+    backgroundColor: '#f8f9fa',
+  },
+  cameraTitle: {
+    margin: '0 0 15px 0',
+    color: '#495057',
+    fontSize: '1.1em',
+  },
+  facesList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+  },
+  faceItem: {
+    padding: '10px',
+    borderRadius: '6px',
+    border: '1px solid #dee2e6',
+  },
+  faceKnown: {
+    backgroundColor: '#d4edda',
+    borderColor: '#c3e6cb',
+  },
+  faceUnknown: {
+    backgroundColor: '#f8d7da',
+    borderColor: '#f5c6cb',
+  },
+  faceName: {
+    fontWeight: 'bold',
+    fontSize: '1.1em',
+    marginBottom: '5px',
+  },
+  faceInfo: {
+    fontSize: '0.9em',
+    color: '#6c757d',
+  },
+  faceTime: {
+    fontSize: '0.85em',
+    color: '#6c757d',
+    marginTop: '5px',
+  },
+  noFaces: {
+    textAlign: 'center',
+    color: '#6c757d',
+    fontStyle: 'italic',
+    padding: '10px',
+  },
+  infoSection: {
+    backgroundColor: '#e7f3ff',
+    padding: '20px',
+    borderRadius: '8px',
+    borderLeft: '4px solid #007bff',
+  },
+  featuresList: {
+    listStyle: 'none',
+    padding: 0,
+    margin: '10px 0 0 0',
+  },
 };
 
 export default DashboardPage;
