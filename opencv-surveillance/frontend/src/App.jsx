@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
+import FaceManagementPage from './pages/FaceManagementPage';
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
@@ -16,7 +17,7 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     setToken(null);
-  }
+  };
 
   return (
     <Router>
@@ -28,6 +29,10 @@ function App() {
         <Route
           path="/"
           element={token ? <DashboardPage onLogout={handleLogout} /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/face-management"
+          element={token ? <FaceManagementPage /> : <Navigate to="/login" />}
         />
       </Routes>
     </Router>

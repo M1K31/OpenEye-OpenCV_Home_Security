@@ -14,31 +14,6 @@ The core goal of this project is to create a robust and extensible surveillance 
 
 ---
 
-## Phase 1 Features (Complete)
-
-This initial version provides the foundational building blocks of the system. The following features have been implemented:
-
-*   **Project Foundation:**
-    *   Complete backend (FastAPI) and frontend (React) project structure.
-    *   SQLite database for user management.
-*   **User Authentication:**
-    *   Secure user login system with JWT-based authentication.
-    *   API endpoints for user creation and token generation.
-*   **Camera Management:**
-    *   A `CameraManager` to handle multiple camera sources.
-    *   Support for a **mock camera** for development and testing.
-    *   API to add, list, and remove cameras.
-*   **Live Video Streaming:**
-    *   An **MJPEG streaming endpoint** to provide a real-time video feed from any camera.
-    *   A live view in the frontend dashboard that displays the stream after login.
-*   **Basic Motion Detection:**
-    *   Motion detection using OpenCV's MOG2 background subtraction algorithm.
-    *   Visual feedback in the live stream with **bounding boxes** drawn around detected motion.
-*   **Motion-Triggered Recording:**
-    *   Automatic video recording initiated by motion detection.
-    *   Recordings are saved as `.mp4` files in the `opencv-surveillance/recordings/` directory.
-    *   A post-motion cooldown period ensures entire events are captured.
-    *   A visual indicator on the live stream shows when a recording is in progress.
 
 ---
 
