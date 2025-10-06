@@ -13,13 +13,10 @@ import json
 import time
 import json
 from datetime import datetime
-<<<<<<< HEAD
 import asyncio
 from backend.core.alert_manager import get_alert_manager
 
-=======
 from typing import List, Dict, Optional
->>>>>>> 744cc56966de3ca9ee7d51ed5fcd4501bfedfbd4
 
 class Recorder:
     """
@@ -88,8 +85,6 @@ class Recorder:
         if self.is_recording and self.writer:
             self.writer.write(frame)
             self.frame_count += 1
-<<<<<<< HEAD
-=======
 
     def add_face_detection(self, face_data: Dict):
         """
@@ -102,7 +97,6 @@ class Recorder:
             face_data['frame_number'] = self.frame_count
             face_data['timestamp'] = datetime.now().isoformat()
             self.detected_faces.append(face_data)
->>>>>>> 744cc56966de3ca9ee7d51ed5fcd4501bfedfbd4
 
     def stop(self):
         """
@@ -128,7 +122,6 @@ class Recorder:
             
             print(f"Stopped recording. Video saved to {self.filename}")
             print(f"Duration: {duration:.2f}s, Frames: {self.frame_count}, Faces detected: {len(self.detected_faces)}")
-<<<<<<< HEAD
             
             # NEW: Trigger recording stopped alert
             try:
@@ -145,8 +138,6 @@ class Recorder:
                 ))
             except Exception as e:
                 print(f"Error triggering recording alert: {e}")
-=======
->>>>>>> 744cc56966de3ca9ee7d51ed5fcd4501bfedfbd4
         
         # Reset tracking variables
         self.filename = ""
@@ -155,7 +146,6 @@ class Recorder:
         self.recording_start_time = None
         self.frame_count = 0
 
-<<<<<<< HEAD
     def _save_metadata(self, duration, file_size):
         """
         Saves recording metadata to a JSON file.
@@ -194,7 +184,6 @@ class Recorder:
                 **face_data
             }
             self.detected_faces.append(face_entry)
-=======
     def _save_metadata(self, duration: float, file_size: int):
         """
         NEW: Save recording metadata to JSON file
@@ -257,4 +246,3 @@ class Recorder:
             'faces_detected': len(self.detected_faces),
             'unique_people': len(unique_people)
         }
->>>>>>> 744cc56966de3ca9ee7d51ed5fcd4501bfedfbd4

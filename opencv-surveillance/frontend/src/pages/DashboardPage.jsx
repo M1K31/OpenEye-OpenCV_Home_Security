@@ -1,56 +1,16 @@
 // Copyright (c) 2025 Mikel Smart
 // This file is part of OpenEye.
-<<<<<<< HEAD
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-=======
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import FaceManagementPage from './FaceManagementPage';
->>>>>>> 744cc56966de3ca9ee7d51ed5fcd4501bfedfbd4
 
 const DashboardPage = ({ onLogout }) => {
   const [showFaceManagement, setShowFaceManagement] = useState(false);
   const [recentDetections, setRecentDetections] = useState([]);
   const [statistics, setStatistics] = useState({});
   const streamUrl = "/api/cameras/mock_cam_1/stream";
-  const [showFaceManagement, setShowFaceManagement] = useState(false);
   const navigate = useNavigate();
-
-  const styles = {
-    headerButtons: {
-      display: 'flex',
-      gap: '1rem',
-      marginTop: '1rem'
-    },
-    alertButton: {
-      backgroundColor: '#ff9800',
-      color: 'white',
-      padding: '10px 20px',
-      border: 'none',
-      borderRadius: '6px',
-      cursor: 'pointer',
-      fontWeight: 'bold',
-    },
-    faceButton: {
-      backgroundColor: '#2196f3',
-      color: 'white',
-      padding: '10px 20px',
-      border: 'none',
-      borderRadius: '6px',
-      cursor: 'pointer',
-      fontWeight: 'bold',
-    },
-    logoutButton: {
-      backgroundColor: '#f44336',
-      color: 'white',
-      padding: '10px 20px',
-      border: 'none',
-      borderRadius: '6px',
-      cursor: 'pointer',
-      fontWeight: 'bold',
-    }
-  };
 
   // Load face detection data
   useEffect(() => {
@@ -94,6 +54,9 @@ const DashboardPage = ({ onLogout }) => {
       <header style={styles.header}>
         <h1>OpenEye Surveillance Dashboard</h1>
         <div style={styles.headerButtons}>
+          <button onClick={() => navigate('/alerts')} style={styles.alertButton}>
+            🔔 Alert Settings
+          </button>
           <button onClick={() => setShowFaceManagement(true)} style={styles.faceButton}>
             👤 Manage Faces
           </button>
@@ -139,19 +102,6 @@ const DashboardPage = ({ onLogout }) => {
           <span>Mock Camera 1</span>
         </div>
       </div>
-<<<<<<< HEAD
-      
-      <div style={styles.headerButtons}>
-        <button onClick={() => navigate('/alerts')} style={styles.alertButton}>
-          🔔 Alert Settings
-        </button>
-        <button onClick={() => setShowFaceManagement(true)} style={styles.faceButton}>
-          👤 Manage Faces
-        </button>
-        <button onClick={onLogout} style={styles.logoutButton}>
-          Logout
-        </button>
-=======
 
       {/* Recent Face Detections */}
       <div style={styles.detectionsContainer}>
@@ -203,12 +153,12 @@ const DashboardPage = ({ onLogout }) => {
           <li>{statistics.total_people > 0 ? '✓' : '○'} Face Recognition {statistics.total_people === 0 && '(Add people to enable)'}</li>
           <li>✓ OpenCV Processing</li>
         </ul>
->>>>>>> 744cc56966de3ca9ee7d51ed5fcd4501bfedfbd4
       </div>
     </div>
   );
 };
 
+// Styles defined ONCE outside component
 const styles = {
   header: {
     display: 'flex',
@@ -222,8 +172,17 @@ const styles = {
     display: 'flex',
     gap: '10px',
   },
+  alertButton: {
+    backgroundColor: '#ff9800',
+    color: 'white',
+    padding: '10px 20px',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontWeight: 'bold',
+  },
   faceButton: {
-    backgroundColor: '#6f42c1',
+    backgroundColor: '#2196f3',
     color: 'white',
     padding: '10px 20px',
     border: 'none',
@@ -232,7 +191,7 @@ const styles = {
     fontWeight: 'bold',
   },
   logoutButton: {
-    backgroundColor: '#dc3545',
+    backgroundColor: '#f44336',
     color: 'white',
     padding: '10px 20px',
     border: 'none',

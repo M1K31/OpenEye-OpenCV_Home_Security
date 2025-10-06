@@ -1,5 +1,6 @@
 # Copyright (c) 2025 Mikel Smart
 # This file is part of OpenEye.
+
 """
 OpenEye Surveillance System - Main Application
 Complete Phase 2 implementation with face recognition
@@ -12,14 +13,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from backend.database.session import engine
-<<<<<<< HEAD
 from backend.database import models, alert_models
 from backend.api.routes import users, cameras, faces, face_history, alerts
-=======
-from backend.database import models
-from backend.api.routes import users, cameras, faces, face_history
->>>>>>> 744cc56966de3ca9ee7d51ed5fcd4501bfedfbd4
 from backend.core.camera_manager import manager as camera_manager
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(
@@ -28,21 +27,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Load environment variables from .env file
-load_dotenv()
-
-<<<<<<< HEAD
-# Setup logging
-logger = logging.getLogger(__name__)
-
-=======
-# Create database tables
-logger.info("Creating database tables...")
-models.Base.metadata.create_all(bind=engine)
-logger.info("Database tables created successfully")
-
 # Initialize FastAPI application
->>>>>>> 744cc56966de3ca9ee7d51ed5fcd4501bfedfbd4
 app = FastAPI(
     title="OpenEye Surveillance System",
     description="OpenCV-powered surveillance system with face recognition, motion detection, and video recording",
@@ -51,18 +36,6 @@ app = FastAPI(
     redoc_url="/api/redoc"
 )
 
-<<<<<<< HEAD
-@app.on_event("startup")
-def startup_event():
-    """
-    On startup, create database tables and add a default mock camera.
-    """
-    # Create database tables
-    logger.info("Creating database tables...")
-    models.Base.metadata.create_all(bind=engine)
-    alert_models.Base.metadata.create_all(bind=engine)
-    logger.info("Database tables created successfully")
-=======
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
@@ -71,15 +44,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
->>>>>>> 744cc56966de3ca9ee7d51ed5fcd4501bfedfbd4
 
 
 @app.on_event("startup")
 async def startup_event():
     """
-    On startup, initialize the system and add default cameras.
+    On startup, create database tables and add default cameras.
     """
     logger.info("Starting OpenEye Surveillance System...")
+    
+    # Create database tables
+    logger.info("Creating database tables...")
+    models.Base.metadata.create_all(bind=engine)
+    alert_models.Base.metadata.create_all(bind=engine)
+    logger.info("Database tables created successfully")
     
     # Add default mock camera for testing
     if not camera_manager.get_camera("mock_cam_1"):
@@ -90,10 +68,27 @@ async def startup_event():
             source="mock",
             enable_face_detection=True
         )
-<<<<<<< HEAD
-        logger.info("Default mock camera added")
+        logger.info("Default mock camera added successfully")
+    
+    logger.info("OpenEye Surveillance System started successfully!")
+    logger.info("Features enabled: Motion Detection, Face Recognition, Video Recording")
 
-# Include all routers
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """
+    On shutdown, clean up resources.
+    """
+    logger.info("Shutting down OpenEye Surveillance System...")
+    
+    # Stop all cameras
+    for camera_id in list(camera_manager.cameras.keys()):
+        camera_manager.remove_camera(camera_id)
+    
+    logger.info("OpenEye Surveillance System shutdown complete")
+
+
+# Include all API routers (ONCE)
 app.include_router(
     users.router,
     prefix="/api",
@@ -123,53 +118,7 @@ app.include_router(
     prefix="/api",
     tags=["Alerts & Notifications"]
 )
-=======
-        logger.info("Default mock camera added successfully")
-    
-    logger.info("OpenEye Surveillance System started successfully!")
-    logger.info("Features enabled: Motion Detection, Face Recognition, Video Recording")
 
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """
-    On shutdown, clean up resources.
-    """
-    logger.info("Shutting down OpenEye Surveillance System...")
-    
-    # Stop all cameras
-    for camera_id in list(camera_manager.cameras.keys()):
-        camera_manager.remove_camera(camera_id)
-    
-    logger.info("OpenEye Surveillance System shutdown complete")
-
-
-# Include all API routers
-app.include_router(
-    users.router,
-    prefix="/api",
-    tags=["Authentication"]
-)
-
-app.include_router(
-    cameras.router,
-    prefix="/api",
-    tags=["Cameras"]
-)
-
-app.include_router(
-    faces.router,
-    prefix="/api",
-    tags=["Face Recognition"]
-)
-
-app.include_router(
-    face_history.router,
-    prefix="/api/faces",
-    tags=["Face Detection History"]
-)
-
->>>>>>> 744cc56966de3ca9ee7d51ed5fcd4501bfedfbd4
 
 @app.get("/")
 async def read_root():
@@ -179,11 +128,12 @@ async def read_root():
     return {
         "name": "OpenEye Surveillance System",
         "version": "2.0.0",
-<<<<<<< HEAD
-        "features": ["Motion Detection", "Face Recognition", "Video Recording", "Alert System"]
-=======
         "description": "OpenCV-powered surveillance with face recognition",
         "features": [
+            "Motion Detection",
+            "Face Recognition",
+            "Video Recording",
+            "Alert System",
             "Real-time motion detection",
             "Face recognition and identification",
             "Automatic video recording",
@@ -193,7 +143,6 @@ async def read_root():
         ],
         "documentation": "/api/docs",
         "status": "operational"
->>>>>>> 744cc56966de3ca9ee7d51ed5fcd4501bfedfbd4
     }
 
 
