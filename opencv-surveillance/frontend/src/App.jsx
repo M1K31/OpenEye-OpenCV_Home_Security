@@ -5,6 +5,8 @@ import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-d
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import FaceManagementPage from './pages/FaceManagementPage';
+import AlertSettingsPage from './pages/AlertSettingsPage';
+
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
@@ -33,6 +35,11 @@ function App() {
         <Route
           path="/face-management"
           element={token ? <FaceManagementPage /> : <Navigate to="/login" />}
+        />
+        {/* NEW ROUTE */}
+        <Route
+          path="/alerts"
+          element={token ? <AlertSettingsPage /> : <Navigate to="/login" />}
         />
       </Routes>
     </Router>

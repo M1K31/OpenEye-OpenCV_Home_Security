@@ -1,10 +1,47 @@
 // Copyright (c) 2025 Mikel Smart
 // This file is part of OpenEye.
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 
 const DashboardPage = ({ onLogout }) => {
   const streamUrl = "/api/cameras/mock_cam_1/stream";
+  const [showFaceManagement, setShowFaceManagement] = useState(false);
+  const navigate = useNavigate();
+
+  const styles = {
+    headerButtons: {
+      display: 'flex',
+      gap: '1rem',
+      marginTop: '1rem'
+    },
+    alertButton: {
+      backgroundColor: '#ff9800',
+      color: 'white',
+      padding: '10px 20px',
+      border: 'none',
+      borderRadius: '6px',
+      cursor: 'pointer',
+      fontWeight: 'bold',
+    },
+    faceButton: {
+      backgroundColor: '#2196f3',
+      color: 'white',
+      padding: '10px 20px',
+      border: 'none',
+      borderRadius: '6px',
+      cursor: 'pointer',
+      fontWeight: 'bold',
+    },
+    logoutButton: {
+      backgroundColor: '#f44336',
+      color: 'white',
+      padding: '10px 20px',
+      border: 'none',
+      borderRadius: '6px',
+      cursor: 'pointer',
+      fontWeight: 'bold',
+    }
+  };
 
   return (
     <div>
@@ -12,11 +49,17 @@ const DashboardPage = ({ onLogout }) => {
       <div className="video-container">
         <img src={streamUrl} alt="Live camera stream" className="video-stream" />
       </div>
-      <div style={{ marginTop: '1rem' }}>
-        <Link to="/face-management" style={{ marginRight: '1rem' }}>
-          <button>Manage Faces</button>
-        </Link>
-        <button onClick={onLogout}>Logout</button>
+      
+      <div style={styles.headerButtons}>
+        <button onClick={() => navigate('/alerts')} style={styles.alertButton}>
+          🔔 Alert Settings
+        </button>
+        <button onClick={() => setShowFaceManagement(true)} style={styles.faceButton}>
+          👤 Manage Faces
+        </button>
+        <button onClick={onLogout} style={styles.logoutButton}>
+          Logout
+        </button>
       </div>
     </div>
   );

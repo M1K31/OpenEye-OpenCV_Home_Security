@@ -12,7 +12,8 @@ from abc import ABC, abstractmethod
 from .motion_detector import MotionDetector
 from .recorder import Recorder
 from .face_detection import FaceDetector  # NEW IMPORT
-
+import asyncio
+from backend.core.alert_manager import get_alert_manager
 
 class Camera(ABC):
     def __init__(self, source, enable_face_detection=True):  # MODIFIED: Added face detection param
@@ -89,6 +90,18 @@ class MockCamera(Camera):
         # Motion detection
         processed_frame, self.motion_detected = self.motion_detector.detect(self.frame.copy())
 
+        # NEW: Trigger motion alert if motion detected
+        if self.motion_detected:
+            try:
+                alert_manager = get_alert_manager()
+                camera_id = getattr(self, 'camera_id', 'mock_cam')
+                asyncio.create_task(alert_manager.trigger_motion_alert(
+                    camera_id=camera_id,
+                    event_data={'timestamp': time.time()}
+                ))
+            except Exception as e:
+                print(f"Error triggering motion alert: {e}")
+
         # NEW: Face detection
         if self.face_detector.enabled:
             processed_frame, self.last_faces_detected = self.face_detector.process_frame(
@@ -146,6 +159,18 @@ class RTSPCamera(Camera):
 
         # Motion detection
         processed_frame, self.motion_detected = self.motion_detector.detect(frame.copy())
+
+        # NEW: Trigger motion alert if motion detected
+        if self.motion_detected:
+            try:
+                alert_manager = get_alert_manager()
+                camera_id = getattr(self, 'camera_id', 'rtsp_cam')
+                asyncio.create_task(alert_manager.trigger_motion_alert(
+                    camera_id=camera_id,
+                    event_data={'timestamp': time.time()}
+                ))
+            except Exception as e:
+                print(f"Error triggering motion alert: {e}")
 
         # NEW: Face detection
         if self.face_detector.enabled:

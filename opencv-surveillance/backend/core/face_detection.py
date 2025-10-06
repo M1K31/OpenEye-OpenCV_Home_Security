@@ -10,8 +10,11 @@ import numpy as np
 import logging
 from typing import Tuple, List, Dict, Optional
 from datetime import datetime
-
 from backend.core.face_recognition import get_face_manager
+import asyncio
+from backend.core.alert_manager import get_alert_manager
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +92,22 @@ class FaceDetector:
                 for face in detected_faces:
                     face['motion_detected'] = motion_detected
                     self.detections_buffer.append(face)
+                    
+                    # NEW: Trigger face recognition alert
+                    try:
+                        alert_manager = get_alert_manager()
+                        camera_id = getattr(self, 'camera_id', 'unknown')
+                        is_known = face['name'] != 'Unknown'
+                        
+                        asyncio.create_task(alert_manager.trigger_face_recognition_alert(
+                            camera_id=camera_id,
+                            person_name=face['name'],
+                            confidence=face['confidence'],
+                            is_known=is_known,
+                            event_data=face
+                        ))
+                    except Exception as e:
+                        logger.error(f"Error triggering face alert: {e}")
 
                 # Trim buffer to max size
                 if len(self.detections_buffer) > self.max_buffer_size:
