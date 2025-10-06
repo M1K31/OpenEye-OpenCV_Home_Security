@@ -17,8 +17,10 @@ python-dotenv>=1.0.0
 opencv-python>=4.8.0
 numpy>=1.24.0
 face_recognition>=1.3.0
+opencv-contrib-python==4.8.1.78
 
 # Optional: For better performance with face_recognition
+<<<<<<< HEAD
 dlib>=19.24.0  # Uncomment if you want to install dlib separately
 
 # Email notifications
@@ -33,3 +35,8 @@ firebase-admin>=6.3.0
 
 # Async HTTP for webhooks
 aiohttp>=3.9.0
+=======
+dlib>=19.24.0
+pillow>=10.1.0
+python-dateutil>=2.8.2
+>>>>>>> 744cc56966de3ca9ee7d51ed5fcd4501bfedfbd4

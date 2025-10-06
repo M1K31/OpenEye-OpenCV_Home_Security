@@ -1,0 +1,60 @@
+# Copyright (c) 2025 Mikel Smart
+# This file is part of OpenEye.
+
+version: '3.8'
+
+services:
+  # Backend API Server
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: openeye-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist face images
+      - ./opencv-surveillance/faces:/app/faces
+      # Persist recordings
+      - ./opencv-surveillance/recordings:/app/recordings
+      # Persist database
+      - ./opencv-surveillance/surveillance.db:/app/surveillance.db
+      # Mount environment file
+      - ./opencv-surveillance/backend/.env:/app/.env
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-development-secret-key}
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - openeye-network
+
+  # Frontend Web Interface
+  frontend:
+    build:
+      context: ./opencv-surveillance/frontend
+      dockerfile: Dockerfile
+    container_name: openeye-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - openeye-network
+
+networks:
+  openeye-network:
+    driver: bridge
+
+volumes:
+  faces-data:
+  recordings-data:
+  db-data:
