@@ -1,0 +1,424 @@
+# Phase 4: Advanced Features Configuration
+# Complete configuration for all advanced surveillance features
+
+# =============================================================================
+# FACIAL RECOGNITION
+# =============================================================================
+facial_recognition:
+  enabled: true
+  
+  # Face detection model
+  detection:
+    model: dnn  # 'dnn' or 'haar'
+    model_path: models/face_detection_model/res10_300x300_ssd_iter_140000.caffemodel
+    config_path: models/face_detection_model/deploy.prototxt
+    confidence_threshold: 0.5
+  
+  # Face recognition settings
+  recognition:
+    model: hog  # 'hog' (CPU) or 'cnn' (GPU)
+    tolerance: 0.6  # Lower = stricter matching (0.0-1.0)
+    
+  # Database
+  database:
+    path: data/faces/database.pkl
+    face_images_dir: data/faces/images
+    unknown_faces_dir: data/faces/unknown
+    auto_save_unknown: true
+  
+  # Processing
+  processing:
+    max_faces_per_frame: 10
+    cache_timeout: 5  # seconds
+    processing_interval: 0.5  # Process every N seconds
+  
+  # Privacy
+  privacy:
+    blur_unknown_faces: false
+    anonymize_after_days: 90
+    require_consent: true
+  
+  # Performance
+  performance:
+    resize_width: 640  # Resize frames for faster processing
+    skip_frames: 2  # Process every Nth frame
+
+# =============================================================================
+# TWO-WAY AUDIO
+# =============================================================================
+two_way_audio:
+  enabled: true
+  
+  # Audio configuration
+  audio:
+    sample_rate: 16000  # Hz
+    channels: 1  # Mono
+    chunk_size: 1024
+    format: int16
+    
+    # Device selection (null = default)
+    input_device: null
+    output_device: null
+  
+  # Audio processing
+  processing:
+    enable_echo_cancellation: true
+    enable_noise_suppression: true
+    noise_gate_threshold: 500
+    auto_gain_control: true
+  
+  # WebRTC settings
+  webrtc:
+    ice_servers:
+      - urls: stun:stun.l.google.com:19302
+      - urls: turn:your-turn-server.com:3478
+        username: turnuser
+        credential: turnpass
+    
+    # Recording
+    recording:
+      enabled: true
+      output_dir: data/audio_recordings
+      format: wav
+      auto_delete_after_days: 30
+
+# =============================================================================
+# TIMELINE & PLAYBACK
+# =============================================================================
+timeline:
+  enabled: true
+  
+  # Database
+  database:
+    path: data/timeline/events.json
+    auto_save_interval: 60  # seconds
+  
+  # Event storage
+  events:
+    retention_days: 90
+    max_events: 100000
+    thumbnail_generation: true
+    thumbnail_size: [320, 180]
+  
+  # Video playback
+  playback:
+    recordings_dir: data/recordings
+    thumbnails_dir: data/thumbnails
+    clips_dir: data/clips
+    
+    # Playback options
+    default_speed: 1.0
+    speed_options: [0.25, 0.5, 1.0, 2.0, 4.0]
+    seek_step: 5  # seconds
+    
+    # Clip export
+    export:
+      default_format: mp4
+      default_codec: h264
+      quality: high  # low, medium, high
+      max_clip_duration: 300  # seconds
+
+# =============================================================================
+# ALERTS & NOTIFICATIONS
+# =============================================================================
+alerts:
+  enabled: true
+  
+  # Alert rules storage
+  rules:
+    config_path: config/alerts.json
+    auto_reload: true
+  
+  # Email notifications
+  email:
+    enabled: true
+    smtp_host: smtp.gmail.com
+    smtp_port: 587
+    username: your_email@gmail.com
+    password: your_app_password
+    from_email: surveillance@example.com
+    use_tls: true
+    
+    # Templates
+    templates:
+      motion_alert: |
+        Motion detected on camera {camera_id} at {timestamp}.
+        Confidence: {confidence}
+      
+      face_detected: |
+        Face recognized: {face_name}
+        Camera: {camera_id}
+        Time: {timestamp}
+        Confidence: {confidence}
+  
+  # SMS notifications (Twilio)
+  sms:
+    enabled: false
+    account_sid: your_twilio_sid
+    auth_token: your_twilio_token
+    from_number: "+1234567890"
+  
+  # Push notifications (Firebase)
+  push:
+    enabled: false
+    fcm_server_key: your_fcm_key
+  
+  # Telegram
+  telegram:
+    enabled: false
+    bot_token: your_telegram_bot_token
+  
+  # Discord
+  discord:
+    enabled: false
+    webhook_url: https://discord.com/api/webhooks/...
+  
+  # Default alert rules
+  default_rules:
+    - id: motion_night
+      name: Motion Detection at Night
+      enabled: true
+      event_types:
+        - motion_detected
+      time_range:
+        start: "22:00"
+        end: "06:00"
+      channels:
+        - email
+      priority: high
+      recipients:
+        - admin@example.com
+      cooldown_seconds: 300
+      max_per_hour: 10
+    
+    - id: face_unknown
+      name: Unknown Face Alert
+      enabled: true
+      event_types:
+        - face_detected
+      conditions:
+        face_name: unknown
+      channels:
+        - email
+        - push
+      priority: medium
+      recipients:
+        - admin@example.com
+
+# =============================================================================
+# CLOUD STORAGE
+# =============================================================================
+cloud_storage:
+  enabled: true
+  
+  # Primary provider
+  primary_provider: s3_primary
+  
+  # Storage providers
+  providers:
+    s3_primary:
+      type: aws_s3
+      bucket_name: surveillance-recordings
+      region: us-east-1
+      prefix: camera_recordings
+      credentials:
+        access_key_id: YOUR_AWS_ACCESS_KEY
+        secret_access_key: YOUR_AWS_SECRET_KEY
+    
+    google_cloud_backup:
+      type: google_cloud
+      bucket_name: surveillance-backup
+      prefix: recordings
+      credentials:
+        credentials_file: /path/to/gcp-credentials.json
+    
+    azure_archive:
+      type: azure_blob
+      bucket_name: surveillance-archive
+      prefix: archive
+      credentials:
+        connection_string: YOUR_AZURE_CONNECTION_STRING
+  
+  # Upload settings
+  upload:
+    auto_upload: true
+    upload_on_event: true
+    upload_interval: 300  # Upload every 5 minutes
+    upload_priority:
+      motion: 7
+      face_detected: 8
+      manual: 10
+    
+    # Bandwidth management
+    max_concurrent_uploads: 3
+    bandwidth_limit_mbps: 10
+    upload_during_hours:
+      start: "00:00"
+      end: "06:00"  # Upload overnight
+  
+  # Retention policies
+  retention:
+    local_retention_days: 7
+    cloud_retention_days: 90
+    auto_cleanup: true
+    cleanup_interval: 86400  # Daily
+    
+    # Archive old recordings
+    archive_enabled: true
+    archive_after_days: 30
+    archive_provider: azure_archive
+
+# =============================================================================
+# OBJECT DETECTION (Optional Advanced Feature)
+# =============================================================================
+object_detection:
+  enabled: false
+  
+  # Model selection
+  model:
+    type: yolov5  # yolov5, yolov8, or mobilenet
+    weights_path: models/yolov5s.pt
+    confidence_threshold: 0.5
+    iou_threshold: 0.45
+  
+  # Detection classes
+  classes:
+    enabled:
+      - person
+      - car
+      - truck
+      - bicycle
+      - dog
+      - cat
+    
+    # Class-specific alerts
+    alerts:
+      person:
+        enabled: true
+        confidence: 0.7
+      car:
+        enabled: false
+      dog:
+        enabled: true
+        confidence: 0.6
+  
+  # Processing
+  processing:
+    interval: 1.0  # seconds
+    max_detections: 20
+    track_objects: true
+
+# =============================================================================
+# ADVANCED MOTION DETECTION
+# =============================================================================
+advanced_motion:
+  enabled: true
+  
+  # Motion detection algorithm
+  algorithm: mog2  # 'mog2', 'knn', or 'framediff'
+  
+  # Sensitivity
+  sensitivity: medium  # low, medium, high
+  
+  # Detection zones (polygon coordinates)
+  zones:
+    camera_1:
+      - name: front_door
+        points: [[100, 100], [200, 100], [200, 200], [100, 200]]
+        sensitivity: high
+        enabled: true
+      
+      - name: driveway
+        points: [[300, 150], [600, 150], [600, 400], [300, 400]]
+        sensitivity: medium
+        enabled: true
+  
+  # Post-processing
+  post_processing:
+    min_area: 500  # Minimum motion area in pixels
+    blur_size: 21  # Gaussian blur kernel size
+    dilate_iterations: 2
+    
+    # False positive reduction
+    debounce_time: 2  # seconds
+    min_duration: 1  # seconds
+
+# =============================================================================
+# PERFORMANCE & OPTIMIZATION
+# =============================================================================
+performance:
+  # Processing
+  max_fps: 15  # Maximum frames per second to process
+  
+  # Threading
+  worker_threads: 4
+  processing_queue_size: 100
+  
+  # GPU acceleration
+  use_gpu: false
+  gpu_device_id: 0
+  
+  # Memory management
+  max_memory_mb: 2048
+  clear_cache_interval: 3600  # seconds
+
+# =============================================================================
+# LOGGING
+# =============================================================================
+logging:
+  level: INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  
+  # Module-specific logging
+  modules:
+    facial_recognition: INFO
+    two_way_audio: INFO
+    timeline: INFO
+    alerts: INFO
+    cloud_storage: INFO
+  
+  # Log files
+  file:
+    enabled: true
+    path: logs/phase4.log
+    max_size: 10485760  # 10MB
+    backup_count: 5
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # Syslog
+  syslog:
+    enabled: false
+    host: localhost
+    port: 514
+
+# =============================================================================
+# SECURITY & PRIVACY
+# =============================================================================
+security:
+  # Encryption
+  encryption:
+    enabled: true
+    encrypt_recordings: true
+    encrypt_face_database: true
+    encryption_key_path: config/encryption.key
+  
+  # Access control
+  access_control:
+    require_authentication: true
+    session_timeout: 3600  # seconds
+    max_failed_attempts: 5
+    lockout_duration: 900  # seconds
+  
+  # Privacy compliance
+  privacy:
+    gdpr_compliant: true
+    anonymize_faces: false
+    data_retention_notice: true
+    consent_required: true
+  
+  # Audit logging
+  audit:
+    enabled: true
+    log_access: true
+    log_exports: true
+    log_deletions: true
+    audit_log_path: logs/audit.log

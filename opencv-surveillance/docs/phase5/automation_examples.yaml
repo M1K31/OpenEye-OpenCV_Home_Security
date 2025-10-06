@@ -1,0 +1,424 @@
+# ============================================================================
+# HOME ASSISTANT AUTOMATIONS
+# Example automations using OpenCV Surveillance cameras
+# ============================================================================
+
+# -----------------------------------------------------------------------------
+# MOTION DETECTION AUTOMATIONS
+# -----------------------------------------------------------------------------
+
+# Send notification when motion detected at night
+- id: motion_detected_night
+  alias: "Alert: Motion Detected at Night"
+  description: Send notification when motion detected between 10 PM and 6 AM
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.front_door_camera_motion
+      to: 'on'
+  condition:
+    - condition: time
+      after: '22:00:00'
+      before: '06:00:00'
+  action:
+    - service: notify.mobile_app
+      data:
+        title: "⚠️ Motion Detected"
+        message: "Motion detected at front door at {{ now().strftime('%I:%M %p') }}"
+        data:
+          image: /api/camera_proxy/camera.front_door_camera
+          push:
+            sound:
+              name: default
+              critical: 1
+              volume: 1.0
+
+# Turn on lights when motion detected
+- id: motion_lights_on
+  alias: "Lights: Turn on when motion detected"
+  description: Turn on porch light when motion detected at front door
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.front_door_camera_motion
+      to: 'on'
+  condition:
+    - condition: sun
+      after: sunset
+      before: sunrise
+  action:
+    - service: light.turn_on
+      target:
+        entity_id: light.front_porch
+      data:
+        brightness: 255
+    - delay:
+        minutes: 5
+    - service: light.turn_off
+      target:
+        entity_id: light.front_porch
+
+# -----------------------------------------------------------------------------
+# FACE RECOGNITION AUTOMATIONS
+# -----------------------------------------------------------------------------
+
+# Welcome home automation
+- id: welcome_home
+  alias: "Welcome: Known Person Detected"
+  description: Turn on lights and send welcome message when known person detected
+  trigger:
+    - platform: mqtt
+      topic: opencv_surveillance/events/face_detected
+  condition:
+    - condition: template
+      value_template: "{{ trigger.payload_json.face_name != 'unknown' }}"
+  action:
+    - service: light.turn_on
+      target:
+        area_id: living_room
+    - service: tts.google_translate_say
+      target:
+        entity_id: media_player.home_speaker
+      data:
+        message: "Welcome home, {{ trigger.payload_json.face_name }}!"
+
+# Alert on unknown person
+- id: unknown_person_alert
+  alias: "Alert: Unknown Person Detected"
+  description: Send alert when unknown person detected
+  trigger:
+    - platform: mqtt
+      topic: opencv_surveillance/events/face_detected
+  condition:
+    - condition: template
+      value_template: "{{ trigger.payload_json.face_name == 'unknown' }}"
+    - condition: template
+      value_template: "{{ trigger.payload_json.confidence > 0.8 }}"
+  action:
+    - service: notify.mobile_app
+      data:
+        title: "🚨 Unknown Person Detected"
+        message: "Unknown person detected at {{ trigger.payload_json.camera_id }} with {{ (trigger.payload_json.confidence * 100) | int }}% confidence"
+        data:
+          image: /api/camera_proxy/camera.{{ trigger.payload_json.camera_id }}
+          actions:
+            - action: "VIEW_CAMERA"
+              title: "View Camera"
+            - action: "START_RECORDING"
+              title: "Start Recording"
+
+# -----------------------------------------------------------------------------
+# RECORDING AUTOMATIONS
+# -----------------------------------------------------------------------------
+
+# Auto-record when motion detected
+- id: auto_record_motion
+  alias: "Recording: Start on motion detection"
+  description: Automatically start recording when motion detected
+  trigger:
+    - platform: state
+      entity_id:
+        - binary_sensor.front_door_camera_motion
+        - binary_sensor.backyard_camera_motion
+      to: 'on'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: "opencv_surveillance/command/{{ trigger.entity_id.split('.')[1].replace('_motion', '') }}"
+        payload: '{"type": "start_recording", "duration": 300}'
+    - delay:
+        seconds: 300
+    - service: mqtt.publish
+      data:
+        topic: "opencv_surveillance/command/{{ trigger.entity_id.split('.')[1].replace('_motion', '') }}"
+        payload: '{"type": "stop_recording"}'
+
+# Record when away from home
+- id: record_when_away
+  alias: "Recording: Auto-record when away"
+  description: Enable recording on all cameras when everyone leaves home
+  trigger:
+    - platform: state
+      entity_id: group.all_persons
+      to: 'not_home'
+      for:
+        minutes: 5
+  action:
+    - service: mqtt.publish
+      data:
+        topic: "opencv_surveillance/command/+"
+        payload: '{"type": "enable_motion_detection"}'
+
+# Stop recording when home
+- id: stop_record_when_home
+  alias: "Recording: Disable when home"
+  description: Disable motion detection when someone arrives home
+  trigger:
+    - platform: state
+      entity_id: group.all_persons
+      to: 'home'
+  action:
+    - service: mqtt.publish
+      data:
+        topic: "opencv_surveillance/command/+"
+        payload: '{"type": "disable_motion_detection"}'
+
+# -----------------------------------------------------------------------------
+# MULTI-CAMERA AUTOMATIONS
+# -----------------------------------------------------------------------------
+
+# Perimeter breach detection
+- id: perimeter_breach
+  alias: "Security: Perimeter Breach"
+  description: Alert when multiple cameras detect motion simultaneously
+  trigger:
+    - platform: state
+      entity_id:
+        - binary_sensor.front_door_camera_motion
+        - binary_sensor.side_gate_camera_motion
+        - binary_sensor.backyard_camera_motion
+      to: 'on'
+  condition:
+    - condition: template
+      value_template: >
+        {{ expand('binary_sensor.front_door_camera_motion',
+                  'binary_sensor.side_gate_camera_motion',
+                  'binary_sensor.backyard_camera_motion')
+           | selectattr('state', 'eq', 'on')
+           | list | count >= 2 }}
+  action:
+    - service: notify.mobile_app
+      data:
+        title: "🚨 PERIMETER BREACH"
+        message: "Multiple cameras detecting motion!"
+        data:
+          push:
+            sound:
+              name: default
+              critical: 1
+              volume: 1.0
+    - service: light.turn_on
+      target:
+        entity_id: all
+      data:
+        brightness: 255
+
+# -----------------------------------------------------------------------------
+# INTEGRATION WITH OTHER SERVICES
+# -----------------------------------------------------------------------------
+
+# Send snapshot to Telegram when doorbell pressed
+- id: doorbell_telegram
+  alias: "Doorbell: Send Telegram notification"
+  description: Send camera snapshot to Telegram when doorbell pressed
+  trigger:
+    - platform: mqtt
+      topic: opencv_surveillance/events/doorbell_pressed
+  action:
+    - service: telegram_bot.send_photo
+      data:
+        url: "http://localhost:8081/api/camera/{{ trigger.payload_json.camera_id }}/snapshot"
+        caption: "🔔 Doorbell pressed at {{ now().strftime('%I:%M %p') }}"
+        keyboard:
+          - - text: "Open Door"
+              callback_data: "/open_door"
+          - - text: "Two-way Audio"
+              callback_data: "/audio_{{ trigger.payload_json.camera_id }}"
+
+# Save snapshot to Google Drive when motion detected
+- id: motion_gdrive_backup
+  alias: "Backup: Save snapshots to Google Drive"
+  description: Automatically save snapshots to Google Drive
+  trigger:
+    - platform: state
+      entity_id:
+        - binary_sensor.front_door_camera_motion
+      to: 'on'
+  action:
+    - service: shell_command.save_to_gdrive
+      data:
+        camera_id: "{{ trigger.entity_id.split('.')[1].replace('_motion', '') }}"
+
+# -----------------------------------------------------------------------------
+# SCHEDULED AUTOMATIONS
+# -----------------------------------------------------------------------------
+
+# Daily health check
+- id: daily_health_check
+  alias: "System: Daily health check"
+  description: Check camera and system status daily
+  trigger:
+    - platform: time
+      at: '09:00:00'
+  action:
+    - service: notify.mobile_app
+      data:
+        title: "📊 Daily Surveillance Report"
+        message: >
+          Cameras online: {{ states.camera | selectattr('state', 'eq', 'streaming') | list | count }}
+          Storage: {{ states('sensor.opencv_surveillance_storage_used') }} GB
+          Events today: {{ states('sensor.opencv_surveillance_events_today') }}
+
+# Weekly cleanup
+- id: weekly_cleanup
+  alias: "Maintenance: Weekly cleanup"
+  description: Clean up old recordings weekly
+  trigger:
+    - platform: time
+      at: '02:00:00'
+  condition:
+    - condition: time
+      weekday:
+        - mon
+  action:
+    - service: mqtt.publish
+      data:
+        topic: "opencv_surveillance/command/system"
+        payload: '{"type": "cleanup_old_recordings", "days": 7}'
+
+# ============================================================================
+# NODE-RED FLOWS (JSON format)
+# ============================================================================
+# Copy this JSON into Node-RED for visual automation building
+#
+# [
+#   {
+#     "id": "motion_flow",
+#     "type": "mqtt in",
+#     "topic": "opencv_surveillance/camera/+/motion",
+#     "broker": "mqtt_broker",
+#     "name": "Motion Events",
+#     "wires": [["process_motion"]]
+#   },
+#   {
+#     "id": "process_motion",
+#     "type": "function",
+#     "func": "if (msg.payload === 'ON') {\n  msg.payload = {\n    type: 'start_recording',\n    duration: 300\n  };\n  return msg;\n}",
+#     "wires": [["send_command"]]
+#   },
+#   {
+#     "id": "send_command",
+#     "type": "mqtt out",
+#     "topic": "opencv_surveillance/command/camera_1",
+#     "broker": "mqtt_broker",
+#     "name": "Send Command"
+#   }
+# ]
+
+# ============================================================================
+# SHELL COMMANDS (Add to Home Assistant configuration.yaml)
+# ============================================================================
+shell_command:
+  save_to_gdrive: >
+    python3 /config/scripts/save_snapshot.py 
+    --camera {{ camera_id }}
+    --destination /mnt/gdrive/surveillance/
+  
+  start_recording: >
+    curl -X POST http://localhost:8081/api/camera/{{ camera_id }}/recording/start
+  
+  stop_recording: >
+    curl -X POST http://localhost:8081/api/camera/{{ camera_id }}/recording/stop
+  
+  take_snapshot: >
+    curl -X POST http://localhost:8081/api/camera/{{ camera_id }}/snapshot
+    -o /config/www/snapshots/{{ camera_id }}_{{ now().strftime('%Y%m%d_%H%M%S') }}.jpg
+
+# ============================================================================
+# LOVELACE DASHBOARD (UI Configuration)
+# ============================================================================
+views:
+  - title: Surveillance
+    path: surveillance
+    icon: mdi:cctv
+    cards:
+      # Camera grid
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: picture-entity
+            entity: camera.front_door_camera
+            camera_view: live
+            name: Front Door
+            show_state: false
+            tap_action:
+              action: more-info
+          
+          - type: picture-entity
+            entity: camera.backyard_camera
+            camera_view: live
+            name: Backyard
+            show_state: false
+      
+      # Motion sensors
+      - type: entities
+        title: Motion Detection
+        entities:
+          - entity: binary_sensor.front_door_camera_motion
+            name: Front Door Motion
+          - entity: binary_sensor.backyard_camera_motion
+            name: Backyard Motion
+          - entity: binary_sensor.side_gate_camera_motion
+            name: Side Gate Motion
+      
+      # System status
+      - type: vertical-stack
+        cards:
+          - type: sensor
+            entity: sensor.opencv_surveillance_cpu_usage
+            name: CPU Usage
+            graph: line
+          
+          - type: sensor
+            entity: sensor.opencv_surveillance_storage_used
+            name: Storage Used
+            graph: line
+      
+      # Quick actions
+      - type: horizontal-stack
+        cards:
+          - type: button
+            name: Record All
+            icon: mdi:record-rec
+            tap_action:
+              action: call-service
+              service: mqtt.publish
+              service_data:
+                topic: opencv_surveillance/command/+
+                payload: '{"type":"start_recording"}'
+          
+          - type: button
+            name: Snapshot All
+            icon: mdi:camera
+            tap_action:
+              action: call-service
+              service: mqtt.publish
+              service_data:
+                topic: opencv_surveillance/command/+
+                payload: '{"type":"snapshot"}'
+
+# ============================================================================
+# ALEXA/GOOGLE ASSISTANT INTEGRATION
+# ============================================================================
+
+# Expose cameras to Alexa/Google
+# Add this to configuration.yaml:
+#
+# alexa:
+#   smart_home:
+#     filter:
+#       include_entities:
+#         - camera.front_door_camera
+#         - camera.backyard_camera
+#
+# google_assistant:
+#   project_id: your-project-id
+#   exposed_domains:
+#     - camera
+#   entity_config:
+#     camera.front_door_camera:
+#       name: Front Door Camera
+#       expose: true
+
+# Voice commands:
+# "Alexa, show front door camera"
+# "Hey Google, show backyard camera on living room TV"
