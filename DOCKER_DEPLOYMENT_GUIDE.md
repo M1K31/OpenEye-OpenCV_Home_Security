@@ -4,8 +4,13 @@ This guide covers deploying OpenEye using Docker with the new first-run setup wi
 
 ## Table of Contents
 - [Quick Start](#quick-start)
+  - [Using Docker Run](#using-docker-run)
+  - [Using Docker Compose](#using-docker-compose)
+  - [Using Docker Desktop (GUI)](#using-docker-desktop-gui)
 - [First-Run Setup](#first-run-setup)
 - [Configuration](#configuration)
+  - [Understanding SECRET_KEY and JWT_SECRET_KEY](#understanding-secret_key-and-jwt_secret_key)
+  - [Optional Environment Variables](#optional-environment-variables)
 - [Docker Compose](#docker-compose)
 - [Production Deployment](#production-deployment)
 - [Troubleshooting](#troubleshooting)
@@ -14,21 +19,27 @@ This guide covers deploying OpenEye using Docker with the new first-run setup wi
 
 ## Quick Start
 
+> **⚠️ IMPORTANT**: Before starting, you MUST set `SECRET_KEY` and `JWT_SECRET_KEY` environment variables for security. See the [Configuration](#understanding-secret_key-and-jwt_secret_key) section for details.
+
 ### Using Docker Run
 
 ```bash
-# Pull the latest image
+# STEP 1: Generate secure random keys (REQUIRED)
+export SECRET_KEY=$(openssl rand -hex 32)
+export JWT_SECRET_KEY=$(openssl rand -hex 32)
+
+# STEP 2: Pull the latest image
 docker pull im1k31s/openeye-opencv_home_security:latest
 
-# Run with default settings
+# STEP 3: Run with your generated keys
 docker run -d \
   --name openeye \
   -p 8000:8000 \
   -v $(pwd)/data:/app/data \
   -v $(pwd)/config:/app/config \
   -v $(pwd)/models:/app/models \
-  -e SECRET_KEY=your-secret-key-change-this \
-  -e JWT_SECRET_KEY=your-jwt-secret-key-change-this \
+  -e SECRET_KEY=$SECRET_KEY \
+  -e JWT_SECRET_KEY=$JWT_SECRET_KEY \
   im1k31s/openeye-opencv_home_security:latest
 ```
 
@@ -42,7 +53,11 @@ cd OpenEye/opencv-surveillance
 # Copy environment file
 cp .env.example .env
 
-# Edit .env with your settings (see Configuration section)
+# IMPORTANT: Generate and add secret keys to .env file
+echo "SECRET_KEY=$(openssl rand -hex 32)" >> .env
+echo "JWT_SECRET_KEY=$(openssl rand -hex 32)" >> .env
+
+# Edit .env with any additional settings (see Configuration section)
 nano .env
 
 # Start services
@@ -51,6 +66,192 @@ docker-compose up -d
 # View logs
 docker-compose logs -f openeye
 ```
+
+### Using Docker Desktop (GUI)
+
+Perfect for users who prefer a graphical interface! Follow these step-by-step instructions:
+
+#### Step 1: Generate Secret Keys
+
+First, generate your required secret keys. Open Terminal (Mac/Linux) or PowerShell (Windows):
+
+**Mac/Linux:**
+```bash
+openssl rand -hex 32
+# Copy the output - this is your SECRET_KEY
+
+openssl rand -hex 32
+# Copy the output - this is your JWT_SECRET_KEY
+```
+
+**Windows (PowerShell):**
+```powershell
+# Generate SECRET_KEY
+[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Minimum 0 -Maximum 256 }))
+
+# Generate JWT_SECRET_KEY
+[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Minimum 0 -Maximum 256 }))
+```
+
+**Alternative: Use Python (All platforms):**
+```bash
+python -c "import secrets; print('SECRET_KEY:', secrets.token_hex(32))"
+python -c "import secrets; print('JWT_SECRET_KEY:', secrets.token_hex(32))"
+```
+
+Keep these keys somewhere safe - you'll need them in the next steps!
+
+#### Step 2: Pull the Image
+
+1. Open **Docker Desktop**
+2. Click on the **Images** tab in the left sidebar
+3. Click **Pull** (or the search icon)
+4. Enter: `im1k31s/openeye-opencv_home_security:latest`
+5. Click **Pull**
+6. Wait for the download to complete (~1.75GB)
+
+![Docker Desktop Pull Image](https://via.placeholder.com/800x400?text=Docker+Desktop+-+Pull+Image)
+
+#### Step 3: Run the Container
+
+1. In Docker Desktop, go to **Images** tab
+2. Find `im1k31s/openeye-opencv_home_security:latest`
+3. Click the **▶ Run** button (play icon) on the right
+4. Click **Optional settings** to expand the configuration panel
+
+#### Step 4: Configure Container Settings
+
+**Container Name:**
+```
+openeye
+```
+
+**Ports:**
+- Click **+** to add a port mapping
+- Host Port: `8000`
+- Container Port: `8000`
+
+**Volumes (Data Persistence):**
+Click **+** three times to add these volume mappings:
+
+1. **For recordings and data:**
+   - Host Path: `/path/to/your/data` (e.g., `/Users/yourname/openeye/data`)
+   - Container Path: `/app/data`
+
+2. **For configuration files:**
+   - Host Path: `/path/to/your/config` (e.g., `/Users/yourname/openeye/config`)
+   - Container Path: `/app/config`
+
+3. **For face recognition models:**
+   - Host Path: `/path/to/your/models` (e.g., `/Users/yourname/openeye/models`)
+   - Container Path: `/app/models`
+
+> 💡 **Tip**: Create these folders on your computer first. Docker Desktop will create them automatically if they don't exist, but it's better to know where they are!
+
+**Windows Example Paths:**
+```
+C:\Users\YourName\openeye\data
+C:\Users\YourName\openeye\config
+C:\Users\YourName\openeye\models
+```
+
+**Mac/Linux Example Paths:**
+```
+/Users/yourname/openeye/data
+/Users/yourname/openeye/config
+/Users/yourname/openeye/models
+```
+
+#### Step 5: Add Environment Variables
+
+This is the **MOST IMPORTANT** step! Click on the **Environment** tab and add these variables:
+
+**Required (Security Keys):**
+```
+SECRET_KEY=<paste-your-generated-key-from-step-1>
+JWT_SECRET_KEY=<paste-your-other-generated-key-from-step-1>
+```
+
+**Example:**
+```
+SECRET_KEY=a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456
+JWT_SECRET_KEY=9876543210fedcba0987654321fedcba0987654321fedcba0987654321fedcba
+```
+
+**Optional (Add if you want email/Telegram notifications):**
+
+For Gmail notifications:
+```
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-email@gmail.com
+SMTP_PASSWORD=your-gmail-app-password
+SMTP_FROM_ADDRESS=your-email@gmail.com
+```
+
+For Telegram notifications:
+```
+TELEGRAM_BOT_TOKEN=your-bot-token
+TELEGRAM_CHAT_ID=your-chat-id
+```
+
+For ntfy.sh push notifications:
+```
+NTFY_TOPIC=openeye-alerts-unique-name
+NTFY_SERVER=https://ntfy.sh
+```
+
+#### Step 6: Start the Container
+
+1. Review all your settings
+2. Click **Run** at the bottom
+3. Docker Desktop will create and start your container
+
+#### Step 7: Verify It's Running
+
+1. Go to the **Containers** tab in Docker Desktop
+2. You should see `openeye` with a green "Running" status
+3. Click on the container name to see logs
+4. Look for: `Application startup complete` or `Uvicorn running on http://0.0.0.0:8000`
+
+#### Step 8: Access OpenEye
+
+1. Open your web browser
+2. Navigate to: `http://localhost:8000`
+3. You'll see the **First-Run Setup Wizard** 🎉
+4. Follow the 3-step wizard to create your admin account
+5. Start using OpenEye!
+
+#### Troubleshooting Docker Desktop
+
+**Container won't start?**
+- Check the logs by clicking on the container name
+- Verify you added both `SECRET_KEY` and `JWT_SECRET_KEY`
+- Make sure port 8000 isn't already in use
+
+**Can't access http://localhost:8000?**
+- Wait 30 seconds for the application to fully start
+- Check the container is running (green status)
+- Try `http://127.0.0.1:8000` instead
+- Check your firewall settings
+
+**Need to change environment variables?**
+1. Stop the container (click ■ stop button)
+2. Delete the container (click 🗑️ delete button)
+3. Start over from Step 3 with new settings
+
+**Want to see what's happening?**
+- Click on the container name in the Containers tab
+- Click the **Logs** tab to see real-time output
+- Click the **Inspect** tab to see configuration
+- Click the **Stats** tab to see resource usage
+
+#### Video Tutorial
+
+**Visual Learner?** Check out this quick video guide:
+1. Pull Image → 2. Configure Settings → 3. Add Environment Variables → 4. Run Container → 5. Complete Setup Wizard
+
+> 📹 *Video tutorial coming soon! Check the GitHub repository for updates.*
 
 ---
 
@@ -114,14 +315,57 @@ OpenEye v3.1.0 introduces a user-friendly setup wizard that runs on first launch
 
 ### Required Environment Variables
 
-These **must** be set for security:
+#### Understanding SECRET_KEY and JWT_SECRET_KEY
 
-```bash
-SECRET_KEY=your-secret-key-change-in-production
-JWT_SECRET_KEY=your-jwt-secret-key-change-in-production
-```
+**Both keys are REQUIRED for security and proper operation.**
 
-Generate secure random keys:
+##### SECRET_KEY
+- **Purpose**: Used for general application security, including:
+  - Session management
+  - Cookie signing
+  - CSRF protection
+  - Database encryption
+  - Secure token generation
+  
+- **Required**: YES - The application will not function properly without it
+- **Default**: If not set, a random key is generated on startup (NOT recommended for production as it changes on restart)
+- **Security Impact**: If compromised, attackers could:
+  - Forge session cookies
+  - Bypass CSRF protection
+  - Access encrypted data
+
+##### JWT_SECRET_KEY
+- **Purpose**: Used specifically for JSON Web Token (JWT) authentication:
+  - API authentication tokens
+  - User login sessions
+  - Token validation and signing
+  - Prevents token tampering
+  
+- **Required**: YES - User authentication will fail without it
+- **Default**: If not set, uses SECRET_KEY as fallback (NOT recommended)
+- **Security Impact**: If compromised, attackers could:
+  - Forge authentication tokens
+  - Impersonate any user
+  - Bypass authentication entirely
+
+##### Important Security Notes
+
+**⚠️ CRITICAL:**
+- Never use the same value for both keys
+- Never commit these keys to version control
+- Never share these keys publicly
+- Change these keys if you suspect they've been compromised
+
+**🔒 Best Practices:**
+- Use different random values for each key
+- Use at least 64 characters (32 bytes hex)
+- Store keys in environment variables, not in code
+- Rotate keys periodically (requires re-authentication)
+- Use a secrets manager in production (AWS Secrets Manager, HashiCorp Vault, etc.)
+
+##### Generate Secure Random Keys
+
+**Method 1: OpenSSL (Recommended)**
 ```bash
 # Generate SECRET_KEY
 openssl rand -hex 32
@@ -129,6 +373,34 @@ openssl rand -hex 32
 # Generate JWT_SECRET_KEY
 openssl rand -hex 32
 ```
+
+**Method 2: Python**
+```bash
+# Generate both keys
+python -c "import secrets; print('SECRET_KEY=' + secrets.token_hex(32)); print('JWT_SECRET_KEY=' + secrets.token_hex(32))"
+```
+
+**Method 3: Online (Use with caution)**
+```bash
+# Visit https://www.random.org/strings/ and generate two random strings
+# Length: 64, Unique: Yes, Format: hex
+```
+
+##### Example Configuration
+
+**Development (for testing only):**
+```bash
+SECRET_KEY=dev-secret-key-not-for-production-use-123456
+JWT_SECRET_KEY=dev-jwt-secret-key-not-for-production-use-123456
+```
+
+**Production (always generate new random keys):**
+```bash
+SECRET_KEY=a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456
+JWT_SECRET_KEY=9876543210fedcba0987654321fedcba0987654321fedcba0987654321fedcba
+```
+
+---
 
 ### Optional Environment Variables
 
