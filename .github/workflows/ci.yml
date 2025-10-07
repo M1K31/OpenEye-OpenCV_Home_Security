@@ -85,6 +85,7 @@ jobs:
         context: ./opencv-surveillance
         file: ./opencv-surveillance/Dockerfile
         push: false
+        load: true
         tags: openeye:test
         cache-from: type=gha
         cache-to: type=gha,mode=max
