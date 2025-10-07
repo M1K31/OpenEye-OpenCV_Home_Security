@@ -12,6 +12,7 @@ import AlertSettingsPage from './pages/AlertSettingsPage';
 import CameraDiscoveryPage from './pages/CameraDiscoveryPage';
 import CameraManagementPage from './pages/CameraManagementPage';
 import ThemeSelectorPage from './pages/ThemeSelectorPage';
+import SettingsPage from './pages/SettingsPage';
 import FirstRunSetup from './pages/FirstRunSetup';
 
 
@@ -63,7 +64,16 @@ function App() {
       <ThemeProvider>
         <Router>
           <Routes>
-            <Route path="/setup" element={<FirstRunSetup />} />
+            <Route 
+              path="/setup" 
+              element={
+                <FirstRunSetup 
+                  onComplete={() => {
+                    setSetupComplete(true);
+                  }} 
+                />
+              } 
+            />
             <Route path="*" element={<Navigate to="/setup" />} />
           </Routes>
         </Router>
@@ -102,6 +112,10 @@ function App() {
           <Route
             path="/alerts"
             element={token ? <AlertSettingsPage /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/settings"
+            element={token ? <SettingsPage /> : <Navigate to="/login" />}
           />
         </Routes>
       </Router>

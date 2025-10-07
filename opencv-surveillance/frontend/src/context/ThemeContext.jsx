@@ -14,13 +14,13 @@ export const useTheme = () => {
 
 export const THEMES = {
   DEFAULT: 'default',
-  SUPERMAN: 'superman',
-  BATMAN: 'batman',
-  WONDER_WOMAN: 'wonderwoman',
-  FLASH: 'flash',
-  AQUAMAN: 'aquaman',
+  SUPERMAN: 'sman',
+  BATMAN: 'bman',
+  WONDER_WOMAN: 'wwoman',
+  FLASH: 'fman',
+  AQUAMAN: 'aman',
   CYBORG: 'cyborg',
-  GREEN_LANTERN: 'greenlantern',
+  GREEN_LANTERN: 'glantern',
 };
 
 export const ThemeProvider = ({ children }) => {
@@ -46,43 +46,10 @@ export const ThemeProvider = ({ children }) => {
   return (
     <ThemeContext.Provider value={value}>
       <div className={`theme-wrapper ${currentTheme}-theme`}>
-        {currentTheme === THEMES.SUPERMAN && <SupermanOverlay />}
-        {currentTheme === THEMES.BATMAN && <BatmanOverlay />}
-        {currentTheme === THEMES.FLASH && <FlashOverlay />}
-        {currentTheme === THEMES.AQUAMAN && <AquamanOverlay />}
-        {currentTheme === THEMES.CYBORG && <CyborgOverlay />}
-        {currentTheme === THEMES.GREEN_LANTERN && <GreenLanternOverlay />}
         {children}
       </div>
     </ThemeContext.Provider>
   );
 };
-
-// Theme Overlays
-const SupermanOverlay = () => (
-  <div className="superman-logo">
-    <div className="superman-s">S</div>
-  </div>
-);
-
-const BatmanOverlay = () => (
-  <div className="bat-signal"></div>
-);
-
-const FlashOverlay = () => (
-  <div className="speed-lines"></div>
-);
-
-const AquamanOverlay = () => (
-  <div className="water-effect"></div>
-);
-
-const CyborgOverlay = () => (
-  <div className="tech-overlay"></div>
-);
-
-const GreenLanternOverlay = () => (
-  <div className="power-glow"></div>
-);
 
 export default ThemeProvider;

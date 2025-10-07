@@ -29,10 +29,9 @@ class SetupInitializeRequest(BaseModel):
         if len(v) < 8:
             errors.append("Password must be at least 8 characters long")
         
-        # Check byte length for bcrypt (72-byte limit)
-        password_bytes = len(v.encode('utf-8'))
-        if password_bytes > 72:
-            errors.append(f"Password is too long ({password_bytes} bytes). Maximum is 72 bytes. Try using fewer special characters.")
+        # Note: We don't reject passwords > 72 bytes here.
+        # The hash_password() function will automatically truncate them.
+        # This provides better UX - passwords "just work"
         
         if not re.search(r'[A-Z]', v):
             errors.append("Password must contain at least one uppercase letter")
@@ -112,7 +111,7 @@ async def initialize_setup(request: SetupInitializeRequest):
         admin_user = User(
             username=request.username,
             email=request.email,
-            password=hashed_pw,
+            hashed_password=hashed_pw,
             role="admin",
             is_active=True
         )

@@ -5,6 +5,7 @@ from typing import Optional
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+import bcrypt
 
 from backend.database import crud
 from backend.api.schemas import user as user_schema
@@ -40,9 +41,9 @@ def hash_password(password: str) -> str:
     """
     Hash a password using bcrypt.
     
-    Bcrypt has a 72-byte limit. If the password is longer, we truncate it
-    to 72 bytes (not characters) to prevent bcrypt errors while maintaining
-    security.
+    Bcrypt has a 72-byte limit. We automatically truncate passwords to 72 bytes
+    to prevent errors while maintaining security. This is done transparently
+    so users don't need to worry about byte limits.
     
     Args:
         password: Plain text password to hash
@@ -54,6 +55,10 @@ def hash_password(password: str) -> str:
     password_bytes = password.encode('utf-8')
     if len(password_bytes) > 72:
         password_bytes = password_bytes[:72]
-        password = password_bytes.decode('utf-8', errors='ignore')
     
-    return pwd_context.hash(password)
+    # Use bcrypt directly to bypass passlib's validation
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password_bytes, salt)
+    
+    # Return as string in the format passlib expects
+    return hashed.decode('utf-8')

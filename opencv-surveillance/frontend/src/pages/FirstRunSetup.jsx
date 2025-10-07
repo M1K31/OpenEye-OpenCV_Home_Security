@@ -54,11 +54,9 @@ const FirstRunSetup = ({ onComplete }) => {
   const validatePassword = (password) => {
     const errors = [];
     
-    // Check byte length for bcrypt (72-byte limit)
-    const byteLength = new Blob([password]).size;
-    if (byteLength > passwordRequirements.maxLength) {
-      errors.push(`Password is too long (maximum ${passwordRequirements.maxLength} bytes)`);
-    }
+    // Note: We don't reject passwords based on byte length here.
+    // The backend hash_password() function will automatically truncate to 72 bytes if necessary.
+    // This provides a better user experience than rejecting valid passwords.
     
     if (password.length < passwordRequirements.minLength) {
       errors.push(`Password must be at least ${passwordRequirements.minLength} characters long`);
@@ -148,9 +146,9 @@ const FirstRunSetup = ({ onComplete }) => {
       if (response.data.success) {
         setStep(3); // Show completion screen
         setTimeout(() => {
-          if (onComplete) onComplete();
-          navigate('/login');
-        }, 3000);
+          // Force a full page reload to make App.jsx re-check setup status
+          window.location.href = '/login';
+        }, 2000);
       }
     } catch (error) {
       setErrors({
