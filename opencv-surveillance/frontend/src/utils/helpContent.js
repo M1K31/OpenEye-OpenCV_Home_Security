@@ -145,7 +145,7 @@ export const HELP_CONTENT = {
   // Themes
   THEMES: {
     title: "Superhero Themes",
-    description: "Choose from 8 superhero-inspired themes: Superman, Batman, Wonder Woman, Flash, Aquaman, Green Lantern, Cyborg, Iron Man. Access via Dashboard → 'Themes'. Theme persists across sessions."
+    description: "Choose from 8 superhero-inspired themes: Sman (Classic red/blue), Bman (Dark knight), W Woman (Warrior gold), Flah (Speed red), Aman (Ocean teal), Cy (Tech silver), G Lantern (Willpower green), and Default (Professional blue). Access via Dashboard → 'Themes'. Theme persists across sessions."
   },
 
   // Live Streaming

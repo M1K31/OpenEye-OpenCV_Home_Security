@@ -36,3 +36,14 @@ def authenticate_user(db: Session, username: str, password: str):
     if not verify_password(password, user.hashed_password):
         return False
     return user
+def hash_password(password: str) -> str:
+    """
+    Hash a password using bcrypt.
+    
+    Args:
+        password: Plain text password to hash
+        
+    Returns:
+        Hashed password string
+    """
+    return pwd_context.hash(password)

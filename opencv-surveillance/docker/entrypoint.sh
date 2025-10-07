@@ -2,8 +2,8 @@
 
 set -e
 
-# Ensure Python packages are in PATH
-export PATH=/root/.local/bin:$PATH
+# Ensure Python packages are in PATH (using openeye user's home)
+export PATH=/home/openeye/.local/bin:$PATH
 
 echo "🚀 Starting OpenEye Surveillance System..."
 echo "================================================"

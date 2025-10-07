@@ -45,16 +45,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Python packages from builder
-COPY --from=builder /root/.local /root/.local
-
 # Create non-root user first
 RUN useradd -m -u 1000 openeye && \
     mkdir -p /app/data /app/config /app/models /app/logs && \
     chown -R openeye:openeye /app
 
-# Set PATH to include local Python packages
-ENV PATH=/root/.local/bin:$PATH \
+# Copy Python packages from builder to openeye user's home
+COPY --from=builder /root/.local /home/openeye/.local
+RUN chown -R openeye:openeye /home/openeye/.local
+
+# Set PATH to include local Python packages (using openeye user's path)
+ENV PATH=/home/openeye/.local/bin:$PATH \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1

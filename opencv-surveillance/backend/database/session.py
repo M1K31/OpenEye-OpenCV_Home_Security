@@ -12,3 +12,14 @@ engine = create_engine(
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
+# Dependency for FastAPI routes
+def get_db():
+    """
+    Database session dependency for FastAPI.
+    Yields a database session and ensures it's closed after use.
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

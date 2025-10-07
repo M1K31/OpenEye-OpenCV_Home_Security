@@ -1,590 +1,379 @@
-# OpenEye - Open Source AI Surveillance System
+# OpenEye - Free AI Surveillance System
 
 ![Version](https://img.shields.io/badge/version-3.1.0-blue.svg) ![License](https://img.shields.io/badge/license-MIT-yellow.svg) ![Cost](https://img.shields.io/badge/cost-$0/month-success.svg)
 
-A **100% free and open-source** AI-powered surveillance system with face recognition, motion detection, and smart home integration. Built with OpenCV, Python, and FastAPI.
+**100% free and open-source** AI-powered surveillance with face recognition, motion detection, and smart home integration. Your data stays on your hardware - no subscriptions, no cloud dependencies.
+
+🔗 **GitHub**: https://github.com/M1K31/OpenEye-OpenCV_Home_Security  
+📚 **Full Documentation**: See DOCKER_DEPLOYMENT_GUIDE.md in the repository
 
 ---
 
-## 🎯 Project Goal
+## ✨ Key Features
 
-OpenEye provides a **completely free alternative to expensive cloud-based surveillance systems** like Nest, Ring, or Arlo. Your data stays on your hardware, with no monthly fees, no cloud dependencies, and full control over your privacy.
+- 🎥 **Multi-Camera Support** - RTSP, USB, network cameras
+- 👤 **Face Recognition** - AI-powered with dlib
+- 🔍 **Motion Detection** - OpenCV MOG2
+- 📹 **Auto Recording** - Motion-triggered capture
+- 🔎 **Camera Discovery** - Automatic USB/network detection (v3.1.0)
+- 🎨 **8 Themes** - Customizable superhero-inspired UI
+- ❓ **Help System** - 36+ inline help entries
+- 🔐 **First-Run Wizard** - Easy admin setup
+- 📧 **Free Alerts** - Email, Telegram, ntfy.sh
+- 🏠 **Smart Home** - HomeKit, Home Assistant integration
+- 👥 **Multi-User** - Admin, User, Viewer roles
 
-**Key Benefits:**
-- ✅ **$0/month** - No subscriptions ever
-- 🔒 **Privacy First** - All data stays local
-- 🧠 **AI-Powered** - Advanced face recognition with dlib
-- 🏠 **Smart Home Ready** - HomeKit, Home Assistant, Nest integration
-- 📱 **Remote Access** - Optional free VPN solutions (WireGuard, Tailscale)
-- 🚀 **Production Ready** - Multi-user support, PostgreSQL, rate limiting
-
----
-
-## ✨ Features
-
-### Core Features
-- 🎥 **Multi-Camera Support** - RTSP streams, USB cameras, mock cameras
-- 🔍 **Motion Detection** - OpenCV MOG2 background subtraction
-- 📹 **Automatic Recording** - Motion-triggered with configurable duration
-- 🎬 **Live Streaming** - MJPEG streams with real-time overlays
-- 👤 **Face Recognition** - AI-powered person identification
-- 💾 **Recording Management** - Search, download, stream, auto-cleanup
-- 🔎 **Camera Discovery** - Automatic USB and network camera detection (NEW in v3.1!)
-- 📱 **Modern Web UI** - React dashboard with camera management
-
-### Notifications & Alerts
-- 📧 **Email Alerts** - SMTP notifications (FREE with Gmail)
-- 💬 **SMS Alerts** - Twilio or Telegram Bot (Telegram is FREE!)
-- 🔔 **Push Notifications** - Firebase or ntfy.sh (ntfy.sh is FREE!)
-- 🎣 **Webhooks** - Custom integrations
-- ⏱️ **Alert Throttling** - Configurable cooldown periods
-
-### Smart Home Integration
-- 🏠 **Home Assistant** - MQTT integration
-- 🍎 **Apple HomeKit** - HomeKit bridge
-- 🔥 **Google Nest** - Nest camera integration
-- ⚡ **Automation** - Trigger devices on events
-
-### Cloud & Storage (All Optional)
-- ☁️ **Cloud Storage** - AWS S3, Google Cloud, Azure, MinIO (FREE!)
-- 🗄️ **Database Options** - SQLite (default) or PostgreSQL
-- 🌐 **Remote Access** - WireGuard VPN, Tailscale, ZeroTier (FREE!)
-
-### Security & Management
-- 👥 **Multi-User System** - Admin, User, Viewer roles
-- 🔐 **JWT Authentication** - Secure API access
-- 🛡️ **Rate Limiting** - API abuse protection
-- 📊 **Advanced Analytics** - Activity tracking and statistics
+**Cost**: $0/month forever • **Privacy**: All data stays local • **Control**: You own everything
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Quick Start Guide
 
-### Using Docker (Recommended)
+### ⚠️ IMPORTANT: Generate Secret Keys First
 
+Before running, you MUST generate secure random keys:
+
+**Mac/Linux:**
 ```bash
-# Pull the image
-docker pull im1k31s/openeye-opencv_home_security:latest
+openssl rand -hex 32  # SECRET_KEY
+openssl rand -hex 32  # JWT_SECRET_KEY
+```
 
-# Run with default settings (SQLite database)
+**Windows (PowerShell):**
+```powershell
+[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Minimum 0 -Maximum 256 }))
+```
+
+**Python (All Platforms):**
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+Keep these keys safe - you'll need them in the next steps!
+
+---
+
+## 📦 Method 1: Docker Run (Command Line)
+
+**Step 1: Generate keys** (see above)
+
+**Step 2: Run the container**
+```bash
 docker run -d \
   --name openeye \
   -p 8000:8000 \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/config:/app/config \
-  -v $(pwd)/models:/app/models \
+  -v ./data:/app/data \
+  -v ./config:/app/config \
+  -v ./models:/app/models \
+  -e SECRET_KEY=your-generated-secret-key-here \
+  -e JWT_SECRET_KEY=your-generated-jwt-secret-key-here \
   im1k31s/openeye-opencv_home_security:latest
-
-# Access the API documentation
-open http://localhost:8000/api/docs
 ```
 
-### Using Docker Compose
-
-```bash
-# Download docker-compose.yml
-wget https://raw.githubusercontent.com/M1K31/OpenEye-OpenCV_Home_Security/main/opencv-surveillance/docker-compose.yml
-
-# Create .env file (optional, see configuration below)
-cp .env.example .env
-
-# Start the service
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-```
+**Step 3: Access OpenEye**
+- Open browser: `http://localhost:8000`
+- Complete the first-run setup wizard
+- Create your admin account with a strong password
 
 ---
 
-## ⚙️ Configuration
+## 🐳 Method 2: Docker Compose (Recommended)
 
-### Environment Variables
-
-The image can be configured using environment variables. All features are **optional** and can be enabled/disabled as needed.
-
-#### Core Settings
-
-```bash
-# Security (REQUIRED - change in production!)
-SECRET_KEY=your-secret-key-change-in-production
-JWT_SECRET_KEY=your-jwt-secret-key-change-in-production
-
-# Application
-LOG_LEVEL=INFO                    # DEBUG, INFO, WARNING, ERROR
-ENABLE_FACE_RECOGNITION=true      # Enable/disable face recognition
-MAX_RECORDING_DURATION=300        # Max recording length in seconds
-```
-
-#### Database (Optional)
-
-```bash
-# Default: SQLite (no configuration needed)
-# For PostgreSQL:
-DATABASE_URL=postgresql://user:password@postgres:5432/openeye
-```
-
-#### Email Notifications (Optional - FREE with Gmail)
-
-```bash
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=your-email@gmail.com
-SMTP_PASSWORD=your-app-password       # Use Gmail App Password
-SMTP_FROM_ADDRESS=your-email@gmail.com
-```
-
-**To Enable/Disable:** Set or leave empty. If empty, email alerts are disabled.
-
-#### SMS Notifications (Optional)
-
-**Option 1: Telegram Bot (FREE!)**
-```bash
-TELEGRAM_BOT_TOKEN=your-bot-token
-TELEGRAM_CHAT_ID=your-chat-id
-```
-
-**Option 2: Twilio (Paid)**
-```bash
-TWILIO_ACCOUNT_SID=your-account-sid
-TWILIO_AUTH_TOKEN=your-auth-token
-TWILIO_FROM_NUMBER=+1234567890
-```
-
-**To Enable/Disable:** Set or leave empty. If empty, SMS alerts are disabled.
-
-#### Push Notifications (Optional)
-
-**Option 1: ntfy.sh (FREE!)**
-```bash
-NTFY_TOPIC=your-unique-topic
-NTFY_SERVER=https://ntfy.sh
-```
-
-**Option 2: Firebase (FREE tier available)**
-```bash
-FIREBASE_CREDENTIALS_PATH=/app/config/firebase-credentials.json
-```
-
-**To Enable/Disable:** Set or leave empty. If empty, push notifications are disabled.
-
-#### Smart Home Integration (Optional)
-
-**Home Assistant (FREE!)**
-```bash
-MQTT_BROKER=homeassistant.local
-MQTT_PORT=1883
-MQTT_USERNAME=openeye
-MQTT_PASSWORD=your-password
-```
-
-**Apple HomeKit (FREE!)**
-```bash
-HOMEKIT_ENABLED=true
-HOMEKIT_PIN=123-45-678
-```
-
-**Google Nest (Requires API access)**
-```bash
-NEST_PROJECT_ID=your-project-id
-NEST_CLIENT_ID=your-client-id
-NEST_CLIENT_SECRET=your-client-secret
-```
-
-**To Enable/Disable:** Set or leave empty. Each integration is independent.
-
-#### Cloud Storage (Optional)
-
-**MinIO (FREE self-hosted)**
-```bash
-MINIO_ENDPOINT=minio.local:9000
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=minioadmin
-MINIO_BUCKET=openeye-recordings
-```
-
-**AWS S3**
-```bash
-AWS_ACCESS_KEY_ID=your-access-key
-AWS_SECRET_ACCESS_KEY=your-secret-key
-AWS_S3_BUCKET=your-bucket-name
-AWS_REGION=us-east-1
-```
-
-**Google Cloud Storage**
-```bash
-GCS_BUCKET=your-bucket-name
-GCS_CREDENTIALS_PATH=/app/config/gcs-credentials.json
-```
-
-**To Enable/Disable:** Set or leave empty. If empty, recordings stay local only.
-
----
-
-## 📋 Complete Example with Docker Compose
-
-Create a `docker-compose.yml` file:
-
+**Step 1: Create docker-compose.yml**
 ```yaml
 version: '3.8'
 
 services:
   openeye:
     image: im1k31s/openeye-opencv_home_security:latest
-    container_name: openeye-surveillance
+    container_name: openeye
     ports:
       - "8000:8000"
     environment:
-      # REQUIRED: Security keys
-      - SECRET_KEY=change-this-in-production-use-long-random-string
-      - JWT_SECRET_KEY=change-this-too-use-different-random-string
-      
-      # Database (optional - defaults to SQLite)
-      - DATABASE_URL=sqlite:///./data/openeye.db
-      
-      # Email (optional - FREE with Gmail)
+      - SECRET_KEY=your-generated-secret-key-here
+      - JWT_SECRET_KEY=your-generated-jwt-secret-key-here
+      # Optional: Add email/Telegram/ntfy.sh settings
       - SMTP_HOST=smtp.gmail.com
       - SMTP_PORT=587
       - SMTP_USERNAME=your-email@gmail.com
       - SMTP_PASSWORD=your-gmail-app-password
-      - SMTP_FROM_ADDRESS=your-email@gmail.com
-      
-      # Telegram (optional - FREE!)
       - TELEGRAM_BOT_TOKEN=your-bot-token
       - TELEGRAM_CHAT_ID=your-chat-id
-      
-      # Application settings
-      - LOG_LEVEL=INFO
-      - ENABLE_FACE_RECOGNITION=true
-      - MAX_RECORDING_DURATION=300
-    
     volumes:
-      - ./data:/app/data           # Recordings, database, logs
-      - ./config:/app/config       # Configuration files
-      - ./models:/app/models       # Face recognition models
-    
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./models:/app/models
     restart: unless-stopped
-    
-    # Optional: Resource limits
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 2G
 ```
 
-Then run:
+**Step 2: Start the service**
 ```bash
 docker-compose up -d
 ```
 
+**Step 3: View logs**
+```bash
+docker-compose logs -f openeye
+```
+
 ---
 
-## 🎮 Usage
+## 🖥️ Method 3: Docker Desktop (GUI)
 
-### Access the API
+Perfect for users who prefer a graphical interface!
 
-- **Interactive API Docs:** http://localhost:8000/api/docs
-- **ReDoc:** http://localhost:8000/api/redoc
-- **Health Check:** http://localhost:8000/api/health
-- **Web Dashboard:** http://localhost:8000/ (NEW in v3.1!)
+### Step 1: Generate Secret Keys
+Use Terminal/PowerShell/Command Prompt to generate keys (see "Generate Secret Keys" section above). **Save these keys** - you'll paste them in Step 5!
 
-### Discover Cameras Automatically (NEW!)
+### Step 2: Pull the Image
+1. Open **Docker Desktop**
+2. Go to **Images** tab
+3. Click **Pull** or search icon
+4. Enter: `im1k31s/openeye-opencv_home_security:latest`
+5. Click **Pull** and wait (~1.75GB download)
 
-The easiest way to add cameras is through the Camera Discovery feature:
+### Step 3: Run the Container
+1. Find the image in the **Images** list
+2. Click the **▶ Run** button (play icon)
+3. Click **Optional settings** to expand
 
-1. Open the web dashboard: http://localhost:8000/
+### Step 4: Configure Container
+**Container name:** `openeye`
+
+**Ports:**
+- Click **+** to add port mapping
+- Host Port: `8000`
+- Container Port: `8000`
+
+**Volumes** (click **+** three times):
+1. Data: Host `C:\openeye\data` (Windows) or `/Users/yourname/openeye/data` (Mac) → Container `/app/data`
+2. Config: Host `C:\openeye\config` or `/Users/yourname/openeye/config` → Container `/app/config`
+3. Models: Host `C:\openeye\models` or `/Users/yourname/openeye/models` → Container `/app/models`
+
+### Step 5: Environment Variables (CRITICAL!)
+Click the **Environment** tab and add:
+
+**Required:**
+```
+SECRET_KEY=paste-your-generated-key-from-step-1
+JWT_SECRET_KEY=paste-your-other-generated-key-from-step-1
+```
+
+**Optional (for notifications):**
+```
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-email@gmail.com
+SMTP_PASSWORD=your-gmail-app-password
+TELEGRAM_BOT_TOKEN=your-bot-token
+TELEGRAM_CHAT_ID=your-chat-id
+```
+
+### Step 6: Start Container
+1. Review all settings
+2. Click **Run** at the bottom
+3. Go to **Containers** tab
+4. Wait for green "Running" status
+
+### Step 7: Access OpenEye
+1. Open browser: `http://localhost:8000`
 2. Complete the first-run setup wizard
-3. Click "🔍 Discover Cameras" in the dashboard
-4. Choose USB or Network scanning:
-   - **USB Cameras:** Click "Scan for USB Cameras" to detect webcams
-   - **Network Cameras:** Click "Scan Network" to find RTSP/IP cameras (30-60 seconds)
-5. Click "Test Connection" to verify camera works
-6. Click "Quick Add" to add the camera
+3. Start using OpenEye!
 
-**What's Discovered:**
-- ✅ USB webcams and built-in cameras
-- ✅ RTSP/IP cameras (Hikvision, Dahua, Amcrest, Reolink, etc.)
-- ✅ Auto-configured with resolution, FPS, and stream URLs
-- ✅ Pre-validated before adding to database
+---
 
-### Add a Camera Manually
+## 🔐 Environment Variables Explained
 
-You can also add cameras via API or curl:
+### Required (Security)
 
+| Variable | Purpose | Example |
+|----------|---------|---------|
+| `SECRET_KEY` | Session management, CSRF protection, database encryption | `a1b2c3d4e5f6...` (64 chars) |
+| `JWT_SECRET_KEY` | API authentication tokens, user sessions | `9876543210fe...` (64 chars) |
+
+**⚠️ CRITICAL**: Without these, authentication will fail! Generate with `openssl rand -hex 32`.
+
+### Optional (Notifications - All FREE!)
+
+**Gmail Alerts:**
 ```bash
-curl -X POST "http://localhost:8000/api/cameras/" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Front Door",
-    "url": "rtsp://camera_ip:554/stream",
-    "type": "rtsp",
-    "enabled": true
-  }'
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-email@gmail.com
+SMTP_PASSWORD=your-gmail-app-password  # Get from myaccount.google.com/apppasswords
+SMTP_FROM_ADDRESS=your-email@gmail.com
 ```
 
-### Register a Face
-
+**Telegram Alerts (Recommended - FREE!):**
 ```bash
-# Upload image with person's name
-curl -X POST "http://localhost:8000/api/faces/upload" \
-  -F "name=John Doe" \
-  -F "file=@photo.jpg"
+TELEGRAM_BOT_TOKEN=your-bot-token  # Get from @BotFather
+TELEGRAM_CHAT_ID=your-chat-id      # Get from @userinfobot
 ```
 
-### View Live Stream
-
-```
-http://localhost:8000/api/cameras/{camera_id}/stream
-```
-
-### Enable/Disable Features
-
-Features are controlled via environment variables. To **enable** a feature, set the required environment variables. To **disable** a feature, leave those variables empty or unset them.
-
-**Examples:**
-
+**ntfy.sh Push Notifications (FREE!):**
 ```bash
-# Disable face recognition
-ENABLE_FACE_RECOGNITION=false
-
-# Disable email alerts (leave SMTP variables empty)
-SMTP_USERNAME=
-SMTP_PASSWORD=
-
-# Disable cloud storage (leave AWS variables empty)
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
+NTFY_TOPIC=openeye-alerts-unique-name
+NTFY_SERVER=https://ntfy.sh
 ```
 
 ---
 
-## 📦 Volumes
+## 📖 First-Run Setup (v3.1.0)
 
-The image uses three volumes for persistent data:
+When you first access OpenEye at `http://localhost:8000`, you'll see the **First-Run Setup Wizard**:
 
-| Volume | Purpose | Required |
-|--------|---------|----------|
-| `/app/data` | Recordings, database, logs | Yes |
-| `/app/config` | Configuration files, credentials | Recommended |
-| `/app/models` | Face recognition models | Optional |
+**Step 1: Welcome** - Introduction and security overview
 
-**Example:**
+**Step 2: Create Admin Account**
+- Choose username (default: `admin`)
+- Enter email address
+- Create **strong password** (12+ chars, complexity required):
+  - At least one uppercase letter
+  - At least one lowercase letter
+  - At least one number
+  - At least one special character
+- Real-time password strength indicator
+
+**Step 3: Complete** - Setup confirmation, auto-redirect to login
+
+**No more auto-generated passwords!** You control your admin credentials from day one.
+
+---
+
+## 🎯 What's New in v3.1.0
+
+### Camera Discovery
+- **USB Camera Scanning**: Automatically detect connected webcams
+- **Network Camera Discovery**: ONVIF protocol support for IP cameras
+- **One-Click Setup**: No manual RTSP URL configuration needed
+
+### Theme System
+Choose from 8 superhero-inspired themes:
+- Sman (Classic red/blue)
+- Bman (Dark knight)
+- W Woman (Warrior gold)
+- Flah (Speed red)
+- Aman (Ocean teal)
+- Cy (Tech silver)
+- G Lantern (Willpower green)
+- Default (Professional blue)
+
+### Help System
+- 36+ inline help entries
+- Context-sensitive help buttons (?)
+- Theme-aware tooltips
+- Covers all features and settings
+
+### First-Run Setup
+- Interactive 3-step wizard
+- Strong password enforcement
+- Real-time validation
+- No auto-generated passwords
+
+---
+
+## 🛠️ Common Commands
+
 ```bash
-docker run -d \
-  -v /path/to/data:/app/data \
-  -v /path/to/config:/app/config \
-  -v /path/to/models:/app/models \
-  im1k31s/openeye-opencv_home_security:latest
+# View logs
+docker logs openeye -f
+
+# Restart container
+docker restart openeye
+
+# Stop container
+docker stop openeye
+
+# Update to latest version
+docker pull im1k31s/openeye-opencv_home_security:latest
+docker stop openeye && docker rm openeye
+# Then run the docker run command again with your keys
+
+# Shell access (troubleshooting)
+docker exec -it openeye bash
 ```
 
 ---
 
-## 🌐 Ports
+## 🆘 Troubleshooting
 
-| Port | Protocol | Purpose |
-|------|----------|---------|
-| 8000 | HTTP | API and streaming |
+**Container won't start?**
+- Check logs: `docker logs openeye`
+- Verify SECRET_KEY and JWT_SECRET_KEY are set
+- Ensure port 8000 isn't in use
 
-**Example with custom port:**
-```bash
-docker run -d -p 9000:8000 im1k31s/openeye-opencv_home_security:latest
-# Access at http://localhost:9000
-```
+**Can't access http://localhost:8000?**
+- Wait 30 seconds for startup
+- Check container status: `docker ps | grep openeye`
+- Try `http://127.0.0.1:8000` instead
+- Check firewall settings
 
----
+**First-run setup not loading?**
+- Check logs: `docker logs openeye | grep setup`
+- Verify database connection
+- Ensure volumes are mounted correctly
 
-## 🔧 Advanced Configuration
-
-### First-Run Setup (NEW in v3.1!)
-
-On first launch, OpenEye will guide you through an interactive setup wizard:
-
-1. **Welcome Screen**
-   - Introduction to OpenEye security features
-   - Password requirements overview
-
-2. **Admin Account Creation**
-   - Set admin username (default: 'admin')
-   - Choose a strong password with:
-     * Minimum 12 characters
-     * At least one uppercase letter
-     * At least one lowercase letter
-     * At least one number
-     * At least one special character (!@#$%^&*)
-   - Real-time password strength indicator (Weak/Fair/Good/Strong)
-   - Email address for notifications
-
-3. **Completion**
-   - Setup complete confirmation
-   - Automatic redirect to login page
-
-**No more auto-generated passwords that need to be reset!** 🎉
-
-### Multi-User Setup
-
-After creating the admin account through the first-run wizard, you can add additional users via API:
-```bash
-curl -X POST "http://localhost:8000/api/users/" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "viewer",
-    "email": "viewer@example.com",
-    "password": "secure-password",
-    "role": "viewer"
-  }'
-```
-
-### PostgreSQL Database
-
-For production deployments, use PostgreSQL:
-
-```yaml
-version: '3.8'
-
-services:
-  postgres:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: openeye
-      POSTGRES_USER: openeye
-      POSTGRES_PASSWORD: secure-password
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
-
-  openeye:
-    image: im1k31s/openeye-opencv_home_security:latest
-    depends_on:
-      - postgres
-    environment:
-      - DATABASE_URL=postgresql://openeye:secure-password@postgres:5432/openeye
-      # ... other environment variables
-    volumes:
-      - ./data:/app/data
-    ports:
-      - "8000:8000"
-    restart: unless-stopped
-
-volumes:
-  postgres_data:
-```
-
-### Remote Access with WireGuard (FREE!)
-
-1. Set up WireGuard VPN on your server
-2. Connect from anywhere securely
-3. Access OpenEye at http://10.0.0.1:8000
-
-See the [User Guide](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/blob/main/opencv-surveillance/docs/USER_GUIDE.md) for detailed VPN setup instructions.
+**Face recognition not working?**
+- Enable in environment: `ENABLE_FACE_RECOGNITION=true`
+- Upload 3-5 clear face photos per person
+- Train the model after adding photos
 
 ---
 
-## 🛠️ Troubleshooting
+## 📚 Full Documentation
 
-### Container won't start
-```bash
-# Check logs
-docker logs openeye
+For complete deployment guides, configuration options, and advanced features:
 
-# Common issues:
-# - SECRET_KEY not set (required!)
-# - Port 8000 already in use
-# - Insufficient permissions on volumes
-```
-
-### Face recognition not working
-```bash
-# Ensure it's enabled
-ENABLE_FACE_RECOGNITION=true
-
-# Check if dlib models are loaded
-docker logs openeye | grep "face_recognition"
-```
-
-### No alerts received
-```bash
-# Verify environment variables are set
-docker exec openeye env | grep SMTP
-
-# Test email configuration via API
-curl -X POST "http://localhost:8000/api/test/email"
-```
-
-### High CPU/Memory usage
-```bash
-# Limit resources in docker-compose.yml
-deploy:
-  resources:
-    limits:
-      cpus: '2'
-      memory: 2G
-```
+- **Complete Docker Guide**: See `DOCKER_DEPLOYMENT_GUIDE.md` in repository
+- **User Guide**: `opencv-surveillance/docs/USER_GUIDE.md`
+- **API Documentation**: `http://localhost:8000/api/docs` (when running)
+- **GitHub Repository**: https://github.com/M1K31/OpenEye-OpenCV_Home_Security
 
 ---
 
-## 📚 Documentation
+## 🔒 Security Best Practices
 
-- **[GitHub Repository](https://github.com/M1K31/OpenEye-OpenCV_Home_Security)**
-- **[User Guide](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/blob/main/opencv-surveillance/docs/USER_GUIDE.md)** - Complete setup guide
-- **[API Documentation](http://localhost:8000/api/docs)** - Interactive API reference
-- **[Uninstall Guide](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/blob/main/opencv-surveillance/docs/UNINSTALL_GUIDE.md)** - Removal instructions
-
----
-
-## 💡 Tips
-
-### Recommended Free Services
-
-1. **Notifications:** Use Telegram Bot (100% free, no limits)
-2. **VPN:** WireGuard or Tailscale (both free!)
-3. **Storage:** MinIO self-hosted (free unlimited)
-4. **Smart Home:** Home Assistant (free and powerful)
-5. **Email:** Gmail with App Password (free tier sufficient)
-
-### Cost Breakdown
-
-| Service | Cost | Alternative |
-|---------|------|-------------|
-| Surveillance software | **$0** | Nest ($6-20/month) |
-| Face recognition | **$0** | AWS Rekognition (pay per use) |
-| Cloud storage | **$0** (local) | Ring ($3-10/month) |
-| Notifications | **$0** (Telegram) | Push services ($5+/month) |
-| Remote access | **$0** (WireGuard) | Cloud subscriptions ($10+/month) |
-| Smart home | **$0** (Home Assistant) | Proprietary ecosystems ($$) |
-
-**Total: $0/month forever** vs. **$24-45+/month** for commercial alternatives
+✅ Always generate unique SECRET_KEY and JWT_SECRET_KEY  
+✅ Use different values for each key  
+✅ Never commit keys to version control  
+✅ Rotate keys periodically  
+✅ Use strong passwords (enforced by setup wizard)  
+✅ Enable HTTPS with reverse proxy for production  
+✅ Keep Docker images updated  
+✅ Regular backups of `/app/data` directory  
 
 ---
 
-## 🤝 Contributing
+## 💡 Why OpenEye?
 
-Contributions are welcome! Please visit our [GitHub repository](https://github.com/M1K31/OpenEye-OpenCV_Home_Security) to:
-- Report bugs
-- Request features
-- Submit pull requests
-- Star the project ⭐
+| Feature | OpenEye | Nest/Ring/Arlo |
+|---------|---------|----------------|
+| **Monthly Cost** | $0 | $10-30/month |
+| **Cloud Dependency** | None | Required |
+| **Privacy** | 100% local | Cloud-based |
+| **Customization** | Full control | Limited |
+| **Smart Home** | Free integrations | Paid/limited |
+| **Storage** | Unlimited (your hardware) | Limited cloud |
+| **API Access** | Full REST API | Limited/paid |
+
+**Total 5-year cost**: OpenEye = $0 | Cloud services = $600-$1,800+
+
+---
+
+## 🤝 Support & Community
+
+- 📖 **Documentation**: https://github.com/M1K31/OpenEye-OpenCV_Home_Security
+- 🐛 **Bug Reports**: https://github.com/M1K31/OpenEye-OpenCV_Home_Security/issues
+- 💬 **Discussions**: https://github.com/M1K31/OpenEye-OpenCV_Home_Security/discussions
 
 ---
 
 ## 📄 License
 
-MIT License - Free to use, modify, and distribute.
+MIT License - Free for personal and commercial use
 
 ---
 
-## 🙏 Support
+**OpenEye v3.1.0** - Built with ❤️ by the open-source community
 
-- **Issues:** [GitHub Issues](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/discussions)
-- **Documentation:** [Wiki](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/wiki)
-
----
-
-## ⭐ Star the Project
-
-If you find OpenEye useful, please consider giving it a star on [GitHub](https://github.com/M1K31/OpenEye-OpenCV_Home_Security)!
-
----
-
-**Built with ❤️ by the open-source community**
+*Your security, your data, your control - at $0/month forever*
