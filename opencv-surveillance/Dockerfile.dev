@@ -1,0 +1,52 @@
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1
+
+# Install all dependencies including dev tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    pkg-config \
+    libopencv-dev \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    libgl1-mesa-glx \
+    libopenblas-dev \
+    liblapack-dev \
+    libx11-dev \
+    libboost-python-dev \
+    ffmpeg \
+    wget \
+    curl \
+    git \
+    vim \
+    htop \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install Python dependencies including dev tools
+COPY requirements.txt .
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt && \
+    pip install \
+        ipython \
+        ipdb \
+        pytest-watch \
+        black \
+        flake8 \
+        mypy \
+        pylint
+
+# Don't copy code - will be mounted as volume
+EXPOSE 8000 5678
+
+# Debug port for remote debugging
+ENV PYTHONPATH=/app
+
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--log-level", "debug"]

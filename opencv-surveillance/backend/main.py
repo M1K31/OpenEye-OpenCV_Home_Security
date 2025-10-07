@@ -1,5 +1,5 @@
 # Copyright (c) 2025 Mikel Smart
-# This file is part of OpenEye.
+# This file is part of OpenEye-OpenCV_Home_Security
 
 """
 OpenEye Surveillance System - Main Application
@@ -14,8 +14,14 @@ from dotenv import load_dotenv
 
 from backend.database.session import engine
 from backend.database import models, alert_models
-from backend.api.routes import users, cameras, faces, face_history, alerts
+from backend.api.routes import users, cameras, faces, face_history, alerts, integrations, recordings, analytics
 from backend.core.camera_manager import manager as camera_manager
+from backend.middleware.rate_limiter import RateLimiter
+from backend.middleware.security import (
+    SecurityHeadersMiddleware,
+    IPWhitelistMiddleware,
+    SQLInjectionProtection
+)
 
 # Load environment variables from .env file
 load_dotenv()
@@ -31,7 +37,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="OpenEye Surveillance System",
     description="OpenCV-powered surveillance system with face recognition, motion detection, and video recording",
-    version="2.0.0",
+    version="3.0.0",  # Phase 6
     docs_url="/api/docs",
     redoc_url="/api/redoc"
 )
@@ -44,6 +50,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Phase 6: Add security middleware (all free and open source)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(SQLInjectionProtection)
+app.add_middleware(RateLimiter, requests_per_minute=100)
+
+# Optional: IP whitelist (disabled by default for ease of use)
+# To enable, uncomment and add your allowed IPs:
+# app.add_middleware(IPWhitelistMiddleware, allowed_ips=["127.0.0.1", "192.168.1.100"])
 
 
 @app.on_event("startup")
@@ -117,6 +132,25 @@ app.include_router(
     alerts.router,
     prefix="/api",
     tags=["Alerts & Notifications"]
+)
+
+app.include_router(
+    integrations.router,
+    prefix="/api",
+    tags=["Smart Home Integrations"]
+)
+
+# Phase 6: New routers for advanced features
+app.include_router(
+    recordings.router,
+    prefix="/api",
+    tags=["Recordings & Playback"]
+)
+
+app.include_router(
+    analytics.router,
+    prefix="/api",
+    tags=["Advanced Analytics"]
 )
 
 

@@ -1,3 +1,6 @@
+# Copyright (c) 2025 Mikel Smart
+# This file is part of OpenEye-OpenCV_Home_Security
+
 """
 Alert & Notification System
 Multi-channel notification delivery with templates and scheduling

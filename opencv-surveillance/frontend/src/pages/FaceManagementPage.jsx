@@ -1,5 +1,5 @@
 // Copyright (c) 2025 Mikel Smart
-// This file is part of OpenEye.
+// This file is part of OpenEye-OpenCV_Home_Security
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';

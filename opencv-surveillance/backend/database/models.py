@@ -1,5 +1,5 @@
 # Copyright (c) 2025 Mikel Smart
-# This file is part of OpenEye.
+# This file is part of OpenEye-OpenCV_Home_Security
 """
 Database models for OpenEye Surveillance System
 UPDATED to include face detection events tracking
@@ -21,6 +21,9 @@ class User(Base):
     hashed_password = Column(String)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Phase 6: User roles for access control
+    role = Column(String, default="viewer")  # admin, user, viewer
 
 
 class FaceDetectionEvent(Base):

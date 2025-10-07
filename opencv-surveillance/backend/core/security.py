@@ -1,5 +1,5 @@
 # Copyright (c) 2025 Mikel Smart
-# This file is part of OpenEye.
+# This file is part of OpenEye-OpenCV_Home_Security
 from passlib.context import CryptContext
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

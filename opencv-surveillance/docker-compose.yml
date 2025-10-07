@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # Main OpenEye application
+  openeye:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: openeye-surveillance
+    ports:
+      - "8000:8000"
+    environment:
+      # Database
+      - DATABASE_URL=sqlite:///./data/openeye.db
+      
+      # Security
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-jwt-secret-key}
+      
+      # Email notifications (optional)
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM_ADDRESS=${SMTP_FROM_ADDRESS:-}
+      
+      # Twilio SMS (optional)
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}
+      - TWILIO_FROM_NUMBER=${TWILIO_FROM_NUMBER:-}
+      
+      # Firebase push notifications (optional)
+      - FIREBASE_CREDENTIALS_PATH=${FIREBASE_CREDENTIALS_PATH:-}
+      
+      # Google Nest integration (optional)
+      - NEST_PROJECT_ID=${NEST_PROJECT_ID:-}
+      - NEST_CLIENT_ID=${NEST_CLIENT_ID:-}
+      - NEST_CLIENT_SECRET=${NEST_CLIENT_SECRET:-}
+      
+      # AWS S3 (optional)
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET:-}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      
+      # Application settings
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ENABLE_FACE_RECOGNITION=${ENABLE_FACE_RECOGNITION:-true}
+      - MAX_RECORDING_DURATION=${MAX_RECORDING_DURATION:-300}
+    
+    volumes:
+      # Persistent data
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./models:/app/models
+    
+    restart: unless-stopped
+    
+    networks:
+      - openeye-network
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+networks:
+  openeye-network:
+    driver: bridge

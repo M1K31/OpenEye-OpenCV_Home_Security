@@ -1,5 +1,5 @@
 # Copyright (c) 2025 Mikel Smart
-# This file is part of OpenEye.
+# This file is part of OpenEye-OpenCV_Home_Security
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel

@@ -1,11 +1,20 @@
 # OpenEye Surveillance System
 
-![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![OpenCV](https://img.shields.io/badge/OpenCV-4.8+-red.svg)
 ![License](https://img.shields.io/badge/license-MIT-yellow.svg)
+![Free](https://img.shields.io/badge/cost-$0/month-success.svg)
 
-An open-source, modern, and feature-rich surveillance system powered by **OpenCV** (not Motion). This project emphasizes OpenCV's computer vision capabilities combined with deep learning for accurate face recognition, creating a powerful alternative to traditional surveillance solutions.
+An **100% free and open-source** surveillance system powered by **OpenCV**. This project emphasizes OpenCV's computer vision capabilities combined with deep learning for accurate face recognition, creating a powerful alternative to traditional (and expensive!) surveillance solutions.
+
+## 💰 Completely Free!
+
+- ✅ **No subscriptions** - $0/month forever
+- ✅ **No cloud dependencies** - Works offline
+- ✅ **No sign-ups required** - All services are optional
+- ✅ **Open source** - Inspect and modify all code
+- ✅ **Self-hosted** - Your data stays on your hardware
 
 ## 🎯 Why OpenEye?
 
@@ -22,6 +31,8 @@ An open-source, modern, and feature-rich surveillance system powered by **OpenCV
 ## 📋 Table of Contents
 
 - [Features](#features)
+- [Quick Start](#quick-start)
+- [Documentation](#documentation)
 - [Architecture](#architecture)
 - [Installation](#installation)
 - [Usage](#usage)
@@ -37,30 +48,95 @@ An open-source, modern, and feature-rich surveillance system powered by **OpenCV
 
 ## ✨ Features
 
-### Phase 1 (Complete)
+### Phase 1-2 (Core Features) ✅
 - ✅ **Multi-Camera Support** - RTSP streams and mock cameras for testing
 - ✅ **Motion Detection** - OpenCV MOG2 background subtraction
 - ✅ **Automatic Recording** - Motion-triggered video capture
 - ✅ **Live Streaming** - MJPEG streams with real-time overlays
-- ✅ **User Authentication** - JWT-based secure access
-- ✅ **Modern UI** - Responsive React dashboard
-
-### Phase 2 (Complete) 🆕
 - ✅ **Face Recognition** - Identify known individuals automatically
-- ✅ **Face Management UI** - Easy person management interface
+- ✅ **Face Management** - Easy person management interface
 - ✅ **Detection History** - Track all face detections with timestamps
-- ✅ **Analytics Dashboard** - Statistics and timeline views
-- ✅ **Metadata Tracking** - Face detection data saved with recordings
-- ✅ **Configurable Settings** - Adjust detection methods and thresholds
-- ✅ **Database Persistence** - SQLite storage for all events
+- ✅ **Database Persistence** - SQLite or PostgreSQL storage
 
-### Coming Soon 🚧
-- 🔔 Real-time Notifications (Email, SMS, Push)
-- 🏠 Smart Home Integration (Home Assistant, HomeKit)
-- 📱 Mobile App (iOS/Android)
-- ☁️ Cloud Storage Options
-- 🎤 Two-Way Audio Communication
-- 🔐 Enhanced Encryption
+### Phase 3 (Notifications) ✅
+- ✅ **Email Alerts** - SMTP notifications (FREE with Gmail)
+- ✅ **SMS Alerts** - Twilio or Telegram Bot (Telegram is FREE!)
+- ✅ **Push Notifications** - Firebase or ntfy.sh (ntfy.sh is FREE!)
+- ✅ **Webhooks** - Custom integrations
+- ✅ **Alert Throttling** - Prevent notification spam
+
+### Phase 4 (Smart Home) ✅
+- ✅ **Home Assistant** - MQTT integration (FREE!)
+- ✅ **HomeKit** - Apple HomeKit bridge (FREE!)
+- ✅ **Google Nest** - Nest integration (optional)
+- ✅ **Automation Ready** - Trigger smart home devices
+
+### Phase 5 (Cloud & Mobile) ✅
+- ✅ **Cloud Storage** - AWS S3, GCS, Azure, or MinIO (MinIO is FREE!)
+- ✅ **Mobile App Structure** - React Native foundation
+- ✅ **Real-time Streaming** - WebSocket support
+- ✅ **Remote Access** - WireGuard VPN (FREE!), Tailscale, ZeroTier
+
+### Phase 6 (Advanced Features) ✅ **NEW!**
+- ✅ **Recording Management** - Search, download, stream recordings
+- ✅ **Advanced Analytics** - Hourly/daily activity breakdown
+- ✅ **Storage Management** - Automatic cleanup, statistics
+- ✅ **Multi-User System** - Admin, User, Viewer roles
+- ✅ **Rate Limiting** - API abuse protection
+- ✅ **SQL Injection Protection** - Enhanced security
+- ✅ **PostgreSQL Support** - Production-ready database
+- ✅ **Docker Deployment** - Easy containerized setup
+
+---
+
+## 🚀 Quick Start
+
+```bash
+# 1. Clone repository
+git clone https://github.com/M1K31/OpenEye.git
+cd OpenEye/opencv-surveillance
+
+# 2. Install dependencies (all free!)
+pip install -r requirements.txt
+
+# 3. Configure environment
+cp .env.example .env
+# Edit .env with your settings (see docs/USER_GUIDE.md)
+
+# 4. Start server
+python -m backend.main
+
+# 5. Access dashboard
+open http://localhost:8000/api/docs
+```
+
+**That's it!** You now have a professional surveillance system running at **$0/month**! 🎉
+
+---
+
+## 📚 Documentation
+
+### For Users
+- **[User Guide](opencv-surveillance/docs/USER_GUIDE.md)** - Complete setup and usage guide
+  - Free vs paid service options
+  - Configuration examples
+  - Telegram/Email/VPN setup
+  - Troubleshooting common issues
+
+- **[Uninstall Guide](opencv-surveillance/docs/UNINSTALL_GUIDE.md)** - Complete removal instructions
+  - Step-by-step uninstallation
+  - Selective removal options
+  - Backup and restore procedures
+
+### For Developers
+- **[API Documentation](http://localhost:8000/api/docs)** - Interactive API reference (when running)
+- **[Docker Guide](opencv-surveillance/DOCKER.md)** - Container deployment
+- **[Implementation Status](opencv-surveillance/PHASE_4_5_COMPLETE.md)** - All phases completed
+
+### Quick References
+- **[Setup Guide](opencv-surveillance/docs/setup_guide.md)** - Initial setup
+- **[API Reference](opencv-surveillance/docs/api_reference.md)** - Endpoint documentation
+- **[Cleanup Report](opencv-surveillance/CLEANUP_REPORT.md)** - File organization
 
 ---
 

@@ -1,5 +1,5 @@
 // Copyright (c) 2025 Mikel Smart
-// This file is part of OpenEye.
+// This file is part of OpenEye-OpenCV_Home_Security
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'

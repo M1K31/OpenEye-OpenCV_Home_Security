@@ -1,3 +1,6 @@
+# Copyright (c) 2025 Mikel Smart
+# This file is part of OpenEye-OpenCV_Home_Security
+
 """
 MQTT Integration Module
 Generic MQTT client for publishing camera events and receiving commands

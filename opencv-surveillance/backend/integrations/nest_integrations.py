@@ -1,3 +1,6 @@
+# Copyright (c) 2025 Mikel Smart
+# This file is part of OpenEye-OpenCV_Home_Security
+
 """
 Nest/Google Smart Device Integration Module
 Integrates with Google Smart Device Management (SDM) API for Nest devices

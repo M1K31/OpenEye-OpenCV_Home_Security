@@ -1,5 +1,5 @@
 # Copyright (c) 2025 Mikel Smart
-# This file is part of OpenEye.
+# This file is part of OpenEye-OpenCV_Home_Security
 """
 Face Recognition Management API Routes
 Provides endpoints for managing people and training face recognition

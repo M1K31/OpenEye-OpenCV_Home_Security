@@ -1,3 +1,6 @@
+# Copyright (c) 2025 Mikel Smart
+# This file is part of OpenEye-OpenCV_Home_Security
+
 """
 Cloud Storage Integration
 Multi-provider cloud storage for recordings and snapshots
