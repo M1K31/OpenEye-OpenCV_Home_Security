@@ -3,7 +3,7 @@
 # ============================================
 # Stage 1: Builder - Compile dependencies
 # ============================================
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -38,7 +38,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxext6 \
     libxrender-dev \
     libgomp1 \
-    libgl1-mesa-glx \
+    libgl1 \
     libopenblas0 \
     liblapack3 \
     ffmpeg \
