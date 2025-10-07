@@ -96,13 +96,13 @@ An **100% free and open-source** surveillance system powered by **OpenCV**. This
   - See [Camera Discovery Guide](#camera-discovery)
   
 - ✅ **Theme System** - 8 superhero themes with consistent styling
-  - Superman (Classic red/blue)
-  - Batman (Dark knight)
-  - Wonder Woman (Warrior gold)
-  - Flash (Speed red)
-  - Aquaman (Ocean teal)
-  - Cyborg (Tech silver)
-  - Green Lantern (Willpower green)
+  - Sman (Classic red/blue)
+  - Bman (Dark knight)
+  - W Woman (Warrior gold)
+  - Flah (Speed red)
+  - Aman (Ocean teal)
+  - Cy (Tech silver)
+  - G Lantern (Willpower green)
   - Default (Professional blue)
   
 - ✅ **Help System** - Comprehensive inline help with 36+ entries
