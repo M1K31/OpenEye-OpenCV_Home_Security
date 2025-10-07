@@ -43,24 +43,27 @@ jobs:
     
     - name: Install Python dependencies
       run: |
+        cd opencv-surveillance
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install pytest pytest-cov pytest-asyncio httpx
     
     - name: Run linting
       run: |
+        cd opencv-surveillance
         pip install flake8 black
         flake8 backend --max-line-length=120 --exclude=__pycache__
         black --check backend
     
     - name: Run tests
       run: |
+        cd opencv-surveillance
         pytest tests/ -v --cov=backend --cov-report=xml || echo "Tests not yet implemented"
     
     - name: Upload coverage
       uses: codecov/codecov-action@v4
       with:
-        file: ./coverage.xml
+        file: ./opencv-surveillance/coverage.xml
         flags: unittests
         name: codecov-umbrella
       if: matrix.python-version == '3.11'
@@ -79,8 +82,8 @@ jobs:
     - name: Build Docker image (test)
       uses: docker/build-push-action@v5
       with:
-        context: .
-        file: ./Dockerfile
+        context: ./opencv-surveillance
+        file: ./opencv-surveillance/Dockerfile
         push: false
         tags: openeye:test
         cache-from: type=gha
