@@ -1,7 +1,26 @@
 # Multi-stage build for optimized production image
 
 # ============================================
-# Stage 1: Builder - Compile dependencies
+# Stage 1: Frontend Builder - Build React app
+# ============================================
+FROM node:18-alpine AS frontend-builder
+
+WORKDIR /frontend
+
+# Copy frontend package files
+COPY frontend/package*.json ./
+
+# Install dependencies
+RUN npm ci --legacy-peer-deps
+
+# Copy frontend source
+COPY frontend/ ./
+
+# Build frontend
+RUN npm run build
+
+# ============================================
+# Stage 2: Python Builder - Compile dependencies
 # ============================================
 FROM python:3.11-slim AS builder
 
@@ -27,7 +46,7 @@ RUN pip install --user --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --user --no-cache-dir -r requirements.txt
 
 # ============================================
-# Stage 2: Runtime - Minimal production image
+# Stage 3: Runtime - Minimal production image
 # ============================================
 FROM python:3.11-slim
 
@@ -47,7 +66,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Create non-root user first
 RUN useradd -m -u 1000 openeye && \
-    mkdir -p /app/data /app/config /app/models /app/logs && \
+    mkdir -p /app/data /app/config /app/models /app/logs /app/frontend/dist && \
     chown -R openeye:openeye /app
 
 # Copy Python packages from builder to openeye user's home
@@ -63,8 +82,13 @@ ENV PATH=/home/openeye/.local/bin:$PATH \
 # Create app directory
 WORKDIR /app
 
-# Copy application code
-COPY --chown=openeye:openeye . .
+# Copy application code (exclude frontend source)
+COPY --chown=openeye:openeye backend/ ./backend/
+COPY --chown=openeye:openeye docker/ ./docker/
+COPY --chown=openeye:openeye requirements.txt ./
+
+# Copy built frontend from frontend-builder
+COPY --from=frontend-builder --chown=openeye:openeye /frontend/dist ./frontend/dist
 
 # Switch to non-root user
 USER openeye

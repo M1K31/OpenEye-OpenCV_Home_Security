@@ -8,8 +8,11 @@ Complete Phase 2 implementation with face recognition
 
 import uvicorn
 import logging
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 
 from backend.database.session import engine
@@ -170,11 +173,45 @@ app.include_router(
 @app.get("/")
 async def read_root():
     """
-    Root endpoint - System information
+    Serve the frontend index.html for the root route
+    """
+    frontend_path = Path(__file__).parent.parent / "frontend" / "dist"
+    index_file = frontend_path / "index.html"
+    
+    if index_file.exists():
+        return FileResponse(index_file)
+    else:
+        # Fallback to API info if frontend not built
+        return {
+            "name": "OpenEye Surveillance System",
+            "version": "3.1.0",
+            "description": "OpenCV-powered surveillance with face recognition",
+            "features": [
+                "Motion Detection",
+                "Face Recognition",
+                "Video Recording",
+                "Alert System",
+                "Real-time motion detection",
+                "Face recognition and identification",
+                "Automatic video recording",
+                "Multi-camera support",
+                "Historical analytics",
+                "REST API access"
+            ],
+            "documentation": "/api/docs",
+            "status": "operational",
+            "note": "Frontend not built. Build the React app or access API at /api/docs"
+        }
+
+
+@app.get("/api")
+async def api_root():
+    """
+    API root endpoint - System information
     """
     return {
-        "name": "OpenEye Surveillance System",
-        "version": "2.0.0",
+        "name": "OpenEye Surveillance System API",
+        "version": "3.1.0",
         "description": "OpenCV-powered surveillance with face recognition",
         "features": [
             "Motion Detection",
@@ -228,6 +265,29 @@ async def system_info():
         "cameras": cameras_info,
         "total_cameras": len(camera_manager.cameras)
     }
+
+
+# Mount static files for frontend (must be last to not override API routes)
+frontend_path = Path(__file__).parent.parent / "frontend" / "dist"
+if frontend_path.exists():
+    # Serve static assets (JS, CSS, images)
+    app.mount("/assets", StaticFiles(directory=str(frontend_path / "assets")), name="assets")
+    
+    # Catch-all route for SPA - must be last
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        """
+        Serve the React SPA for all non-API routes
+        This enables client-side routing
+        """
+        # Don't intercept API routes
+        if full_path.startswith("api/"):
+            return {"error": "Not found"}
+        
+        index_file = frontend_path / "index.html"
+        if index_file.exists():
+            return FileResponse(index_file)
+        return {"error": "Frontend not found"}
 
 
 if __name__ == "__main__":
