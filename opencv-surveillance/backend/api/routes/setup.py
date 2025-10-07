@@ -19,15 +19,19 @@ class SetupInitializeRequest(BaseModel):
     """Request model for initializing admin account."""
     username: str = Field(..., min_length=3, max_length=50)
     email: EmailStr
-    password: str = Field(..., min_length=12)
+    password: str = Field(..., min_length=8, max_length=72)  # Bcrypt has 72-byte limit
 
     @validator('password')
     def validate_password_strength(cls, v):
         """Validate password meets security requirements."""
         errors = []
         
-        if len(v) < 12:
-            errors.append("Password must be at least 12 characters long")
+        # Check byte length for bcrypt (72-byte limit)
+        if len(v.encode('utf-8')) > 72:
+            errors.append("Password is too long (maximum 72 bytes)")
+        
+        if len(v) < 8:
+            errors.append("Password must be at least 8 characters long")
         
         if not re.search(r'[A-Z]', v):
             errors.append("Password must contain at least one uppercase letter")

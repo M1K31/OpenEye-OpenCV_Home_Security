@@ -24,7 +24,8 @@ function App() {
     // Check if setup is complete on initial load
     const checkSetup = async () => {
       try {
-        const response = await axios.get('http://localhost:8000/api/setup/status');
+        // Use relative URL so it works in Docker and traditional deployments
+        const response = await axios.get('/api/setup/status');
         setSetupComplete(response.data.setup_complete);
       } catch (error) {
         console.error('Error checking setup status:', error);

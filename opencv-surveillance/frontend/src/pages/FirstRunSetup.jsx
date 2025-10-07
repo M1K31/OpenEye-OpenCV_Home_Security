@@ -23,7 +23,8 @@ const FirstRunSetup = ({ onComplete }) => {
 
   // Password strength requirements
   const passwordRequirements = {
-    minLength: 12,
+    minLength: 8,  // Reduced from 12 to match bcrypt 72-byte limit
+    maxLength: 72,  // Bcrypt byte limit
     requireUppercase: true,
     requireLowercase: true,
     requireNumbers: true,
@@ -52,6 +53,12 @@ const FirstRunSetup = ({ onComplete }) => {
 
   const validatePassword = (password) => {
     const errors = [];
+    
+    // Check byte length for bcrypt (72-byte limit)
+    const byteLength = new Blob([password]).size;
+    if (byteLength > passwordRequirements.maxLength) {
+      errors.push(`Password is too long (maximum ${passwordRequirements.maxLength} bytes)`);
+    }
     
     if (password.length < passwordRequirements.minLength) {
       errors.push(`Password must be at least ${passwordRequirements.minLength} characters long`);
@@ -186,7 +193,7 @@ const FirstRunSetup = ({ onComplete }) => {
               <div className="security-notice">
                 <strong>🔐 Security Requirements:</strong>
                 <ul>
-                  <li>Minimum {passwordRequirements.minLength} characters</li>
+                  <li>Between {passwordRequirements.minLength}-{passwordRequirements.maxLength} characters</li>
                   <li>At least one uppercase letter (A-Z)</li>
                   <li>At least one lowercase letter (a-z)</li>
                   <li>At least one number (0-9)</li>
