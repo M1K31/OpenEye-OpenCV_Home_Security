@@ -1,5 +1,15 @@
 version: '3.8'
 
+# OpenEye v3.1.0 - Docker Compose Configuration
+# 
+# FIRST-RUN SETUP:
+# 1. Start the container: docker-compose up -d
+# 2. Open http://localhost:8000/
+# 3. Complete the interactive setup wizard to create your admin account
+# 4. No need to configure admin credentials in this file!
+#
+# For detailed configuration, see: https://github.com/M1K31/OpenEye
+
 services:
   # Main OpenEye application
   openeye:
@@ -13,21 +23,29 @@ services:
       # Database
       - DATABASE_URL=sqlite:///./data/openeye.db
       
-      # Security
+      # Security (REQUIRED)
       - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-jwt-secret-key}
       
-      # Email notifications (optional)
+      # Email notifications (optional - FREE with Gmail)
       - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
       - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_USERNAME=${SMTP_USERNAME:-}
       - SMTP_PASSWORD=${SMTP_PASSWORD:-}
       - SMTP_FROM_ADDRESS=${SMTP_FROM_ADDRESS:-}
       
-      # Twilio SMS (optional)
+      # Telegram Bot (optional - FREE!)
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      
+      # Twilio SMS (optional - paid)
       - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-}
       - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}
       - TWILIO_FROM_NUMBER=${TWILIO_FROM_NUMBER:-}
+      
+      # ntfy.sh push notifications (optional - FREE!)
+      - NTFY_TOPIC=${NTFY_TOPIC:-}
+      - NTFY_SERVER=${NTFY_SERVER:-https://ntfy.sh}
       
       # Firebase push notifications (optional)
       - FIREBASE_CREDENTIALS_PATH=${FIREBASE_CREDENTIALS_PATH:-}

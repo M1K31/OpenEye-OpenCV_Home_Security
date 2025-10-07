@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 
 from backend.database.session import engine
 from backend.database import models, alert_models
-from backend.api.routes import users, cameras, faces, face_history, alerts, integrations, recordings, analytics
+from backend.api.routes import users, cameras, faces, face_history, alerts, integrations, recordings, analytics, discovery, setup
 from backend.core.camera_manager import manager as camera_manager
 from backend.middleware.rate_limiter import RateLimiter
 from backend.middleware.security import (
@@ -151,6 +151,19 @@ app.include_router(
     analytics.router,
     prefix="/api",
     tags=["Advanced Analytics"]
+)
+
+# Camera Discovery
+app.include_router(
+    discovery.router,
+    prefix="/api",
+    tags=["Camera Discovery"]
+)
+
+# First-Run Setup
+app.include_router(
+    setup.router,
+    tags=["First-Run Setup"]
 )
 
 

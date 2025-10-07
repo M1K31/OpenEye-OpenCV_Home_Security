@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import HelpButton from '../components/HelpButton';
+import { HELP_CONTENT } from '../utils/helpContent';
 import './FaceManagementPage.css';
 
 const FaceManagementPage = () => {
@@ -160,7 +162,13 @@ const FaceManagementPage = () => {
   return (
     <div className="face-management-container">
       <header className="page-header">
-        <h1>Face Recognition Management</h1>
+        <h1>
+          Face Recognition Management
+          <HelpButton 
+            title={HELP_CONTENT.FACE_RECOGNITION.title}
+            description={HELP_CONTENT.FACE_RECOGNITION.description}
+          />
+        </h1>
         <button onClick={() => navigate('/')} className="btn-secondary">Back to Dashboard</button>
       </header>
 

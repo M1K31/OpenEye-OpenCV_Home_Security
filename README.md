@@ -87,6 +87,38 @@ An **100% free and open-source** surveillance system powered by **OpenCV**. This
 - ✅ **PostgreSQL Support** - Production-ready database
 - ✅ **Docker Deployment** - Easy containerized setup
 
+### v3.1.0 Features ✅ **LATEST!**
+- ✅ **Camera Discovery** - Automatic USB and network camera detection
+  - USB webcam scanning
+  - Network camera discovery (ONVIF protocol)
+  - Auto-detection with one click
+  - Manual camera configuration
+  - See [Camera Discovery Guide](#camera-discovery)
+  
+- ✅ **Theme System** - 8 superhero themes with consistent styling
+  - Superman (Classic red/blue)
+  - Batman (Dark knight)
+  - Wonder Woman (Warrior gold)
+  - Flash (Speed red)
+  - Aquaman (Ocean teal)
+  - Cyborg (Tech silver)
+  - Green Lantern (Willpower green)
+  - Default (Professional blue)
+  
+- ✅ **Help System** - Comprehensive inline help with 36+ entries
+  - Context-sensitive help buttons (?)
+  - Theme-aware tooltips
+  - Mobile responsive
+  - Covers all features and settings
+  - See [HELP_SYSTEM_IMPLEMENTATION.md](opencv-surveillance/HELP_SYSTEM_IMPLEMENTATION.md)
+  
+- ✅ **First-Run Setup** - User-friendly admin account creation
+  - Interactive setup wizard
+  - Strong password enforcement (12+ chars, complexity)
+  - Real-time password strength indicator
+  - Email validation
+  - No more auto-generated passwords!
+
 ---
 
 ## 🚀 Quick Start
@@ -377,6 +409,51 @@ Per-camera configuration:
   "post_motion_cooldown": 5
 }
 ```
+
+### Camera Discovery
+
+OpenEye v3.1.0 includes automatic camera discovery to simplify setup:
+
+#### USB Camera Discovery
+Automatically detects connected USB webcams:
+```bash
+# Via API
+GET /api/cameras/discover/usb
+
+# Returns list of available USB cameras with indices
+```
+
+#### Network Camera Discovery  
+Scans local network for ONVIF-compatible IP cameras:
+```bash
+# Via API
+GET /api/cameras/discover/network
+
+# Returns list of discovered cameras with:
+# - IP address
+# - ONVIF port
+# - Device information
+# - RTSP stream URLs
+```
+
+#### Using the Discovery UI
+1. Navigate to **Camera Management** page
+2. Click the **Discovery** tab
+3. Choose **USB** or **Network** scan
+4. Click **Scan for Cameras**
+5. Select discovered cameras to add
+6. Configure settings and save
+
+**Benefits:**
+- ✅ No manual RTSP URL configuration
+- ✅ Automatic detection of camera capabilities  
+- ✅ One-click camera addition
+- ✅ Works with most modern IP cameras
+
+**Supported Protocols:**
+- USB/Webcam (Video4Linux, DirectShow)
+- ONVIF (Network cameras)
+- RTSP streams (manual configuration)
 
 ### Environment Variables
 

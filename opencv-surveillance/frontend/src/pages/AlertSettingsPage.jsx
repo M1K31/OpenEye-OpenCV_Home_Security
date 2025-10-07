@@ -4,6 +4,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import HelpButton from '../components/HelpButton';
+import { HELP_CONTENT } from '../utils/helpContent';
 import './AlertSettingsPage.css';
 
 const AlertSettingsPage = () => {
@@ -209,7 +211,18 @@ const AlertSettingsPage = () => {
 
       {/* Email Settings */}
       <section className="settings-section">
-        <h2>📧 Email Notifications</h2>
+        <h2>
+          ✉️ Email Notifications
+          <HelpButton 
+            title={HELP_CONTENT.EMAIL_NOTIFICATIONS.title}
+            description={HELP_CONTENT.EMAIL_NOTIFICATIONS.description}
+          />
+        </h2>
+        <div className="notification-method-header">
+          <p className="method-description">
+            Receive alert notifications via email. Configure SMTP server in Docker environment.
+          </p>
+        </div>
         <div className="form-group">
           <label className="checkbox-label">
             <input
@@ -223,13 +236,24 @@ const AlertSettingsPage = () => {
         {config.email_enabled && (
           <>
             <div className="form-group">
-              <label>Email Address:</label>
+              <label>Recipient Email Address:</label>
               <input
                 type="email"
                 value={config.email_address || ''}
                 onChange={(e) => updateConfig('email_address', e.target.value)}
                 placeholder="your@email.com"
               />
+            </div>
+            <div className="help-text" style={{ marginTop: '15px' }}>
+              <p><strong>📧 SMTP Server Configuration (Environment Variables)</strong></p>
+              <code style={{ display: 'block', background: '#f0f0f0', padding: '10px', margin: '10px 0', borderRadius: '5px', fontSize: '13px' }}>
+                SMTP_HOST=smtp.gmail.com<br/>
+                SMTP_PORT=587<br/>
+                SMTP_USERNAME=your-email@gmail.com<br/>
+                SMTP_PASSWORD=your-app-password<br/>
+                SMTP_FROM=openeye@yourdomain.com
+              </code>
+              <small>💡 For Gmail: Use an <a href="https://support.google.com/accounts/answer/185833" target="_blank" rel="noopener noreferrer">App Password</a>, not your regular password!</small>
             </div>
             {config.id && config.email_address && (
               <button
@@ -242,11 +266,20 @@ const AlertSettingsPage = () => {
             )}
           </>
         )}
-      </section>
-
-      {/* SMS Settings */}
+      </section>      {/* SMS Settings */}
       <section className="settings-section">
-        <h2>📱 SMS Notifications (Twilio)</h2>
+        <h2>
+          📱 SMS Notifications
+          <HelpButton 
+            title="SMS & Telegram Notifications"
+            description="Send SMS alerts via Twilio (paid) or Telegram Bot (FREE!). Telegram requires creating a bot via @BotFather and getting your chat ID from @userinfobot. Set environment variables for credentials."
+          />
+        </h2>
+        <div className="notification-method-header">
+          <p className="method-description">
+            Send SMS alerts via Twilio or Telegram Bot. Telegram is FREE! 🎉
+          </p>
+        </div>
         <div className="form-group">
           <label className="checkbox-label">
             <input
@@ -259,23 +292,107 @@ const AlertSettingsPage = () => {
         </div>
         {config.sms_enabled && (
           <>
-            <div className="form-group">
-              <label>Phone Number (E.164 format):</label>
-              <input
-                type="tel"
-                value={config.phone_number || ''}
-                onChange={(e) => updateConfig('phone_number', e.target.value)}
-                placeholder="+1234567890"
-              />
-              <small>Include country code (e.g., +1 for USA)</small>
+            <div className="method-tabs">
+              <p><strong>Option 1: Telegram Bot (FREE!)</strong></p>
+              <div className="help-text">
+                <p>1. Message <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer">@BotFather</a> on Telegram</p>
+                <p>2. Create a new bot and get your token</p>
+                <p>3. Message your bot and get your chat ID from <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer">@userinfobot</a></p>
+                <p>4. Set environment variables: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID</p>
+              </div>
+              
+              <p style={{ marginTop: '20px' }}><strong>Option 2: Twilio (Paid)</strong></p>
+              <div className="form-group">
+                <label>Phone Number (E.164 format):</label>
+                <input
+                  type="tel"
+                  value={config.phone_number || ''}
+                  onChange={(e) => updateConfig('phone_number', e.target.value)}
+                  placeholder="+1234567890"
+                />
+                <small>Include country code (e.g., +1 for USA). Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER in environment.</small>
+              </div>
             </div>
-            {config.id && config.phone_number && (
+            {config.id && (config.phone_number || process.env.TELEGRAM_BOT_TOKEN) && (
               <button
                 onClick={() => testAlert('sms')}
                 disabled={testing}
                 className="btn-test"
               >
-                Send Test SMS
+                Send Test SMS/Telegram
+              </button>
+            )}
+          </>
+        )}
+      </section>
+
+      {/* Push Notifications */}
+      <section className="settings-section">
+        <h2>
+          🔔 Push Notifications
+          <HelpButton 
+            title="Push Notifications"
+            description="Choose between ntfy.sh (FREE & open source) or Firebase. ntfy.sh requires topic name and app download. Firebase requires project setup and credentials JSON. Both send instant push notifications to mobile devices."
+          />
+        </h2>
+        <div className="notification-method-header">
+          <p className="method-description">
+            Send push notifications to mobile devices. Choose between Firebase or ntfy.sh (FREE & Open Source!)
+          </p>
+        </div>
+        <div className="form-group">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={config.push_enabled}
+              onChange={(e) => updateConfig('push_enabled', e.target.checked)}
+            />
+            <span>Enable Push Notifications</span>
+          </label>
+        </div>
+        {config.push_enabled && (
+          <>
+            <div className="method-tabs">
+              <p><strong>Option 1: ntfy.sh (FREE & Open Source!) 🎉</strong></p>
+              <div className="help-text">
+                <p>1. Choose a unique topic name (e.g., openeye-alerts-yourname)</p>
+                <p>2. Subscribe to topic in ntfy app: <a href="https://ntfy.sh/" target="_blank" rel="noopener noreferrer">ntfy.sh</a></p>
+                <p>3. Set environment variables:</p>
+                <code style={{ display: 'block', background: '#f0f0f0', padding: '10px', margin: '10px 0', borderRadius: '5px' }}>
+                  NTFY_TOPIC=your-unique-topic<br/>
+                  NTFY_SERVER=https://ntfy.sh
+                </code>
+                <p>4. Download the ntfy app on iOS/Android and subscribe to your topic!</p>
+              </div>
+              
+              <p style={{ marginTop: '20px' }}><strong>Option 2: Firebase Cloud Messaging (FCM)</strong></p>
+              <div className="help-text">
+                <p>1. Create a Firebase project at <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer">Firebase Console</a></p>
+                <p>2. Download service account credentials JSON</p>
+                <p>3. Set environment variable:</p>
+                <code style={{ display: 'block', background: '#f0f0f0', padding: '10px', margin: '10px 0', borderRadius: '5px' }}>
+                  FIREBASE_CREDENTIALS_PATH=/app/config/firebase-credentials.json
+                </code>
+              </div>
+              
+              <div className="form-group" style={{ marginTop: '20px' }}>
+                <label>Device Token (FCM only):</label>
+                <input
+                  type="text"
+                  value={config.push_token || ''}
+                  onChange={(e) => updateConfig('push_token', e.target.value)}
+                  placeholder="Your FCM device token"
+                />
+                <small>Leave empty if using ntfy.sh</small>
+              </div>
+            </div>
+            {config.id && (
+              <button
+                onClick={() => testAlert('push')}
+                disabled={testing}
+                className="btn-test"
+              >
+                Send Test Push Notification
               </button>
             )}
           </>
@@ -284,7 +401,13 @@ const AlertSettingsPage = () => {
 
       {/* Webhook Settings */}
       <section className="settings-section">
-        <h2>🔗 Webhook Notifications</h2>
+        <h2>
+          🔗 Webhook Notifications
+          <HelpButton 
+            title={HELP_CONTENT.WEBHOOKS.title}
+            description={HELP_CONTENT.WEBHOOKS.description}
+          />
+        </h2>
         <div className="form-group">
           <label className="checkbox-label">
             <input
@@ -321,7 +444,13 @@ const AlertSettingsPage = () => {
 
       {/* Throttling */}
       <section className="settings-section">
-        <h2>⏱️ Alert Throttling</h2>
+        <h2>
+          ⏱️ Alert Throttling
+          <HelpButton 
+            title={HELP_CONTENT.ALERT_THROTTLING.title}
+            description={HELP_CONTENT.ALERT_THROTTLING.description}
+          />
+        </h2>
         <div className="form-group">
           <label>Minimum Seconds Between Alerts: {config.min_seconds_between_alerts}</label>
           <input
@@ -338,7 +467,13 @@ const AlertSettingsPage = () => {
 
       {/* Quiet Hours */}
       <section className="settings-section">
-        <h2>🌙 Quiet Hours</h2>
+        <h2>
+          🌙 Quiet Hours
+          <HelpButton 
+            title={HELP_CONTENT.QUIET_HOURS.title}
+            description={HELP_CONTENT.QUIET_HOURS.description}
+          />
+        </h2>
         <div className="form-group">
           <label className="checkbox-label">
             <input

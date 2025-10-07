@@ -54,11 +54,17 @@ const DashboardPage = ({ onLogout }) => {
       <header style={styles.header}>
         <h1>OpenEye Surveillance Dashboard</h1>
         <div style={styles.headerButtons}>
+          <button onClick={() => navigate('/camera-management')} style={styles.cameraButton}>
+            � Cameras
+          </button>
+          <button onClick={() => navigate('/theme-selector')} style={styles.themeButton}>
+            🎨 Themes
+          </button>
           <button onClick={() => navigate('/alerts')} style={styles.alertButton}>
-            🔔 Alert Settings
+            🔔 Alerts
           </button>
           <button onClick={() => setShowFaceManagement(true)} style={styles.faceButton}>
-            👤 Manage Faces
+            👤 Faces
           </button>
           <button onClick={onLogout} style={styles.logoutButton}>
             Logout
@@ -174,6 +180,24 @@ const styles = {
   },
   alertButton: {
     backgroundColor: '#ff9800',
+    color: 'white',
+    padding: '10px 20px',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontWeight: 'bold',
+  },
+  cameraButton: {
+    backgroundColor: '#9c27b0',
+    color: 'white',
+    padding: '10px 20px',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontWeight: 'bold',
+  },
+  themeButton: {
+    backgroundColor: '#ff5722',
     color: 'white',
     padding: '10px 20px',
     border: 'none',

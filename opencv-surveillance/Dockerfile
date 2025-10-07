@@ -48,6 +48,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy Python packages from builder
 COPY --from=builder /root/.local /root/.local
 
+# Create non-root user first
+RUN useradd -m -u 1000 openeye && \
+    mkdir -p /app/data /app/config /app/models /app/logs && \
+    chown -R openeye:openeye /app
+
 # Set PATH to include local Python packages
 ENV PATH=/root/.local/bin:$PATH \
     PYTHONUNBUFFERED=1 \
@@ -56,11 +61,6 @@ ENV PATH=/root/.local/bin:$PATH \
 
 # Create app directory
 WORKDIR /app
-
-# Create non-root user
-RUN useradd -m -u 1000 openeye && \
-    mkdir -p /app/data /app/config /app/models /app/logs && \
-    chown -R openeye:openeye /app
 
 # Copy application code
 COPY --chown=openeye:openeye . .
@@ -79,4 +79,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
 
 # Default command
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
