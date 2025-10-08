@@ -50,24 +50,15 @@ const DashboardPage = ({ onLogout }) => {
   }
 
   return (
-    <div>
+    <div style={styles.container}>
       <header style={styles.header}>
-        <h1>OpenEye Surveillance Dashboard</h1>
+        <h1 style={styles.title}>OpenEye Surveillance Dashboard</h1>
         <div style={styles.headerButtons}>
-          <button onClick={() => navigate('/camera-management')} style={styles.cameraButton}>
-            � Cameras
-          </button>
-          <button onClick={() => navigate('/theme-selector')} style={styles.themeButton}>
-            🎨 Themes
-          </button>
-          <button onClick={() => navigate('/alerts')} style={styles.alertButton}>
-            🔔 Alerts
-          </button>
-          <button onClick={() => setShowFaceManagement(true)} style={styles.faceButton}>
-            👤 Faces
+          <button onClick={() => navigate('/settings')} style={styles.settingsButton}>
+            ⚙️ Settings
           </button>
           <button onClick={onLogout} style={styles.logoutButton}>
-            Logout
+            🚪 Logout
           </button>
         </div>
       </header>
@@ -166,71 +157,59 @@ const DashboardPage = ({ onLogout }) => {
 
 // Styles defined ONCE outside component
 const styles = {
+  container: {
+    backgroundColor: 'var(--bg-main)',
+    minHeight: '100vh',
+    color: 'var(--text-primary)',
+    padding: '20px',
+  },
   header: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: '20px',
     paddingBottom: '15px',
-    borderBottom: '2px solid #e0e0e0',
+    borderBottom: '2px solid var(--border-panel)',
+  },
+  title: {
+    color: 'var(--text-primary)',
+    fontSize: '28px',
+    margin: 0,
   },
   headerButtons: {
     display: 'flex',
     gap: '10px',
   },
-  alertButton: {
-    backgroundColor: '#ff9800',
-    color: 'white',
-    padding: '10px 20px',
+  settingsButton: {
+    backgroundColor: 'var(--text-link)',
+    color: '#FFFFFF',
+    padding: '12px 24px',
     border: 'none',
     borderRadius: '6px',
     cursor: 'pointer',
-    fontWeight: 'bold',
-  },
-  cameraButton: {
-    backgroundColor: '#9c27b0',
-    color: 'white',
-    padding: '10px 20px',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontWeight: 'bold',
-  },
-  themeButton: {
-    backgroundColor: '#ff5722',
-    color: 'white',
-    padding: '10px 20px',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontWeight: 'bold',
-  },
-  faceButton: {
-    backgroundColor: '#2196f3',
-    color: 'white',
-    padding: '10px 20px',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontWeight: 'bold',
+    fontWeight: '600',
+    fontSize: '14px',
+    transition: 'all 0.2s ease',
   },
   logoutButton: {
-    backgroundColor: '#f44336',
-    color: 'white',
-    padding: '10px 20px',
+    backgroundColor: 'var(--color-error)',
+    color: '#FFFFFF',
+    padding: '12px 24px',
     border: 'none',
     borderRadius: '6px',
     cursor: 'pointer',
-    fontWeight: 'bold',
+    fontWeight: '600',
+    fontSize: '14px',
+    transition: 'all 0.2s ease',
   },
   statsBanner: {
     display: 'flex',
     justifyContent: 'space-around',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'var(--bg-panel)',
     padding: '15px',
     borderRadius: '8px',
     marginBottom: '20px',
-    border: '1px solid #dee2e6',
+    border: '1px solid var(--border-panel)',
   },
   statItem: {
     display: 'flex',
@@ -239,25 +218,25 @@ const styles = {
   },
   statLabel: {
     fontSize: '0.9em',
-    color: '#6c757d',
+    color: '#999',
     marginBottom: '5px',
   },
   statValue: {
     fontSize: '1.5em',
     fontWeight: 'bold',
-    color: '#495057',
+    color: 'var(--text-primary)',
   },
   videoContainer: {
     marginBottom: '30px',
-    backgroundColor: '#fff',
+    backgroundColor: 'var(--bg-panel)',
     padding: '20px',
     borderRadius: '8px',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+    border: '1px solid var(--border-panel)',
   },
   videoStream: {
     width: '100%',
     maxWidth: '800px',
-    border: '2px solid #dee2e6',
+    border: '2px solid var(--border-panel)',
     borderRadius: '8px',
   },
   streamInfo: {
@@ -266,22 +245,22 @@ const styles = {
     alignItems: 'center',
     gap: '10px',
     marginTop: '10px',
-    color: '#6c757d',
+    color: '#999',
   },
   liveIndicator: {
-    color: '#dc3545',
+    color: 'var(--color-error)',
     fontWeight: 'bold',
   },
   detectionsContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: 'var(--bg-panel)',
     padding: '20px',
     borderRadius: '8px',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+    border: '1px solid var(--border-panel)',
     marginBottom: '30px',
   },
   noDetections: {
     textAlign: 'center',
-    color: '#6c757d',
+    color: '#999',
     fontStyle: 'italic',
     padding: '20px',
   },
@@ -291,14 +270,14 @@ const styles = {
     gap: '20px',
   },
   cameraDetections: {
-    border: '1px solid #dee2e6',
+    border: '1px solid var(--border-panel)',
     borderRadius: '8px',
     padding: '15px',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'var(--bg-main)',
   },
   cameraTitle: {
     margin: '0 0 15px 0',
-    color: '#495057',
+    color: 'var(--text-primary)',
     fontSize: '1.1em',
   },
   facesList: {
@@ -309,41 +288,42 @@ const styles = {
   faceItem: {
     padding: '10px',
     borderRadius: '6px',
-    border: '1px solid #dee2e6',
+    border: '1px solid var(--border-panel)',
   },
   faceKnown: {
-    backgroundColor: '#d4edda',
-    borderColor: '#c3e6cb',
+    backgroundColor: 'rgba(40, 167, 69, 0.15)',
+    borderColor: 'var(--color-success)',
   },
   faceUnknown: {
-    backgroundColor: '#f8d7da',
-    borderColor: '#f5c6cb',
+    backgroundColor: 'rgba(220, 53, 69, 0.15)',
+    borderColor: 'var(--color-error)',
   },
   faceName: {
     fontWeight: 'bold',
     fontSize: '1.1em',
     marginBottom: '5px',
+    color: 'var(--text-primary)',
   },
   faceInfo: {
     fontSize: '0.9em',
-    color: '#6c757d',
+    color: '#999',
   },
   faceTime: {
     fontSize: '0.85em',
-    color: '#6c757d',
+    color: '#999',
     marginTop: '5px',
   },
   noFaces: {
     textAlign: 'center',
-    color: '#6c757d',
+    color: '#999',
     fontStyle: 'italic',
     padding: '10px',
   },
   infoSection: {
-    backgroundColor: '#e7f3ff',
+    backgroundColor: 'rgba(0, 123, 255, 0.15)',
     padding: '20px',
     borderRadius: '8px',
-    borderLeft: '4px solid #007bff',
+    borderLeft: '4px solid var(--text-link)',
   },
   featuresList: {
     listStyle: 'none',

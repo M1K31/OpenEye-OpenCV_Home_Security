@@ -12,7 +12,8 @@ import AlertSettingsPage from './pages/AlertSettingsPage';
 import CameraDiscoveryPage from './pages/CameraDiscoveryPage';
 import CameraManagementPage from './pages/CameraManagementPage';
 import ThemeSelectorPage from './pages/ThemeSelectorPage';
-import SettingsPage from './pages/SettingsPage';
+// import SettingsPage from './pages/SettingsPage';
+import SettingsPage from './pages/SettingsPageSimple'; // TEMPORARY: Using simple test version
 import FirstRunSetup from './pages/FirstRunSetup';
 
 
@@ -107,7 +108,7 @@ function App() {
           />
           <Route
             path="/theme-selector"
-            element={token ? <ThemeSelectorPage onBack={() => window.history.back()} /> : <Navigate to="/login" />}
+            element={token ? <ThemeSelectorPage /> : <Navigate to="/login" />}
           />
           <Route
             path="/alerts"

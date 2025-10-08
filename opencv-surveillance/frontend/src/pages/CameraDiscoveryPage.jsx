@@ -324,6 +324,9 @@ const styles = {
     maxWidth: '1400px',
     margin: '0 auto',
     fontFamily: 'Arial, sans-serif',
+    backgroundColor: 'var(--bg-main)',
+    minHeight: '100vh',
+    color: 'var(--text-primary)',
   },
   header: {
     marginBottom: '30px',
@@ -552,20 +555,23 @@ const styles = {
     gap: '20px',
   },
   helpCard: {
-    background: 'white',
+    background: 'var(--bg-panel)',
     padding: '20px',
     borderRadius: '8px',
     boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+    color: 'var(--text-primary)',
   },
   helpList: {
     listStyle: 'none',
     padding: 0,
     margin: '10px 0 0 0',
+    color: 'var(--text-primary)',
   },
   helpText: {
-    color: '#7f8c8d',
+    color: 'var(--text-primary)',
     fontSize: '14px',
     marginBottom: '10px',
+    opacity: 0.8,
   },
 };
 

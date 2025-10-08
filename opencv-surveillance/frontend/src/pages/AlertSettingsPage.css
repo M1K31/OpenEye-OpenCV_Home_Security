@@ -358,3 +358,49 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+/* SMTP Configuration Code Block */
+.smtp-config-code {
+  display: block;
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  padding: 10px;
+  margin: 10px 0;
+  border-radius: 5px;
+  border: 1px solid var(--border-panel);
+  font-size: 13px;
+  font-family: 'Courier New', monospace;
+  line-height: 1.6;
+}
+
+/* Method Description */
+.method-description {
+  color: var(--text-primary);
+  margin: 10px 0;
+  line-height: 1.5;
+}
+
+/* No Logs Message */
+.no-logs {
+  color: #88c0d0;
+  text-align: center;
+  padding: 20px;
+  font-style: italic;
+}
+
+/* Help Text Links */
+.help-text a {
+  color: var(--text-link);
+  text-decoration: none;
+}
+
+.help-text a:hover {
+  text-decoration: underline;
+}
+
+.help-text small {
+  color: #88c0d0;
+}
+
+.help-text strong {
+  color: var(--text-primary);
+}

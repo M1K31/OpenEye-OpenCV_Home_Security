@@ -1,0 +1,355 @@
+/* Copyright (c) 2025 Mikel Smart
+ * This file is part of OpenEye-OpenCV_Home_Security
+ * Global Dark Theme - Applied to ALL pages consistently
+ */
+
+:root {
+  /* Main Colors */
+  --bg-main: #262626;
+  --bg-panel: #333333;
+  --border-panel: #4d4d4d;
+  --border-input: #666666;
+  --state-active: #606060;
+  
+  /* Text Colors */
+  --text-primary: #ffffff;
+  --text-link: #007bff;
+  
+  /* Status Colors */
+  --color-success: #28a745;
+  --color-error: #dc3545;
+  --color-warning: #ffc107;
+  
+  /* Derived Colors */
+  --bg-hover: #404040;
+  --bg-input: #2a2a2a;
+  --shadow: rgba(0, 0, 0, 0.5);
+}
+
+/* Global Body Styling */
+body {
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+/* Container Styling */
+.app-container {
+  background-color: var(--bg-main);
+  min-height: 100vh;
+  color: var(--text-primary);
+}
+
+/* Panel/Card Styling */
+.panel,
+.card {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-panel);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px var(--shadow);
+}
+
+/* Headers */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-primary);
+  margin-top: 0;
+}
+
+/* Links */
+a {
+  color: var(--text-link);
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+a:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+/* Buttons */
+button,
+.btn {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-panel);
+  color: var(--text-primary);
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+button:hover,
+.btn:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--border-input);
+}
+
+button:active,
+.btn:active,
+button.active,
+.btn.active {
+  background-color: var(--state-active);
+}
+
+button:disabled,
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Primary Button */
+.btn-primary,
+button.primary {
+  background-color: var(--text-link);
+  border-color: var(--text-link);
+  color: white;
+}
+
+.btn-primary:hover,
+button.primary:hover {
+  background-color: #0056b3;
+  border-color: #0056b3;
+}
+
+/* Success Button */
+.btn-success,
+button.success {
+  background-color: var(--color-success);
+  border-color: var(--color-success);
+  color: white;
+}
+
+.btn-success:hover,
+button.success:hover {
+  background-color: #218838;
+  border-color: #218838;
+}
+
+/* Danger Button */
+.btn-danger,
+button.danger {
+  background-color: var(--color-error);
+  border-color: var(--color-error);
+  color: white;
+}
+
+.btn-danger:hover,
+button.danger:hover {
+  background-color: #c82333;
+  border-color: #c82333;
+}
+
+/* Warning Button */
+.btn-warning,
+button.warning {
+  background-color: var(--color-warning);
+  border-color: var(--color-warning);
+  color: #000;
+}
+
+.btn-warning:hover,
+button.warning:hover {
+  background-color: #e0a800;
+  border-color: #e0a800;
+}
+
+/* Input Fields */
+input,
+textarea,
+select {
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-input);
+  color: var(--text-primary);
+  padding: 10px;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--text-link);
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #999;
+}
+
+/* Labels */
+label {
+  color: var(--text-primary);
+  font-weight: 500;
+  margin-bottom: 5px;
+  display: inline-block;
+}
+
+/* Tables */
+table {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-panel);
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th,
+td {
+  border: 1px solid var(--border-panel);
+  padding: 12px;
+  text-align: left;
+}
+
+th {
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+tr:hover {
+  background-color: var(--bg-hover);
+}
+
+/* Status Indicators */
+.status-success {
+  color: var(--color-success);
+}
+
+.status-error {
+  color: var(--color-error);
+}
+
+.status-warning {
+  color: var(--color-warning);
+}
+
+/* Alert Messages */
+.alert {
+  padding: 15px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  border-left: 4px solid;
+}
+
+.alert-success {
+  background-color: rgba(40, 167, 69, 0.15);
+  border-left-color: var(--color-success);
+  color: var(--color-success);
+}
+
+.alert-error {
+  background-color: rgba(220, 53, 69, 0.15);
+  border-left-color: var(--color-error);
+  color: var(--color-error);
+}
+
+.alert-warning {
+  background-color: rgba(255, 193, 7, 0.15);
+  border-left-color: var(--color-warning);
+  color: var(--color-warning);
+}
+
+/* Loading Spinner */
+.spinner {
+  border: 3px solid var(--border-panel);
+  border-top: 3px solid var(--text-link);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-main);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-input);
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--state-active);
+}
+
+/* Modal/Dialog */
+.modal-overlay {
+  background-color: rgba(0, 0, 0, 0.7);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-panel);
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 4px 20px var(--shadow);
+}
+
+/* Form Groups */
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Grid Layouts */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 768px) {
+  .grid-2,
+  .grid-3 {
+    grid-template-columns: 1fr;
+  }
+}

@@ -423,6 +423,59 @@ GET /api/cameras/discover/usb
 # Returns list of available USB cameras with indices
 ```
 
+**⚠️ macOS Docker Limitations:**
+
+USB camera discovery has limitations when running in Docker on macOS due to how Docker Desktop virtualizes hardware access. Docker on macOS runs in a Linux VM, which doesn't have direct access to the host's USB devices.
+
+**Why USB Cameras Don't Work in Docker on macOS:**
+- Docker Desktop on macOS uses a lightweight Linux VM (HyperKit/WSL2)
+- USB devices aren't automatically passed through to the VM
+- The `/dev/video*` devices that OpenCV needs aren't available inside containers
+
+**Workarounds for macOS Users:**
+
+**Option 1: Use Network/IP Cameras (Recommended)**
+- Works perfectly with Docker on all platforms
+- Use ONVIF network camera discovery (see below)
+- More flexible for multi-camera setups
+- Example affordable options: Wyze Cam v3, Reolink cameras
+
+**Option 2: Run Backend Natively on macOS**
+Instead of using Docker, run the FastAPI backend directly:
+```bash
+# Install Python dependencies
+cd opencv-surveillance/backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r ../requirements.txt
+
+# Run backend
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+**Option 3: USB/IP Forwarding (Advanced)**
+Recent Docker Desktop versions have experimental USB/IP support:
+```bash
+# 1. Start privileged container for USB management
+docker run --rm -it --privileged --pid=host alpine
+
+# 2. Inside container, attach USB device
+nsenter -t 1 -m
+usbip list -r host.docker.internal
+usbip attach -r host.docker.internal -d <BUSID>
+
+# 3. Device appears at /dev/video0 in other containers
+```
+**Note:** This method is experimental and may not work reliably.
+
+**Option 4: Linux Development Environment**
+- Run Docker on Linux (native USB passthrough support)
+- Use a Raspberry Pi or similar Linux device
+- Cloud VPS with USB cameras (if supported)
+
+**Recommended Solution:**
+For production use with macOS, we recommend using network/IP cameras which work seamlessly across all platforms and provide better reliability and scalability.
+
 #### Network Camera Discovery  
 Scans local network for ONVIF-compatible IP cameras:
 ```bash

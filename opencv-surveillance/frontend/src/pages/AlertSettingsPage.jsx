@@ -8,7 +8,7 @@ import HelpButton from '../components/HelpButton';
 import { HELP_CONTENT } from '../utils/helpContent';
 import './AlertSettingsPage.css';
 
-const AlertSettingsPage = () => {
+const AlertSettingsPage = ({ embedded = false }) => {
   const navigate = useNavigate();
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -54,6 +54,26 @@ const AlertSettingsPage = () => {
       }
       setLoading(false);
     } catch (error) {
+      // Set default config on error to prevent null access
+      setConfig({
+        user_id: 1,
+        motion_alerts_enabled: true,
+        face_recognition_alerts_enabled: true,
+        unknown_face_alerts_enabled: true,
+        recording_alerts_enabled: false,
+        email_enabled: true,
+        sms_enabled: false,
+        push_enabled: false,
+        webhook_enabled: false,
+        email_address: '',
+        phone_number: '',
+        push_token: '',
+        webhook_url: '',
+        min_seconds_between_alerts: 300,
+        quiet_hours_enabled: false,
+        quiet_hours_start: '22:00',
+        quiet_hours_end: '07:00'
+      });
       showMessage('Error loading configuration: ' + error.message, 'error');
       setLoading(false);
     }
@@ -131,9 +151,11 @@ const AlertSettingsPage = () => {
     <div className="alert-settings-container">
       <header className="page-header">
         <h1>Alert & Notification Settings</h1>
-        <button onClick={() => navigate('/')} className="btn-secondary">
-          Back to Dashboard
-        </button>
+        {!embedded && (
+          <button onClick={() => navigate('/')} className="btn-secondary">
+            Back to Dashboard
+          </button>
+        )}
       </header>
 
       {message && (
@@ -246,7 +268,7 @@ const AlertSettingsPage = () => {
             </div>
             <div className="help-text" style={{ marginTop: '15px' }}>
               <p><strong>📧 SMTP Server Configuration (Environment Variables)</strong></p>
-              <code style={{ display: 'block', background: '#f0f0f0', padding: '10px', margin: '10px 0', borderRadius: '5px', fontSize: '13px' }}>
+              <code className="smtp-config-code">
                 SMTP_HOST=smtp.gmail.com<br/>
                 SMTP_PORT=587<br/>
                 SMTP_USERNAME=your-email@gmail.com<br/>

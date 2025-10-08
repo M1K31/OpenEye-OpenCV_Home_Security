@@ -7,7 +7,7 @@ import HelpButton from '../components/HelpButton';
 import { HELP_CONTENT } from '../utils/helpContent';
 import axios from 'axios';
 
-const CameraManagementPage = () => {
+const CameraManagementPage = ({ embedded = false }) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('list'); // 'list', 'discover', 'manual'
   const [cameras, setCameras] = useState([]);
@@ -32,9 +32,12 @@ const CameraManagementPage = () => {
     setLoading(true);
     try {
       const response = await axios.get('/api/cameras/');
-      setCameras(response.data);
+      // Ensure we always set an array
+      const cameraData = Array.isArray(response.data) ? response.data : [];
+      setCameras(cameraData);
     } catch (err) {
       setError(`Failed to load cameras: ${err.response?.data?.detail || err.message}`);
+      setCameras([]); // Ensure cameras remains an array on error
     } finally {
       setLoading(false);
     }
@@ -110,9 +113,11 @@ const CameraManagementPage = () => {
     <div style={styles.container}>
       {/* Header */}
       <div style={styles.header}>
-        <button onClick={() => navigate('/')} style={styles.backButton}>
-          ← Back to Dashboard
-        </button>
+        {!embedded && (
+          <button onClick={() => navigate('/')} style={styles.backButton}>
+            ← Back to Dashboard
+          </button>
+        )}
         <h1 style={styles.title}>
           📹 Camera Management
           <HelpButton 
@@ -453,14 +458,17 @@ const styles = {
     maxWidth: '1400px',
     margin: '0 auto',
     fontFamily: 'Arial, sans-serif',
+    backgroundColor: 'var(--bg-main)',
+    minHeight: '100vh',
+    color: 'var(--text-primary)',
   },
   header: {
     marginBottom: '30px',
   },
   backButton: {
-    background: '#6c757d',
-    color: 'white',
-    border: 'none',
+    background: 'var(--bg-panel)',
+    color: 'var(--text-primary)',
+    border: '1px solid var(--border-panel)',
     padding: '10px 20px',
     borderRadius: '5px',
     cursor: 'pointer',
@@ -469,18 +477,18 @@ const styles = {
   },
   title: {
     fontSize: '32px',
-    color: '#2c3e50',
+    color: 'var(--text-primary)',
     marginBottom: '10px',
   },
   subtitle: {
     fontSize: '16px',
-    color: '#7f8c8d',
+    color: '#999',
   },
   tabContainer: {
     display: 'flex',
     gap: '10px',
     marginBottom: '20px',
-    borderBottom: '2px solid #e9ecef',
+    borderBottom: '2px solid var(--border-panel)',
   },
   tab: {
     background: 'transparent',
@@ -490,27 +498,27 @@ const styles = {
     cursor: 'pointer',
     borderBottom: '3px solid transparent',
     transition: 'all 0.3s',
-    color: '#7f8c8d',
+    color: '#999',
   },
   tabActive: {
-    color: '#667eea',
-    borderBottom: '3px solid #667eea',
+    color: 'var(--text-link)',
+    borderBottom: '3px solid var(--text-link)',
     fontWeight: 'bold',
   },
   alert: {
     error: {
-      background: '#fee',
-      border: '1px solid #fcc',
-      color: '#c33',
+      background: 'rgba(220, 53, 69, 0.15)',
+      border: '1px solid var(--color-error)',
+      color: 'var(--color-error)',
       padding: '15px',
       borderRadius: '5px',
       marginBottom: '20px',
       position: 'relative',
     },
     success: {
-      background: '#efe',
-      border: '1px solid #cfc',
-      color: '#3c3',
+      background: 'rgba(40, 167, 69, 0.15)',
+      border: '1px solid var(--color-success)',
+      color: 'var(--color-success)',
       padding: '15px',
       borderRadius: '5px',
       marginBottom: '20px',
@@ -528,10 +536,10 @@ const styles = {
     color: 'inherit',
   },
   content: {
-    background: 'white',
+    background: 'var(--bg-panel)',
     borderRadius: '10px',
     padding: '30px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+    border: '1px solid var(--border-panel)',
   },
   sectionHeader: {
     display: 'flex',
@@ -541,16 +549,16 @@ const styles = {
   },
   sectionTitle: {
     fontSize: '24px',
-    color: '#2c3e50',
+    color: 'var(--text-primary)',
     margin: 0,
   },
   sectionDescription: {
-    color: '#7f8c8d',
+    color: '#999',
     marginBottom: '30px',
     lineHeight: '1.6',
   },
   refreshButton: {
-    background: '#17a2b8',
+    background: 'var(--text-link)',
     color: 'white',
     border: 'none',
     padding: '10px 20px',
@@ -561,7 +569,7 @@ const styles = {
   emptyState: {
     textAlign: 'center',
     padding: '80px 20px',
-    color: '#7f8c8d',
+    color: '#999',
   },
   emptyIcon: {
     fontSize: '64px',
@@ -585,9 +593,9 @@ const styles = {
     fontWeight: 'bold',
   },
   secondaryButton: {
-    background: '#fff',
-    color: '#667eea',
-    border: '2px solid #667eea',
+    background: 'var(--bg-panel)',
+    color: 'var(--text-link)',
+    border: '2px solid var(--text-link)',
     padding: '15px 40px',
     borderRadius: '25px',
     cursor: 'pointer',
@@ -600,8 +608,8 @@ const styles = {
     gap: '20px',
   },
   cameraCard: {
-    background: '#f8f9fa',
-    border: '2px solid #e9ecef',
+    background: 'var(--bg-main)',
+    border: '2px solid var(--border-panel)',
     borderRadius: '10px',
     overflow: 'hidden',
   },
@@ -630,10 +638,10 @@ const styles = {
     fontSize: '14px',
   },
   statusEnabled: {
-    color: '#4ade80',
+    color: 'var(--color-success)',
   },
   statusDisabled: {
-    color: '#f87171',
+    color: 'var(--color-error)',
   },
   cardBody: {
     padding: '15px',
@@ -646,12 +654,12 @@ const styles = {
   },
   label: {
     fontWeight: 'bold',
-    color: '#2c3e50',
+    color: 'var(--text-primary)',
     display: 'block',
     marginBottom: '5px',
   },
   value: {
-    color: '#7f8c8d',
+    color: '#999',
     fontFamily: 'monospace',
     fontSize: '14px',
   },
@@ -659,11 +667,11 @@ const styles = {
     padding: '15px',
     display: 'flex',
     gap: '10px',
-    background: '#fff',
+    background: 'var(--bg-panel)',
   },
   viewButton: {
     flex: 1,
-    background: '#17a2b8',
+    background: 'var(--text-link)',
     color: 'white',
     border: 'none',
     padding: '10px',
@@ -673,7 +681,7 @@ const styles = {
   },
   enableButton: {
     flex: 1,
-    background: '#28a745',
+    background: 'var(--color-success)',
     color: 'white',
     border: 'none',
     padding: '10px',
@@ -683,8 +691,8 @@ const styles = {
   },
   disableButton: {
     flex: 1,
-    background: '#ffc107',
-    color: '#000',
+    background: 'var(--color-warning)',
+    color: 'var(--bg-main)',
     border: 'none',
     padding: '10px',
     borderRadius: '5px',
@@ -693,7 +701,7 @@ const styles = {
   },
   deleteButton: {
     flex: 1,
-    background: '#dc3545',
+    background: 'var(--color-error)',
     color: 'white',
     border: 'none',
     padding: '10px',
@@ -716,21 +724,21 @@ const styles = {
   },
   input: {
     padding: '12px',
-    border: '2px solid #e9ecef',
+    border: '2px solid var(--border-panel)',
     borderRadius: '5px',
     fontSize: '14px',
     fontFamily: 'inherit',
   },
   select: {
     padding: '12px',
-    border: '2px solid #e9ecef',
+    border: '2px solid var(--border-panel)',
     borderRadius: '5px',
     fontSize: '14px',
     fontFamily: 'inherit',
   },
   hint: {
     fontSize: '12px',
-    color: '#7f8c8d',
+    color: '#999',
     marginTop: '5px',
   },
   checkboxLabel: {
@@ -738,7 +746,7 @@ const styles = {
     alignItems: 'center',
     gap: '10px',
     fontSize: '14px',
-    color: '#2c3e50',
+    color: 'var(--text-primary)',
   },
   checkbox: {
     width: '20px',
@@ -750,7 +758,7 @@ const styles = {
     marginTop: '30px',
   },
   submitButton: {
-    background: '#28a745',
+    background: 'var(--color-success)',
     color: 'white',
     border: 'none',
     padding: '15px 40px',
@@ -760,7 +768,7 @@ const styles = {
     fontWeight: 'bold',
   },
   resetButton: {
-    background: '#6c757d',
+    background: 'var(--bg-panel)',
     color: 'white',
     border: 'none',
     padding: '15px 40px',
@@ -769,14 +777,14 @@ const styles = {
     fontSize: '16px',
   },
   helpSection: {
-    background: '#f8f9fa',
+    background: 'var(--bg-main)',
     borderRadius: '10px',
     padding: '25px',
     marginTop: '40px',
   },
   helpTitle: {
     fontSize: '20px',
-    color: '#2c3e50',
+    color: 'var(--text-primary)',
     marginBottom: '20px',
   },
   helpGrid: {
@@ -792,8 +800,8 @@ const styles = {
   },
   code: {
     display: 'block',
-    background: '#2c3e50',
-    color: '#4ade80',
+    background: 'var(--bg-main)',
+    color: 'var(--color-success)',
     padding: '10px',
     borderRadius: '5px',
     fontSize: '12px',

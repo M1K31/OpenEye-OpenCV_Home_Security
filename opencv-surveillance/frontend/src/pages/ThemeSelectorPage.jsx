@@ -1,11 +1,13 @@
 // Copyright (c) 2025 Mikel Smart
 // This file is part of OpenEye-OpenCV_Home_Security
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme, THEMES } from '../context/ThemeContext';
 import HelpButton from '../components/HelpButton';
 import { HELP_CONTENT } from '../utils/helpContent';
 
-const ThemeSelectorPage = ({ onBack }) => {
+const ThemeSelectorPage = ({ embedded = false }) => {
+  const navigate = useNavigate();
   const { currentTheme, setTheme } = useTheme();
   const [previewTheme, setPreviewTheme] = useState(currentTheme);
 
@@ -65,12 +67,18 @@ const ThemeSelectorPage = ({ onBack }) => {
     setPreviewTheme(theme);
   };
 
+  // Safety check: ensure currentTheme exists in themeInfo
+  const safeCurrentTheme = themeInfo[currentTheme] ? currentTheme : THEMES.DEFAULT;
+  const currentThemeData = themeInfo[safeCurrentTheme];
+
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <button onClick={onBack} style={styles.backButton}>
-          ← Back to Dashboard
-        </button>
+        {!embedded && (
+          <button onClick={() => navigate('/')} style={styles.backButton}>
+            ← Back to Dashboard
+          </button>
+        )}
         <h1 style={styles.title}>
           🎨 Theme Selector
           <HelpButton 
@@ -86,7 +94,7 @@ const ThemeSelectorPage = ({ onBack }) => {
       <div style={styles.currentTheme}>
         <span style={styles.label}>Current Theme:</span>
         <span style={styles.themeName}>
-          {themeInfo[currentTheme].icon} {themeInfo[currentTheme].name}
+          {currentThemeData.icon} {currentThemeData.name}
         </span>
       </div>
 
@@ -174,12 +182,17 @@ const styles = {
     maxWidth: '1400px',
     margin: '0 auto',
     fontFamily: 'Arial, sans-serif',
+    backgroundColor: 'var(--bg-main)',
+    minHeight: '100vh',
+    color: 'var(--text-primary)',
   },
   header: {
     marginBottom: '30px',
   },
   backButton: {
-    background: '#6c757d',
+    background: 'var(--bg-panel)',
+    color: 'var(--text-primary)',
+    border: '1px solid var(--border-panel)',
     color: 'white',
     border: 'none',
     padding: '10px 20px',
@@ -197,7 +210,7 @@ const styles = {
     opacity: 0.8,
   },
   currentTheme: {
-    background: 'rgba(255,255,255,0.1)',
+    background: 'rgba(255,255,255,0.05)',
     padding: '15px 25px',
     borderRadius: '10px',
     marginBottom: '30px',
@@ -220,7 +233,7 @@ const styles = {
     marginBottom: '40px',
   },
   themeCard: {
-    background: 'rgba(255,255,255,0.9)',
+    background: 'var(--bg-panel)',
     color: '#2c3e50',
     borderRadius: '15px',
     padding: '25px',
@@ -250,14 +263,14 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: 'rgba(0,0,0,0.05)',
+    background: 'var(--bg-panel)',
     borderRadius: '10px',
   },
   activeBadge: {
     position: 'absolute',
     top: 0,
     right: 0,
-    background: '#28a745',
+    background: 'var(--color-success)',
     color: 'white',
     padding: '4px 12px',
     borderRadius: '15px',
@@ -268,7 +281,8 @@ const styles = {
     fontSize: '14px',
     marginBottom: '20px',
     lineHeight: '1.6',
-    opacity: 0.8,
+    opacity: 0.9,
+    color: '#88c0d0', // Light blue for better readability on dark backgrounds
   },
   colorPalette: {
     display: 'flex',
@@ -286,7 +300,7 @@ const styles = {
   },
   applyButton: {
     width: '100%',
-    background: '#667eea',
+    background: 'var(--text-link)',
     color: 'white',
     border: 'none',
     padding: '12px',
@@ -303,7 +317,7 @@ const styles = {
     fontSize: '16px',
   },
   infoSection: {
-    background: 'rgba(255,255,255,0.1)',
+    background: 'rgba(255,255,255,0.05)',
     borderRadius: '15px',
     padding: '30px',
   },
@@ -317,8 +331,8 @@ const styles = {
     gap: '20px',
   },
   infoCard: {
-    background: 'rgba(255,255,255,0.9)',
-    color: '#2c3e50',
+    background: 'var(--bg-panel)',
+    color: 'var(--text-primary)',
     padding: '20px',
     borderRadius: '10px',
   },

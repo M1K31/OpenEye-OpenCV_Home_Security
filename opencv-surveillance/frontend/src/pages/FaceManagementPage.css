@@ -1,169 +1,108 @@
 /*
 Copyright (c) 2025 Mikel Smart
 This file is part of OpenEye-OpenCV_Home_Security
+Dark theme for Face Management Page
 */
+
 .face-management-container {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 20px;
+  background-color: var(--bg-main);
+  min-height: 100vh;
+  color: var(--text-primary);
 }
 
-.page-header {
+header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 30px;
   padding-bottom: 20px;
-  border-bottom: 2px solid #e0e0e0;
+  border-bottom: 2px solid var(--border-panel);
 }
 
-.page-header h1 {
+header h1 {
   margin: 0;
-  color: #333;
+  color: var(--text-primary);
+  font-size: 2em;
 }
 
-/* Message Box */
-.message {
-  padding: 15px 20px;
-  border-radius: 8px;
-  margin-bottom: 20px;
-  font-weight: 500;
-}
-
-.message-success {
-  background-color: #d4edda;
-  color: #155724;
-  border: 1px solid #c3e6cb;
-}
-
-.message-error {
-  background-color: #f8d7da;
-  color: #721c24;
-  border: 1px solid #f5c6cb;
-}
-
-/* Statistics Section */
-.statistics-section {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+/* All CSS rules inherit global dark theme variables */
+.btn-primary {
+  background-color: var(--text-link);
   color: white;
-  padding: 30px;
-  border-radius: 12px;
-  margin-bottom: 30px;
 }
 
-.statistics-section h2 {
-  margin-top: 0;
-  margin-bottom: 20px;
+.btn-secondary {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-panel);
+  color: var(--text-primary);
 }
 
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
+.btn-danger {
+  background-color: var(--color-error);
+  color: white;
 }
 
-.stat-card {
-  background: rgba(255, 255, 255, 0.2);
-  padding: 20px;
-  border-radius: 8px;
-  text-align: center;
-}
-
-.stat-value {
-  font-size: 2.5em;
-  font-weight: bold;
-  margin-bottom: 5px;
-}
-
-.stat-label {
-  font-size: 0.9em;
-  opacity: 0.9;
-}
-
-/* Settings Section */
-.settings-section {
-  background: #f9f9f9;
-  padding: 25px;
-  border-radius: 12px;
-  margin-bottom: 30px;
-}
-
-.settings-section h2 {
-  margin-top: 0;
-  margin-bottom: 20px;
-  color: #333;
-}
-
-.settings-form {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-}
-
-.form-group label {
-  font-weight: 600;
-  margin-bottom: 8px;
-  color: #555;
-}
-
-.form-group select,
-.form-group input[type="text"] {
-  padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 14px;
-}
-
-.form-group input[type="range"] {
-  width: 100%;
-}
-
-.form-group small {
-  margin-top: 5px;
-  color: #777;
-  font-size: 12px;
+.btn-success {
+  background-color: var(--color-success);
+  color: white;
 }
 
 /* Add Person Section */
 .add-person-section {
-  background: white;
-  padding: 25px;
-  border-radius: 12px;
+  background-color: var(--bg-panel);
+  padding: 20px;
+  border-radius: 8px;
   margin-bottom: 30px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border-panel);
 }
 
 .add-person-section h2 {
   margin-top: 0;
+  color: var(--text-primary);
+  font-size: 1.5em;
   margin-bottom: 15px;
-  color: #333;
 }
 
 .add-person-form {
   display: flex;
   gap: 10px;
+  align-items: center;
 }
 
 .add-person-form input {
   flex: 1;
-  padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 14px;
+  padding: 10px;
+  border: 1px solid var(--border-input);
+  border-radius: 4px;
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  font-size: 16px;
+}
+
+.add-person-form button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: opacity 0.2s;
+}
+
+.add-person-form button:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.add-person-form button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* People Section */
 .people-section {
-  background: white;
-  padding: 25px;
-  border-radius: 12px;
-  margin-bottom: 30px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-top: 30px;
 }
 
 .section-header {
@@ -175,7 +114,16 @@ This file is part of OpenEye-OpenCV_Home_Security
 
 .section-header h2 {
   margin: 0;
-  color: #333;
+  color: var(--text-primary);
+  font-size: 1.5em;
+}
+
+.no-people {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-primary);
+  opacity: 0.6;
+  font-size: 1.1em;
 }
 
 .people-grid {
@@ -184,183 +132,125 @@ This file is part of OpenEye-OpenCV_Home_Security
   gap: 20px;
 }
 
+/* Person Card */
 .person-card {
-  background: #f8f9fa;
-  padding: 20px;
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-panel);
   border-radius: 8px;
-  border: 1px solid #e0e0e0;
-  transition: transform 0.2s, box-shadow 0.2s;
+  padding: 15px;
+  transition: transform 0.2s;
 }
 
 .person-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
 }
 
 .person-card h3 {
   margin: 0 0 10px 0;
-  color: #333;
+  color: var(--text-primary);
   font-size: 1.2em;
 }
 
 .person-card p {
-  color: #666;
-  margin: 0 0 15px 0;
+  margin: 5px 0;
+  color: var(--text-primary);
+  opacity: 0.8;
+  font-size: 0.9em;
 }
 
-.person-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.no-people {
-  text-align: center;
-  color: #999;
-  font-style: italic;
-  padding: 40px;
-}
-
-/* Modal */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: white;
-  padding: 30px;
-  border-radius: 12px;
-  max-width: 500px;
-  width: 90%;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-}
-
-.modal-content h2 {
-  margin-top: 0;
-  margin-bottom: 20px;
-  color: #333;
-}
-
-.modal-content input[type="file"] {
-  width: 100%;
-  padding: 10px;
-  margin-bottom: 15px;
-  border: 2px dashed #ddd;
-  border-radius: 6px;
+.person-card button {
+  margin-top: 10px;
+  padding: 8px 15px;
+  border: none;
+  border-radius: 4px;
   cursor: pointer;
+  transition: opacity 0.2s;
 }
 
-.modal-actions {
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-  margin-top: 20px;
+.person-card button:hover {
+  opacity: 0.9;
 }
 
-/* Instructions Section */
-.instructions-section {
-  background: #f0f7ff;
-  padding: 25px;
-  border-radius: 12px;
-  border-left: 4px solid #007bff;
+/* Statistics Section */
+.statistics-section {
+  background-color: var(--bg-panel);
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 30px;
+  border: 1px solid var(--border-panel);
 }
 
-.instructions-section h2 {
+.statistics-section h2 {
   margin-top: 0;
-  margin-bottom: 15px;
-  color: #333;
+  color: var(--text-primary);
+  text-align: center;
+  font-size: 1.5em;
 }
 
-.instructions-section ol {
-  color: #555;
-  line-height: 1.8;
-  padding-left: 20px;
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 15px;
+  margin-top: 15px;
 }
 
-.instructions-section ol li {
-  margin-bottom: 10px;
+.stat-card {
+  text-align: center;
+  padding: 15px;
+  background-color: var(--bg-main);
+  border-radius: 6px;
 }
 
-.tips {
-  margin-top: 20px;
-  padding-top: 15px;
-  border-top: 1px solid #d0e5ff;
+.stat-value {
+  font-size: 2em;
+  font-weight: bold;
+  color: var(--text-link);
+  margin-bottom: 5px;
 }
 
-.tips ul {
-  color: #555;
-  line-height: 1.6;
-  padding-left: 20px;
+.stat-label {
+  color: var(--text-primary);
+  opacity: 0.8;
+  font-size: 0.9em;
 }
 
-/* Buttons */
-.btn-primary, .btn-secondary, .btn-success, .btn-warning, .btn-danger, .btn-small {
+/* Messages */
+.message {
+  padding: 12px 20px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  font-weight: 500;
+}
+
+.message-success {
+  background-color: var(--color-success);
+  color: white;
+}
+
+.message-error {
+  background-color: var(--color-error);
+  color: white;
+}
+
+.message-warning {
+  background-color: var(--color-warning);
+  color: #000;
+}
+
+/* Button Base Styles */
+button {
   padding: 10px 20px;
   border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 600;
+  border-radius: 4px;
   cursor: pointer;
-  transition: background-color 0.3s, transform 0.1s;
+  font-size: 14px;
+  transition: all 0.2s;
 }
 
-.btn-primary {
-  background-color: #007bff;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background-color: #0056b3;
-}
-
-.btn-secondary {
-  background-color: #6c757d;
-  color: white;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background-color: #545b62;
-}
-
-.btn-success {
-  background-color: #28a745;
-  color: white;
-}
-
-.btn-success:hover:not(:disabled) {
-  background-color: #1e7e34;
-}
-
-.btn-warning {
-  background-color: #ffc107;
-  color: #212529;
-}
-
-.btn-warning:hover:not(:disabled) {
-  background-color: #e0a800;
-}
-
-.btn-danger {
-  background-color: #dc3545;
-  color: white;
-}
-
-.btn-danger:hover:not(:disabled) {
-  background-color: #bd2130;
-}
-
-.btn-small {
-  padding: 6px 12px;
-  font-size: 12px;
-  flex: 1;
+button:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
 }
 
 button:disabled {
@@ -368,35 +258,309 @@ button:disabled {
   cursor: not-allowed;
 }
 
-button:active:not(:disabled) {
-  transform: scale(0.98);
+.btn-warning {
+  background-color: var(--color-warning);
+  color: #000;
 }
 
-/* Responsive Design */
-@media (max-width: 768px) {
-  .page-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 15px;
-  }
+/* Settings Section */
+.settings-section {
+  background-color: var(--bg-panel);
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 30px;
+  border: 1px solid var(--border-panel);
+}
 
-  .stats-grid,
-  .people-grid {
-    grid-template-columns: 1fr;
-  }
+.settings-section h2 {
+  margin-top: 0;
+  color: var(--text-primary);
+  font-size: 1.5em;
+  margin-bottom: 15px;
+}
 
-  .add-person-form {
-    flex-direction: column;
-  }
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
 
-  .section-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 15px;
-  }
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 
-  .modal-content {
-    width: 95%;
-    padding: 20px;
-  }
+.form-group label {
+  color: var(--text-primary);
+  font-weight: 500;
+  font-size: 1em;
+}
+
+.form-group select,
+.form-group input[type="range"] {
+  padding: 8px;
+  border: 1px solid var(--border-input);
+  border-radius: 4px;
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  font-size: 16px;
+}
+
+.form-group select {
+  cursor: pointer;
+}
+
+.form-group small {
+  color: #88c0d0;
+  font-size: 0.85em;
+  font-style: italic;
+  opacity: 0.9;
+}
+
+/* Quick Guide Section */
+.quick-guide {
+  background-color: var(--bg-panel);
+  padding: 20px;
+  border-radius: 8px;
+  margin-top: 30px;
+  border: 1px solid var(--border-panel);
+}
+
+.quick-guide h2 {
+  margin-top: 0;
+  color: var(--text-primary);
+  font-size: 1.5em;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.quick-guide ol {
+  color: var(--text-primary);
+  line-height: 1.8;
+  padding-left: 20px;
+}
+
+.quick-guide ol li {
+  margin-bottom: 8px;
+}
+
+.quick-guide h3 {
+  color: var(--text-primary);
+  margin-top: 20px;
+  margin-bottom: 10px;
+  font-size: 1.2em;
+}
+
+.quick-guide ul {
+  color: var(--text-primary);
+  list-style: disc;
+  padding-left: 20px;
+  line-height: 1.6;
+}
+
+.quick-guide p {
+  color: #88c0d0;
+  font-size: 14px;
+  margin-bottom: 20px;
+  line-height: 1.6;
+  opacity: 0.9;
+}
+
+/* Spinner Animation */
+.spinner {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+  font-size: 1.2em;
+  margin-right: 8px;
+  transform-origin: center center;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Improve button styles */
+.btn-warning {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+/* File input styling */
+input[type="file"] {
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  padding: 10px;
+  border: 1px solid var(--border-input);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+input[type="file"]::file-selector-button {
+  background-color: var(--text-link);
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-right: 10px;
+}
+
+input[type="file"]::file-selector-button:hover {
+  opacity: 0.9;
+}
+
+/* Person card enhancements */
+.person-card .photo-count {
+  color: #88c0d0;
+  font-size: 0.9em;
+  margin-top: 5px;
+}
+
+.person-card .actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.person-card .actions button {
+  flex: 1;
+}
+
+/* Range input styling */
+input[type="range"] {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, 
+    var(--color-error) 0%, 
+    var(--color-warning) 50%, 
+    var(--color-success) 100%);
+  outline: none;
+  -webkit-appearance: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+/* Select dropdown styling */
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 20px;
+  padding-right: 40px;
+}
+
+select option {
+  background-color: var(--bg-panel);
+  color: var(--text-primary);
+}
+
+/* Instructions Section */
+.instructions-section {
+  background-color: var(--bg-panel);
+  padding: 20px;
+  border-radius: 8px;
+  margin-top: 30px;
+  border: 1px solid var(--border-panel);
+}
+
+.instructions-section h2 {
+  margin-top: 0;
+  color: var(--text-primary);
+  font-size: 1.5em;
+  margin-bottom: 15px;
+}
+
+.instructions-section ol {
+  color: var(--text-primary);
+  line-height: 1.8;
+  padding-left: 20px;
+  margin-bottom: 20px;
+}
+
+.instructions-section ol li {
+  margin-bottom: 8px;
+}
+
+.instructions-section .tips {
+  background-color: var(--bg-main);
+  padding: 15px;
+  border-radius: 6px;
+  border-left: 4px solid var(--text-link);
+}
+
+.instructions-section .tips strong {
+  color: var(--text-link);
+  font-size: 1.1em;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.instructions-section .tips ul {
+  color: var(--text-primary);
+  list-style: disc;
+  padding-left: 20px;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.instructions-section .tips ul li {
+  margin-bottom: 5px;
+}
+
+/* Ensure no white gaps between sections */
+body {
+  background-color: var(--bg-main) !important;
+}
+
+.face-management-container > * {
+  margin-bottom: 20px;
+}
+
+/* Ensure all sections have consistent backgrounds */
+section {
+  background-color: var(--bg-panel);
+  border-radius: 8px;
+  padding: 20px;
+  border: 1px solid var(--border-panel);
+}
+
+/* Override for sections that already have their own styles */
+.statistics-section,
+.settings-section,
+.add-person-section,
+.people-section,
+.instructions-section,
+.quick-guide {
+  margin-bottom: 20px;
+}
+
+/* Ensure headers don't have white backgrounds */
+.page-header {
+  background-color: transparent;
 }

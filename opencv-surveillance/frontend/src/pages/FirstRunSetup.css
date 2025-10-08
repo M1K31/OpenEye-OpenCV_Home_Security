@@ -1,6 +1,7 @@
 /*
 Copyright (c) 2025 Mikel Smart
 This file is part of OpenEye-OpenCV_Home_Security
+Dark theme for First Run Setup
 */
 
 .first-run-container {
@@ -8,14 +9,14 @@ This file is part of OpenEye-OpenCV_Home_Security
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background-color: var(--bg-main);
   padding: 20px;
 }
 
 .setup-card {
-  background: white;
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-panel);
   border-radius: 12px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
   max-width: 600px;
   width: 100%;
   padding: 40px;
@@ -40,12 +41,12 @@ This file is part of OpenEye-OpenCV_Home_Security
 
 .setup-header h1 {
   margin: 0 0 10px 0;
-  color: #333;
+  color: var(--text-primary);
   font-size: 32px;
 }
 
 .setup-subtitle {
-  color: #666;
+  color: #999;
   font-size: 16px;
   margin: 0;
 }
@@ -68,270 +69,265 @@ This file is part of OpenEye-OpenCV_Home_Security
 }
 
 .info-section h2 {
-  color: #333;
+  color: var(--text-primary);
   margin: 0 0 15px 0;
   font-size: 24px;
 }
 
 .info-section p {
-  color: #666;
+  color: #999;
   line-height: 1.6;
   margin: 0 0 15px 0;
 }
 
-.security-notice {
-  background: #f0f4ff;
-  border-left: 4px solid #667eea;
-  padding: 15px;
-  border-radius: 6px;
-  margin-top: 20px;
+.info-section ul {
+  color: #999;
+  line-height: 1.8;
 }
 
-.security-notice strong {
-  color: #667eea;
-  display: block;
-  margin-bottom: 10px;
+.info-section li {
+  margin-bottom: 8px;
 }
 
-.security-notice ul {
-  margin: 0;
-  padding-left: 20px;
+.form-section {
+  margin-bottom: 30px;
 }
 
-.security-notice li {
-  color: #555;
-  margin-bottom: 5px;
-  line-height: 1.4;
+.form-section h2 {
+  color: var(--text-primary);
+  margin: 0 0 20px 0;
+  font-size: 24px;
 }
 
 .form-group {
-  margin-bottom: 25px;
+  margin-bottom: 20px;
 }
 
 .form-group label {
   display: block;
   margin-bottom: 8px;
-  color: #333;
-  font-weight: 600;
+  color: var(--text-primary);
+  font-weight: 500;
   font-size: 14px;
 }
 
 .form-group input {
   width: 100%;
-  padding: 12px 15px;
-  border: 2px solid #e0e0e0;
+  padding: 12px;
+  border: 1px solid var(--border-input);
   border-radius: 6px;
   font-size: 14px;
-  transition: all 0.3s ease;
   box-sizing: border-box;
+  background-color: var(--bg-input);
+  color: var(--text-primary);
+  transition: border-color 0.2s;
 }
 
 .form-group input:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: var(--text-link);
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
 }
 
-.form-group input.input-error {
-  border-color: #f44336;
-}
-
-.form-group input.input-disabled {
-  background: #f5f5f5;
-  cursor: not-allowed;
+.form-group input::placeholder {
   color: #999;
 }
 
-.form-group small {
-  display: block;
+.error-text {
+  color: var(--color-error);
+  font-size: 13px;
   margin-top: 5px;
+  display: block;
+}
+
+.password-requirements {
+  background-color: var(--bg-main);
+  border: 1px solid var(--border-panel);
+  border-radius: 6px;
+  padding: 15px;
+  margin-top: 10px;
+}
+
+.password-requirements h4 {
+  margin: 0 0 10px 0;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.password-requirements ul {
+  margin: 0;
+  padding-left: 20px;
+  list-style: none;
+}
+
+.password-requirements li {
   color: #999;
-  font-size: 12px;
+  font-size: 13px;
+  margin-bottom: 8px;
+  position: relative;
+  padding-left: 20px;
+}
+
+.password-requirements li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: var(--color-success);
+}
+
+.password-requirements li.invalid::before {
+  content: '✗';
+  color: var(--color-error);
 }
 
 .password-strength {
   margin-top: 10px;
 }
 
-.strength-label {
-  font-size: 13px;
-  color: #666;
+.password-strength-label {
+  display: flex;
+  justify-content: space-between;
   margin-bottom: 5px;
+  font-size: 13px;
 }
 
-.strength-label span {
+.password-strength-label span:first-child {
+  color: var(--text-primary);
+  opacity: 0.8;
+}
+
+.password-strength-label span:last-child {
   font-weight: 600;
 }
 
-.strength-bar {
-  height: 6px;
-  background: #e0e0e0;
-  border-radius: 3px;
+.password-strength-bar {
+  height: 8px;
+  background-color: var(--bg-main);
+  border-radius: 4px;
   overflow: hidden;
 }
 
-.strength-bar-fill {
+.password-strength-bar-fill {
   height: 100%;
-  transition: all 0.3s ease;
-  border-radius: 3px;
-}
-
-.error-text {
-  color: #f44336;
-  font-size: 13px;
-  margin-top: 5px;
-  display: block;
-}
-
-.error-list {
-  margin: 5px 0 0 0;
-  padding-left: 20px;
-}
-
-.error-list li {
-  margin-bottom: 3px;
-  line-height: 1.4;
-}
-
-.error-banner {
-  background: #ffebee;
-  border: 1px solid #f44336;
-  color: #c62828;
-  padding: 12px 15px;
-  border-radius: 6px;
-  margin-bottom: 20px;
-  font-size: 14px;
+  transition: width 0.3s ease, background-color 0.3s ease;
+  border-radius: 4px;
 }
 
 .button-group {
   display: flex;
-  gap: 15px;
+  gap: 10px;
   margin-top: 30px;
 }
 
-.btn-primary,
-.btn-secondary,
-.btn-large {
-  padding: 12px 30px;
+.btn {
+  flex: 1;
+  padding: 12px 24px;
   border: none;
   border-radius: 6px;
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
-  flex: 1;
+  transition: all 0.2s;
 }
 
 .btn-primary {
-  background: #667eea;
+  background-color: var(--text-link);
   color: white;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #5568d3;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  background-color: #0056b3;
 }
 
 .btn-primary:disabled {
-  background: #ccc;
+  background-color: var(--border-input);
   cursor: not-allowed;
   opacity: 0.6;
 }
 
 .btn-secondary {
-  background: #f5f5f5;
-  color: #666;
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-panel);
+  color: var(--text-primary);
 }
 
-.btn-secondary:hover:not(:disabled) {
-  background: #e0e0e0;
+.btn-secondary:hover {
+  background-color: var(--bg-hover);
 }
 
-.btn-large {
-  width: 100%;
-  padding: 15px;
-  font-size: 18px;
-}
-
-.completion-step {
+.success-message {
   text-align: center;
-  padding: 40px 20px;
+  padding: 20px;
 }
 
-.success-icon {
-  width: 80px;
-  height: 80px;
-  background: #4caf50;
-  color: white;
-  font-size: 48px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 20px;
-  animation: scaleIn 0.5s ease-out;
+.success-message h2 {
+  color: var(--color-success);
+  margin: 0 0 10px 0;
 }
 
-@keyframes scaleIn {
-  from {
-    transform: scale(0);
-  }
-  to {
-    transform: scale(1);
-  }
-}
-
-.completion-step h2 {
-  color: #333;
-  margin: 0 0 15px 0;
-  font-size: 28px;
-}
-
-.completion-step p {
-  color: #666;
-  font-size: 16px;
-  margin: 10px 0;
-}
-
-.redirect-message {
+.success-message p {
   color: #999;
-  font-size: 14px;
-  font-style: italic;
-  margin-top: 20px;
 }
 
 .loading-spinner {
-  width: 50px;
-  height: 50px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #667eea;
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 3px solid var(--border-panel);
+  border-top-color: white;
   border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin: 0 auto 20px;
+  animation: spin 0.8s linear infinite;
+  margin-right: 8px;
+  vertical-align: middle;
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-/* Mobile responsive */
+.progress-indicator {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 30px;
+}
+
+.progress-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: var(--bg-main);
+  border: 2px solid var(--border-panel);
+  transition: all 0.3s;
+}
+
+.progress-dot.active {
+  background-color: var(--text-link);
+  border-color: var(--text-link);
+  transform: scale(1.2);
+}
+
+.progress-dot.completed {
+  background-color: var(--color-success);
+  border-color: var(--color-success);
+}
+
 @media (max-width: 768px) {
   .setup-card {
     padding: 30px 20px;
   }
 
   .setup-header h1 {
-    font-size: 26px;
+    font-size: 28px;
   }
 
   .button-group {
     flex-direction: column;
   }
 
-  .btn-primary,
-  .btn-secondary {
+  .btn {
     width: 100%;
   }
 }

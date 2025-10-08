@@ -7,7 +7,7 @@ import HelpButton from '../components/HelpButton';
 import { HELP_CONTENT } from '../utils/helpContent';
 import './FaceManagementPage.css';
 
-const FaceManagementPage = () => {
+const FaceManagementPage = ({ embedded = false }) => {
   const navigate = useNavigate();
   const [people, setPeople] = useState([]);
   const [statistics, setStatistics] = useState({});
@@ -131,12 +131,13 @@ const FaceManagementPage = () => {
 
   const trainModel = async () => {
     setIsTraining(true);
+    showMessage('🔄 Training model... This may take a minute.', 'warning');
     try {
       const response = await axios.post('/api/faces/train', {});
-      showMessage(response.data.message, 'success');
+      showMessage('✅ ' + response.data.message, 'success');
       loadStatistics();
     } catch (error) {
-      showMessage('Error training model: ' + error.message, 'error');
+      showMessage('❌ Error training model: ' + error.message, 'error');
     } finally {
       setIsTraining(false);
     }
@@ -169,7 +170,9 @@ const FaceManagementPage = () => {
             description={HELP_CONTENT.FACE_RECOGNITION.description}
           />
         </h1>
-        <button onClick={() => navigate('/')} className="btn-secondary">Back to Dashboard</button>
+        {!embedded && (
+          <button onClick={() => navigate('/')} className="btn-secondary">Back to Dashboard</button>
+        )}
       </header>
 
       {message && (
@@ -258,7 +261,11 @@ const FaceManagementPage = () => {
         <div className="section-header">
           <h2>People ({people.length})</h2>
           <button onClick={trainModel} disabled={isTraining || people.length === 0} className="btn-warning">
-            {isTraining ? 'Training...' : 'Train Model'}
+            {isTraining ? (
+              <>
+                <span className="spinner">◐</span> Training Model...
+              </>
+            ) : 'Train Model'}
           </button>
         </div>
 
