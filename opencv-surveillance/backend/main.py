@@ -115,7 +115,7 @@ app.include_router(
 
 app.include_router(
     cameras.router,
-    prefix="/api",
+    prefix="/api/cameras",
     tags=["Cameras"]
 )
 
