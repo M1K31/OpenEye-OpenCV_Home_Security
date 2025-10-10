@@ -6,7 +6,7 @@ from typing import List, Optional
 
 from backend.database import models
 from backend.api.schemas import user as user_schema
-from backend.core.security import get_password_hash
+from backend.core.auth import hash_password  # FIXED: Use consistent hash_password from auth
 
 
 # ============================================================================
@@ -18,7 +18,7 @@ def get_user_by_username(db: Session, username: str):
 
 
 def create_user(db: Session, user: user_schema.UserCreate):
-    hashed_password = get_password_hash(user.password)
+    hashed_password = hash_password(user.password)  # FIXED: Changed from get_password_hash
     db_user = models.User(
         username=user.username,
         email=user.email,

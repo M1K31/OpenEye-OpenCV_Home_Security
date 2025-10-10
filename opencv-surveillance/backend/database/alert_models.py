@@ -9,6 +9,10 @@ from sqlalchemy import Column, Integer, String, Boolean, DateTime, JSON, Float
 from datetime import datetime
 from backend.database.session import Base
 
+# SAFETY CHECK: Verify Base consistency
+from backend.database.models import Base as ModelsBase
+assert Base is ModelsBase, "Base classes must be identical!"
+
 
 class AlertConfiguration(Base):
     """

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import axios from 'axios';
 import { ThemeProvider } from './context/ThemeContext';
-import './themes.css';
+// REMOVED: import './themes.css'; - Now in main.jsx
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import FaceManagementPage from './pages/FaceManagementPage';
@@ -12,8 +12,7 @@ import AlertSettingsPage from './pages/AlertSettingsPage';
 import CameraDiscoveryPage from './pages/CameraDiscoveryPage';
 import CameraManagementPage from './pages/CameraManagementPage';
 import ThemeSelectorPage from './pages/ThemeSelectorPage';
-// import SettingsPage from './pages/SettingsPage';
-import SettingsPage from './pages/SettingsPageSimple'; // TEMPORARY: Using simple test version
+import SettingsPage from './pages/SettingsPage';
 import FirstRunSetup from './pages/FirstRunSetup';
 
 

@@ -33,8 +33,22 @@ export const ThemeProvider = ({ children }) => {
     // Save theme to localStorage
     localStorage.setItem('openeye-theme', currentTheme);
     
-    // Apply theme class to body
+    // CRITICAL: Apply theme class to html element (documentElement) for maximum CSS specificity
+    // This ensures :root variables are properly scoped to the theme
+    const htmlElement = document.documentElement;
+    
+    // Remove all existing theme classes
+    Object.values(THEMES).forEach(theme => {
+      htmlElement.classList.remove(`${theme}-theme`);
+    });
+    
+    // Add current theme class
+    htmlElement.classList.add(`${currentTheme}-theme`);
+    
+    // Also apply to body for backward compatibility
     document.body.className = `${currentTheme}-theme`;
+    
+    console.log(`[ThemeContext] Applied theme: ${currentTheme}`);
   }, [currentTheme]);
 
   const value = {
@@ -45,9 +59,7 @@ export const ThemeProvider = ({ children }) => {
 
   return (
     <ThemeContext.Provider value={value}>
-      <div className={`theme-wrapper ${currentTheme}-theme`}>
-        {children}
-      </div>
+      {children}
     </ThemeContext.Provider>
   );
 };

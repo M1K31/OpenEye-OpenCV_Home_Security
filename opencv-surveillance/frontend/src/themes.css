@@ -1,109 +1,111 @@
 /* 
- * OpenEye Accessible Themes
- * Following WCAG 2.1 AA guidelines for accessibility
- * - Minimum 4.5:1 contrast ratio for text
- * - Keyboard navigation support
- * - Focus indicators
- * - Responsive design
+ * Copyright (c) 2025 Mikel Smart
+ * OpenEye Unified Theme System
+ * All themes follow WCAG 2.1 AA accessibility guidelines
  */
 
 /* ===================
-   DEFAULT THEME (MotionEye Inspired)
+   RESET & BASE STYLES
    =================== */
-:root,
-.default-theme {
-  /* Main background for the entire application */
-  --me-background: #F4F4F4;
-  
-  /* Card and panel backgrounds */
-  --me-card-background: #FFFFFF;
-  
-  /* Header and footer colors */
-  --me-header-background: #ECEFF1;
-  --me-header-text: #333333;
-  
-  /* Text colors */
-  --me-text-primary: #212121;
-  --me-text-secondary: #757575;
-  --me-text-icon: #546E7A;
-  
-  /* Accent colors */
-  --me-accent-blue: #42A5F5;
-  --me-accent-green: #66BB6A;
-  --me-accent-red: #EF5350;
-  
-  /* Border and shadow colors */
-  --me-border-color: #DDDDDD;
-  --me-shadow-color: rgba(0, 0, 0, 0.1);
-  
-  /* Theme CSS variables for consistency */
-  --theme-primary: var(--me-accent-blue);
-  --theme-secondary: var(--me-accent-green);
-  --theme-background: var(--me-background);
-  --theme-text: var(--me-text-primary);
-  --theme-text-secondary: var(--me-text-secondary);
-  --theme-card-bg: var(--me-card-background);
-  --theme-border: var(--me-border-color);
-  --theme-accent: var(--me-accent-blue);
-  --theme-success: var(--me-accent-green);
-  --theme-error: var(--me-accent-red);
-  --theme-warning: #FFA726;
-  --theme-code-bg: #F5F5F5;
-  
-  background-color: var(--me-background);
-  color: var(--me-text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
-  min-height: 100vh;
+*, *::before, *::after {
+  box-sizing: border-box;
 }
 
-.default-theme button:focus,
-.default-theme a:focus,
-.default-theme input:focus,
-.default-theme select:focus {
-  outline: 3px solid var(--me-accent-blue);
-  outline-offset: 2px;
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
 }
 
 /* ===================
-   SMAN THEME (Superman-inspired)
-   Accessible with proper contrast
+   DEFAULT THEME (Dark Professional)
    =================== */
-.sman-theme {
-  --sman-blue: #0052A3;
-  --sman-blue-light: #1976D2;
-  --sman-red: #C41E3A;
-  --sman-yellow: #FFD700;
-  --sman-white: #FFFFFF;
+:root,
+html.default-theme,
+html.default-theme body {
+  /* Background Colors */
+  --bg-main: #262626;
+  --bg-panel: #333333;
+  --bg-input: #2a2a2a;
+  --bg-hover: #404040;
   
-  /* Theme CSS variables */
-  --theme-primary: var(--sman-red);
-  --theme-secondary: var(--sman-blue);
-  --theme-background: #E3F2FD;
-  --theme-text: #1A237E;
-  --theme-text-secondary: #283593;
-  --theme-card-bg: var(--sman-white);
-  --theme-border: var(--sman-blue);
-  --theme-accent: var(--sman-red);
-  --theme-success: #43A047;
-  --theme-error: var(--sman-red);
-  --theme-warning: #FB8C00;
-  --theme-code-bg: #F5F5F5;
+  /* Text Colors */
+  --text-primary: #ffffff;
+  --text-secondary: #cccccc;
+  --text-link: #007bff;
   
-  background: linear-gradient(180deg, #E3F2FD 0%, #BBDEFB 100%);
-  color: var(--theme-text);
-  font-family: 'Arial', sans-serif;
-  min-height: 100vh;
+  /* Border Colors */
+  --border-panel: #4d4d4d;
+  --border-input: #666666;
+  
+  /* State Colors */
+  --state-active: #606060;
+  --color-success: #28a745;
+  --color-error: #dc3545;
+  --color-warning: #ffc107;
+  
+  /* Theme-specific variables for compatibility */
+  --theme-primary: #007bff;
+  --theme-secondary: #6c757d;
+  --theme-background: var(--bg-main);
+  --theme-text: var(--text-primary);
+  --theme-text-secondary: var(--text-secondary);
+  --theme-card-bg: var(--bg-panel);
+  --theme-border: var(--border-panel);
+  --theme-accent: #007bff;
+  --theme-success: var(--color-success);
+  --theme-error: var(--color-error);
+  --theme-warning: var(--color-warning);
+  --theme-code-bg: #1e1e1e;
+  
+  /* Shadow */
+  --shadow: rgba(0, 0, 0, 0.5);
+  
+  background-color: var(--bg-main);
+  color: var(--text-primary);
 }
 
-.sman-theme button {
-  background: var(--sman-red);
-  color: var(--sman-white);
-  border: 2px solid var(--sman-blue);
-  font-weight: bold;
-  padding: 0.75rem 1.5rem;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
+/* ===================
+   SUPERMAN THEME
+   =================== */
+html.sman-theme,
+html.sman-theme body {
+  --bg-main: #0d47a1;
+  --bg-panel: #1565c0;
+  --bg-input: #0a3d91;
+  --bg-hover: #1976d2;
+  
+  --text-primary: #ffd700;
+  --text-secondary: #ffffff;
+  --text-link: #ff1744;
+  
+  --border-panel: #1976d2;
+  --border-input: #ffd700;
+  
+  --state-active: #1e88e5;
+  --color-success: #4caf50;
+  --color-error: #d32f2f;
+  --color-warning: #ffd700;
+  
+  --theme-primary: #d32f2f;
+  --theme-secondary: #0d47a1;
+  --theme-background: var(--bg-main);
+  --theme-text: var(--text-primary);
+  --theme-text-secondary: var(--text-secondary);
+  --theme-card-bg: var(--bg-panel);
+  --theme-border: var(--border-panel);
+  --theme-accent: var(--text-link);
+  --theme-success: var(--color-success);
+  --theme-error: var(--color-error);
+  --theme-warning: var(--color-warning);
+  --theme-code-bg: #0a3d91;
+  
+  --shadow: rgba(0, 0, 0, 0.6);
+  
+  background: linear-gradient(180deg, #0d47a1 0%, #1565c0 100%);
+  color: var(--text-primary);
+  font-family: 'Arial Black', sans-serif;
 }
 
 .sman-theme button:hover {
@@ -111,293 +113,450 @@
   box-shadow: 0 4px 8px rgba(0, 82, 163, 0.3);
 }
 
-.sman-theme button:focus {
-  outline: 3px solid var(--sman-yellow);
-  outline-offset: 2px;
+/* ===================
+   BATMAN THEME
+   =================== */
+html.bman-theme,
+html.bman-theme body {
+  --bg-main: #111111;
+  --bg-panel: #1a1a1a;
+  --bg-input: #0a0a0a;
+  --bg-hover: #2a2a2a;
+  
+  --text-primary: #edc233;
+  --text-secondary: #ffffff;
+  --text-link: #edc233;
+  
+  --border-panel: #333333;
+  --border-input: #edc233;
+  
+  --state-active: #3a3a3a;
+  --color-success: #66bb6a;
+  --color-error: #ef5350;
+  --color-warning: #edc233;
+  
+  --theme-primary: #edc233;
+  --theme-secondary: #333333;
+  --theme-background: var(--bg-main);
+  --theme-text: var(--text-primary);
+  --theme-text-secondary: var(--text-secondary);
+  --theme-card-bg: var(--bg-panel);
+  --theme-border: var(--border-panel);
+  --theme-accent: var(--text-link);
+  --theme-success: var(--color-success);
+  --theme-error: var(--color-error);
+  --theme-warning: var(--color-warning);
+  --theme-code-bg: #000000;
+  
+  --shadow: rgba(0, 0, 0, 0.9);
+  
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  font-family: 'Roboto', sans-serif;
 }
 
 /* ===================
-   BMAN THEME (Batman-inspired)
-   High contrast for accessibility
+   WONDER WOMAN THEME
    =================== */
-.bman-theme {
-  --bman-black: #1A1A1A;
-  --bman-gray: #3A3A3A;
-  --bman-yellow: #FFD700;
-  --bman-blue: #4A90E2;
-  --bman-white: #FFFFFF;
+html.wwoman-theme,
+html.wwoman-theme body {
+  --bg-main: #0d3b66;
+  --bg-panel: #1a5490;
+  --bg-input: #0a2d4d;
+  --bg-hover: #2463a3;
   
-  /* Theme CSS variables */
-  --theme-primary: var(--bman-yellow);
-  --theme-secondary: var(--bman-blue);
-  --theme-background: #2C2C2C;
-  --theme-text: var(--bman-white);
-  --theme-text-secondary: #E0E0E0;
-  --theme-card-bg: var(--bman-gray);
-  --theme-border: var(--bman-yellow);
-  --theme-accent: var(--bman-yellow);
-  --theme-success: #66BB6A;
-  --theme-error: #EF5350;
-  --theme-warning: #FFA726;
-  --theme-code-bg: var(--bman-black);
+  --text-primary: #ffd700;
+  --text-secondary: #ffffff;
+  --text-link: #c41e3a;
   
-  background-color: var(--theme-background);
-  color: var(--theme-text);
-  font-family: 'Roboto', 'Arial', sans-serif;
-  min-height: 100vh;
-}
-
-.bman-theme button {
-  background: var(--bman-gray);
-  color: var(--bman-yellow);
-  border: 2px solid var(--bman-yellow);
-  font-weight: bold;
-  padding: 0.75rem 1.5rem;
-  border-radius: 6px;
-  cursor: pointer;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  transition: all 0.2s;
-}
-
-.bman-theme button:hover {
-  background: var(--bman-yellow);
-  color: var(--bman-black);
-}
-
-.bman-theme button:focus {
-  outline: 3px solid var(--bman-blue);
-  outline-offset: 2px;
-}
-
-.bman-theme a {
-  color: var(--bman-yellow);
-  text-decoration: underline;
-}
-
-/* ===================
-   WWOMAN THEME (Wonder Woman-inspired)
-   Bold colors with proper contrast
-   =================== */
-.wwoman-theme {
-  --ww-red: #C41E3A;
-  --ww-blue: #003DA5;
-  --ww-gold: #FFD700;
-  --ww-white: #FFFFFF;
-  --ww-light: #FFF5E1;
+  --border-panel: #2463a3;
+  --border-input: #ffd700;
   
-  /* Theme CSS variables */
-  --theme-primary: var(--ww-red);
-  --theme-secondary: var(--ww-blue);
-  --theme-background: var(--ww-light);
-  --theme-text: #1A1A1A;
-  --theme-text-secondary: #424242;
-  --theme-card-bg: var(--ww-white);
-  --theme-border: var(--ww-gold);
-  --theme-accent: var(--ww-red);
-  --theme-success: #43A047;
-  --theme-error: var(--ww-red);
-  --theme-warning: #FB8C00;
-  --theme-code-bg: #F5F5F5;
+  --state-active: #2e6db3;
+  --color-success: #4caf50;
+  --color-error: #c41e3a;
+  --color-warning: #ffd700;
   
-  background: linear-gradient(180deg, var(--ww-light) 0%, #FFE4B5 100%);
-  color: var(--theme-text);
+  --theme-primary: #c41e3a;
+  --theme-secondary: #0d3b66;
+  --theme-background: var(--bg-main);
+  --theme-text: var(--text-primary);
+  --theme-text-secondary: var(--text-secondary);
+  --theme-card-bg: var(--bg-panel);
+  --theme-border: var(--border-panel);
+  --theme-accent: var(--text-link);
+  --theme-success: var(--color-success);
+  --theme-error: var(--color-error);
+  --theme-warning: var(--color-warning);
+  --theme-code-bg: #0a2d4d;
+  
+  --shadow: rgba(0, 0, 0, 0.6);
+  
+  background: linear-gradient(180deg, #0d3b66 0%, #1a5490 100%);
+  color: var(--text-primary);
   font-family: 'Georgia', serif;
-  min-height: 100vh;
-}
-
-.wwoman-theme button {
-  background: var(--ww-red);
-  color: var(--ww-white);
-  border: 2px solid var(--ww-gold);
-  font-weight: bold;
-  padding: 0.75rem 1.5rem;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.wwoman-theme button:hover {
-  background: var(--ww-blue);
-  transform: translateY(-2px);
-}
-
-.wwoman-theme button:focus {
-  outline: 3px solid var(--ww-gold);
-  outline-offset: 2px;
 }
 
 /* ===================
-   FMAN THEME (Flash-inspired)
-   High energy with accessibility
+   FLASH THEME
    =================== */
-.fman-theme {
-  --flash-red: #DC0000;
-  --flash-yellow: #FFCC00;
-  --flash-white: #FFFFFF;
-  --flash-light: #FFF8DC;
+html.fman-theme,
+html.fman-theme body {
+  --theme-primary: #FFD700;
+  --theme-secondary: #DC0000;
+  --theme-background: #DC0000;
+  --theme-text: #FFD700;
+  --theme-text-secondary: #FFFFFF;
+  --theme-card-bg: rgba(139, 0, 0, 0.9);
+  --theme-border: #FFD700;
+  --theme-accent: #FFD700;
+  --theme-success: #4CAF50;
+  --theme-error: #FF5252;
+  --theme-warning: #FFD700;
   
-  /* Theme CSS variables */
-  --theme-primary: var(--flash-red);
-  --theme-secondary: var(--flash-yellow);
-  --theme-background: var(--flash-light);
-  --theme-text: #1A1A1A;
-  --theme-text-secondary: #424242;
-  --theme-card-bg: var(--flash-white);
-  --theme-border: var(--flash-red);
-  --theme-accent: var(--flash-yellow);
-  --theme-success: #43A047;
-  --theme-error: var(--flash-red);
-  --theme-warning: var(--flash-yellow);
-  --theme-code-bg: #F5F5F5;
+  --bg-main: #DC0000;
+  --bg-panel: rgba(139, 0, 0, 0.9);
+  --bg-input: rgba(0, 0, 0, 0.3);
+  --bg-hover: #B00000;
+  --text-primary: #FFD700;
+  --text-secondary: #FFFFFF;
+  --text-link: #FFD700;
+  --border-panel: #FFD700;
+  --border-input: #FFD700;
+  --state-active: #A00000;
+  --color-success: #4CAF50;
+  --color-error: #FF5252;
+  --color-warning: #FFD700;
   
-  background: linear-gradient(135deg, var(--flash-light) 0%, #FFEBCD 100%);
-  color: var(--theme-text);
-  font-family: 'Impact', 'Arial Black', sans-serif;
-  min-height: 100vh;
+  background: linear-gradient(135deg, #DC0000 0%, #8B0000 100%);
+  color: #FFD700;
 }
 
 .fman-theme button {
-  background: var(--flash-red);
-  color: var(--flash-white);
-  border: 2px solid var(--flash-yellow);
+  background: #FFD700;
+  color: #8B0000;
+  border: 2px solid #FFFFFF;
   font-weight: bold;
-  padding: 0.75rem 1.5rem;
-  border-radius: 6px;
-  cursor: pointer;
   text-transform: uppercase;
-  transition: all 0.2s;
 }
 
 .fman-theme button:hover {
-  background: var(--flash-yellow);
-  color: var(--flash-red);
-  transform: scale(1.05);
+  transform: scale(1.1);
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
 }
 
-.fman-theme button:focus {
-  outline: 3px solid var(--flash-red);
-  outline-offset: 2px;
-}
-
-/* ===================
-   AMAN THEME (Aquaman-inspired)
-   Ocean colors with proper contrast
-   =================== */
+/* Aquaman Theme */
 .aman-theme {
-  --aqua-blue: #006994;
-  --aqua-green: #00A878;
-  --aqua-orange: #FF6B35;
-  --aqua-light: #E6F7FF;
-  --aqua-white: #FFFFFF;
-  
-  /* Theme CSS variables */
-  --theme-primary: var(--aqua-blue);
-  --theme-secondary: var(--aqua-green);
-  --theme-background: var(--aqua-light);
-  --theme-text: #003D5B;
-  --theme-text-secondary: #005F73;
-  --theme-card-bg: var(--aqua-white);
-  --theme-border: var(--aqua-blue);
-  --theme-accent: var(--aqua-orange);
-  --theme-success: var(--aqua-green);
+  --theme-primary: #FF6B35;
+  --theme-secondary: #00C49A;
+  --theme-background: #006994;
+  --theme-text: #FFFFFF;
+  --theme-text-secondary: #E0F7FA;
+  --theme-card-bg: rgba(0, 105, 148, 0.9);
+  --theme-border: #00C49A;
+  --theme-accent: #FF6B35;
+  --theme-success: #00C49A;
   --theme-error: #EF5350;
-  --theme-warning: var(--aqua-orange);
-  --theme-code-bg: #F0F9FF;
+  --theme-warning: #FFA726;
   
-  background: linear-gradient(180deg, var(--aqua-light) 0%, #CCEEFF 100%);
-  color: var(--theme-text);
-  font-family: 'Verdana', sans-serif;
-  min-height: 100vh;
+  --bg-main: #006994;
+  --bg-panel: rgba(0, 105, 148, 0.9);
+  --bg-input: rgba(0, 0, 0, 0.2);
+  --bg-hover: #007BA7;
+  --text-primary: #FFFFFF;
+  --text-secondary: #E0F7FA;
+  --text-link: #FF6B35;
+  --border-panel: #00C49A;
+  --border-input: #00C49A;
+  --state-active: #008CB4;
+  --color-success: #00C49A;
+  --color-error: #EF5350;
+  --color-warning: #FFA726;
+  
+  background: linear-gradient(180deg, #006994 0%, #004D6D 100%);
+  color: #FFFFFF;
 }
 
 .aman-theme button {
-  background: var(--aqua-blue);
-  color: var(--aqua-white);
-  border: 2px solid var(--aqua-green);
+  background: #FF6B35;
+  color: #FFFFFF;
+  border: 2px solid #00C49A;
   font-weight: bold;
-  padding: 0.75rem 1.5rem;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
 }
 
 .aman-theme button:hover {
-  background: var(--aqua-green);
-  transform: translateY(-2px);
+  background: #00C49A;
+  box-shadow: 0 0 15px rgba(0, 196, 154, 0.5);
 }
 
-.aman-theme button:focus {
-  outline: 3px solid var(--aqua-orange);
-  outline-offset: 2px;
-}
-
-/* ===================
-   GLANTERN THEME (Green Lantern-inspired)
-   Green focus with high contrast
-   =================== */
+/* Green Lantern Theme */
 .glantern-theme {
-  --gl-green: #00A650;
-  --gl-dark: #003D1A;
-  --gl-white: #FFFFFF;
-  --gl-light: #E8F5E9;
-  
-  /* Theme CSS variables */
-  --theme-primary: var(--gl-green);
-  --theme-secondary: var(--gl-dark);
-  --theme-background: var(--gl-light);
-  --theme-text: var(--gl-dark);
-  --theme-text-secondary: #1B5E20;
-  --theme-card-bg: var(--gl-white);
-  --theme-border: var(--gl-green);
-  --theme-accent: var(--gl-green);
-  --theme-success: var(--gl-green);
+  --theme-primary: #00A550;
+  --theme-secondary: #B2FF9E;
+  --theme-background: #001A0F;
+  --theme-text: #FFFFFF;
+  --theme-text-secondary: #B2FF9E;
+  --theme-card-bg: rgba(0, 80, 40, 0.9);
+  --theme-border: #00A550;
+  --theme-accent: #B2FF9E;
+  --theme-success: #00A550;
   --theme-error: #EF5350;
   --theme-warning: #FFA726;
-  --theme-code-bg: #F1F8E9;
   
-  background: linear-gradient(180deg, var(--gl-light) 0%, #C8E6C9 100%);
-  color: var(--theme-text);
-  font-family: 'Arial', sans-serif;
-  min-height: 100vh;
+  --bg-main: #001A0F;
+  --bg-panel: rgba(0, 80, 40, 0.9);
+  --bg-input: rgba(0, 0, 0, 0.3);
+  --bg-hover: #00331A;
+  --text-primary: #FFFFFF;
+  --text-secondary: #B2FF9E;
+  --text-link: #B2FF9E;
+  --border-panel: #00A550;
+  --border-input: #00A550;
+  --state-active: #004D26;
+  --color-success: #00A550;
+  --color-error: #EF5350;
+  --color-warning: #FFA726;
+  
+  background: radial-gradient(circle at center, #001A0F 0%, #000000 100%);
+  color: #FFFFFF;
 }
 
 .glantern-theme button {
-  background: var(--gl-green);
-  color: var(--gl-white);
-  border: 2px solid var(--gl-dark);
+  background: #00A550;
+  color: #FFFFFF;
+  border: 2px solid #B2FF9E;
   font-weight: bold;
-  padding: 0.75rem 1.5rem;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
+  box-shadow: 0 0 10px rgba(0, 165, 80, 0.5);
 }
 
 .glantern-theme button:hover {
-  background: var(--gl-dark);
+  box-shadow: 0 0 25px rgba(0, 165, 80, 0.8);
   transform: scale(1.05);
 }
 
-.glantern-theme button:focus {
-  outline: 3px solid var(--gl-green);
-  outline-offset: 2px;
+/* ===================
+   GLOBAL COMPONENT STYLES
+   =================== */
+
+/* Body & Container */
+body {
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+}
+
+.app-container,
+.container {
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  min-height: 100vh;
+}
+
+/* Panels & Cards */
+.panel,
+.card,
+section {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-panel);
+  color: var(--text-primary);
+}
+
+/* Headers */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-primary);
+}
+
+/* Links */
+a {
+  color: var(--text-link);
+}
+
+a:hover {
+  opacity: 0.8;
+}
+
+/* Buttons */
+button,
+.btn {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-input);
+  color: var(--text-primary);
+}
+
+button:hover,
+.btn:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--border-input);
+}
+
+button:active,
+.btn:active,
+button.active,
+.btn.active {
+  background-color: var(--state-active);
+}
+
+.btn-primary,
+button.primary {
+  background-color: var(--theme-primary);
+  border-color: var(--theme-primary);
+  color: #ffffff;
+}
+
+.btn-success,
+button.success {
+  background-color: var(--color-success);
+  border-color: var(--color-success);
+  color: #ffffff;
+}
+
+.btn-danger,
+button.danger {
+  background-color: var(--color-error);
+  border-color: var(--color-error);
+  color: #ffffff;
+}
+
+.btn-warning,
+button.warning {
+  background-color: var(--color-warning);
+  border-color: var(--color-warning);
+  color: #000000;
+}
+
+/* Input Fields */
+input,
+textarea,
+select {
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-input);
+  color: var(--text-primary);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--theme-primary);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+/* Labels */
+label {
+  color: var(--text-primary);
+}
+
+/* Tables */
+table {
+  border: 1px solid var(--border-panel);
+  background-color: var(--bg-panel);
+  color: var(--text-primary);
+}
+
+th,
+td {
+  border: 1px solid var(--border-panel);
+  color: var(--text-primary);
+}
+
+th {
+  background-color: var(--bg-main);
+}
+
+tr:hover {
+  background-color: var(--bg-hover);
+}
+
+/* Status Colors */
+.status-success {
+  color: var(--color-success);
+}
+
+.status-error {
+  color: var(--color-error);
+}
+
+.status-warning {
+  color: var(--color-warning);
+}
+
+/* Alert Messages */
+.alert-success,
+.message-success {
+  background-color: var(--color-success);
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
+.alert-error,
+.message-error {
+  background-color: var(--color-error);
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+.alert-warning,
+.message-warning {
+  background-color: var(--color-warning);
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-main);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-panel);
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--state-active);
+}
+
+/* Modal/Dialog */
+.modal-overlay {
+  background-color: rgba(0, 0, 0, 0.7);
+}
+
+.modal-content {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-panel);
+  color: var(--text-primary);
+}
+
+/* Code blocks */
+code,
+pre {
+  background-color: var(--theme-code-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--border-panel);
 }
 
 /* ===================
-   GLOBAL ACCESSIBILITY STYLES
+   ACCESSIBILITY
    =================== */
-
-/* Ensure all interactive elements have visible focus */
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 3px solid currentColor;
+  outline: 2px solid var(--theme-primary);
   outline-offset: 2px;
 }
 
-/* Reduce motion for users who prefer it */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -408,58 +567,14 @@ textarea:focus-visible {
   }
 }
 
-/* High contrast mode support */
-@media (prefers-contrast: high) {
-  * {
-    border-width: 2px !important;
-  }
-  
-  button {
-    font-weight: bold !important;
-  }
-}
-
-/* Print styles */
+/* ===================
+   PRINT STYLES
+   =================== */
 @media print {
-  body {
+  * {
     background: white !important;
     color: black !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
   }
-  
-  button,
-  .no-print {
-    display: none !important;
-  }
-}
-
-/* Responsive typography */
-body {
-  font-size: 16px;
-  line-height: 1.5;
-}
-
-h1 {
-  font-size: 2rem;
-  line-height: 1.2;
-  margin-bottom: 1rem;
-}
-
-h2 {
-  font-size: 1.5rem;
-  line-height: 1.3;
-  margin-bottom: 0.875rem;
-}
-
-h3 {
-  font-size: 1.25rem;
-  line-height: 1.4;
-  margin-bottom: 0.75rem;
-}
-
-/* Ensure sufficient touch targets */
-button,
-a {
-  min-height: 44px;
-  min-width: 44px;
-  padding: 0.75rem 1.5rem;
 }

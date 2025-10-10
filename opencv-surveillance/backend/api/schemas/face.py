@@ -19,10 +19,26 @@ class PersonCreate(PersonBase):
     pass
 
 
+class PersonUpdate(BaseModel):
+    """Schema for updating a person"""
+    name: str = Field(..., description="New person's name")
+
+
 class Person(PersonBase):
     """Schema for person response"""
     photo_count: int = Field(0, description="Number of photos for this person")
     path: str = Field(..., description="Path to person's photo directory")
+
+    class Config:
+        from_attributes = True
+
+
+class PhotoInfo(BaseModel):
+    """Schema for photo information"""
+    filename: str = Field(..., description="Photo filename")
+    path: str = Field(..., description="Full path to photo")
+    size_bytes: int = Field(..., description="File size in bytes")
+    uploaded_at: datetime = Field(..., description="Upload timestamp")
 
     class Config:
         from_attributes = True

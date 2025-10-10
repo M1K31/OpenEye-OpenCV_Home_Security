@@ -182,7 +182,7 @@ const styles = {
   },
   settingsButton: {
     backgroundColor: 'var(--text-link)',
-    color: '#FFFFFF',
+    color: 'var(--text-primary)',
     padding: '12px 24px',
     border: 'none',
     borderRadius: '6px',
@@ -193,7 +193,7 @@ const styles = {
   },
   logoutButton: {
     backgroundColor: 'var(--color-error)',
-    color: '#FFFFFF',
+    color: 'var(--text-primary)',
     padding: '12px 24px',
     border: 'none',
     borderRadius: '6px',
@@ -218,7 +218,7 @@ const styles = {
   },
   statLabel: {
     fontSize: '0.9em',
-    color: '#999',
+    color: 'var(--text-secondary)',
     marginBottom: '5px',
   },
   statValue: {
@@ -245,7 +245,7 @@ const styles = {
     alignItems: 'center',
     gap: '10px',
     marginTop: '10px',
-    color: '#999',
+    color: 'var(--text-secondary)',
   },
   liveIndicator: {
     color: 'var(--color-error)',
@@ -260,7 +260,7 @@ const styles = {
   },
   noDetections: {
     textAlign: 'center',
-    color: '#999',
+    color: 'var(--text-secondary)',
     fontStyle: 'italic',
     padding: '20px',
   },
@@ -306,16 +306,16 @@ const styles = {
   },
   faceInfo: {
     fontSize: '0.9em',
-    color: '#999',
+    color: 'var(--text-secondary)',
   },
   faceTime: {
     fontSize: '0.85em',
-    color: '#999',
+    color: 'var(--text-secondary)',
     marginTop: '5px',
   },
   noFaces: {
     textAlign: 'center',
-    color: '#999',
+    color: 'var(--text-secondary)',
     fontStyle: 'italic',
     padding: '10px',
   },

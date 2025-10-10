@@ -8,6 +8,7 @@ This replaces your existing camera_manager.py
 import cv2
 import numpy as np
 import time
+import threading  # FIX: Added for thread safety
 from abc import ABC, abstractmethod
 from .motion_detector import MotionDetector
 from .recorder import Recorder
@@ -95,10 +96,20 @@ class MockCamera(Camera):
             try:
                 alert_manager = get_alert_manager()
                 camera_id = getattr(self, 'camera_id', 'mock_cam')
-                asyncio.create_task(alert_manager.trigger_motion_alert(
-                    camera_id=camera_id,
-                    event_data={'timestamp': time.time()}
-                ))
+                # FIX: Use run_coroutine_threadsafe for calling async from sync context
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        asyncio.run_coroutine_threadsafe(
+                            alert_manager.trigger_motion_alert(
+                                camera_id=camera_id,
+                                event_data={'timestamp': time.time()}
+                            ),
+                            loop
+                        )
+                except RuntimeError:
+                    # No event loop running, skip alert
+                    pass
             except Exception as e:
                 print(f"Error triggering motion alert: {e}")
 
@@ -108,6 +119,11 @@ class MockCamera(Camera):
                 processed_frame,
                 self.motion_detected
             )
+            
+            # FIX: Log faces to recorder if recording (MockCamera)
+            if self.recorder.is_recording and self.last_faces_detected:
+                for face in self.last_faces_detected:
+                    self.recorder.add_face_detection(face)
 
         # Recording logic
         if self.motion_detected:
@@ -165,10 +181,20 @@ class RTSPCamera(Camera):
             try:
                 alert_manager = get_alert_manager()
                 camera_id = getattr(self, 'camera_id', 'rtsp_cam')
-                asyncio.create_task(alert_manager.trigger_motion_alert(
-                    camera_id=camera_id,
-                    event_data={'timestamp': time.time()}
-                ))
+                # FIX: Use run_coroutine_threadsafe for calling async from sync context
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        asyncio.run_coroutine_threadsafe(
+                            alert_manager.trigger_motion_alert(
+                                camera_id=camera_id,
+                                event_data={'timestamp': time.time()}
+                            ),
+                            loop
+                        )
+                except RuntimeError:
+                    # No event loop running, skip alert
+                    pass
             except Exception as e:
                 print(f"Error triggering motion alert: {e}")
 
@@ -178,6 +204,11 @@ class RTSPCamera(Camera):
                 processed_frame,
                 self.motion_detected
             )
+            
+            # FIX: Log faces to recorder if recording (RTSPCamera)
+            if self.recorder.is_recording and self.last_faces_detected:
+                for face in self.last_faces_detected:
+                    self.recorder.add_face_detection(face)
 
         # Recording logic
         if self.motion_detected:
@@ -205,47 +236,55 @@ class CameraManager:
         if cls._instance is None:
             cls._instance = super(CameraManager, cls).__new__(cls)
             cls._instance.cameras = {}
+            cls._instance._lock = threading.Lock()  # FIX: Added thread safety
         return cls._instance
 
     def add_camera(self, camera_id, camera_type, source, enable_face_detection=True):  # MODIFIED
-        if camera_id in self.cameras:
-            print(f"Camera with ID '{camera_id}' already exists.")
-            return
+        with self._lock:  # FIX: Thread-safe dictionary access
+            if camera_id in self.cameras:
+                print(f"Camera with ID '{camera_id}' already exists.")
+                return
 
-        if camera_type == "rtsp":
-            camera = RTSPCamera(source, enable_face_detection)
-        elif camera_type == "mock":
-            camera = MockCamera(source, enable_face_detection)
-        else:
-            print(f"Unknown camera type: {camera_type}")
-            return
+            if camera_type == "rtsp":
+                camera = RTSPCamera(source, enable_face_detection)
+            elif camera_type == "mock":
+                camera = MockCamera(source, enable_face_detection)
+            else:
+                print(f"Unknown camera type: {camera_type}")
+                return
 
-        camera.start()
-        if camera.is_running:
-            self.cameras[camera_id] = camera
-            print(f"Camera '{camera_id}' added and started (face detection: {enable_face_detection}).")
-        else:
-            print(f"Failed to start camera '{camera_id}'.")
+            camera.start()
+            if camera.is_running:
+                # FIX: Set camera_id attribute on both camera and recorder
+                camera.camera_id = camera_id
+                camera.recorder.camera_id = camera_id
+                self.cameras[camera_id] = camera
+                print(f"Camera '{camera_id}' added and started (face detection: {enable_face_detection}).")
+            else:
+                print(f"Failed to start camera '{camera_id}'.")
 
     def get_camera(self, camera_id):
-        return self.cameras.get(camera_id)
+        with self._lock:  # FIX: Thread-safe access
+            return self.cameras.get(camera_id)
 
     def remove_camera(self, camera_id):
-        if camera_id in self.cameras:
-            self.cameras[camera_id].stop()
-            del self.cameras[camera_id]
-            print(f"Camera '{camera_id}' removed.")
+        with self._lock:  # FIX: Thread-safe dictionary modification
+            if camera_id in self.cameras:
+                self.cameras[camera_id].stop()
+                del self.cameras[camera_id]
+                print(f"Camera '{camera_id}' removed.")
 
     # NEW METHOD
     def get_all_face_detections(self):
         """Get face detections from all cameras"""
-        all_detections = {}
-        for camera_id, camera in self.cameras.items():
-            all_detections[camera_id] = {
-                'recent_faces': camera.last_faces_detected,
-                'statistics': camera.get_face_statistics()
-            }
-        return all_detections
+        with self._lock:  # FIX: Thread-safe iteration
+            all_detections = {}
+            for camera_id, camera in self.cameras.items():
+                all_detections[camera_id] = {
+                    'recent_faces': camera.last_faces_detected,
+                    'statistics': camera.get_face_statistics()
+                }
+            return all_detections
 
 
 manager = CameraManager()

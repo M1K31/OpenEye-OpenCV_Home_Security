@@ -1,722 +1,629 @@
 # OpenEye Surveillance System
 
-![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-3.3.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![OpenCV](https://img.shields.io/badge/OpenCV-4.8+-red.svg)
 ![License](https://img.shields.io/badge/license-MIT-yellow.svg)
 ![Free](https://img.shields.io/badge/cost-$0/month-success.svg)
 
-An **100% free and open-source** surveillance system powered by **OpenCV**. This project emphasizes OpenCV's computer vision capabilities combined with deep learning for accurate face recognition, creating a powerful alternative to traditional (and expensive!) surveillance solutions.
+A **100% free and open-source** AI-powered surveillance system using **OpenCV** and **face recognition**. Self-hosted, private, and completely free - forever.
+
+🐳 **Docker Hub**: [im1k31s/openeye-opencv_home_security](https://hub.docker.com/r/im1k31s/openeye-opencv_home_security)
+
+---
 
 ## 💰 Completely Free!
 
 - ✅ **No subscriptions** - $0/month forever
-- ✅ **No cloud dependencies** - Works offline
-- ✅ **No sign-ups required** - All services are optional
+- ✅ **No cloud dependencies** - Works completely offline
+- ✅ **No sign-ups required** - All cloud services are optional
 - ✅ **Open source** - Inspect and modify all code
 - ✅ **Self-hosted** - Your data stays on your hardware
-
-## 🎯 Why OpenEye?
-
-**OpenEye leverages OpenCV's full power** for advanced computer vision tasks:
-- ✨ **True OpenCV Implementation** - Direct use of OpenCV's algorithms, not Motion
-- 🧠 **AI-Powered Face Recognition** - dlib-based face detection and recognition
-- 🎥 **Real-time Processing** - Efficient video stream analysis
-- 🏠 **Self-Hosted** - Complete control over your data
-- 🚀 **Modern Stack** - FastAPI + React for a responsive experience
-- 📊 **Rich Analytics** - Historical face detection tracking and statistics
+- ✅ **No AI API costs** - Uses free local face recognition
 
 ---
 
-## 📋 Table of Contents
+## 🎯 Why OpenEye?
 
-- [Features](#features)
-- [Quick Start](#quick-start)
-- [Documentation](#documentation)
-- [Architecture](#architecture)
-- [Installation](#installation)
-- [Usage](#usage)
-- [API Documentation](#api-documentation)
-- [Configuration](#configuration)
-- [Development](#development)
-- [Deployment](#deployment)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
-- [License](#license)
+**OpenEye leverages OpenCV's full power** for advanced computer vision:
+- ✨ **True OpenCV Implementation** - Direct use of OpenCV algorithms, not Motion
+- 🧠 **AI Face Recognition** - dlib-based detection and recognition
+- 🎥 **Real-time Processing** - Efficient video stream analysis
+- 🏠 **Self-Hosted** - Complete control over your data
+- 🚀 **Modern Stack** - FastAPI + React
+- 📊 **Rich Analytics** - Historical tracking and statistics
+- 🎨 **Beautiful UI** - 8 customizable superhero themes
 
 ---
 
 ## ✨ Features
 
-### Phase 1-2 (Core Features) ✅
-- ✅ **Multi-Camera Support** - RTSP streams and mock cameras for testing
-- ✅ **Motion Detection** - OpenCV MOG2 background subtraction
-- ✅ **Automatic Recording** - Motion-triggered video capture
-- ✅ **Live Streaming** - MJPEG streams with real-time overlays
-- ✅ **Face Recognition** - Identify known individuals automatically
-- ✅ **Face Management** - Easy person management interface
-- ✅ **Detection History** - Track all face detections with timestamps
-- ✅ **Database Persistence** - SQLite or PostgreSQL storage
+### Core Surveillance (v3.0+)
+- 🎥 **Multi-Camera Support** - RTSP, USB, network cameras
+- 👁️ **Motion Detection** - OpenCV MOG2 background subtraction
+- 📹 **Auto Recording** - Motion-triggered video capture with metadata
+- 🎬 **Live Streaming** - MJPEG streams with real-time overlays
+- 👤 **Face Recognition** - AI-powered identification
+- 📊 **Detection History** - Track all events with timestamps
+- 💾 **Database** - SQLite or PostgreSQL storage
 
-### Phase 3 (Notifications) ✅
-- ✅ **Email Alerts** - SMTP notifications (FREE with Gmail)
-- ✅ **SMS Alerts** - Twilio or Telegram Bot (Telegram is FREE!)
-- ✅ **Push Notifications** - Firebase or ntfy.sh (ntfy.sh is FREE!)
-- ✅ **Webhooks** - Custom integrations
-- ✅ **Alert Throttling** - Prevent notification spam
+### Camera Discovery (v3.1.0+)
+- 🔍 **USB Auto-Detection** - Scans and tests USB webcams
+- 🌐 **Network Scanning** - Discovers RTSP/IP cameras on local network
+- ⚡ **One-Click Setup** - Quick-add discovered cameras
+- ✅ **Pre-Add Testing** - Validate before adding to system
+- 🎛️ **Smart Configuration** - Auto-detect resolution/FPS
 
-### Phase 4 (Smart Home) ✅
-- ✅ **Home Assistant** - MQTT integration (FREE!)
-- ✅ **HomeKit** - Apple HomeKit bridge (FREE!)
-- ✅ **Google Nest** - Nest integration (optional)
-- ✅ **Automation Ready** - Trigger smart home devices
+### User Interface (v3.1.0+)
+- 🎨 **8 Superhero Themes** - Superman, Batman, Wonder Woman, Flash, Aquaman, Cyborg, Green Lantern, Default
+- ❓ **Integrated Help System** - 36+ context-sensitive help entries
+- 🎯 **First-Run Wizard** - Easy setup for new installations
+- 📱 **Responsive Design** - Works on desktop, tablet, mobile
+- 🔐 **Multi-User Support** - Admin, User, Viewer roles
 
-### Phase 5 (Cloud & Mobile) ✅
-- ✅ **Cloud Storage** - AWS S3, GCS, Azure, or MinIO (MinIO is FREE!)
-- ✅ **Mobile App Structure** - React Native foundation
-- ✅ **Real-time Streaming** - WebSocket support
-- ✅ **Remote Access** - WireGuard VPN (FREE!), Tailscale, ZeroTier
+### Notifications (Phase 3)
+- 📧 **Email Alerts** - SMTP notifications (FREE with Gmail)
+- 📱 **SMS Alerts** - Twilio or Telegram Bot (Telegram is FREE!)
+- 🔔 **Push Notifications** - Firebase or ntfy.sh (ntfy.sh is FREE!)
+- 🪝 **Webhooks** - Custom integrations
+- ⏱️ **Smart Throttling** - Prevent notification spam
 
-### Phase 6 (Advanced Features) ✅ **NEW!**
-- ✅ **Recording Management** - Search, download, stream recordings
-- ✅ **Advanced Analytics** - Hourly/daily activity breakdown
-- ✅ **Storage Management** - Automatic cleanup, statistics
-- ✅ **Multi-User System** - Admin, User, Viewer roles
-- ✅ **Rate Limiting** - API abuse protection
-- ✅ **SQL Injection Protection** - Enhanced security
-- ✅ **PostgreSQL Support** - Production-ready database
-- ✅ **Docker Deployment** - Easy containerized setup
+### Smart Home Integration (Phase 4)
+- 🏠 **Home Assistant** - MQTT integration (FREE!)
+- 🍎 **HomeKit** - Apple HomeKit bridge (FREE!)
+- 🏡 **Google Nest** - Nest integration
+- ⚙️ **Automation** - Trigger smart home devices on events
 
-### v3.1.0 Features ✅ **LATEST!**
-- ✅ **Camera Discovery** - Automatic USB and network camera detection
-  - USB webcam scanning
-  - Network camera discovery (ONVIF protocol)
-  - Auto-detection with one click
-  - Manual camera configuration
-  - See [Camera Discovery Guide](#camera-discovery)
-  
-- ✅ **Theme System** - 8 superhero themes with consistent styling
-  - Sman (Classic red/blue)
-  - Bman (Dark knight)
-  - W Woman (Warrior gold)
-  - Flah (Speed red)
-  - Aman (Ocean teal)
-  - Cy (Tech silver)
-  - G Lantern (Willpower green)
-  - Default (Professional blue)
-  
-- ✅ **Help System** - Comprehensive inline help with 36+ entries
-  - Context-sensitive help buttons (?)
-  - Theme-aware tooltips
-  - Mobile responsive
-  - Covers all features and settings
-  - See [HELP_SYSTEM_IMPLEMENTATION.md](opencv-surveillance/HELP_SYSTEM_IMPLEMENTATION.md)
-  
-- ✅ **First-Run Setup** - User-friendly admin account creation
-  - Interactive setup wizard
-  - Strong password enforcement (12+ chars, complexity)
-  - Real-time password strength indicator
-  - Email validation
-  - No more auto-generated passwords!
+### Cloud & Storage (Phase 5)
+- ☁️ **Cloud Storage** - AWS S3, Google Cloud, Azure, or MinIO (FREE!)
+- 🗄️ **Automatic Cleanup** - Configurable retention policies
+- 📈 **Storage Analytics** - Monitor disk usage
+- 🔄 **Backup Options** - Multiple storage backends
+
+### Advanced Features (Phase 6)
+- 🎬 **Recording Management** - Search, download, stream recordings
+- 📊 **Advanced Analytics** - Hourly/daily activity reports
+- 👥 **Multi-User System** - Role-based access control
+- 🛡️ **Security Hardening** - Rate limiting, SQL injection protection
+- 🗃️ **PostgreSQL Support** - Production-ready database
+- 🐳 **Docker Ready** - Easy containerized deployment
 
 ---
 
 ## 🚀 Quick Start
 
+### Option 1: Docker (Recommended)
+
+#### 1. Generate Security Keys
+
+**REQUIRED**: Generate secure random keys before running:
+
 ```bash
-# 1. Clone repository
-git clone https://github.com/M1K31/OpenEye.git
-cd OpenEye/opencv-surveillance
+# Mac/Linux
+openssl rand -hex 32  # Copy this as SECRET_KEY
+openssl rand -hex 32  # Copy this as JWT_SECRET_KEY
 
-# 2. Install dependencies (all free!)
-pip install -r requirements.txt
+# Windows PowerShell
+[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Minimum 0 -Maximum 256 }))
 
-# 3. Configure environment
-cp .env.example .env
-# Edit .env with your settings (see docs/USER_GUIDE.md)
-
-# 4. Start server
-python -m backend.main
-
-# 5. Access dashboard
-open http://localhost:8000/api/docs
+# Python (all platforms)
+python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
-**That's it!** You now have a professional surveillance system running at **$0/month**! 🎉
+#### 2. Create Docker Compose File
+
+Create `docker-compose.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+  openeye:
+    image: im1k31s/openeye-opencv_home_security:latest
+    container_name: openeye
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./recordings:/app/recordings
+      - ./faces:/app/faces
+    environment:
+      - SECRET_KEY=your_generated_secret_key_here
+      - JWT_SECRET_KEY=your_generated_jwt_secret_here
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+    restart: unless-stopped
+```
+
+#### 3. Start OpenEye
+
+```bash
+docker-compose up -d
+```
+
+#### 4. Access the Application
+
+Open your browser to: **http://localhost:8000**
+
+Follow the first-run setup wizard to create your admin account.
+
+---
+
+### Option 2: Manual Installation
+
+#### Prerequisites
+
+- Python 3.9+
+- Node.js 16+ and npm
+- CMake (for dlib)
+- Git
+
+#### System Dependencies
+
+**Ubuntu/Debian:**
+```bash
+sudo apt-get update && sudo apt-get install -y \
+    build-essential cmake libopenblas-dev \
+    liblapack-dev libjpeg-dev libpng-dev python3-dev
+```
+
+**macOS:**
+```bash
+brew install cmake openblas
+```
+
+#### Installation Steps
+
+```bash
+# Clone repository
+git clone https://github.com/M1K31/OpenEye-OpenCV_Home_Security.git
+cd OpenEye-OpenCV_Home_Security/opencv-surveillance
+
+# Install Python dependencies
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+
+# Install frontend dependencies
+cd frontend
+npm install
+npm run build
+cd ..
+
+# Generate secret keys
+python -c "import secrets; print('SECRET_KEY=' + secrets.token_hex(32))"
+python -c "import secrets; print('JWT_SECRET_KEY=' + secrets.token_hex(32))"
+
+# Create .env file with your keys
+echo "SECRET_KEY=your_key_here" > .env
+echo "JWT_SECRET_KEY=your_jwt_key_here" >> .env
+
+# Start the application
+uvicorn backend.main:app --host 0.0.0.0 --port 8000
+```
+
+Access at: **http://localhost:8000**
 
 ---
 
 ## 📚 Documentation
 
-### For Users
-- **[User Guide](opencv-surveillance/docs/USER_GUIDE.md)** - Complete setup and usage guide
-  - Free vs paid service options
-  - Configuration examples
-  - Telegram/Email/VPN setup
-  - Troubleshooting common issues
+### Quick Links
+- 📖 [Installation Guide](#quick-start)
+- 🎨 [Theme System](#themes)
+- 🎥 [Camera Setup](#camera-setup)
+- 👤 [Face Management](#face-management)
+- 🔔 [Notification Setup](#notifications)
+- 🏠 [Smart Home Integration](#smart-home)
+- 🐛 [Troubleshooting](#troubleshooting)
+- 🗑️ [Uninstall Guide](opencv-surveillance/docs/UNINSTALL_GUIDE.md)
+- 📚 [Full User Guide](opencv-surveillance/docs/USER_GUIDE.md)
+- 🔧 [API Reference](opencv-surveillance/docs/api_reference.md)
+- 📝 [Changelog](CHANGELOG.md)
 
-- **[Uninstall Guide](opencv-surveillance/docs/UNINSTALL_GUIDE.md)** - Complete removal instructions
-  - Step-by-step uninstallation
-  - Selective removal options
-  - Backup and restore procedures
+---
 
-### For Developers
-- **[API Documentation](http://localhost:8000/api/docs)** - Interactive API reference (when running)
-- **[Docker Guide](opencv-surveillance/DOCKER.md)** - Container deployment
-- **[Implementation Status](opencv-surveillance/PHASE_4_5_COMPLETE.md)** - All phases completed
+## 🎥 Camera Setup
 
-### Quick References
-- **[Setup Guide](opencv-surveillance/docs/setup_guide.md)** - Initial setup
-- **[API Reference](opencv-surveillance/docs/api_reference.md)** - Endpoint documentation
-- **[Cleanup Report](opencv-surveillance/CLEANUP_REPORT.md)** - File organization
+### Supported Camera Types
+
+| Type | Example | macOS Docker | Linux/Native |
+|------|---------|--------------|--------------|
+| **RTSP/IP Cameras** | `rtsp://192.168.1.100:554/stream` | ✅ | ✅ |
+| **USB Webcams** | `/dev/video0` or index `0` | ⚠️ Limited | ✅ |
+| **ONVIF Cameras** | Auto-discovered | ✅ | ✅ |
+| **Mock (Testing)** | Built-in test camera | ✅ | ✅ |
+
+⚠️ **macOS Docker Limitation**: USB cameras have limited support in Docker on macOS. Use network/IP cameras or run natively.
+
+### Adding Cameras
+
+#### Method 1: Auto-Discovery (Recommended)
+
+1. Navigate to **Camera Management**
+2. Click **Discovery** tab
+3. Select **USB** or **Network** scan
+4. Click **Quick Add** on discovered cameras
+
+#### Method 2: Manual Configuration
+
+1. Navigate to **Camera Management**
+2. Click **Manual** tab
+3. Fill in camera details:
+   - **Camera ID**: Unique identifier (e.g., `front_door`)
+   - **Name**: Friendly name
+   - **Type**: RTSP or Mock
+   - **Source**: RTSP URL or device path
+4. Click **Add Camera**
+
+### Common RTSP URLs
+
+```
+# Hikvision
+rtsp://admin:password@192.168.1.100:554/Streaming/Channels/101
+
+# Dahua
+rtsp://admin:password@192.168.1.100:554/cam/realmonitor?channel=1&subtype=0
+
+# Amcrest
+rtsp://admin:password@192.168.1.100:554/cam/realmonitor?channel=1&subtype=1
+
+# Reolink
+rtsp://admin:password@192.168.1.100:554/h264Preview_01_main
+
+# Generic
+rtsp://username:password@ip_address:port/stream_path
+```
+
+---
+
+## 👤 Face Management
+
+### Adding Known Faces
+
+1. Navigate to **Face Management**
+2. Click **Upload Face**
+3. Enter person's name
+4. Upload 3-5 clear photos:
+   - Front-facing
+   - Well-lit
+   - Different expressions
+   - Various angles
+5. Click **Train Model**
+
+### Best Practices
+
+- ✅ Use high-quality, well-lit photos
+- ✅ Include multiple angles and expressions
+- ✅ Ensure face is clearly visible
+- ❌ Avoid sunglasses or masks
+- ❌ Don't use blurry or low-resolution images
+
+---
+
+## 🔔 Notifications
+
+### Email Setup (FREE with Gmail)
+
+1. Navigate to **Alert Settings**
+2. Enable **Email Notifications**
+3. Configure SMTP:
+
+```
+SMTP Host: smtp.gmail.com
+SMTP Port: 587
+Username: your-email@gmail.com
+Password: your-app-password (not your regular password!)
+```
+
+**Gmail App Password**: [Generate here](https://myaccount.google.com/apppasswords)
+
+### Telegram Bot (100% FREE!)
+
+1. Create bot with [@BotFather](https://t.me/botfather)
+2. Get your Chat ID from [@userinfobot](https://t.me/userinfobot)
+3. Configure in OpenEye:
+
+```
+Bot Token: 123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
+Chat ID: 123456789
+```
+
+### Push Notifications (FREE with ntfy.sh)
+
+1. Choose a unique topic name: `openeye-alerts-yourname`
+2. Configure in OpenEye:
+
+```
+ntfy Server: https://ntfy.sh
+Topic: openeye-alerts-yourname
+```
+
+3. Subscribe on your phone: [ntfy.sh app](https://ntfy.sh/)
+
+---
+
+## 🏠 Smart Home Integration
+
+### Home Assistant (MQTT)
+
+```yaml
+# configuration.yaml
+sensor:
+  - platform: mqtt
+    name: "Front Door Motion"
+    state_topic: "openeye/front_door/motion"
+    
+  - platform: mqtt
+    name: "Front Door Face"
+    state_topic: "openeye/front_door/face"
+
+automation:
+  - alias: "Alert on Unknown Face"
+    trigger:
+      - platform: state
+        entity_id: sensor.front_door_face
+        to: "unknown"
+    action:
+      - service: notify.mobile_app
+        data:
+          message: "Unknown person detected at front door"
+```
+
+### Apple HomeKit
+
+OpenEye exposes motion sensors and occupancy sensors to HomeKit automatically. Add in Home app:
+
+1. Open **Home** app
+2. Tap **+** → **Add Accessory**
+3. Scan QR code (displayed in OpenEye settings)
+4. Add cameras as sensors
+
+---
+
+## 🎨 Themes
+
+OpenEye includes 8 superhero-inspired themes:
+
+1. **Default** - Professional dark theme
+2. **Superman** - Classic red and blue
+3. **Batman** - Dark knight aesthetic
+4. **Wonder Woman** - Warrior princess
+5. **Flash** - Speed force energy
+6. **Aquaman** - Ocean depths
+7. **Cyborg** - Tech enhanced
+8. **Green Lantern** - Willpower green
+
+**To change theme**: Click **Themes** button → Select theme → Apply
+
+Themes persist across sessions and include custom animations!
+
+---
+
+## 🐛 Troubleshooting
+
+### Cannot access web interface
+
+**Check if service is running:**
+```bash
+docker ps  # Should show openeye container
+curl http://localhost:8000/api/health  # Should return OK
+```
+
+**Solution**: Restart container
+```bash
+docker-compose restart
+```
+
+### Camera not connecting
+
+**Test RTSP URL:**
+```bash
+ffmpeg -i "rtsp://admin:pass@192.168.1.100:554/stream" -frames:v 1 test.jpg
+```
+
+**Common issues:**
+- Wrong credentials
+- Incorrect RTSP URL
+- Camera not on same network
+- Firewall blocking ports
+
+### Face recognition not working
+
+**Check model files:**
+```bash
+ls opencv-surveillance/models/face_detection_model/
+# Should contain: shape_predictor_68_face_landmarks.dat
+```
+
+**Solution**: Download models
+```bash
+cd opencv-surveillance/models
+./download_models.sh
+```
+
+### High CPU usage
+
+**Optimization tips:**
+- Lower camera resolution
+- Reduce FPS
+- Disable face recognition on less important cameras
+- Use motion detection zones
+
+### Database locked errors
+
+**Solution**: Switch to PostgreSQL for production
+```yaml
+environment:
+  - DATABASE_URL=postgresql://user:pass@postgres:5432/openeye
+```
+
+### Docker build fails
+
+**Common causes:**
+- Insufficient disk space
+- Network issues during dependency download
+- Out of memory
+
+**Solution**: Increase Docker resources (Settings → Resources → 4GB RAM minimum)
+
+---
+
+## 🗑️ Uninstallation
+
+### Docker Cleanup
+
+```bash
+# Stop and remove containers
+docker-compose down
+
+# Remove images
+docker rmi im1k31s/openeye-opencv_home_security:latest
+
+# Remove volumes (WARNING: Deletes all data!)
+docker volume prune
+
+# Remove data directories
+rm -rf data recordings faces
+```
+
+### Manual Cleanup
+
+```bash
+# Remove application directory
+rm -rf OpenEye-OpenCV_Home_Security
+
+# Remove virtual environment
+rm -rf venv
+
+# Remove any created databases
+rm surveillance.db
+```
+
+Full uninstall guide: [opencv-surveillance/docs/UNINSTALL_GUIDE.md](opencv-surveillance/docs/UNINSTALL_GUIDE.md)
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-OpenEye System
-│
-├── Backend (FastAPI + OpenCV)
-│   ├── Camera Management
-│   │   ├── RTSP Camera Support
-│   │   ├── Mock Camera (Testing)
-│   │   └── Stream Processing
-│   ├── Motion Detection (OpenCV MOG2)
-│   ├── Face Recognition (face_recognition + dlib)
-│   │   ├── Face Detection
-│   │   ├── Face Encoding
-│   │   └── Person Identification
-│   ├── Video Recording
-│   │   ├── Motion-Triggered
-│   │   └── Metadata Tracking
-│   └── REST API
-│       ├── Authentication
-│       ├── Camera Control
-│       ├── Face Management
-│       └── Analytics
-│
-└── Frontend (React + Vite)
-    ├── Live Dashboard
-    ├── Face Management
-    ├── Detection History
-    └── Settings
-
-Database (SQLite)
-├── Users
-├── Face Detection Events
-├── Recording Events
-└── System Logs
+┌─────────────────────────────────────────────────────────┐
+│                    OpenEye System                        │
+├─────────────────────────────────────────────────────────┤
+│                                                          │
+│  Frontend (React)              Backend (FastAPI)         │
+│  ├── Dashboard                 ├── Camera Manager        │
+│  ├── Camera Mgmt               ├── Motion Detector       │
+│  ├── Face Mgmt                 ├── Face Recognition      │
+│  ├── Settings                  ├── Recorder              │
+│  └── Themes                    ├── Alert Manager         │
+│                                ├── API Routes            │
+│                                └── Database (SQLite/PG)  │
+│                                                          │
+├─────────────────────────────────────────────────────────┤
+│  External Integrations (Optional)                        │
+│  ├── Email (SMTP)                                        │
+│  ├── Telegram Bot                                        │
+│  ├── ntfy.sh Push                                        │
+│  ├── Home Assistant (MQTT)                               │
+│  ├── HomeKit Bridge                                      │
+│  └── Cloud Storage (S3/MinIO)                            │
+└─────────────────────────────────────────────────────────┘
 ```
 
----
-
-## 🚀 Installation
-
-### Prerequisites
-
-- **Python 3.9+**
-- **Node.js 16+** and npm
-- **CMake** (required for dlib)
-- **Git**
-
-### System Dependencies
-
-#### Ubuntu/Debian/Raspberry Pi:
-```bash
-sudo apt-get update
-sudo apt-get install -y \
-    build-essential \
-    cmake \
-    libopenblas-dev \
-    liblapack-dev \
-    libjpeg-dev \
-    libpng-dev \
-    python3-dev
-```
-
-#### macOS:
-```bash
-brew install cmake openblas
-```
-
-#### Windows:
-- Install Visual Studio Build Tools
-- Install CMake from https://cmake.org/download/
-
-### Quick Start
-
-1. **Clone the repository:**
-```bash
-git clone https://github.com/M1K31/OpenEye.git
-cd OpenEye
-```
-
-2. **Install backend dependencies:**
-```bash
-cd opencv-surveillance/backend
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r ../../requirements.txt
-```
-
-*Note: dlib installation may take 5-30 minutes to compile*
-
-3. **Install frontend dependencies:**
-```bash
-cd ../frontend
-npm install
-```
-
-4. **Create faces directory:**
-```bash
-cd ..
-mkdir -p faces
-```
-
-5. **Start the backend:**
-```bash
-cd opencv-surveillance
-uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-6. **Start the frontend** (new terminal):
-```bash
-cd opencv-surveillance/frontend
-npm run dev
-```
-
-7. **Access the application:**
-- Frontend: http://localhost:5173
-- API Docs: http://localhost:8000/api/docs
-
-### Docker Installation
-
-```bash
-# Build and start all services
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Stop services
-docker-compose down
-```
-
----
-
-## 💻 Usage
-
-### First Time Setup
-
-1. **Create a user:**
-```bash
-curl -X POST "http://localhost:8000/api/users/" \
-  -H "Content-Type: application/json" \
-  -d '{"username": "admin", "password": "your-password", "email": "admin@example.com"}'
-```
-
-2. **Login** to the web interface at http://localhost:5173
-
-3. **Add people for face recognition:**
-   - Click "👤 Manage Faces"
-   - Add a new person
-   - Upload 3-5 clear photos
-   - Click "Train Model"
-
-4. **View live stream** and see face recognition in action!
-
-### Adding Real Cameras
-
-```python
-# Via Python API
-from backend.core.camera_manager import manager
-
-manager.add_camera(
-    camera_id="front_door",
-    camera_type="rtsp",
-    source="rtsp://username:password@camera-ip:554/stream",
-    enable_face_detection=True
-)
-```
-
-Or via REST API:
-```bash
-curl -X POST "http://localhost:8000/api/cameras/" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "camera_id": "front_door",
-    "camera_type": "rtsp",
-    "source": "rtsp://camera-ip:554/stream"
-  }'
-```
-
----
-
-## 📚 API Documentation
-
-### Key Endpoints
-
-#### Face Recognition
-- `GET /api/faces/people` - List all registered people
-- `POST /api/faces/people` - Add a new person
-- `POST /api/faces/people/{name}/photos` - Upload photos
-- `POST /api/faces/train` - Train the recognition model
-- `GET /api/faces/statistics` - Get face detection stats
-- `GET /api/faces/detections` - Get recent detections
-
-#### Face Detection History
-- `GET /api/faces/history/detections` - Query detection history
-- `GET /api/faces/history/statistics` - Get analytics
-- `GET /api/faces/history/person/{name}` - Person-specific history
-- `GET /api/faces/history/timeline` - Hourly detection timeline
-
-#### Cameras
-- `GET /api/cameras/` - List all cameras
-- `POST /api/cameras/` - Add a new camera
-- `DELETE /api/cameras/{id}` - Remove a camera
-- `GET /api/cameras/{id}/stream` - Live MJPEG stream
-
-#### System
-- `GET /api/health` - Health check
-- `GET /api/system/info` - System information
-
-**Full API documentation:** http://localhost:8000/api/docs
-
----
-
-## ⚙️ Configuration
-
-### Face Recognition Settings
-
-Edit via UI or API:
-```json
-{
-  "detection_method": "hog",  // "hog" (CPU) or "cnn" (GPU)
-  "recognition_threshold": 0.6,  // 0.0-1.0, lower = stricter
-  "faces_folder": "faces"
-}
-```
-
-### Camera Settings
-
-Per-camera configuration:
-```json
-{
-  "face_detection_enabled": true,
-  "motion_detection_enabled": true,
-  "recording_enabled": true,
-  "post_motion_cooldown": 5
-}
-```
-
-### Camera Discovery
-
-OpenEye v3.1.0 includes automatic camera discovery to simplify setup:
-
-#### USB Camera Discovery
-Automatically detects connected USB webcams:
-```bash
-# Via API
-GET /api/cameras/discover/usb
-
-# Returns list of available USB cameras with indices
-```
-
-**⚠️ macOS Docker Limitations:**
-
-USB camera discovery has limitations when running in Docker on macOS due to how Docker Desktop virtualizes hardware access. Docker on macOS runs in a Linux VM, which doesn't have direct access to the host's USB devices.
-
-**Why USB Cameras Don't Work in Docker on macOS:**
-- Docker Desktop on macOS uses a lightweight Linux VM (HyperKit/WSL2)
-- USB devices aren't automatically passed through to the VM
-- The `/dev/video*` devices that OpenCV needs aren't available inside containers
-
-**Workarounds for macOS Users:**
-
-**Option 1: Use Network/IP Cameras (Recommended)**
-- Works perfectly with Docker on all platforms
-- Use ONVIF network camera discovery (see below)
-- More flexible for multi-camera setups
-- Example affordable options: Wyze Cam v3, Reolink cameras
-
-**Option 2: Run Backend Natively on macOS**
-Instead of using Docker, run the FastAPI backend directly:
-```bash
-# Install Python dependencies
-cd opencv-surveillance/backend
-python3 -m venv venv
-source venv/bin/activate
-pip install -r ../requirements.txt
-
-# Run backend
-uvicorn main:app --host 0.0.0.0 --port 8000
-```
-
-**Option 3: USB/IP Forwarding (Advanced)**
-Recent Docker Desktop versions have experimental USB/IP support:
-```bash
-# 1. Start privileged container for USB management
-docker run --rm -it --privileged --pid=host alpine
-
-# 2. Inside container, attach USB device
-nsenter -t 1 -m
-usbip list -r host.docker.internal
-usbip attach -r host.docker.internal -d <BUSID>
-
-# 3. Device appears at /dev/video0 in other containers
-```
-**Note:** This method is experimental and may not work reliably.
-
-**Option 4: Linux Development Environment**
-- Run Docker on Linux (native USB passthrough support)
-- Use a Raspberry Pi or similar Linux device
-- Cloud VPS with USB cameras (if supported)
-
-**Recommended Solution:**
-For production use with macOS, we recommend using network/IP cameras which work seamlessly across all platforms and provide better reliability and scalability.
-
-#### Network Camera Discovery  
-Scans local network for ONVIF-compatible IP cameras:
-```bash
-# Via API
-GET /api/cameras/discover/network
-
-# Returns list of discovered cameras with:
-# - IP address
-# - ONVIF port
-# - Device information
-# - RTSP stream URLs
-```
-
-#### Using the Discovery UI
-1. Navigate to **Camera Management** page
-2. Click the **Discovery** tab
-3. Choose **USB** or **Network** scan
-4. Click **Scan for Cameras**
-5. Select discovered cameras to add
-6. Configure settings and save
-
-**Benefits:**
-- ✅ No manual RTSP URL configuration
-- ✅ Automatic detection of camera capabilities  
-- ✅ One-click camera addition
-- ✅ Works with most modern IP cameras
-
-**Supported Protocols:**
-- USB/Webcam (Video4Linux, DirectShow)
-- ONVIF (Network cameras)
-- RTSP streams (manual configuration)
-
-### Environment Variables
-
-Create `backend/.env`:
-```ini
-SECRET_KEY=your-super-secret-key-change-this
-DATABASE_URL=sqlite:///./surveillance.db
-```
-
----
-
-## 🛠️ Development
-
-### Project Structure
-
-```
-opencv-surveillance/
-├── backend/
-│   ├── core/
-│   │   ├── face_recognition.py      # Face recognition engine
-│   │   ├── face_detector.py         # Detection integration
-│   │   ├── camera_manager.py        # Camera management
-│   │   ├── motion_detector.py       # Motion detection
-│   │   └── recorder.py              # Video recording
-│   ├── api/
-│   │   ├── routes/                  # API endpoints
-│   │   └── schemas/                 # Pydantic models
-│   ├── database/
-│   │   ├── models.py                # SQLAlchemy models
-│   │   └── face_crud.py             # Database operations
-│   └── main.py                      # FastAPI application
-├── frontend/
-│   └── src/
-│       ├── pages/
-│       │   ├── DashboardPage.jsx
-│       │   └── FaceManagementPage.jsx
-│       └── App.jsx
-├── faces/                           # Face images storage
-├── recordings/                      # Video recordings
-└── tests/                           # Test suite
-```
-
-### Running Tests
-
-```bash
-# Start the backend
-uvicorn backend.main:app --host 0.0.0.0 --port 8000
-
-# In another terminal, run tests
-python tests/test_face_recognition.py
-```
-
-### Code Style
-
-```bash
-# Format Python code
-black backend/
-
-# Lint Python code
-pylint backend/
-
-# Format JavaScript
-cd frontend && npm run lint
-```
-
----
-
-## 🚢 Deployment
-
-### Production Considerations
-
-1. **Change default credentials** and secret keys
-2. **Use HTTPS** with proper SSL certificates
-3. **Set up firewall** rules to restrict access
-4. **Configure CORS** for your domain
-5. **Set up automated backups** for database and recordings
-6. **Monitor disk space** for recordings
-7. **Use production-grade database** (PostgreSQL) for high traffic
-
-### Raspberry Pi Optimization
-
-```python
-# Use HOG detection method (CPU-only)
-settings = {
-    "detection_method": "hog",
-    "recognition_threshold": 0.55
-}
-
-# Reduce frame processing rate
-face_detector.detection_cooldown = 3.0  # Process every 3 seconds
-```
-
-### Systemd Service
-
-Create `/etc/systemd/system/openeye.service`:
-```ini
-[Unit]
-Description=OpenEye Surveillance System
-After=network.target
-
-[Service]
-Type=simple
-User=openeye
-WorkingDirectory=/opt/openeye
-ExecStart=/opt/openeye/venv/bin/uvicorn backend.main:app --host 0.0.0.0 --port 8000
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start:
-```bash
-sudo systemctl enable openeye
-sudo systemctl start openeye
-```
-
----
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-**Issue: dlib fails to install**
-```bash
-# Solution: Install CMake first
-sudo apt-get install cmake
-pip install --no-cache-dir dlib==19.24.2
-```
-
-**Issue: Face recognition is slow**
-- Use 'hog' detection method instead of 'cnn'
-- Increase detection cooldown
-- Reduce video resolution
-
-**Issue: Faces not detected**
-- Ensure photos are high quality and well-lit
-- Train the model after adding photos
-- Lower recognition threshold
-- Check that face_recognition is installed correctly
-
-**Issue: Import errors**
-```bash
-pip install --force-reinstall -r requirements.txt
-```
-
-### Performance Tips
-
-- **Raspberry Pi**: Use HOG detection, lower resolution
-- **GPU Available**: Use CNN detection for better accuracy
-- **High Traffic**: Use PostgreSQL instead of SQLite
-- **Multiple Cameras**: Consider dedicated hardware per camera
+**Technology Stack:**
+- **Backend**: Python 3.11, FastAPI, OpenCV, face_recognition, dlib
+- **Frontend**: React 18, Vite, React Router
+- **Database**: SQLite (default) or PostgreSQL (production)
+- **Deployment**: Docker, Docker Compose
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please follow these steps:
+Contributions are welcome! Here's how you can help:
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+1. **Fork** the repository
+2. **Create** a feature branch (`git checkout -b feature/AmazingFeature`)
+3. **Commit** your changes (`git commit -m 'Add AmazingFeature'`)
+4. **Push** to the branch (`git push origin feature/AmazingFeature`)
+5. **Open** a Pull Request
 
 ### Development Guidelines
 
-- Follow PEP 8 for Python code
-- Use ESLint rules for JavaScript
+- Follow PEP 8 for Python
+- Use ESLint for JavaScript/React
 - Write tests for new features
 - Update documentation
-- Keep commits atomic and well-described
+- Keep commits atomic and descriptive
+
+### Areas for Contribution
+
+- 🧪 Additional test coverage
+- 📝 Documentation improvements
+- 🌐 Translations/i18n
+- 🎨 New theme designs
+- 🔌 Smart home integrations
+- 📱 Mobile app development
+- 🐛 Bug fixes and performance
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+You are free to:
+- ✅ Use commercially
+- ✅ Modify
+- ✅ Distribute
+- ✅ Private use
 
 ---
 
 ## 🙏 Acknowledgments
 
-- **OpenCV** - Computer vision library
-- **face_recognition** - Face recognition built on dlib
-- **FastAPI** - Modern Python web framework
-- **React** - Frontend library
-- **dlib** - Machine learning toolkit
+- **OpenCV** - Computer vision library powering detection and processing
+- **face_recognition** - Simple face recognition built on dlib
+- **dlib** - Machine learning toolkit for face detection
+- **FastAPI** - Modern, fast Python web framework
+- **React** - UI library for building the interface
 
 ---
 
-## 📧 Support
+## 📧 Support & Community
 
-- 📖 **Documentation**: Check this README and [API docs](http://localhost:8000/api/docs)
-- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/M1K31/OpenEye/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/M1K31/OpenEye/discussions)
+- 📖 **Documentation**: This README + [User Guide](opencv-surveillance/docs/USER_GUIDE.md)
+- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/issues)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/discussions)
+- 🐳 **Docker Hub**: [im1k31s/openeye-opencv_home_security](https://hub.docker.com/r/im1k31s/openeye-opencv_home_security)
 
 ---
 
 ## 🎯 Roadmap
 
-- [x] Phase 1: Basic motion detection and recording
-- [x] Phase 2: Face recognition and analytics
-- [ ] Phase 3: Notifications and alerts
-- [ ] Phase 4: Smart home integration
-- [ ] Phase 5: Mobile applications
-- [ ] Phase 6: Cloud storage options
+- [x] Phase 1-2: Core surveillance and face recognition
+- [x] Phase 3: Notifications and alerts
+- [x] Phase 4: Smart home integration  
+- [x] Phase 5: Cloud storage and mobile prep
+- [x] Phase 6: Advanced features and security
+- [x] v3.1.0: Camera discovery and theme system
+- [x] v3.2.0: UI/UX improvements
+- [x] v3.3.0: Critical bug fixes and stability
+- [ ] v3.4.0: Timeline playback system
+- [ ] v3.5.0: Two-way audio support
+- [ ] v4.0.0: License plate recognition (ALPR)
+- [ ] v4.1.0: Object detection (YOLO)
+- [ ] v5.0.0: Complete mobile app
+
+See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
 ---
 
-**Made with ❤️ using OpenCV**
+**Made with ❤️ using OpenCV and AI**
 
-*OpenEye - See clearly, secure completely*
+*OpenEye - See clearly, secure completely. 100% Free Forever.*
+
+---
+
+**⭐ If you find OpenEye useful, please star this repository!**

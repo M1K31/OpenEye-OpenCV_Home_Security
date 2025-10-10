@@ -71,6 +71,13 @@ async def startup_event():
     """
     logger.info("Starting OpenEye Surveillance System...")
     
+    # FIX: Create required directories
+    logger.info("Creating required directories...")
+    required_dirs = ['recordings', 'faces', 'data', 'data/snapshots', 'data/thumbnails']
+    for dir_path in required_dirs:
+        Path(dir_path).mkdir(parents=True, exist_ok=True)
+    logger.info("Required directories created successfully")
+    
     # Create database tables
     logger.info("Creating database tables...")
     models.Base.metadata.create_all(bind=engine)
