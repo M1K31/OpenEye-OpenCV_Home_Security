@@ -204,12 +204,16 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000
 
 Access at: **http://localhost:8000**
 
+**🚀 Production Setup (Linux):** For running OpenEye as a system service with auto-start and auto-restart, see [Linux Systemd Service Guide](opencv-surveillance/docs/LINUX_SYSTEMD_SERVICE.md)
+
 ---
 
 ## 📚 Documentation
 
 ### Quick Links
 - 📖 [Installation Guide](#quick-start)
+- 🐧 [Linux Systemd Service](opencv-surveillance/docs/LINUX_SYSTEMD_SERVICE.md) - Run as system service
+- 🔄 [Docker vs Linux Comparison](DOCKER_VS_LINUX_INSTALLATION_ANALYSIS.md) - Feature parity analysis
 - 🎨 [Theme System](#themes)
 - 🎥 [Camera Setup](#camera-setup)
 - 👤 [Face Management](#face-management)
@@ -220,7 +224,8 @@ Access at: **http://localhost:8000**
 - 📚 [Full User Guide](opencv-surveillance/docs/USER_GUIDE.md)
 - 🔧 [API Reference (Old)](opencv-surveillance/docs/api_reference.md)
 - **🚀 [API Documentation (NEW)](opencv-surveillance/docs/API_DOCUMENTATION.md)** ⭐
-- 📝 [Release Notes v3.3.7](RELEASE_NOTES_v3.3.7.md)
+- 📊 [Statistics Polling Alternatives](STATISTICS_POLLING_ALTERNATIVES.md) - WebSockets guide
+- 📝 [Release Notes v3.3.8](RELEASE_NOTES_v3.3.8.md)
 - 📝 [Changelog](CHANGELOG.md)
 
 ---
