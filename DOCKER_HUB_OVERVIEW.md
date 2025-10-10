@@ -1,12 +1,14 @@
-# OpenEye - Free AI Surveillance System
+# OpenEye - Advanced Home Security System
 
-![Version](https://img.shields.io/badge/version-3.3.0-blue.svg) ![License](https://img.shields.io/badge/license-MIT-yellow.svg) ![Cost](https://img.shields.io/badge/cost-$0/month-success.svg)
+![Version](https://img.shields.io/badge/version-3.3.8-blue.svg) ![License](https://img.shields.io/badge/license-MIT-yellow.svg) ![Cost](https://img.shields.io/badge/cost-$0/month-success.svg)
 
 **100% free and open-source** AI-powered surveillance with face recognition, motion detection, and smart home integration. Your data stays on your hardware - no subscriptions, no cloud dependencies.
 
 🔗 **GitHub**: https://github.com/M1K31/OpenEye-OpenCV_Home_Security  
 📚 **Full Documentation**: [README.md](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/blob/main/README.md)  
-📝 **Changelog**: [CHANGELOG.md](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/blob/main/CHANGELOG.md)
+🚀 **API Documentation**: [API_DOCUMENTATION.md](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/blob/main/opencv-surveillance/docs/API_DOCUMENTATION.md)  
+📝 **Changelog**: [CHANGELOG.md](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/blob/main/CHANGELOG.md)  
+📝 **Release Notes**: [v3.3.7](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/blob/main/RELEASE_NOTES_v3.3.7.md)
 
 ---
 

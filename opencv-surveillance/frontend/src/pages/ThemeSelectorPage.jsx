@@ -193,8 +193,6 @@ const styles = {
     background: 'var(--bg-panel)',
     color: 'var(--text-primary)',
     border: '1px solid var(--border-panel)',
-    color: 'white',
-    border: 'none',
     padding: '10px 20px',
     borderRadius: '5px',
     cursor: 'pointer',

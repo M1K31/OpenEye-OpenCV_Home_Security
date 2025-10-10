@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.3.8] - 2025-10-09
+
+### Fixed
+- **Help Button Tooltip Flickering (CRITICAL UX)**: Fixed tooltip disappearing when moving mouse toward it
+  - Root cause: No delay on hide + conflicting hover/click handlers + tooltip couldn't receive mouse events
+  - Added 300ms delay before hiding tooltip to allow smooth mouse movement
+  - Added `pointer-events: auto` to tooltip so it can receive mouse events
+  - Tooltip now stays visible when hovering over it
+  - Click-outside-to-close functionality added
+  - Better mobile support with fixed positioning
+  - Cleanup of timeouts on unmount to prevent memory leaks
+  - Added `aria-expanded` attribute for accessibility
+- **Help Button Mobile Support**: Improved tooltip positioning on mobile devices
+  - Changed to `position: fixed` with bottom positioning
+  - Arrow pointer now points upward from bottom
+  - Better touch device interaction
+
+### Changed
+- Enhanced help tooltip UX with smooth transitions
+- Hover shows/hides smoothly, click toggles for touch devices
+- Added proper z-index layering (container: 100, tooltip: 1001)
+- Improved accessibility with proper ARIA attributes
+
+### Technical
+- **Frontend**: Added `useRef` and `useEffect` hooks for timeout management
+- **CSS**: Added `pointer-events: auto` to enable tooltip interaction
+- **Mobile**: Fixed positioning prevents tooltip from going off-screen
+
+---
+
+## [3.3.7] - 2025-10-10
+
+### Added
+- **Password Visibility Toggle**: Eye/hide emoji buttons for passwords in First-Run Setup and Login pages
+- **API Documentation**: Comprehensive API reference with examples (`/docs/API_DOCUMENTATION.md`)
+  - Complete endpoint documentation
+  - Python and JavaScript integration examples
+  - Webhook integration guide
+  - Authentication guide
+
+### Fixed
+- **Face Recognition Photo Upload (CRITICAL)**: Fixed invisible file upload button
+  - Root cause: Undefined CSS variable `var(--primary-color)`
+  - Solution: Hardcoded blue color (#007bff) with enhanced styling
+  - Added file icon, bold text, hover effects
+  - Users can now successfully upload photos and train face recognition
+- **Camera Discovery 404 Errors**: Fixed `/api/cameras/discover/status` returning 404
+  - Root cause: Router registration order
+  - Solution: Moved discovery router before cameras router in `main.py`
+  - Eliminates console spam during camera scanning
+- **Alert Configuration Validation**: Fixed 422 errors when saving alert config
+  - Empty strings now properly converted to `null` for backend validation
+- **Content Security Policy**: Updated CSP to allow `data:` URIs for inline SVG images
+
+### Changed
+- Enhanced file upload modal with explicit styling to prevent CSS conflicts
+- Improved console logging for debugging file uploads and modal rendering
+- Better error messages for alert configuration saves
+
+### Technical
+- **Frontend**: Axios interceptor properly reads JWT token on every request
+- **Backend**: Router order ensures discovery routes take precedence
+- **CSP Headers**: `img-src 'self' data:;` allows inline SVG images
+
+---
+
 ## [3.3.0] - 2025-10-08
 
 ### Fixed

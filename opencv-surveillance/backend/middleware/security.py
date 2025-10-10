@@ -28,7 +28,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        response.headers["Content-Security-Policy"] = "default-src 'self'"
+        # Updated CSP to allow data URIs for images (used by inline SVGs and base64 images)
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "img-src 'self' data:; "
+            "style-src 'self' 'unsafe-inline'; "
+            "script-src 'self'"
+        )
         
         return response
 

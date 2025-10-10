@@ -482,7 +482,7 @@ const styles = {
   },
   subtitle: {
     fontSize: '16px',
-    color: '#999',
+    color: 'var(--text-secondary)',
   },
   tabContainer: {
     display: 'flex',
@@ -498,7 +498,7 @@ const styles = {
     cursor: 'pointer',
     borderBottom: '3px solid transparent',
     transition: 'all 0.3s',
-    color: '#999',
+    color: 'var(--text-secondary)',
   },
   tabActive: {
     color: 'var(--text-link)',
@@ -553,7 +553,7 @@ const styles = {
     margin: 0,
   },
   sectionDescription: {
-    color: '#999',
+    color: 'var(--text-secondary)',
     marginBottom: '30px',
     lineHeight: '1.6',
   },
@@ -569,7 +569,7 @@ const styles = {
   emptyState: {
     textAlign: 'center',
     padding: '80px 20px',
-    color: '#999',
+    color: 'var(--text-secondary)',
   },
   emptyIcon: {
     fontSize: '64px',
@@ -659,7 +659,7 @@ const styles = {
     marginBottom: '5px',
   },
   value: {
-    color: '#999',
+    color: 'var(--text-secondary)',
     fontFamily: 'monospace',
     fontSize: '14px',
   },
@@ -738,7 +738,7 @@ const styles = {
   },
   hint: {
     fontSize: '12px',
-    color: '#999',
+    color: 'var(--text-secondary)',
     marginTop: '5px',
   },
   checkboxLabel: {

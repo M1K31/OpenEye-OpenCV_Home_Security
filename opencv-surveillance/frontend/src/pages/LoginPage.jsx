@@ -7,6 +7,7 @@ const LoginPage = ({ setToken }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -54,14 +55,34 @@ const LoginPage = ({ setToken }) => {
           </div>
           <div style={styles.formGroup}>
             <label style={styles.label}>Password</label>
-            <input
-              type="password"
-              placeholder="Enter password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              style={styles.input}
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="Enter password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                style={{...styles.input, paddingRight: '40px'}}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '10px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '18px',
+                  color: '#999'
+                }}
+                title={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? '🙈' : '👁️'}
+              </button>
+            </div>
           </div>
           <button type="submit" style={styles.button}>Login</button>
         </form>
@@ -119,7 +140,7 @@ const styles = {
   },
   button: {
     backgroundColor: 'var(--text-link)',
-    color: '#fff',
+    color: 'var(--text-primary)',
     padding: '12px',
     border: 'none',
     borderRadius: '4px',

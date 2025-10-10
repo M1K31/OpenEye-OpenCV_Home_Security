@@ -20,6 +20,8 @@ const FirstRunSetup = ({ onComplete }) => {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [checkingSetup, setCheckingSetup] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Password strength requirements
   const passwordRequirements = {
@@ -241,16 +243,37 @@ const FirstRunSetup = ({ onComplete }) => {
 
               <div className="form-group">
                 <label htmlFor="password">Password *</label>
-                <input
-                  type="password"
-                  id="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  placeholder="Enter a strong password"
-                  required
-                  className={errors.password ? 'input-error' : ''}
-                />
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    id="password"
+                    name="password"
+                    value={formData.password}
+                    onChange={handleInputChange}
+                    placeholder="Enter a strong password"
+                    required
+                    className={errors.password ? 'input-error' : ''}
+                    style={{ paddingRight: '40px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    style={{
+                      position: 'absolute',
+                      right: '10px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '18px',
+                      color: 'var(--text-secondary)'
+                    }}
+                    title={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? '🙈' : '👁️'}
+                  </button>
+                </div>
                 
                 {passwordStrength && (
                   <div className="password-strength">
@@ -288,16 +311,37 @@ const FirstRunSetup = ({ onComplete }) => {
 
               <div className="form-group">
                 <label htmlFor="confirmPassword">Confirm Password *</label>
-                <input
-                  type="password"
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  value={formData.confirmPassword}
-                  onChange={handleInputChange}
-                  placeholder="Re-enter your password"
-                  required
-                  className={errors.confirmPassword ? 'input-error' : ''}
-                />
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    value={formData.confirmPassword}
+                    onChange={handleInputChange}
+                    placeholder="Re-enter your password"
+                    required
+                    className={errors.confirmPassword ? 'input-error' : ''}
+                    style={{ paddingRight: '40px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    style={{
+                      position: 'absolute',
+                      right: '10px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '18px',
+                      color: 'var(--text-secondary)'
+                    }}
+                    title={showConfirmPassword ? "Hide password" : "Show password"}
+                  >
+                    {showConfirmPassword ? '🙈' : '👁️'}
+                  </button>
+                </div>
                 {errors.confirmPassword && (
                   <span className="error-text">{errors.confirmPassword}</span>
                 )}

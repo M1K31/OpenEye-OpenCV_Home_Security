@@ -45,8 +45,28 @@ html.default-theme body {
   --color-error: #dc3545;
   --color-warning: #ffc107;
   
+  /* Success/Error States */
+  --success-bg: #d4edda;
+  --success-text: #155724;
+  --success-border: #c3e6cb;
+  --success-dark: #1e7e34;
+  --error-bg: #f8d7da;
+  --error-text: #721c24;
+  --error-border: #f5c6cb;
+  
+  /* Warning States */
+  --warning-bg: #fff3cd;
+  --warning-text: #856404;
+  --warning-border: #ffc107;
+  
+  /* Info States */
+  --info-bg: #d1ecf1;
+  --info-text: #0c5460;
+  --info-border: #17a2b8;
+  
   /* Theme-specific variables for compatibility */
   --theme-primary: #007bff;
+  --theme-primary-dark: #0056b3;
   --theme-secondary: #6c757d;
   --theme-background: var(--bg-main);
   --theme-text: var(--text-primary);

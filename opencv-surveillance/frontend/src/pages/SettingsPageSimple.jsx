@@ -21,10 +21,10 @@ const SettingsPageSimple = () => {
 
       <div style={styles.content}>
         <h2 style={{ color: 'var(--text-primary)' }}>Settings Page Test</h2>
-        <p style={{ color: '#999' }}>
+        <p style={{ color: 'var(--text-secondary)' }}>
           If you can see this, the Settings page routing works!
         </p>
-        <p style={{ color: '#999' }}>
+        <p style={{ color: 'var(--text-secondary)' }}>
           The issue is likely with the embedded pages (Cameras, Faces, Alerts, Themes).
         </p>
         
@@ -57,7 +57,7 @@ const SettingsPageSimple = () => {
 
         <div style={styles.infoBox}>
           <h3 style={{ color: 'var(--text-primary)', marginTop: 0 }}>Debugging Instructions:</h3>
-          <ol style={{ color: '#999', lineHeight: '1.8' }}>
+          <ol style={{ color: 'var(--text-secondary)', lineHeight: '1.8' }}>
             <li>Open Browser DevTools (Press F12)</li>
             <li>Go to the Console tab</li>
             <li>Look for messages starting with [SettingsPage]</li>

@@ -15,6 +15,24 @@ import ThemeSelectorPage from './pages/ThemeSelectorPage';
 import SettingsPage from './pages/SettingsPage';
 import FirstRunSetup from './pages/FirstRunSetup';
 
+// Configure axios interceptor to add Authorization header to all requests
+axios.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    console.log('[Axios Interceptor] Request to:', config.url, 'Token exists:', !!token);
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+      console.log('[Axios Interceptor] Added Authorization header');
+    } else {
+      console.warn('[Axios Interceptor] No token found in localStorage');
+    }
+    return config;
+  },
+  (error) => {
+    console.error('[Axios Interceptor] Request error:', error);
+    return Promise.reject(error);
+  }
+);
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));

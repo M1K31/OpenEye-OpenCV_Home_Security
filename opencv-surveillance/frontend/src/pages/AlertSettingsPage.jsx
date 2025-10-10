@@ -42,10 +42,10 @@ const AlertSettingsPage = ({ embedded = false }) => {
           sms_enabled: false,
           push_enabled: false,
           webhook_enabled: false,
-          email_address: '',
-          phone_number: '',
-          push_token: '',
-          webhook_url: '',
+          email_address: null,
+          phone_number: null,
+          push_token: null,
+          webhook_url: null,
           min_seconds_between_alerts: 300,
           quiet_hours_enabled: false,
           quiet_hours_start: '22:00',
@@ -65,10 +65,10 @@ const AlertSettingsPage = ({ embedded = false }) => {
         sms_enabled: false,
         push_enabled: false,
         webhook_enabled: false,
-        email_address: '',
-        phone_number: '',
-        push_token: '',
-        webhook_url: '',
+        email_address: null,
+        phone_number: null,
+        push_token: null,
+        webhook_url: null,
         min_seconds_between_alerts: 300,
         quiet_hours_enabled: false,
         quiet_hours_start: '22:00',
@@ -98,23 +98,43 @@ const AlertSettingsPage = ({ embedded = false }) => {
   };
 
   const saveConfiguration = async () => {
+    console.log('[AlertSettings] Starting saveConfiguration...');
+    console.log('[AlertSettings] Current config:', config);
     setSaving(true);
     try {
-      if (config.id) {
+      // Clean the config data - convert empty strings to null
+      const cleanConfig = {
+        ...config,
+        email_address: config.email_address?.trim() || null,
+        phone_number: config.phone_number?.trim() || null,
+        push_token: config.push_token?.trim() || null,
+        webhook_url: config.webhook_url?.trim() || null,
+      };
+
+      console.log('[AlertSettings] Cleaned config:', cleanConfig);
+
+      if (cleanConfig.id) {
         // Update existing
-        await axios.put(`/api/alerts/config/${config.id}`, config);
+        console.log('[AlertSettings] Updating existing config ID:', cleanConfig.id);
+        await axios.put(`/api/alerts/config/${cleanConfig.id}`, cleanConfig);
         showMessage('Configuration updated successfully', 'success');
       } else {
         // Create new
-        const response = await axios.post('/api/alerts/config', config);
+        console.log('[AlertSettings] Creating new config');
+        const response = await axios.post('/api/alerts/config', cleanConfig);
         setConfig(response.data);
         showMessage('Configuration created successfully', 'success');
       }
       loadStatistics();
     } catch (error) {
-      showMessage('Error saving configuration: ' + error.message, 'error');
+      const errorMsg = error.response?.data?.detail || error.message;
+      console.error('[AlertSettings] Error saving configuration:', errorMsg);
+      console.error('[AlertSettings] Full error:', error);
+      console.error('[AlertSettings] Error response:', error.response?.data);
+      showMessage('Error saving configuration: ' + errorMsg, 'error');
     } finally {
       setSaving(false);
+      console.log('[AlertSettings] saveConfiguration complete');
     }
   };
 
@@ -170,19 +190,19 @@ const AlertSettingsPage = ({ embedded = false }) => {
           <h2>Alert Statistics (Last 7 Days)</h2>
           <div className="stats-grid">
             <div className="stat-card">
-              <div className="stat-value">{stats.total_notifications}</div>
+              <div className="stat-value">{stats.total_notifications || 0}</div>
               <div className="stat-label">Total Alerts</div>
             </div>
             <div className="stat-card">
-              <div className="stat-value">{stats.successful}</div>
+              <div className="stat-value">{stats.successful || 0}</div>
               <div className="stat-label">Successful</div>
             </div>
             <div className="stat-card">
-              <div className="stat-value">{stats.failed}</div>
+              <div className="stat-value">{stats.failed || 0}</div>
               <div className="stat-label">Failed</div>
             </div>
             <div className="stat-card">
-              <div className="stat-value">{stats.success_rate.toFixed(1)}%</div>
+              <div className="stat-value">{(stats.success_rate || 0).toFixed(1)}%</div>
               <div className="stat-label">Success Rate</div>
             </div>
           </div>
@@ -266,7 +286,7 @@ const AlertSettingsPage = ({ embedded = false }) => {
                 placeholder="your@email.com"
               />
             </div>
-            <div className="help-text" style={{ marginTop: '15px' }}>
+            <div className="help-text mt-15">
               <p><strong>📧 SMTP Server Configuration (Environment Variables)</strong></p>
               <code className="smtp-config-code">
                 SMTP_HOST=smtp.gmail.com<br/>
@@ -323,7 +343,7 @@ const AlertSettingsPage = ({ embedded = false }) => {
                 <p>4. Set environment variables: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID</p>
               </div>
               
-              <p style={{ marginTop: '20px' }}><strong>Option 2: Twilio (Paid)</strong></p>
+              <p className="mt-20"><strong>Option 2: Twilio (Paid)</strong></p>
               <div className="form-group">
                 <label>Phone Number (E.164 format):</label>
                 <input
@@ -335,7 +355,7 @@ const AlertSettingsPage = ({ embedded = false }) => {
                 <small>Include country code (e.g., +1 for USA). Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER in environment.</small>
               </div>
             </div>
-            {config.id && (config.phone_number || process.env.TELEGRAM_BOT_TOKEN) && (
+            {config.id && config.phone_number && (
               <button
                 onClick={() => testAlert('sms')}
                 disabled={testing}
@@ -380,24 +400,24 @@ const AlertSettingsPage = ({ embedded = false }) => {
                 <p>1. Choose a unique topic name (e.g., openeye-alerts-yourname)</p>
                 <p>2. Subscribe to topic in ntfy app: <a href="https://ntfy.sh/" target="_blank" rel="noopener noreferrer">ntfy.sh</a></p>
                 <p>3. Set environment variables:</p>
-                <code style={{ display: 'block', background: '#f0f0f0', padding: '10px', margin: '10px 0', borderRadius: '5px' }}>
+                <code className="code-block">
                   NTFY_TOPIC=your-unique-topic<br/>
                   NTFY_SERVER=https://ntfy.sh
                 </code>
                 <p>4. Download the ntfy app on iOS/Android and subscribe to your topic!</p>
               </div>
               
-              <p style={{ marginTop: '20px' }}><strong>Option 2: Firebase Cloud Messaging (FCM)</strong></p>
+              <p className="mt-20"><strong>Option 2: Firebase Cloud Messaging (FCM)</strong></p>
               <div className="help-text">
                 <p>1. Create a Firebase project at <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer">Firebase Console</a></p>
                 <p>2. Download service account credentials JSON</p>
                 <p>3. Set environment variable:</p>
-                <code style={{ display: 'block', background: '#f0f0f0', padding: '10px', margin: '10px 0', borderRadius: '5px' }}>
+                <code className="code-block">
                   FIREBASE_CREDENTIALS_PATH=/app/config/firebase-credentials.json
                 </code>
               </div>
               
-              <div className="form-group" style={{ marginTop: '20px' }}>
+              <div className="form-group mt-20">
                 <label>Device Token (FCM only):</label>
                 <input
                   type="text"

@@ -33,6 +33,11 @@ This file is part of OpenEye-OpenCV_Home_Security
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
+.question-mark-button:focus {
+  outline: 2px solid var(--theme-primary, #667eea);
+  outline-offset: 2px;
+}
+
 .help-description {
   position: absolute;
   left: 30px;
@@ -48,6 +53,7 @@ This file is part of OpenEye-OpenCV_Home_Security
   z-index: 1000;
   animation: fadeIn 0.2s ease-in;
   color: var(--theme-text, #333);
+  pointer-events: auto; /* CRITICAL: Allow mouse interaction with tooltip */
 }
 
 .help-title {
@@ -132,19 +138,42 @@ This file is part of OpenEye-OpenCV_Home_Security
     left: auto;
     right: 30px;
     max-width: 280px;
+    position: fixed; /* Better for mobile */
+    top: auto;
+    bottom: 60px; /* Position above button */
+    transform: none;
   }
   
   .help-description::before {
     left: auto;
-    right: -10px;
+    right: 10px;
+    top: auto;
+    bottom: -10px;
     border-right: none;
-    border-left: 10px solid var(--theme-primary, #667eea);
+    border-left: none;
+    border-top: 10px solid var(--theme-primary, #667eea);
+    border-bottom: none;
+    transform: none;
   }
   
   .help-description::after {
     left: auto;
-    right: -8px;
+    right: 11px;
+    top: auto;
+    bottom: -8px;
     border-right: none;
-    border-left: 9px solid var(--theme-card-bg, white);
+    border-left: none;
+    border-top: 9px solid var(--theme-card-bg, white);
+    border-bottom: none;
+    transform: none;
   }
+}
+
+/* Ensure tooltip is above other content */
+.help-container {
+  z-index: 100;
+}
+
+.help-description {
+  z-index: 1001;
 }

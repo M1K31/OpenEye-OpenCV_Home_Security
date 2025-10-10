@@ -120,6 +120,13 @@ app.include_router(
     tags=["Authentication"]
 )
 
+# Camera Discovery - MUST be before /api/cameras to avoid route conflicts
+app.include_router(
+    discovery.router,
+    prefix="/api",
+    tags=["Camera Discovery"]
+)
+
 app.include_router(
     cameras.router,
     prefix="/api/cameras",
@@ -161,13 +168,6 @@ app.include_router(
     analytics.router,
     prefix="/api",
     tags=["Advanced Analytics"]
-)
-
-# Camera Discovery
-app.include_router(
-    discovery.router,
-    prefix="/api",
-    tags=["Camera Discovery"]
 )
 
 # First-Run Setup

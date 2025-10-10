@@ -99,10 +99,19 @@ const FaceManagementPage = ({ embedded = false }) => {
   };
 
   const handleFileSelect = (e) => {
-    setUploadFiles(Array.from(e.target.files));
+    console.log('[FaceManagement] File input changed');
+    console.log('[FaceManagement] Files selected:', e.target.files);
+    console.log('[FaceManagement] Number of files:', e.target.files.length);
+    const filesArray = Array.from(e.target.files);
+    console.log('[FaceManagement] Files array:', filesArray);
+    setUploadFiles(filesArray);
   };
 
   const uploadPhotos = async (personName) => {
+    console.log('[FaceManagement] uploadPhotos called for:', personName);
+    console.log('[FaceManagement] uploadFiles:', uploadFiles);
+    console.log('[FaceManagement] uploadFiles.length:', uploadFiles.length);
+    
     if (uploadFiles.length === 0) {
       showMessage('Please select photos to upload', 'error');
       return;
@@ -111,18 +120,24 @@ const FaceManagementPage = ({ embedded = false }) => {
     setLoading(true);
     const formData = new FormData();
     uploadFiles.forEach(file => {
+      console.log('[FaceManagement] Appending file:', file.name, 'Size:', file.size);
       formData.append('files', file);
     });
 
+    console.log('[FaceManagement] FormData created, sending to API...');
+    
     try {
       const response = await axios.post(`/api/faces/people/${personName}/photos`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
+      console.log('[FaceManagement] Upload response:', response.data);
       showMessage(response.data.message, 'success');
       setUploadFiles([]);
       setSelectedPerson(null);
       loadPeople();
     } catch (error) {
+      console.error('[FaceManagement] Upload error:', error);
+      console.error('[FaceManagement] Error response:', error.response?.data);
       showMessage('Error uploading photos: ' + error.message, 'error');
     } finally {
       setLoading(false);
@@ -279,7 +294,10 @@ const FaceManagementPage = ({ embedded = false }) => {
                 <p>Photos: {person.photo_count}</p>
                 <div className="person-actions">
                   <button
-                    onClick={() => setSelectedPerson(person.name)}
+                    onClick={() => {
+                      console.log('[FaceManagement] Add Photos clicked for:', person.name);
+                      setSelectedPerson(person.name);
+                    }}
                     className="btn-small btn-primary"
                     disabled={loading}
                   >
@@ -301,17 +319,80 @@ const FaceManagementPage = ({ embedded = false }) => {
 
       {/* Photo Upload Modal */}
       {selectedPerson && (
-        <div className="modal-overlay" onClick={() => setSelectedPerson(null)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h2>Add Photos for {selectedPerson}</h2>
-            <input
-              type="file"
-              multiple
-              accept="image/jpeg,image/jpg,image/png"
-              onChange={handleFileSelect}
-            />
+        <div 
+          className="modal-overlay" 
+          onClick={() => {
+            console.log('[FaceManagement] Modal overlay clicked, closing modal');
+            setSelectedPerson(null);
+          }}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999
+          }}
+        >
+          <div 
+            className="modal-content" 
+            onClick={(e) => {
+              console.log('[FaceManagement] Modal content clicked');
+              e.stopPropagation();
+            }}
+            style={{
+              backgroundColor: 'var(--bg-panel)',
+              padding: '30px',
+              borderRadius: '10px',
+              maxWidth: '500px',
+              width: '90%',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+              border: '1px solid var(--border-panel)'
+            }}
+          >
+            <h2 style={{ color: 'var(--text-primary)', marginTop: 0 }}>
+              Add Photos for {selectedPerson}
+            </h2>
+            {console.log('[FaceManagement] Modal is rendering for person:', selectedPerson)}
+            <div style={{ margin: '20px 0' }}>
+              <label 
+                htmlFor="photo-upload" 
+                style={{
+                  display: 'inline-block',
+                  padding: '12px 24px',
+                  background: '#007bff',
+                  color: '#ffffff',
+                  borderRadius: '5px',
+                  cursor: 'pointer',
+                  marginBottom: '10px',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  border: 'none',
+                  transition: 'background 0.3s ease'
+                }}
+                onMouseOver={(e) => e.target.style.background = '#0056b3'}
+                onMouseOut={(e) => e.target.style.background = '#007bff'}
+                onClick={() => console.log('[FaceManagement] Choose Photos label clicked')}
+              >
+                📁 Choose Photos
+              </label>
+              <input
+                id="photo-upload"
+                type="file"
+                multiple
+                accept="image/jpeg,image/jpg,image/png"
+                onChange={handleFileSelect}
+                style={{ display: 'none' }}
+              />
+            </div>
             {uploadFiles.length > 0 && (
-              <p>{uploadFiles.length} file(s) selected</p>
+              <p style={{ color: 'var(--text-primary)' }}>
+                ✅ {uploadFiles.length} file(s) selected
+              </p>
             )}
             <div className="modal-actions">
               <button

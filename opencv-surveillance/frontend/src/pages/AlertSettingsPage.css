@@ -7,6 +7,9 @@ This file is part of OpenEye-OpenCV_Home_Security
   max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  min-height: 100vh;
 }
 
 .page-header {
@@ -15,12 +18,12 @@ This file is part of OpenEye-OpenCV_Home_Security
   align-items: center;
   margin-bottom: 30px;
   padding-bottom: 20px;
-  border-bottom: 2px solid #e0e0e0;
+  border-bottom: 2px solid var(--border-panel, #444444);
 }
 
 .page-header h1 {
   margin: 0;
-  color: #333;
+  color: var(--text-primary);
 }
 
 /* Messages */
@@ -32,29 +35,31 @@ This file is part of OpenEye-OpenCV_Home_Security
 }
 
 .message-success {
-  background-color: #d4edda;
-  color: #155724;
-  border: 1px solid #c3e6cb;
+  background-color: var(--success-bg, #d4edda);
+  color: var(--success-text, #155724);
+  border: 1px solid var(--success-border, #c3e6cb);
 }
 
 .message-error {
-  background-color: #f8d7da;
-  color: #721c24;
-  border: 1px solid #f5c6cb;
+  background-color: var(--error-bg, #f8d7da);
+  color: var(--error-text, #721c24);
+  border: 1px solid var(--error-border, #f5c6cb);
 }
 
 /* Statistics */
 .stats-section {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: var(--theme-primary, #007bff);
+  color: var(--text-primary);
   padding: 30px;
   border-radius: 12px;
   margin-bottom: 30px;
+  border: 1px solid var(--border-panel, #444444);
 }
 
 .stats-section h2 {
   margin-top: 0;
   margin-bottom: 20px;
+  color: var(--text-primary);
 }
 
 .stats-grid {
@@ -64,36 +69,43 @@ This file is part of OpenEye-OpenCV_Home_Security
 }
 
 .stat-card {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--bg-panel);
   padding: 20px;
   border-radius: 8px;
   text-align: center;
+  border: 1px solid var(--border-panel, #444444);
 }
 
 .stat-value {
   font-size: 2.5em;
   font-weight: bold;
   margin-bottom: 5px;
+  color: var(--text-primary);
 }
 
 .stat-label {
   font-size: 0.9em;
   opacity: 0.9;
+  color: var(--text-secondary);
 }
 
 /* Settings Sections */
 .settings-section {
-  background: white;
+  background: var(--bg-panel);
   padding: 25px;
   border-radius: 12px;
   margin-bottom: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-panel, #444444);
 }
 
 .settings-section h2 {
   margin-top: 0;
   margin-bottom: 20px;
-  color: #333;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .form-grid {
@@ -111,17 +123,29 @@ This file is part of OpenEye-OpenCV_Home_Security
 .form-group label {
   font-weight: 600;
   margin-bottom: 8px;
-  color: #555;
+  color: var(--text-primary);
 }
 
 .form-group input[type="email"],
 .form-group input[type="tel"],
 .form-group input[type="url"],
+.form-group input[type="text"],
 .form-group input[type="time"] {
   padding: 10px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-panel, #444444);
   border-radius: 6px;
   font-size: 14px;
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+}
+
+.form-group input[type="email"]:focus,
+.form-group input[type="tel"]:focus,
+.form-group input[type="url"]:focus,
+.form-group input[type="text"]:focus,
+.form-group input[type="time"]:focus {
+  outline: none;
+  border-color: var(--theme-primary, #007bff);
 }
 
 .form-group input[type="range"] {
@@ -130,7 +154,7 @@ This file is part of OpenEye-OpenCV_Home_Security
 
 .form-group small {
   margin-top: 5px;
-  color: #777;
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -140,51 +164,65 @@ This file is part of OpenEye-OpenCV_Home_Security
   gap: 10px;
   cursor: pointer;
   font-weight: normal !important;
+  color: var(--text-primary);
+}
+
+.checkbox-label span {
+  color: var(--text-primary);
 }
 
 .checkbox-label input[type="checkbox"] {
   width: 20px;
   height: 20px;
   cursor: pointer;
+  accent-color: var(--theme-primary, #007bff);
 }
 
 /* Buttons */
 .btn-primary, .btn-secondary, .btn-test, .btn-large {
   padding: 10px 20px;
-  border: none;
+  border: 1px solid var(--border-panel, #444444);
   border-radius: 6px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: all 0.3s;
 }
 
 .btn-primary {
-  background-color: #007bff;
-  color: white;
+  background-color: var(--theme-primary, #007bff);
+  color: var(--text-primary);
+  border-color: var(--theme-primary, #007bff);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background-color: #0056b3;
+  background-color: var(--theme-primary-dark, #0056b3);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
 .btn-secondary {
-  background-color: #6c757d;
-  color: white;
+  background-color: var(--bg-panel);
+  color: var(--text-primary);
+  border-color: var(--border-panel, #444444);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background-color: #545b62;
+  background-color: var(--bg-main);
+  border-color: var(--text-secondary);
 }
 
 .btn-test {
-  background-color: #28a745;
+  background-color: var(--success-bg, #28a745);
   color: white;
   margin-top: 10px;
+  border-color: var(--success-bg, #28a745);
 }
 
 .btn-test:hover:not(:disabled) {
-  background-color: #1e7e34;
+  background-color: var(--success-dark, #1e7e34);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
 .btn-large {
@@ -205,20 +243,22 @@ button:disabled {
 
 /* Logs Section */
 .logs-section {
-  background: white;
+  background: var(--bg-panel);
   padding: 25px;
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-panel, #444444);
 }
 
 .logs-section h2 {
   margin-top: 0;
   margin-bottom: 20px;
+  color: var(--text-primary);
 }
 
 .no-logs {
   text-align: center;
-  color: #999;
+  color: var(--text-secondary);
   font-style: italic;
   padding: 40px;
 }
@@ -233,27 +273,40 @@ button:disabled {
 }
 
 .logs-table thead {
-  background-color: #f8f9fa;
+  background-color: var(--bg-main);
+  border-bottom: 2px solid var(--border-panel, #444444);
 }
 
 .logs-table th,
 .logs-table td {
   padding: 12px;
   text-align: left;
-  border-bottom: 1px solid #dee2e6;
+  border-bottom: 1px solid var(--border-panel, #444444);
+  color: var(--text-primary);
 }
 
 .logs-table th {
   font-weight: 600;
-  color: #495057;
+  color: var(--text-primary);
+}
+
+.logs-table tbody tr {
+  background-color: var(--bg-panel);
+  transition: background-color 0.2s;
+}
+
+.logs-table tbody tr:hover {
+  background-color: var(--bg-main);
 }
 
 .logs-table tr.success {
-  background-color: #f8fff8;
+  background-color: var(--bg-panel);
+  border-left: 3px solid var(--success-bg, #28a745);
 }
 
 .logs-table tr.failed {
-  background-color: #fff8f8;
+  background-color: var(--bg-panel);
+  border-left: 3px solid var(--error-bg, #dc3545);
 }
 
 .status {
@@ -277,40 +330,46 @@ button:disabled {
   text-align: center;
   padding: 50px;
   font-size: 18px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 /* Notification Method Styles */
 .notification-method-header {
-  background: #f8f9fa;
+  background: var(--bg-main);
   padding: 15px;
   border-radius: 8px;
   margin-bottom: 20px;
-  border-left: 4px solid #667eea;
+  border-left: 4px solid var(--theme-primary, #007bff);
+  border: 1px solid var(--border-panel, #444444);
 }
 
 .method-description {
   margin: 0;
-  color: #555;
+  color: var(--text-primary);
   font-size: 14px;
 }
 
 .method-tabs {
-  background: #ffffff;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-main);
+  border: 1px solid var(--border-panel, #444444);
   border-radius: 8px;
   padding: 20px;
   margin: 15px 0;
 }
 
+.method-tabs p {
+  color: var(--text-primary);
+  margin: 10px 0;
+}
+
 .method-tabs p strong {
-  color: #667eea;
+  color: var(--theme-primary, #007bff);
   font-size: 16px;
 }
 
 .help-text {
-  background: #f0f4ff;
-  border: 1px solid #d0e0ff;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-panel, #444444);
   border-radius: 6px;
   padding: 15px;
   margin: 10px 0;
@@ -319,12 +378,12 @@ button:disabled {
 
 .help-text p {
   margin: 8px 0;
-  color: #444;
+  color: var(--text-primary);
   line-height: 1.6;
 }
 
 .help-text a {
-  color: #667eea;
+  color: var(--theme-primary, #007bff);
   text-decoration: none;
   font-weight: 600;
 }
@@ -334,12 +393,34 @@ button:disabled {
 }
 
 .help-text code {
-  background: #f5f5f5;
+  background: var(--bg-main);
   padding: 2px 6px;
   border-radius: 3px;
   font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
   font-size: 13px;
-  color: #e83e8c;
+  color: var(--theme-accent, #e83e8c);
+  border: 1px solid var(--border-panel, #444444);
+}
+
+.code-block {
+  display: block;
+  background: var(--bg-main);
+  color: var(--text-primary);
+  padding: 10px;
+  margin: 10px 0;
+  border-radius: 5px;
+  border: 1px solid var(--border-panel, #444444);
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.mt-20 {
+  margin-top: 20px;
+}
+
+.mt-15 {
+  margin-top: 15px;
 }
 
 /* Responsive */
@@ -366,7 +447,7 @@ button:disabled {
   padding: 10px;
   margin: 10px 0;
   border-radius: 5px;
-  border: 1px solid var(--border-panel);
+  border: 1px solid var(--border-panel, #444444);
   font-size: 13px;
   font-family: 'Courier New', monospace;
   line-height: 1.6;
@@ -381,7 +462,7 @@ button:disabled {
 
 /* No Logs Message */
 .no-logs {
-  color: #88c0d0;
+  color: var(--text-secondary);
   text-align: center;
   padding: 20px;
   font-style: italic;
@@ -389,7 +470,7 @@ button:disabled {
 
 /* Help Text Links */
 .help-text a {
-  color: var(--text-link);
+  color: var(--theme-primary, #007bff);
   text-decoration: none;
 }
 
@@ -398,7 +479,7 @@ button:disabled {
 }
 
 .help-text small {
-  color: #88c0d0;
+  color: var(--text-secondary);
 }
 
 .help-text strong {
