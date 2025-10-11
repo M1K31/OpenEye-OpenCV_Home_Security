@@ -4,11 +4,14 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import FaceManagementPage from './FaceManagementPage';
+import wsService from '../services/WebSocketService';
 
 const DashboardPage = ({ onLogout }) => {
   const [showFaceManagement, setShowFaceManagement] = useState(false);
   const [recentDetections, setRecentDetections] = useState([]);
   const [statistics, setStatistics] = useState({});
+  const [wsStatus, setWsStatus] = useState('disconnected'); // WebSocket connection status
+  const [usePolling, setUsePolling] = useState(false); // Fallback to polling if WebSocket fails
   const streamUrl = "/api/cameras/mock_cam_1/stream";
   const navigate = useNavigate();
 
@@ -36,14 +39,93 @@ const DashboardPage = ({ onLogout }) => {
     loadDetections();
     loadStats();
 
-    // Refresh every 5 seconds
-    const interval = setInterval(() => {
-      loadDetections();
-      loadStats();
-    }, 5000);
+    // WebSocket setup
+    const token = localStorage.getItem('token');
+    let pollingInterval = null;
 
-    return () => clearInterval(interval);
-  }, []);
+    if (token) {
+      // Try WebSocket connection first
+      wsService.connect(token);
+
+      // Listen for WebSocket status changes
+      const unsubscribeStatus = wsService.on('status_change', ({ status }) => {
+        setWsStatus(status);
+        
+        // If WebSocket fails after max retries, fall back to polling
+        if (status === 'error' || status === 'disconnected') {
+          console.log('WebSocket unavailable, using polling fallback');
+          setUsePolling(true);
+        } else if (status === 'connected') {
+          setUsePolling(false);
+        }
+      });
+
+      // Listen for statistics updates via WebSocket
+      const unsubscribeStats = wsService.on('statistics_update', (message) => {
+        if (message.data) {
+          setStatistics(prevStats => ({
+            ...prevStats,
+            ...message.data
+          }));
+        }
+      });
+
+      // Listen for camera events
+      const unsubscribeCameraEvents = wsService.on('camera_event', (message) => {
+        console.log('Camera event received:', message);
+        // Refresh detections on certain camera events
+        if (message.event_type === 'face_detected' || message.event_type === 'face_recognized') {
+          loadDetections();
+        }
+      });
+
+      // Polling fallback (only if WebSocket fails)
+      const startPolling = () => {
+        if (pollingInterval) {
+          clearInterval(pollingInterval);
+        }
+        pollingInterval = setInterval(() => {
+          if (usePolling || !wsService.isConnected()) {
+            loadDetections();
+            loadStats();
+          }
+        }, 5000);
+      };
+
+      // Start polling after a short delay to see if WebSocket connects
+      setTimeout(() => {
+        if (!wsService.isConnected()) {
+          console.log('WebSocket not connected, starting polling');
+          setUsePolling(true);
+          startPolling();
+        }
+      }, 3000);
+
+      // Cleanup
+      return () => {
+        unsubscribeStatus();
+        unsubscribeStats();
+        unsubscribeCameraEvents();
+        if (pollingInterval) {
+          clearInterval(pollingInterval);
+        }
+        // Don't disconnect WebSocket here - it should persist across page navigation
+      };
+    } else {
+      // No token, use polling only
+      setUsePolling(true);
+      pollingInterval = setInterval(() => {
+        loadDetections();
+        loadStats();
+      }, 5000);
+
+      return () => {
+        if (pollingInterval) {
+          clearInterval(pollingInterval);
+        }
+      };
+    }
+  }, [usePolling]);
 
   if (showFaceManagement) {
     return <FaceManagementPage onBack={() => setShowFaceManagement(false)} />;
@@ -54,6 +136,24 @@ const DashboardPage = ({ onLogout }) => {
       <header style={styles.header}>
         <h1 style={styles.title}>OpenEye Surveillance Dashboard</h1>
         <div style={styles.headerButtons}>
+          {/* Connection Status Indicator */}
+          <div style={styles.connectionStatus}>
+            {wsStatus === 'connected' && (
+              <span style={styles.statusConnected} title="Real-time updates active">
+                🟢 Live
+              </span>
+            )}
+            {wsStatus === 'connecting' && (
+              <span style={styles.statusConnecting} title="Connecting to real-time updates">
+                🟡 Connecting...
+              </span>
+            )}
+            {(wsStatus === 'disconnected' || wsStatus === 'error') && usePolling && (
+              <span style={styles.statusPolling} title="Using polling fallback">
+                🔵 Polling
+              </span>
+            )}
+          </div>
           <button onClick={() => navigate('/settings')} style={styles.settingsButton}>
             ⚙️ Settings
           </button>
@@ -178,7 +278,25 @@ const styles = {
   },
   headerButtons: {
     display: 'flex',
-    gap: '10px',
+    gap: '15px',
+    alignItems: 'center',
+  },
+  connectionStatus: {
+    padding: '6px 12px',
+    borderRadius: '6px',
+    fontSize: '0.9em',
+    fontWeight: '500',
+    backgroundColor: 'var(--bg-panel)',
+    border: '1px solid var(--border-panel)',
+  },
+  statusConnected: {
+    color: 'var(--color-success)',
+  },
+  statusConnecting: {
+    color: '#ffc107',
+  },
+  statusPolling: {
+    color: '#17a2b8',
   },
   settingsButton: {
     backgroundColor: 'var(--text-link)',

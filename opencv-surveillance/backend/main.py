@@ -8,6 +8,7 @@ Complete Phase 2 implementation with face recognition
 
 import uvicorn
 import logging
+import asyncio
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,8 +18,11 @@ from dotenv import load_dotenv
 
 from backend.database.session import engine
 from backend.database import models, alert_models
-from backend.api.routes import users, cameras, faces, face_history, alerts, integrations, recordings, analytics, discovery, setup
+from backend.api.routes import users, cameras, faces, face_history, alerts, integrations, recordings, analytics, discovery, setup, websockets
 from backend.core.camera_manager import manager as camera_manager
+from backend.core.websocket_manager import broadcast_statistics_update
+from backend.core.face_recognition import get_face_manager
+from backend.core.statistics_broadcaster import get_broadcaster
 from backend.middleware.rate_limiter import RateLimiter
 from backend.middleware.security import (
     SecurityHeadersMiddleware,
@@ -95,8 +99,14 @@ async def startup_event():
         )
         logger.info("Default mock camera added successfully")
     
+    # Start statistics broadcaster
+    logger.info("Starting statistics broadcaster...")
+    broadcaster = get_broadcaster()
+    await broadcaster.start()
+    logger.info("Statistics broadcaster started successfully")
+    
     logger.info("OpenEye Surveillance System started successfully!")
-    logger.info("Features enabled: Motion Detection, Face Recognition, Video Recording")
+    logger.info("Features enabled: Motion Detection, Face Recognition, Video Recording, Real-time WebSocket Updates")
 
 
 @app.on_event("shutdown")
@@ -105,6 +115,11 @@ async def shutdown_event():
     On shutdown, clean up resources.
     """
     logger.info("Shutting down OpenEye Surveillance System...")
+    
+    # Stop statistics broadcaster
+    logger.info("Stopping statistics broadcaster...")
+    broadcaster = get_broadcaster()
+    await broadcaster.stop()
     
     # Stop all cameras
     for camera_id in list(camera_manager.cameras.keys()):
@@ -168,6 +183,13 @@ app.include_router(
     analytics.router,
     prefix="/api",
     tags=["Advanced Analytics"]
+)
+
+# WebSocket routes for real-time updates
+app.include_router(
+    websockets.router,
+    prefix="/api",
+    tags=["WebSockets"]
 )
 
 # First-Run Setup
