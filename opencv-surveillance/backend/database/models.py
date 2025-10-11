@@ -79,10 +79,29 @@ class Camera(Base):
     # Motion detection settings
     motion_detection_enabled = Column(Boolean, default=True)
     min_contour_area = Column(Integer, default=500)
+    motion_sensitivity = Column(Integer, default=5)  # 1-10 scale (5=medium)
+    motion_threshold = Column(Integer, default=50)  # varThreshold 1-100
+    noise_reduction = Column(String, default='medium')  # low, medium, high
+    detect_shadows = Column(Boolean, default=True)
+    detection_zones = Column(String, nullable=True)  # JSON string for zone grid
     
     # Recording settings
     recording_enabled = Column(Boolean, default=True)
     post_motion_cooldown = Column(Integer, default=5)
+    
+    # Video quality settings
+    resolution = Column(String, default='1920x1080')
+    fps_target = Column(Integer, default=15)
+    bitrate_kbps = Column(Integer, default=2000)
+    codec = Column(String, default='h264')
+    
+    # Image quality settings
+    jpeg_quality = Column(Integer, default=90)  # 1-100
+    brightness = Column(Integer, default=0)  # -100 to +100
+    contrast = Column(Float, default=1.0)  # 0.5 to 3.0
+    saturation = Column(Float, default=1.0)  # 0.0 to 2.0
+    sharpness = Column(String, default='none')  # none, low, medium, high
+    noise_reduction_strength = Column(Integer, default=0)  # 0-100
     
     # Metadata
     created_at = Column(DateTime, default=datetime.utcnow)
