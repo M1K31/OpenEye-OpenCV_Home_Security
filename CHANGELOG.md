@@ -7,11 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased] - 2025-10-11
+## [3.5.1.4] - 2025-10-11
+
+### Fixed
+- **CRITICAL: Path Validation 422 Errors** - Fixed route ordering issue in settings API
+  - Reordered FastAPI routes to put specific `/settings/validate-path` before generic `/settings/{setting_key}`
+  - Prevents path parameter matching that was causing Pydantic validation errors
+  - Users can now successfully validate and configure custom storage paths
+  - Enhanced frontend error logging to display detailed Pydantic validation errors
+
+### Changed
+- **Version Updates** - Updated version to 3.5.1.4 across all backend endpoints
+  - FastAPI app version (main.py)
+  - Root endpoint version
+  - API root endpoint version
 
 ### Documentation
-- Added "Troubleshooting: Session & Token Refresh" guidance and cross-references in API docs and User Guide for recovering from expired JWT sessions.
+- Added comprehensive root cause analysis in PATH_VALIDATION_FIX_v3.5.1.4.md
+- Created TESTING_CHECKLIST_v3.5.1.4.md with 40+ test scenarios
+- Documented FastAPI route ordering best practices
 
+### Technical Details
+- **Root Cause**: FastAPI matches routes in order; generic routes with path parameters must come AFTER specific routes
+- **Impact**: Enables System Settings page path validation to work correctly
+- **Testing**: Verified with 200 OK responses for path validation, settings persistence confirmed
+
+---
+
+## [3.5.1.0-3.5.1.3] - 2025-10-10 to 2025-10-11
+
+### Added
+- **System Settings Page** - New comprehensive settings interface
+  - Custom storage path configuration for recordings and face images
+  - Path validation with directory creation support
+  - Display mode controls (Grid/Vertical/Horizontal/Cycle)
+  - Recording duration and cycle interval settings
+  - Per-camera feature toggles (Motion Detection, Recording, Face Detection)
+  
+- **System Settings API** - Backend support for configurable system settings
+  - Database model for storing key-value settings
+  - CRUD operations for system settings
+  - Path validation endpoint
+  - Settings persistence across restarts
+
+- **Display Modes** - Multiple camera layout options
+  - Grid view (default)
+  - Vertical split (2 columns)
+  - Horizontal rows
+  - Auto-cycle between cameras with configurable interval
+
+- **Granular Camera Controls** - Per-camera feature toggles
+  - Enable/disable motion detection per camera
+  - Enable/disable recording per camera
+  - Enable/disable face detection per camera
+  - Settings persist in database
+
+### Changed
+- **Camera Defaults** - New cameras default to features disabled for user control
+- **Recorder** - Supports configurable output directory and recording duration
+- **Face Detection** - Supports configurable faces directory path
+- **Camera Manager** - Loads and merges system settings on startup
+
+### Fixed
+- Settings page tab persistence and UI improvements (v3.5.1.1)
+- Recordings page playback and metadata display (v3.5.1.2)
+- Path selection browser security restrictions (v3.5.1.3)
+
+---
 
 ## [3.4.0] - 2025-01-10
 
