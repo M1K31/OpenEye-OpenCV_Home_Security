@@ -140,6 +140,22 @@ class VideoProcessor:
             self.frames_skipped += 1
             return False
     
+    def process_frame(self, frame: np.ndarray) -> np.ndarray:
+        """
+        Process a frame by resizing it to target resolution.
+        
+        Args:
+            frame: Input frame
+            
+        Returns:
+            Processed frame at target resolution
+        """
+        if frame is None:
+            return None
+        
+        # Resize to target resolution
+        return self.resize_frame(frame, preserve_aspect=True)
+    
     def resize_frame(
         self,
         frame: np.ndarray,

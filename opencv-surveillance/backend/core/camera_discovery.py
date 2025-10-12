@@ -92,65 +92,77 @@ class CameraDiscovery:
         else:
             return f'index:{index}'
     
-    async def discover_network_cameras(self, subnet: Optional[str] = None) -> List[Dict]:
+    async def discover_network_cameras(self, subnet: Optional[str] = None, timeout: int = 60) -> List[Dict]:
         """
         Discover RTSP/IP cameras on the local network.
         
         Args:
             subnet: Optional subnet to scan (e.g., '192.168.1.0/24')
                    If None, will scan all local subnets
+            timeout: Maximum time in seconds for the entire scan (default: 60)
         
         Returns:
-            List of discovered network cameras
+            List of discovered network cameras (returns partial results if timeout)
         """
-        logger.info("Starting network camera discovery...")
+        logger.info(f"Starting network camera discovery... (timeout: {timeout}s)")
         self.scanning = True
         network_cameras = []
         
-        try:
-            # Get local subnets if none specified
-            if subnet is None:
-                subnets = self._get_local_subnets()
-            else:
-                subnets = [subnet]
+        async def _do_scan():
+            """Inner function to perform the actual scan"""
+            nonlocal network_cameras
             
-            logger.info(f"Scanning subnets: {subnets}")
-            
-            # Common RTSP ports
-            rtsp_ports = [554, 8554, 8080, 88]
-            
-            for subnet_cidr in subnets:
-                network = ipaddress.ip_network(subnet_cidr, strict=False)
+            try:
+                # Get local subnets if none specified
+                if subnet is None:
+                    subnets = self._get_local_subnets()
+                else:
+                    subnets = [subnet]
                 
-                # Limit scanning to reasonable subnet sizes
-                if network.num_addresses > 256:
-                    logger.warning(f"Subnet {subnet_cidr} too large, skipping")
-                    continue
+                logger.info(f"Scanning subnets: {subnets}")
                 
-                # Scan each IP in the subnet
-                tasks = []
-                for ip in network.hosts():
-                    for port in rtsp_ports:
-                        tasks.append(self._check_rtsp_port(str(ip), port))
+                # Common RTSP ports
+                rtsp_ports = [554, 8554, 8080, 88]
                 
-                # Run scans concurrently (in batches to avoid overwhelming network)
-                batch_size = 50
-                for i in range(0, len(tasks), batch_size):
-                    batch = tasks[i:i + batch_size]
-                    results = await asyncio.gather(*batch, return_exceptions=True)
+                for subnet_cidr in subnets:
+                    network = ipaddress.ip_network(subnet_cidr, strict=False)
                     
-                    for result in results:
-                        if result and not isinstance(result, Exception):
-                            network_cameras.append(result)
-                            logger.info(f"Found camera at {result['ip']}:{result['port']}")
+                    # Limit scanning to reasonable subnet sizes
+                    if network.num_addresses > 256:
+                        logger.warning(f"Subnet {subnet_cidr} too large, skipping")
+                        continue
+                    
+                    # Scan each IP in the subnet
+                    tasks = []
+                    for ip in network.hosts():
+                        for port in rtsp_ports:
+                            tasks.append(self._check_rtsp_port(str(ip), port))
+                    
+                    # Run scans concurrently (in batches to avoid overwhelming network)
+                    batch_size = 50
+                    for i in range(0, len(tasks), batch_size):
+                        batch = tasks[i:i + batch_size]
+                        results = await asyncio.gather(*batch, return_exceptions=True)
+                        
+                        for result in results:
+                            if result and not isinstance(result, Exception):
+                                network_cameras.append(result)
+                                logger.info(f"Found camera at {result['ip']}:{result['port']}")
+            
+            except Exception as e:
+                logger.error(f"Error during network discovery: {e}")
         
+        try:
+            # Run scan with timeout
+            await asyncio.wait_for(_do_scan(), timeout=timeout)
+            logger.info(f"Network camera discovery complete. Found {len(network_cameras)} cameras")
+        except asyncio.TimeoutError:
+            logger.warning(f"Network scan timed out after {timeout}s. Returning {len(network_cameras)} cameras found so far")
         except Exception as e:
-            logger.error(f"Error during network discovery: {e}")
-        
+            logger.error(f"Unexpected error during network discovery: {e}")
         finally:
             self.scanning = False
         
-        logger.info(f"Network camera discovery complete. Found {len(network_cameras)} cameras")
         return network_cameras
     
     def _get_local_subnets(self) -> List[str]:

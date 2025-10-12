@@ -208,6 +208,46 @@ DATABASE_URL=postgresql://openeye:your_secure_password@localhost:5432/openeye_db
 ### WireGuard VPN (FREE - Remote Access)
 
 1. **Install WireGuard**:
+
+## Troubleshooting: Session / Token Refresh Issues
+
+If the frontend fails to refresh an expired JWT via the inline "Session Expired" modal, follow these recovery steps:
+
+1. Manual logout and re-login
+   - Click the user menu → "Logout" to clear client-side state.
+   - Re-open the application and log in with your credentials.
+
+2. Clear token from browser storage (advanced)
+   - Open browser devtools (F12) → Application (or Storage) → Local Storage
+   - Select the site origin and remove the `token` key (or entries created by OpenEye)
+   - Refresh the page and log in again.
+
+3. Verify backend token endpoint
+   - From a terminal, verify that `/api/token` is reachable:
+
+```bash
+curl -v -X POST http://localhost:8000/api/token -d "username=admin&password=yourpassword"
+```
+
+4. Check WebSocket reconnection (if using dashboard updates)
+   - If the WebSocket shows authentication errors, ensure the token in the URL or the client is fresh.
+   - Restart the frontend or reload the page after re-login to re-initiate WebSocket connection.
+
+5. Server-side checks
+   - Inspect backend logs for authentication errors:
+
+```bash
+source venv/bin/activate
+python3 -m uvicorn backend.main:app --reload
+# watch output for 401/403 entries or token decode errors
+```
+
+6. Final recovery (if all else fails)
+   - Stop the server and restart it to re-initialize background services and WebSocket manager
+   - If using Docker, `docker-compose down` then `docker-compose up -d`.
+
+If you want, I can add screenshots or a short video walkthrough to this guide.
+
 ```bash
 # Ubuntu/Debian
 sudo apt-get install wireguard

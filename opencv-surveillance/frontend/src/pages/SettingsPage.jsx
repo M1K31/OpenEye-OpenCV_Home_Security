@@ -6,6 +6,7 @@ import CameraManagementPage from './CameraManagementPage';
 import FaceManagementPage from './FaceManagementPage';
 import AlertSettingsPage from './AlertSettingsPage';
 import ThemeSelectorPage from './ThemeSelectorPage';
+import SystemSettingsPage from './SystemSettingsPage';
 
 const SettingsPage = () => {
   const navigate = useNavigate();
@@ -18,6 +19,7 @@ const SettingsPage = () => {
     { id: 'faces', label: 'Faces', icon: '👤' },
     { id: 'alerts', label: 'Alerts', icon: '🔔' },
     { id: 'themes', label: 'Themes', icon: '🎨' },
+    { id: 'system', label: 'System', icon: '⚙️' },
   ];
 
   const renderContent = () => {
@@ -32,6 +34,8 @@ const SettingsPage = () => {
           return <AlertSettingsPage embedded={true} />;
         case 'themes':
           return <ThemeSelectorPage embedded={true} />;
+        case 'system':
+          return <SystemSettingsPage embedded={true} />;
         default:
           return <div style={styles.loading}>Select a tab</div>;
       }

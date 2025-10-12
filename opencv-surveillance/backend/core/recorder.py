@@ -22,12 +22,13 @@ class Recorder:
     """
     Handles video recording to a file with face detection metadata
     """
-    def __init__(self, output_dir="recordings"):
+    def __init__(self, output_dir="recordings", max_recording_duration=300):
         self.output_dir = output_dir
         self.is_recording = False
         self.writer = None
         self.filename = ""
         self.metadata_filename = ""
+        self.max_recording_duration = max_recording_duration  # Maximum recording time in seconds (default: 5 minutes)
         
         # NEW: Track face detections during recording
         self.detected_faces = []
@@ -47,15 +48,37 @@ class Recorder:
             return
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.filename = os.path.join(self.output_dir, f"motion_{timestamp}.mp4")
-        self.metadata_filename = os.path.join(self.output_dir, f"motion_{timestamp}_metadata.json")
-
-        # Using 'mp4v' codec for MP4 files.
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        self.writer = cv2.VideoWriter(self.filename, fourcc, fps, (frame_width, frame_height))
-
-        if not self.writer.isOpened():
-            print(f"Error: Could not open video writer for {self.filename}")
+        
+        # Try different codecs based on platform and availability
+        # For macOS with AVFoundation, use MJPG or avc1
+        codecs_to_try = [
+            ('avc1', '.mp4'),  # H.264 for AVFoundation on macOS
+            ('mp4v', '.mp4'),  # MPEG-4 fallback
+            ('MJPG', '.avi'),  # Motion JPEG fallback
+        ]
+        
+        self.writer = None
+        for codec_name, ext in codecs_to_try:
+            try:
+                self.filename = os.path.join(self.output_dir, f"motion_{timestamp}{ext}")
+                self.metadata_filename = os.path.join(self.output_dir, f"motion_{timestamp}_metadata.json")
+                
+                fourcc = cv2.VideoWriter_fourcc(*codec_name)
+                self.writer = cv2.VideoWriter(self.filename, fourcc, fps, (frame_width, frame_height))
+                
+                if self.writer.isOpened():
+                    print(f"Successfully initialized video writer with codec '{codec_name}' for {self.filename}")
+                    break
+                else:
+                    # Clean up the writer object
+                    self.writer.release()
+                    self.writer = None
+            except Exception as e:
+                print(f"Failed to initialize with codec '{codec_name}': {e}")
+                self.writer = None
+        
+        if not self.writer or not self.writer.isOpened():
+            print(f"Error: Could not open video writer for {self.filename} with any available codec")
             return
 
         self.is_recording = True
@@ -97,6 +120,22 @@ class Recorder:
             face_data['frame_number'] = self.frame_count
             face_data['timestamp'] = datetime.now().isoformat()
             self.detected_faces.append(face_data)
+    
+    def should_stop_recording(self):
+        """
+        Check if recording should stop due to maximum duration exceeded.
+        
+        Returns:
+            bool: True if max duration exceeded, False otherwise
+        """
+        if not self.is_recording or not self.recording_start_time:
+            return False
+        
+        duration = (datetime.now() - self.recording_start_time).total_seconds()
+        if duration >= self.max_recording_duration:
+            print(f"Maximum recording duration ({self.max_recording_duration}s) reached. Stopping recording.")
+            return True
+        return False
 
     def stop(self):
         """

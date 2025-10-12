@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import axios from 'axios';
 import { ThemeProvider } from './context/ThemeContext';
+import authService from './services/authService';
 // REMOVED: import './themes.css'; - Now in main.jsx
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
@@ -14,28 +15,13 @@ import CameraManagementPage from './pages/CameraManagementPage';
 import ThemeSelectorPage from './pages/ThemeSelectorPage';
 import SettingsPage from './pages/SettingsPage';
 import FirstRunSetup from './pages/FirstRunSetup';
+import RecordingsPage from './pages/RecordingsPage';
 
-// Configure axios interceptor to add Authorization header to all requests
-axios.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    console.log('[Axios Interceptor] Request to:', config.url, 'Token exists:', !!token);
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-      console.log('[Axios Interceptor] Added Authorization header');
-    } else {
-      console.warn('[Axios Interceptor] No token found in localStorage');
-    }
-    return config;
-  },
-  (error) => {
-    console.error('[Axios Interceptor] Request error:', error);
-    return Promise.reject(error);
-  }
-);
+// Auth service automatically sets up axios interceptors
+// for token management and automatic refresh
 
 function App() {
-  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [token, setToken] = useState(authService.getToken());
   const [setupComplete, setSetupComplete] = useState(null);
   const [checkingSetup, setCheckingSetup] = useState(true);
 
@@ -58,12 +44,12 @@ function App() {
   }, []);
 
   const handleSetToken = (newToken) => {
-    localStorage.setItem('token', newToken);
+    authService.setToken(newToken);
     setToken(newToken);
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
+    authService.logout();
     setToken(null);
   };
 
@@ -134,6 +120,14 @@ function App() {
           <Route
             path="/settings"
             element={token ? <SettingsPage /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/recordings"
+            element={token ? <RecordingsPage /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/dashboard"
+            element={token ? <DashboardPage onLogout={handleLogout} /> : <Navigate to="/login" />}
           />
         </Routes>
       </Router>

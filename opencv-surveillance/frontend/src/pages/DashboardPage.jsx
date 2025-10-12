@@ -12,8 +12,55 @@ const DashboardPage = ({ onLogout }) => {
   const [statistics, setStatistics] = useState({});
   const [wsStatus, setWsStatus] = useState('disconnected'); // WebSocket connection status
   const [usePolling, setUsePolling] = useState(false); // Fallback to polling if WebSocket fails
-  const streamUrl = "/api/cameras/mock_cam_1/stream";
+  const [cameras, setCameras] = useState([]); // List of all cameras
+  const [displayMode, setDisplayMode] = useState('grid'); // Display mode: grid, vertical, horizontal, cycle
+  const [currentCameraIndex, setCurrentCameraIndex] = useState(0); // For cycle mode
+  const [systemSettings, setSystemSettings] = useState({}); // System settings from backend
   const navigate = useNavigate();
+
+  // Load system settings for display mode and cycle interval
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const response = await axios.get('/api/settings');
+        setSystemSettings(response.data);
+        // Set display mode from settings
+        if (response.data.display_mode) {
+          setDisplayMode(response.data.display_mode);
+        }
+      } catch (error) {
+        console.error('Error loading system settings:', error);
+      }
+    };
+    loadSettings();
+  }, []);
+
+  // Cycle mode timer
+  useEffect(() => {
+    if (displayMode === 'cycle' && cameras.length > 1) {
+      const cycleInterval = (systemSettings.cycle_interval || 5) * 1000; // Convert to milliseconds
+      const timer = setInterval(() => {
+        setCurrentCameraIndex((prevIndex) => (prevIndex + 1) % cameras.length);
+      }, cycleInterval);
+      
+      return () => clearInterval(timer);
+    }
+  }, [displayMode, cameras.length, systemSettings.cycle_interval]);
+
+  // Load cameras once on mount
+  useEffect(() => {
+    const loadCameras = async () => {
+      try {
+        const response = await axios.get('/api/cameras/');
+        // API returns { cameras: [...], total: n }
+        setCameras(response.data.cameras || []);
+      } catch (error) {
+        console.error('Error loading cameras:', error);
+        setCameras([]); // Set empty array on error
+      }
+    };
+    loadCameras();
+  }, []);
 
   // Load face detection data
   useEffect(() => {
@@ -127,6 +174,76 @@ const DashboardPage = ({ onLogout }) => {
     }
   }, [usePolling]);
 
+  // Helper function to get grid style based on display mode
+  const getGridStyle = (mode) => {
+    const baseStyle = {
+      marginTop: '15px',
+      gap: '20px',
+    };
+
+    switch (mode) {
+      case 'grid':
+        return {
+          ...baseStyle,
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+        };
+      case 'vertical':
+        return {
+          ...baseStyle,
+          display: 'flex',
+          flexDirection: 'column',
+        };
+      case 'horizontal':
+        return {
+          ...baseStyle,
+          display: 'flex',
+          flexDirection: 'row',
+          overflowX: 'auto',
+        };
+      case 'cycle':
+        return {
+          ...baseStyle,
+          display: 'flex',
+          justifyContent: 'center',
+        };
+      default:
+        return styles.cameraGrid;
+    }
+  };
+
+  // Helper function to render a single camera
+  const renderCamera = (camera) => {
+    if (!camera) return null;
+    
+    return (
+      <div key={camera.camera_id} style={styles.cameraCard}>
+        <div style={styles.cameraHeader}>
+          <h3 style={styles.cameraName}>{camera.name || camera.camera_id}</h3>
+          <span style={camera.is_active ? styles.liveIndicator : styles.offlineIndicator}>
+            {camera.is_active ? '🔴 LIVE' : '⚫ OFFLINE'}
+          </span>
+        </div>
+        {camera.is_active ? (
+          <img 
+            src={`/api/cameras/${camera.camera_id}/stream`}
+            alt={`${camera.name || camera.camera_id} stream`}
+            className="video-stream" 
+            style={styles.videoStream}
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="640" height="480"%3E%3Crect fill="%23333" width="640" height="480"/%3E%3Ctext fill="%23fff" font-size="20" x="50%25" y="50%25" text-anchor="middle" dominant-baseline="middle"%3EStream Unavailable%3C/text%3E%3C/svg%3E';
+            }}
+          />
+        ) : (
+          <div style={styles.offlineStream}>
+            <span style={styles.offlineText}>Camera Offline</span>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   if (showFaceManagement) {
     return <FaceManagementPage onBack={() => setShowFaceManagement(false)} />;
   }
@@ -154,6 +271,9 @@ const DashboardPage = ({ onLogout }) => {
               </span>
             )}
           </div>
+          <button onClick={() => navigate('/recordings')} style={styles.recordingsButton}>
+            📼 Recordings
+          </button>
           <button onClick={() => navigate('/settings')} style={styles.settingsButton}>
             ⚙️ Settings
           </button>
@@ -187,17 +307,70 @@ const DashboardPage = ({ onLogout }) => {
 
       {/* Video Stream */}
       <div className="video-container" style={styles.videoContainer}>
-        <h2>Live Camera Feed</h2>
-        <img 
-          src={streamUrl} 
-          alt="Live camera stream" 
-          className="video-stream" 
-          style={styles.videoStream}
-        />
-        <div style={styles.streamInfo}>
-          <span style={styles.liveIndicator}>🔴 LIVE</span>
-          <span>Mock Camera 1</span>
+        <div style={styles.streamHeader}>
+          <h2>Live Camera Feeds</h2>
+          {cameras.length > 0 && (
+            <div style={styles.displayModeSelector}>
+              <button 
+                onClick={() => setDisplayMode('grid')} 
+                style={{...styles.modeButton, ...(displayMode === 'grid' ? styles.modeButtonActive : {})}}
+                title="Grid View - Display all cameras in a responsive grid layout (best for 2-6 cameras)"
+              >
+                ▦
+              </button>
+              <button 
+                onClick={() => setDisplayMode('vertical')} 
+                style={{...styles.modeButton, ...(displayMode === 'vertical' ? styles.modeButtonActive : {})}}
+                title="Vertical Stack - Stack cameras vertically, one per row (best for 1-3 cameras)"
+              >
+                ☰
+              </button>
+              <button 
+                onClick={() => setDisplayMode('horizontal')} 
+                style={{...styles.modeButton, ...(displayMode === 'horizontal' ? styles.modeButtonActive : {})}}
+                title="Horizontal Stack - Line up cameras side-by-side with horizontal scroll (best for multiple cameras)"
+              >
+                ≡
+              </button>
+              <button 
+                onClick={() => setDisplayMode('cycle')} 
+                style={{...styles.modeButton, ...(displayMode === 'cycle' ? styles.modeButtonActive : {})}}
+                title="Cycle Mode - Auto-rotate through cameras one at a time (interval configured in System Settings)"
+              >
+                🔄
+              </button>
+            </div>
+          )}
         </div>
+        
+        {cameras.length === 0 ? (
+          <div style={styles.noCameras}>
+            <p>📹 No cameras configured yet.</p>
+            <p style={styles.noCamerasSubtext}>Add your first camera to start monitoring</p>
+            <button 
+              onClick={() => navigate('/settings')} 
+              style={styles.addCameraButton}
+            >
+              ➕ Add Camera
+            </button>
+          </div>
+        ) : (
+          <>
+            {displayMode === 'cycle' && cameras.length > 1 && (
+              <div style={styles.cycleInfo}>
+                <span>Camera {currentCameraIndex + 1} of {cameras.length}</span>
+                <span> • </span>
+                <span>Auto-switching every {systemSettings.cycle_interval || 5}s</span>
+              </div>
+            )}
+            <div style={getGridStyle(displayMode)}>
+              {displayMode === 'cycle' 
+                ? renderCamera(cameras[currentCameraIndex])
+                : cameras.map(camera => renderCamera(camera))
+              }
+            </div>
+          </>
+        )}
       </div>
 
       {/* Recent Face Detections */}
@@ -298,6 +471,17 @@ const styles = {
   statusPolling: {
     color: '#17a2b8',
   },
+  recordingsButton: {
+    backgroundColor: '#8e44ad',
+    color: 'var(--text-primary)',
+    padding: '12px 24px',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontWeight: '600',
+    fontSize: '14px',
+    transition: 'all 0.2s ease',
+  },
   settingsButton: {
     backgroundColor: 'var(--text-link)',
     color: 'var(--text-primary)',
@@ -349,6 +533,44 @@ const styles = {
     backgroundColor: 'var(--bg-panel)',
     padding: '20px',
     borderRadius: '8px',
+    border: '1px solid var(--border-panel)',
+  },
+  streamHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '15px',
+  },
+  displayModeSelector: {
+    display: 'flex',
+    gap: '10px',
+    backgroundColor: 'var(--bg-main)',
+    padding: '8px',
+    borderRadius: '8px',
+    border: '1px solid var(--border-panel)',
+  },
+  modeButton: {
+    background: 'var(--bg-panel)',
+    color: 'var(--text-primary)',
+    border: '1px solid var(--border-panel)',
+    padding: '8px 16px',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '18px',
+    transition: 'all 0.2s ease',
+  },
+  modeButtonActive: {
+    background: 'var(--text-link)',
+    color: 'white',
+    boxShadow: '0 2px 8px rgba(0, 123, 255, 0.3)',
+  },
+  cycleInfo: {
+    textAlign: 'center',
+    padding: '10px',
+    backgroundColor: 'var(--bg-main)',
+    borderRadius: '6px',
+    color: 'var(--text-secondary)',
+    marginBottom: '15px',
     border: '1px solid var(--border-panel)',
   },
   videoStream: {
@@ -447,6 +669,76 @@ const styles = {
     listStyle: 'none',
     padding: 0,
     margin: '10px 0 0 0',
+  },
+  // Camera Grid Styles
+  noCameras: {
+    textAlign: 'center',
+    padding: '60px 40px',
+    color: 'var(--text-secondary)',
+    fontSize: '1.1em',
+  },
+  noCamerasSubtext: {
+    fontSize: '0.9em',
+    color: 'var(--text-secondary)',
+    marginTop: '5px',
+    marginBottom: '20px',
+  },
+  addCameraButton: {
+    backgroundColor: 'var(--text-link)',
+    color: 'var(--text-primary)',
+    padding: '14px 32px',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontWeight: '600',
+    fontSize: '16px',
+    marginTop: '10px',
+    transition: 'all 0.2s ease',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+  },
+  cameraGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+    gap: '20px',
+    marginTop: '15px',
+  },
+  cameraCard: {
+    backgroundColor: 'var(--bg-main)',
+    border: '1px solid var(--border-panel)',
+    borderRadius: '8px',
+    overflow: 'hidden',
+  },
+  cameraHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '12px 15px',
+    backgroundColor: 'var(--bg-panel)',
+    borderBottom: '1px solid var(--border-panel)',
+  },
+  cameraName: {
+    margin: 0,
+    fontSize: '1.1em',
+    color: 'var(--text-primary)',
+  },
+  offlineIndicator: {
+    color: 'var(--text-secondary)',
+    fontWeight: 'bold',
+    fontSize: '0.9em',
+  },
+  offlineStream: {
+    width: '100%',
+    height: '300px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'var(--bg-main)',
+    border: '2px dashed var(--border-panel)',
+  },
+  offlineText: {
+    color: 'var(--text-secondary)',
+    fontSize: '1.2em',
+    fontStyle: 'italic',
   },
 };
 

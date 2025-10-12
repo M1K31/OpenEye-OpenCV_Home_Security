@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased] - 2025-10-11
+
+### Documentation
+- Added "Troubleshooting: Session & Token Refresh" guidance and cross-references in API docs and User Guide for recovering from expired JWT sessions.
+
+
 ## [3.4.0] - 2025-01-10
 
 ### Added

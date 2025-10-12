@@ -406,6 +406,106 @@ class TelegramNotifier:
             return False
 
 
+class WebhookNotifier:
+    """
+    Webhook notification delivery
+    
+    Sends HTTP POST requests to configured webhook URLs with JSON payloads
+    """
+    
+    def __init__(self, webhook_url: str, headers: Optional[Dict[str, str]] = None, timeout: int = 10):
+        """
+        Initialize webhook notifier
+        
+        Args:
+            webhook_url: URL to send webhook POST requests to
+            headers: Optional custom HTTP headers (e.g., authentication)
+            timeout: Request timeout in seconds
+        """
+        self.webhook_url = webhook_url
+        self.headers = headers or {'Content-Type': 'application/json'}
+        self.timeout = timeout
+        
+        logger.info(f"Webhook notifier initialized for {webhook_url}")
+    
+    async def send(self, notification: Notification) -> bool:
+        """
+        Send webhook notification
+        
+        Args:
+            notification: Notification to send
+            
+        Returns:
+            True if successful (HTTP 2xx response)
+        """
+        try:
+            # Create webhook payload
+            payload = {
+                'id': notification.id,
+                'alert_rule_id': notification.alert_rule_id,
+                'timestamp': notification.timestamp.isoformat(),
+                'priority': notification.priority.value,
+                'subject': notification.subject,
+                'body': notification.body,
+                'recipient': notification.recipient,
+                'channel': notification.channel.value,
+                'data': notification.data,
+                'attachments': notification.attachments
+            }
+            
+            # Send POST request
+            response = requests.post(
+                self.webhook_url,
+                json=payload,
+                headers=self.headers,
+                timeout=self.timeout
+            )
+            
+            # Check response status
+            response.raise_for_status()
+            
+            logger.info(f"Webhook notification sent to {self.webhook_url} (status: {response.status_code})")
+            notification.delivered = True
+            notification.delivery_time = datetime.now()
+            return True
+        
+        except requests.exceptions.Timeout:
+            logger.error(f"Webhook request timed out after {self.timeout}s: {self.webhook_url}")
+            notification.error = f"Timeout after {self.timeout}s"
+            return False
+        
+        except requests.exceptions.HTTPError as e:
+            logger.error(f"Webhook HTTP error {e.response.status_code}: {self.webhook_url}")
+            notification.error = f"HTTP {e.response.status_code}: {e.response.text}"
+            return False
+        
+        except Exception as e:
+            logger.error(f"Error sending webhook notification: {e}")
+            notification.error = str(e)
+            return False
+    
+    def configure(self, webhook_url: Optional[str] = None, headers: Optional[Dict[str, str]] = None, timeout: Optional[int] = None):
+        """
+        Update webhook notifier configuration
+        
+        Args:
+            webhook_url: New webhook URL
+            headers: New HTTP headers
+            timeout: New timeout in seconds
+        """
+        if webhook_url is not None:
+            self.webhook_url = webhook_url
+            logger.info(f"Webhook URL updated to: {webhook_url}")
+        
+        if headers is not None:
+            self.headers = headers
+            logger.info("Webhook headers updated")
+        
+        if timeout is not None:
+            self.timeout = timeout
+            logger.info(f"Webhook timeout set to {timeout}s")
+
+
 class AlertManager:
     """
     Main alert management system

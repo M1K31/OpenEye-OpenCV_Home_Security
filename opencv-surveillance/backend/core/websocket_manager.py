@@ -30,9 +30,19 @@ class WebSocketConnection:
     async def send_json(self, data: dict):
         """Send JSON data through the WebSocket."""
         try:
+            # Check if WebSocket is still connected before sending
+            if self.websocket.client_state.name == "DISCONNECTED":
+                raise RuntimeError("WebSocket is disconnected")
+            
             await self.websocket.send_json(data)
             self.last_activity = datetime.utcnow()
             self.message_count += 1
+        except RuntimeError as e:
+            # WebSocket not connected - don't spam logs
+            raise
+        except Exception as e:
+            logger.error(f"Error sending WebSocket message: {e}")
+            raise
         except Exception as e:
             logger.error(f"Error sending message to user {self.username}: {e}")
             raise
@@ -140,6 +150,14 @@ class WebSocketConnectionManager:
             connection = self.active_connections[connection_id]
             try:
                 await connection.send_json(message)
+            except RuntimeError as e:
+                # Expected disconnection - silently cleanup
+                if "disconnected" in str(e).lower() or "accept" in str(e).lower():
+                    logger.debug(f"WebSocket connection {connection_id} closed during send (expected)")
+                    await self.disconnect(connection_id)
+                else:
+                    logger.error(f"Failed to send personal message: {e}")
+                    await self.disconnect(connection_id)
             except Exception as e:
                 logger.error(f"Failed to send personal message: {e}")
                 await self.disconnect(connection_id)
@@ -160,6 +178,14 @@ class WebSocketConnectionManager:
                 
             try:
                 await connection.send_json(message)
+            except RuntimeError as e:
+                # Expected disconnection - log at debug level
+                if "disconnected" in str(e).lower() or "accept" in str(e).lower():
+                    logger.debug(f"WebSocket connection {connection_id} closed during broadcast (expected)")
+                    disconnected.append(connection_id)
+                else:
+                    logger.error(f"Failed to broadcast to {connection.username}: {e}")
+                    disconnected.append(connection_id)
             except Exception as e:
                 logger.error(
                     f"Failed to broadcast to {connection.username}: {e}"

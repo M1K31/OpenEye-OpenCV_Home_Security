@@ -77,7 +77,7 @@ class Camera(Base):
     face_detection_threshold = Column(Float, default=0.6)
     
     # Motion detection settings
-    motion_detection_enabled = Column(Boolean, default=True)
+    motion_detection_enabled = Column(Boolean, default=False)  # CHANGED: Default to False
     min_contour_area = Column(Integer, default=500)
     motion_sensitivity = Column(Integer, default=5)  # 1-10 scale (5=medium)
     motion_threshold = Column(Integer, default=50)  # varThreshold 1-100
@@ -86,7 +86,7 @@ class Camera(Base):
     detection_zones = Column(String, nullable=True)  # JSON string for zone grid
     
     # Recording settings
-    recording_enabled = Column(Boolean, default=True)
+    recording_enabled = Column(Boolean, default=False)  # CHANGED: Default to False
     post_motion_cooldown = Column(Integer, default=5)
     
     # Video quality settings
@@ -157,3 +157,21 @@ class SystemLog(Base):
     
     def __repr__(self):
         return f"<SystemLog({self.log_level}: {self.component} - {self.message})>"
+
+
+class SystemSettings(Base):
+    """
+    NEW: Global system settings model
+    Stores user preferences for paths, display modes, and global configurations
+    """
+    __tablename__ = "system_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    setting_key = Column(String, unique=True, index=True)  # Unique key for each setting
+    setting_value = Column(String)  # Value stored as string (JSON if complex)
+    setting_type = Column(String, default='string')  # string, int, float, boolean, json
+    description = Column(String, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def __repr__(self):
+        return f"<SystemSettings({self.setting_key}={self.setting_value})>"

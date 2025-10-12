@@ -371,9 +371,21 @@ class FaceRecognitionManager:
 _face_manager: Optional[FaceRecognitionManager] = None
 
 
-def get_face_manager() -> FaceRecognitionManager:
-    """Get or create the global face recognition manager instance"""
+def get_face_manager(faces_folder: str = "faces") -> FaceRecognitionManager:
+    """
+    Get or create the global face recognition manager instance
+    
+    Args:
+        faces_folder: Directory containing person subdirectories with face images
+        
+    Returns:
+        Global FaceRecognitionManager instance
+    """
     global _face_manager
     if _face_manager is None:
-        _face_manager = FaceRecognitionManager()
+        _face_manager = FaceRecognitionManager(faces_folder=faces_folder)
+    elif _face_manager.faces_folder != faces_folder:
+        # Reinitialize if faces folder changed
+        logger.info(f"Faces folder changed from {_face_manager.faces_folder} to {faces_folder}")
+        _face_manager = FaceRecognitionManager(faces_folder=faces_folder)
     return _face_manager

@@ -149,11 +149,79 @@ Follow the first-run setup wizard to create your admin account.
 
 ---
 
-### Option 2: Manual Installation
+### Option 2: Local Installation (Automated)
+
+**🚀 NEW**: Use our automated installation script for a one-command setup!
 
 #### Prerequisites
 
-- Python 3.9+
+- Python 3.8+ (Python 3.12+ recommended)
+- Node.js 16+ and npm (for frontend)
+- Git
+- macOS or Linux
+
+#### Automated Installation
+
+```bash
+# Clone repository
+git clone https://github.com/M1K31/OpenEye-OpenCV_Home_Security.git
+cd OpenEye-OpenCV_Home_Security/opencv-surveillance
+
+# Run the installation script
+./scripts/install-local.sh
+```
+
+The script will:
+- ✅ Check Python version and system dependencies
+- ✅ Install required system packages (OpenCV, CMake, etc.)
+- ✅ Create Python virtual environment
+- ✅ Install all Python dependencies
+- ✅ Generate secure secret keys automatically
+- ✅ Create configuration files (.env)
+- ✅ Build frontend (if Node.js installed)
+- ✅ Create launch scripts (start.sh, stop.sh)
+- ✅ Optionally create systemd service (Linux)
+
+#### Starting OpenEye
+
+```bash
+# After installation, simply run:
+./start.sh
+
+# Or manually:
+source venv/bin/activate
+python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+
+# Stop the server:
+./stop.sh
+# Or press Ctrl+C in the terminal
+```
+
+Access at: **http://localhost:8000**
+
+---
+
+### Developer & Maintenance Tools
+
+- **Audit Tool (Phase Verification)**: A lightweight auditor is included at `opencv-surveillance/scripts/audit-system.py`. Run it from the `opencv-surveillance` folder to verify backend classes, methods, and Phase 2/3 compliance. It helps identify naming mismatches and missing APIs.
+
+```bash
+cd opencv-surveillance
+python3 scripts/audit-system.py
+```
+
+- **Token Refresh UX**: The frontend includes an automatic token refresh flow. When a request fails with 401 due to an expired JWT the UI will show an inline "Session Expired" modal asking the user to re-authenticate. After a successful login the original request is retried automatically so the user keeps their current state.
+
+> Quick recovery: If the session modal fails, see the "Troubleshooting: Session & Token Refresh" section in the API docs (`opencv-surveillance/docs/API_DOCUMENTATION.md`) or the User Guide (`opencv-surveillance/docs/USER_GUIDE.md`).
+
+
+### Option 3: Manual Installation (Advanced)
+
+If you prefer manual control or the script doesn't work for your system:
+
+#### Prerequisites
+
+- Python 3.8+
 - Node.js 16+ and npm
 - CMake (for dlib)
 - Git
@@ -163,13 +231,20 @@ Follow the first-run setup wizard to create your admin account.
 **Ubuntu/Debian:**
 ```bash
 sudo apt-get update && sudo apt-get install -y \
-    build-essential cmake libopenblas-dev \
-    liblapack-dev libjpeg-dev libpng-dev python3-dev
+    python3-dev python3-pip python3-venv \
+    build-essential cmake pkg-config \
+    libopencv-dev libavcodec-dev libavformat-dev \
+    libswscale-dev libv4l-dev libatlas-base-dev \
+    gfortran libhdf5-dev libjpeg-dev libpng-dev
 ```
 
 **macOS:**
 ```bash
-brew install cmake openblas
+# Install Homebrew if not installed
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install dependencies
+brew install opencv pkg-config cmake python@3.12
 ```
 
 #### Installation Steps
@@ -179,30 +254,64 @@ brew install cmake openblas
 git clone https://github.com/M1K31/OpenEye-OpenCV_Home_Security.git
 cd OpenEye-OpenCV_Home_Security/opencv-surveillance
 
-# Install Python dependencies
-python -m venv venv
+# Create virtual environment
+python3 -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# Upgrade pip and install Python dependencies
+pip install --upgrade pip setuptools wheel
 pip install -r requirements.txt
 
-# Install frontend dependencies
+# Create required directories
+mkdir -p data/faces data/thumbnails models/face_detection_model
+
+# Generate secret keys and create .env file
+JWT_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
+ADMIN_TOKEN=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
+
+# Create .env file
+cat > .env << EOF
+# Security Keys - KEEP THESE SECRET!
+JWT_SECRET_KEY=$JWT_SECRET
+ADMIN_TOKEN=$ADMIN_TOKEN
+
+# Database
+DATABASE_URL=sqlite:///./surveillance.db
+
+# Server Configuration
+HOST=0.0.0.0
+PORT=8000
+
+# CORS Settings
+CORS_ORIGINS=http://localhost:8000,http://localhost:3000
+
+# Feature Flags
+ENABLE_MOTION_DETECTION=true
+ENABLE_FACE_RECOGNITION=true
+ENABLE_RECORDING=true
+
+# Logging
+LOG_LEVEL=INFO
+EOF
+
+# Install frontend dependencies and build (optional but recommended)
 cd frontend
 npm install
 npm run build
 cd ..
 
-# Generate secret keys
-python -c "import secrets; print('SECRET_KEY=' + secrets.token_hex(32))"
-python -c "import secrets; print('JWT_SECRET_KEY=' + secrets.token_hex(32))"
-
-# Create .env file with your keys
-echo "SECRET_KEY=your_key_here" > .env
-echo "JWT_SECRET_KEY=your_jwt_key_here" >> .env
-
 # Start the application
-uvicorn backend.main:app --host 0.0.0.0 --port 8000
+python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 Access at: **http://localhost:8000**
+
+#### Important Notes
+
+1. **Always activate venv**: Run `source venv/bin/activate` before starting the server
+2. **Keep .env secure**: Never commit this file to version control
+3. **Change admin password**: On first login, change the default admin credentials
+4. **Regular backups**: Backup your `surveillance.db` file regularly
 
 **🚀 Production Setup (Linux):** For running OpenEye as a system service with auto-start and auto-restart, see [Linux Systemd Service Guide](opencv-surveillance/docs/LINUX_SYSTEMD_SERVICE.md)
 

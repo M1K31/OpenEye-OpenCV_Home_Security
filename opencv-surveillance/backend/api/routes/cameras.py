@@ -115,6 +115,66 @@ def get_camera(camera_id: str, db: Session = Depends(get_db)):
     return db_camera
 
 
+@router.patch("/{camera_id}", response_model=camera_schema.CameraResponse)
+def patch_camera(
+    camera_id: str,
+    camera_update: camera_schema.CameraUpdate,
+    db: Session = Depends(get_db)
+):
+    """
+    Partially update camera configuration (PATCH)
+    
+    - Update only specified fields
+    - Useful for toggling enabled state
+    - Returns updated camera configuration
+    """
+    db_camera = crud.get_camera_by_id(db, camera_id)
+    if not db_camera:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Camera '{camera_id}' not found"
+        )
+    
+    # Get only fields that were provided
+    update_data = camera_update.model_dump(exclude_unset=True)
+    
+    # Handle camera state changes in camera_manager BEFORE updating database
+    # This ensures we control the camera based on the new state
+    if 'is_active' in update_data:
+        is_enabled = update_data.get('is_active')
+        
+        if is_enabled:
+            # Enable camera: stop it first if running, then start with updated config
+            if camera_manager.get_camera(camera_id):
+                camera_manager.remove_camera(camera_id)
+            try:
+                # Use updated values if provided, otherwise use existing
+                camera_type = update_data.get('camera_type', db_camera.camera_type)
+                source = update_data.get('source', db_camera.source)
+                face_detection = update_data.get('face_detection_enabled', db_camera.face_detection_enabled)
+                
+                camera_manager.add_camera(
+                    camera_id=camera_id,
+                    camera_type=camera_type,
+                    source=source,
+                    enable_face_detection=face_detection
+                )
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Error starting camera: {str(e)}"
+                )
+        else:
+            # Disable camera: stop it if running
+            if camera_manager.get_camera(camera_id):
+                camera_manager.remove_camera(camera_id)
+    
+    # Update database
+    updated_camera = crud.update_camera(db, camera_id, update_data)
+    
+    return updated_camera
+
+
 @router.put("/{camera_id}", response_model=camera_schema.CameraResponse)
 def update_camera(
     camera_id: str,
@@ -122,7 +182,7 @@ def update_camera(
     db: Session = Depends(get_db)
 ):
     """
-    Update camera configuration
+    Update camera configuration (PUT - full update)
     
     - Can update any camera settings
     - Changes to source require camera restart

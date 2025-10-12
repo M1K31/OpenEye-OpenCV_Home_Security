@@ -16,9 +16,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 
-from backend.database.session import engine
+from backend.database.session import engine, SessionLocal
 from backend.database import models, alert_models
-from backend.api.routes import users, cameras, faces, face_history, alerts, integrations, recordings, analytics, discovery, setup, websockets
+from backend.api.routes import users, cameras, faces, face_history, alerts, integrations, recordings, analytics, discovery, setup, websockets, settings
 from backend.core.camera_manager import manager as camera_manager
 from backend.core.websocket_manager import broadcast_statistics_update
 from backend.core.face_recognition import get_face_manager
@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="OpenEye Surveillance System",
     description="OpenCV-powered surveillance system with face recognition, motion detection, and video recording",
-    version="3.0.0",  # Phase 6
+    version="3.5.1.4",  # Path validation fix and settings enhancements
     docs_url="/api/docs",
     redoc_url="/api/redoc"
 )
@@ -75,29 +75,77 @@ async def startup_event():
     """
     logger.info("Starting OpenEye Surveillance System...")
     
-    # FIX: Create required directories
-    logger.info("Creating required directories...")
-    required_dirs = ['recordings', 'faces', 'data', 'data/snapshots', 'data/thumbnails']
-    for dir_path in required_dirs:
-        Path(dir_path).mkdir(parents=True, exist_ok=True)
-    logger.info("Required directories created successfully")
-    
     # Create database tables
     logger.info("Creating database tables...")
     models.Base.metadata.create_all(bind=engine)
     alert_models.Base.metadata.create_all(bind=engine)
     logger.info("Database tables created successfully")
     
-    # Add default mock camera for testing
-    if not camera_manager.get_camera("mock_cam_1"):
-        logger.info("Adding default mock camera...")
-        camera_manager.add_camera(
-            camera_id="mock_cam_1",
-            camera_type="mock",
-            source="mock",
-            enable_face_detection=True
-        )
-        logger.info("Default mock camera added successfully")
+    # Initialize system settings with defaults
+    db = SessionLocal()
+    try:
+        from backend.database import crud
+        crud.initialize_default_settings(db)
+        settings_list = crud.get_all_system_settings(db)
+        
+        # Convert list to dictionary
+        system_settings = {}
+        for setting in settings_list:
+            try:
+                if setting.setting_type == 'int':
+                    system_settings[setting.setting_key] = int(setting.setting_value)
+                elif setting.setting_type == 'float':
+                    system_settings[setting.setting_key] = float(setting.setting_value)
+                elif setting.setting_type == 'boolean':
+                    system_settings[setting.setting_key] = setting.setting_value.lower() == 'true'
+                else:
+                    system_settings[setting.setting_key] = setting.setting_value
+            except (ValueError, AttributeError):
+                system_settings[setting.setting_key] = setting.setting_value
+        
+        # Get configured paths
+        recordings_path = system_settings.get('recordings_path', 'recordings')
+        faces_path = system_settings.get('faces_path', 'faces')
+        
+        logger.info(f"System settings loaded - Recordings: {recordings_path}, Faces: {faces_path}")
+    finally:
+        db.close()
+    
+    # Create required directories based on system settings
+    logger.info("Creating required directories...")
+    required_dirs = [recordings_path, faces_path, 'data', 'data/snapshots', 'data/thumbnails']
+    for dir_path in required_dirs:
+        Path(dir_path).mkdir(parents=True, exist_ok=True)
+    logger.info("Required directories created successfully")
+    
+    # Initialize face recognition manager with configured path
+    logger.info(f"Initializing face recognition with faces directory: {faces_path}")
+    face_manager = get_face_manager(faces_folder=faces_path)
+    logger.info(f"Face recognition initialized: {len(face_manager.known_face_names)} known faces")
+    
+    # Load existing cameras from database
+    logger.info("Loading cameras from database...")
+    db = SessionLocal()
+    try:
+        from backend.database import crud
+        db_cameras = crud.get_active_cameras(db)
+        loaded_count = 0
+        for db_camera in db_cameras:
+            if not camera_manager.get_camera(db_camera.camera_id):
+                try:
+                    camera_manager.add_camera(
+                        camera_id=db_camera.camera_id,
+                        camera_type=db_camera.camera_type,
+                        source=db_camera.source,
+                        enable_face_detection=db_camera.face_detection_enabled
+                    )
+                    loaded_count += 1
+                    logger.info(f"Loaded camera '{db_camera.camera_id}' from database")
+                except Exception as e:
+                    logger.error(f"Failed to load camera '{db_camera.camera_id}': {e}")
+        logger.info(f"Loaded {loaded_count} camera(s) from database")
+    finally:
+        db.close()
     
     # Start statistics broadcaster
     logger.info("Starting statistics broadcaster...")
@@ -192,6 +240,13 @@ app.include_router(
     tags=["WebSockets"]
 )
 
+# System Settings
+app.include_router(
+    settings.router,
+    prefix="/api",
+    tags=["System Settings"]
+)
+
 # First-Run Setup
 app.include_router(
     setup.router,
@@ -213,7 +268,7 @@ async def read_root():
         # Fallback to API info if frontend not built
         return {
             "name": "OpenEye Surveillance System",
-            "version": "3.1.0",
+            "version": "3.5.1.4",
             "description": "OpenCV-powered surveillance with face recognition",
             "features": [
                 "Motion Detection",
@@ -240,7 +295,7 @@ async def api_root():
     """
     return {
         "name": "OpenEye Surveillance System API",
-        "version": "3.1.0",
+        "version": "3.5.1.4",
         "description": "OpenCV-powered surveillance with face recognition",
         "features": [
             "Motion Detection",

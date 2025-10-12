@@ -32,8 +32,8 @@ const CameraManagementPage = ({ embedded = false }) => {
     setLoading(true);
     try {
       const response = await axios.get('/api/cameras/');
-      // Ensure we always set an array
-      const cameraData = Array.isArray(response.data) ? response.data : [];
+      // API returns {cameras: [...], total: n}
+      const cameraData = response.data.cameras || [];
       setCameras(cameraData);
     } catch (err) {
       setError(`Failed to load cameras: ${err.response?.data?.detail || err.message}`);
@@ -97,7 +97,7 @@ const CameraManagementPage = ({ embedded = false }) => {
   // Handle camera enable/disable toggle
   const handleToggleCamera = async (cameraId, currentState) => {
     try {
-      await axios.patch(`/api/cameras/${cameraId}`, { enabled: !currentState });
+      await axios.patch(`/api/cameras/${cameraId}`, { is_active: !currentState });
       setSuccess(`✅ Camera ${!currentState ? 'enabled' : 'disabled'} successfully!`);
       loadCameras();
     } catch (err) {
@@ -207,11 +207,11 @@ const CameraManagementPage = ({ embedded = false }) => {
                   <div key={camera.camera_id} style={styles.cameraCard}>
                     <div style={styles.cardHeader}>
                       <div style={styles.cameraInfo}>
-                        <h3 style={styles.cameraName}>{camera.name}</h3>
+                        <h3 style={styles.cameraName}>{camera.camera_id}</h3>
                         <span style={styles.cameraType}>{camera.camera_type?.toUpperCase()}</span>
                       </div>
                       <div style={styles.statusBadge}>
-                        {camera.enabled ? (
+                        {camera.is_active ? (
                           <span style={styles.statusEnabled}>● Active</span>
                         ) : (
                           <span style={styles.statusDisabled}>○ Disabled</span>
@@ -250,10 +250,10 @@ const CameraManagementPage = ({ embedded = false }) => {
                         👁️ View Stream
                       </button>
                       <button
-                        onClick={() => handleToggleCamera(camera.camera_id, camera.enabled)}
-                        style={camera.enabled ? styles.disableButton : styles.enableButton}
+                        onClick={() => handleToggleCamera(camera.camera_id, camera.is_active)}
+                        style={camera.is_active ? styles.disableButton : styles.enableButton}
                       >
-                        {camera.enabled ? '⏸️ Disable' : '▶️ Enable'}
+                        {camera.is_active ? '⏸️ Disable' : '▶️ Enable'}
                       </button>
                       <button
                         onClick={() => handleDeleteCamera(camera.camera_id)}

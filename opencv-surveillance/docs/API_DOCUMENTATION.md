@@ -86,6 +86,47 @@ cameras = requests.get('http://localhost:8000/api/cameras', headers=headers)
 print(cameras.json())
 ```
 
+### Troubleshooting: Session & Token Refresh
+
+If a request returns `401 Unauthorized` due to an expired JWT, the frontend includes an inline "Session Expired" modal that prompts the user to re-enter credentials and transparently retries the failed request. For API consumers or for manual recovery, follow these steps:
+
+1. Quick check — request the token endpoint manually
+
+```bash
+# Replace username/password with valid credentials
+curl -v -X POST http://localhost:8000/api/token -d "username=admin&password=yourpassword"
+```
+
+Expected: a JSON response containing `access_token`. If you receive 401 or 400, verify credentials and server logs.
+
+2. Clear client token (browser)
+
+- Open browser devtools → Application/Storage → Local Storage and remove the `token` entry for the site. Then reload and log in again.
+
+3. Retry failing API call with a fresh token
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8000/api/token -d "username=admin&password=yourpassword" | jq -r .access_token)
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/cameras
+```
+
+4. WebSocket connections
+
+- WebSocket endpoints require a valid token in the query string (`/api/ws/statistics?token=JWT`). If you see WebSocket auth errors, re-login in the UI (or obtain a fresh token) and re-open the WebSocket connection — the dashboard auto-reconnects when a new token is present.
+
+5. Server logs
+
+- Inspect backend logs for `401`/`403` or token decode errors. If running with the development server, start with:
+
+```bash
+source venv/bin/activate
+python3 -m uvicorn backend.main:app --reload
+# watch for authentication failures or exceptions in stderr/stdout
+```
+
+If you need an explicit server-side force-logout or token blacklisting feature, consider adding a short endpoint that invalidates tokens on the server (not currently present).
+
+
 ---
 
 ## Base URL
@@ -829,6 +870,17 @@ PUSH_SERVICE_KEY=your_api_key
 ```
 
 **Note:** A UI for configuring these will be added in a future version. Currently, set them in your docker-compose.yml or deployment environment.
+
+## Additional Notes
+
+- Webhook delivery is implemented by the `WebhookNotifier` class in `backend/core/alert_notification_system.py`. The webhook payload example above matches the JSON shape produced by the notifier. You can also configure per-webhook secrets and signature verification; see the `WebhookManager` in `backend/integrations/webhook_system.py` for registration and signature utilities.
+- The frontend includes an automatic token refresh flow: when the server returns a 401 due to an expired JWT, the UI will prompt the user with an inline "Session Expired" modal to re-enter credentials. The login modal generates a new token and transparently retries the failed request so the user preserves application state.
+- A lightweight audit tool `scripts/audit-system.py` is included to verify Phase 2/3 API surface and detect missing methods; run it from the repository root to generate a quick report of classes/methods and Phase compliance:
+
+```bash
+cd opencv-surveillance
+python3 scripts/audit-system.py
+```
 
 ---
 

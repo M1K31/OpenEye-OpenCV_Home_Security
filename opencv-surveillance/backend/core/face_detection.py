@@ -25,21 +25,23 @@ class FaceDetector:
     Works alongside motion detection to identify people in video
     """
 
-    def __init__(self, enabled: bool = True):
+    def __init__(self, enabled: bool = True, faces_dir: str = "faces"):
         """
         Initialize face detector
 
         Args:
             enabled: Whether face detection is enabled
+            faces_dir: Directory where face images are stored
         """
         self.enabled = enabled
-        self.face_manager = get_face_manager()
+        self.faces_dir = faces_dir
+        self.face_manager = get_face_manager(faces_folder=faces_dir)
         self.last_detection_time = None
         self.detection_cooldown = 2.0  # Seconds between detections to reduce CPU load
         self.detections_buffer = []  # Store recent detections
         self.max_buffer_size = 10
 
-        logger.info(f"FaceDetector initialized (enabled={enabled})")
+        logger.info(f"FaceDetector initialized (enabled={enabled}, faces_dir={faces_dir})")
 
     def set_enabled(self, enabled: bool):
         """Enable or disable face detection"""
