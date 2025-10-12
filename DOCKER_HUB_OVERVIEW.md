@@ -1,6 +1,6 @@
 # OpenEye - Advanced Home Security System
 
-![Version](https://img.shields.io/badge/version-3.5.1.4-blue.svg) ![License](https://img.shields.io/badge/license-MIT-yellow.svg) ![Cost](https://img.shields.io/badge/cost-$0/month-success.svg)
+![Version](https://img.shields.io/badge/version-3.5.2-blue.svg) ![License](https://img.shields.io/badge/license-MIT-yellow.svg) ![Cost](https://img.shields.io/badge/cost-$0/month-success.svg)
 
 **100% free and open-source** AI-powered surveillance with face recognition, motion detection, and smart home integration. Your data stays on your hardware - no subscriptions, no cloud dependencies.
 
@@ -246,11 +246,12 @@ rtsp://admin:password@192.168.1.100:554/h264Preview_01_main
 
 ## 📦 Available Tags
 
-- `latest` - Most recent stable release
-- `3.3.0` - Current version (bug fixes and stability)
-- `3.2.8` - Previous stable version
+- `latest` - Most recent stable release (v3.5.2)
+- `v3.5.2` - Current version (path validation, snapshot fixes)
+- `v3.4.0` - Previous stable version
+- `v3.3.8` - Earlier stable version
+- `v3.3.0` - Earlier version (bug fixes and stability)
 - `3.1.0` - Camera discovery and themes release
-- `3.0.0` - Initial release
 
 **Recommended**: Use `latest` for automatic updates or specific version tags for stability.
 
@@ -479,22 +480,25 @@ deploy:
 
 ---
 
-## 🆕 What's New in v3.3.0
+## 🆕 What's New in v3.5.2
 
-### Critical Bug Fixes
-- ✅ Fixed async/await context issues in camera threads
-- ✅ Fixed missing camera_id attribute causing identification errors
-- ✅ Standardized password hashing across all code paths
-- ✅ Added automatic directory creation on startup
-- ✅ Implemented thread-safe camera management
-- ✅ Fixed face detection metadata not being saved to recordings
-- ✅ Added database schema consistency verification
+### Critical Fixes
+- ✅ **Fixed snapshot display** - Path conversion now handles absolute file system paths correctly
+- ✅ **Path validation** - Advanced settings now auto-verify storage paths
+- ✅ **Download functionality** - Snapshot download button working correctly
+- ✅ **Frontend rebuild** - Updated assets with all fixes included
 
-### Improvements
-- Better error handling for motion alerts
-- Enhanced thread safety preventing race conditions
-- Improved metadata tracking for face detections
-- More robust first-run experience
+### Deployment Improvements
+- ✅ **Docker optimization** - Build context reduced from 8GB to ~50MB
+- ✅ **Media exclusion** - Images and videos properly excluded from builds
+- ✅ **Documentation** - Comprehensive deployment guides added
+- ✅ **Automated deployment** - New deployment scripts for easy updates
+
+### Previous Versions
+- **v3.5.1.4**: Path selection and validation improvements
+- **v3.5.0**: Granular controls implementation
+- **v3.4.0**: Video recording and playback fixes
+- **v3.3.0**: Critical bug fixes and thread safety
 
 See full [CHANGELOG.md](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/blob/main/CHANGELOG.md)
 
