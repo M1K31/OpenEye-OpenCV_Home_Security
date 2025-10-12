@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased] - 2025-10-12
+
+### Changed
+- **Project Organization** - Restructured documentation for better maintainability
+  - Created `/docs` folder structure with subdirectories: `releases/`, `archived-releases/`, `development/`
+  - Moved all version-specific and development documentation to appropriate folders
+  - Consolidated duplicate documentation files
+  - Removed hardcoded development paths from all documentation
+
+### Removed
+- **Development Artifacts** - Cleaned up development-only files
+  - Removed backup files (`README.md.backup`)
+  - Removed server logs and test databases from repository
+  - Excluded archives folder from version control
+  - Updated `.gitignore` to prevent future inclusion of development artifacts
+
+---
+
 ## [3.5.1.4] - 2025-10-11
 
 ### Fixed
