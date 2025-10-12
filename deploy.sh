@@ -11,8 +11,8 @@ echo ""
 
 # Configuration
 VERSION="v3.5.2"
-DOCKER_USERNAME="m1k31"
-DOCKER_IMAGE="openeye"
+DOCKER_USERNAME="im1k31s"
+DOCKER_IMAGE="openeye-opencv_home_security"
 GITHUB_REPO="M1K31/OpenEye-OpenCV_Home_Security"
 
 # Colors
