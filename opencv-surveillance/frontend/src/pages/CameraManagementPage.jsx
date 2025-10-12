@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import CameraDiscoveryPage from './CameraDiscoveryPage';
 import HelpButton from '../components/HelpButton';
 import { HELP_CONTENT } from '../utils/helpContent';
-import axios from 'axios';
+import apiClient from '../api/apiClient';
 
 const CameraManagementPage = ({ embedded = false }) => {
   const navigate = useNavigate();
@@ -31,7 +31,7 @@ const CameraManagementPage = ({ embedded = false }) => {
   const loadCameras = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('/api/cameras/');
+      const response = await apiClient.get('/cameras/');
       // API returns {cameras: [...], total: n}
       const cameraData = response.data.cameras || [];
       setCameras(cameraData);
@@ -57,7 +57,7 @@ const CameraManagementPage = ({ embedded = false }) => {
     setSuccess(null);
 
     try {
-      await axios.post('/api/cameras/', manualForm);
+      await apiClient.post('/cameras/', manualForm);
       setSuccess(`✅ Camera "${manualForm.name}" added successfully!`);
       
       // Reset form
@@ -86,7 +86,7 @@ const CameraManagementPage = ({ embedded = false }) => {
     }
 
     try {
-      await axios.delete(`/api/cameras/${cameraId}`);
+      await apiClient.delete(`/cameras/${cameraId}`);
       setSuccess(`✅ Camera "${cameraId}" deleted successfully!`);
       loadCameras();
     } catch (err) {
@@ -97,7 +97,7 @@ const CameraManagementPage = ({ embedded = false }) => {
   // Handle camera enable/disable toggle
   const handleToggleCamera = async (cameraId, currentState) => {
     try {
-      await axios.patch(`/api/cameras/${cameraId}`, { is_active: !currentState });
+      await apiClient.patch(`/cameras/${cameraId}`, { is_active: !currentState });
       setSuccess(`✅ Camera ${!currentState ? 'enabled' : 'disabled'} successfully!`);
       loadCameras();
     } catch (err) {

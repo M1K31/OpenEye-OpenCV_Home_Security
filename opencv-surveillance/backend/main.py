@@ -31,6 +31,7 @@ from backend.api.routes import (
     setup,
     websockets,
     settings,
+    motion_events,
 )
 from backend.core.camera_manager import manager as camera_manager
 from backend.core.websocket_manager import broadcast_statistics_update
@@ -73,7 +74,8 @@ app.add_middleware(
 # Phase 6: Add security middleware (all free and open source)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(SQLInjectionProtection)
-app.add_middleware(RateLimiter, requests_per_minute=100)
+# Increased rate limit to 1000 requests/minute to handle rapid UI interactions (sliders, etc.)
+app.add_middleware(RateLimiter, requests_per_minute=1000)
 
 # Optional: IP whitelist (disabled by default for ease of use)
 # To enable, uncomment and add your allowed IPs:
@@ -245,6 +247,12 @@ app.include_router(
     prefix="/api",
     tags=["Advanced Analytics"])
 
+# Motion Detection Events - NEW
+app.include_router(
+    motion_events.router,
+    prefix="/api",
+    tags=["Motion Detection Events"])
+
 # WebSocket routes for real-time updates
 app.include_router(websockets.router, prefix="/api", tags=["WebSockets"])
 
@@ -351,6 +359,109 @@ async def system_info():
         "total_cameras": len(
             camera_manager.cameras)}
 
+
+# ============================================================================
+# MOUNT USER-CONFIGURED DATA DIRECTORIES
+# ============================================================================
+# Mount recordings, faces, and snapshots directories from user settings
+# This allows users to configure custom storage locations
+
+db = SessionLocal()
+try:
+    from backend.database import crud
+    settings_list = crud.get_all_system_settings(db)
+    system_settings = {s.setting_key: s.setting_value for s in settings_list}
+    
+    # Get all three user-configurable paths
+    recordings_path_setting = system_settings.get("recordings_path", "recordings")
+    faces_path_setting = system_settings.get("faces_path", "faces")
+    snapshots_path_setting = system_settings.get("snapshots_path", "data/snapshots")
+finally:
+    db.close()
+
+# 1. Mount RECORDINGS directory
+recordings_path = Path(recordings_path_setting)
+if recordings_path.exists():
+    app.mount(
+        "/recordings",
+        StaticFiles(directory=str(recordings_path)),
+        name="recordings"
+    )
+    logger.info(f"Mounted recordings directory: {recordings_path}")
+else:
+    logger.warning(f"Recordings directory not found: {recordings_path}")
+    # Create it if it doesn't exist
+    recordings_path.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Created recordings directory: {recordings_path}")
+    app.mount(
+        "/recordings",
+        StaticFiles(directory=str(recordings_path)),
+        name="recordings"
+    )
+
+# 2. Mount FACES directory
+faces_path = Path(faces_path_setting)
+if faces_path.exists():
+    app.mount(
+        "/faces",
+        StaticFiles(directory=str(faces_path)),
+        name="faces"
+    )
+    logger.info(f"Mounted faces directory: {faces_path}")
+else:
+    logger.warning(f"Faces directory not found: {faces_path}")
+    # Create it if it doesn't exist
+    faces_path.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Created faces directory: {faces_path}")
+    app.mount(
+        "/faces",
+        StaticFiles(directory=str(faces_path)),
+        name="faces"
+    )
+
+# 3. Mount SNAPSHOTS directory
+snapshots_path = Path(snapshots_path_setting)
+if snapshots_path.exists():
+    app.mount(
+        "/data/snapshots",
+        StaticFiles(directory=str(snapshots_path)),
+        name="snapshots"
+    )
+    logger.info(f"Mounted snapshots directory: {snapshots_path}")
+else:
+    logger.warning(f"Snapshots directory not found: {snapshots_path}")
+    # Create it if it doesn't exist
+    snapshots_path.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Created snapshots directory: {snapshots_path}")
+    app.mount(
+        "/data/snapshots",
+        StaticFiles(directory=str(snapshots_path)),
+        name="snapshots"
+    )
+
+# Mount local data/snapshots as fallback for legacy files (if custom path is different)
+if str(snapshots_path) != "data/snapshots":
+    local_snapshots = Path("data/snapshots")
+    if local_snapshots.exists():
+        app.mount(
+            "/legacy/snapshots",
+            StaticFiles(directory=str(local_snapshots)),
+            name="snapshots_local"
+        )
+        logger.info(f"Mounted local snapshots directory for legacy files: {local_snapshots}")
+
+# Mount default data directories
+data_path = Path("data")
+if data_path.exists():
+    # Serve thumbnails directory
+    thumbnails_path = data_path / "thumbnails"
+    if thumbnails_path.exists():
+        app.mount(
+            "/data/thumbnails",
+            StaticFiles(directory=str(thumbnails_path)),
+            name="thumbnails"
+        )
+        logger.info(f"Mounted thumbnails directory: {thumbnails_path}")
 
 # Mount static files for frontend (must be last to not override API routes)
 frontend_path = Path(__file__).parent.parent / "frontend" / "dist"

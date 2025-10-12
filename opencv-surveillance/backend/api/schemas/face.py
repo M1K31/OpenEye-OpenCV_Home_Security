@@ -37,6 +37,13 @@ class Person(PersonBase):
         from_attributes = True
 
 
+class PeopleListResponse(BaseModel):
+    """Schema for people list response"""
+    
+    people: list['Person']
+    total: int
+
+
 class PhotoInfo(BaseModel):
     """Schema for photo information"""
 

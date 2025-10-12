@@ -1,0 +1,109 @@
+/* Copyright (c) 2025 Mikel Smart
+ * Section Placeholder Styles
+ */
+
+.section-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.section-header {
+  font-size: 32px;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+  color: var(--text-primary);
+}
+
+html.aquasecurity-theme .section-header {
+  color: #00AEEF;
+  text-shadow: 0 0 20px rgba(0, 174, 239, 0.3);
+}
+
+.section-description {
+  font-size: 16px;
+  color: var(--text-secondary);
+  margin: 0 0 32px 0;
+}
+
+.section-placeholder {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-panel);
+  border-radius: 12px;
+  padding: 60px 40px;
+  text-align: center;
+  box-shadow: 0 2px 8px var(--shadow);
+}
+
+html.aquasecurity-theme .section-placeholder {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.placeholder-icon {
+  font-size: 80px;
+  display: block;
+  margin-bottom: 20px;
+  opacity: 0.6;
+}
+
+.section-placeholder p {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 24px 0;
+}
+
+.feature-list {
+  list-style: none;
+  padding: 0;
+  margin: 24px auto 0;
+  max-width: 400px;
+  text-align: left;
+}
+
+.feature-list li {
+  padding: 12px 16px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-input);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.feature-list li::before {
+  content: '✓';
+  margin-right: 12px;
+  color: var(--color-success);
+  font-weight: bold;
+}
+
+html.aquasecurity-theme .feature-list li {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+html.aquasecurity-theme .feature-list li::before {
+  color: #00AEEF;
+}
+
+@media (max-width: 768px) {
+  .section-container {
+    padding: 16px;
+  }
+
+  .section-header {
+    font-size: 24px;
+  }
+
+  .section-placeholder {
+    padding: 40px 20px;
+  }
+
+  .placeholder-icon {
+    font-size: 60px;
+  }
+}

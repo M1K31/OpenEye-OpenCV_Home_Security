@@ -5,6 +5,7 @@ Face Detector - Integrates face recognition with camera streams
 Designed to work alongside motion detection in the OpenEye surveillance system
 """
 
+from typing import Tuple, List, Dict
 import numpy as np
 import logging
 from datetime import datetime

@@ -83,6 +83,14 @@ class NotificationLogResponse(BaseModel):
         from_attributes = True
 
 
+class NotificationLogListResponse(BaseModel):
+    """Schema for notification log list response"""
+    
+    logs: List[NotificationLogResponse]
+    total: int
+    filtered: int
+
+
 class TestAlertRequest(BaseModel):
     """Schema for testing alert delivery"""
 
@@ -210,7 +218,7 @@ def delete_alert_configuration(config_id: int, db: Session = Depends(get_db)):
     return {"message": f"Alert configuration {config_id} deleted successfully"}
 
 
-@router.get("/alerts/logs", response_model=List[NotificationLogResponse])
+@router.get("/alerts/logs", response_model=NotificationLogListResponse)
 def get_notification_logs(
         event_type: Optional[str] = Query(
             None,
@@ -232,6 +240,9 @@ def get_notification_logs(
 
     Returns a history of all sent notifications for debugging and tracking.
     """
+    # Get total count before filtering
+    total_count = db.query(alert_models.NotificationLog).count()
+    
     query = db.query(alert_models.NotificationLog)
 
     if event_type:
@@ -245,13 +256,20 @@ def get_notification_logs(
     if channel:
         query = query.filter(alert_models.NotificationLog.channel == channel)
 
+    # Get filtered count
+    filtered_count = query.count()
+    
     logs = (
         query.order_by(alert_models.NotificationLog.created_at.desc())
         .limit(limit)
         .all()
     )
 
-    return logs
+    return NotificationLogListResponse(
+        logs=logs,
+        total=total_count,
+        filtered=filtered_count
+    )
 
 
 @router.post("/alerts/test", status_code=200)

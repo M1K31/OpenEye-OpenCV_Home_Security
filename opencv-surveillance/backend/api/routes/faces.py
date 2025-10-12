@@ -22,7 +22,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get("/faces/people", response_model=List[face_schema.Person])
+@router.get("/faces/people", response_model=face_schema.PeopleListResponse)
 def list_people(current_user: user_schema.User = Depends(
         get_current_active_user)):
     """
@@ -33,7 +33,10 @@ def list_people(current_user: user_schema.User = Depends(
     try:
         face_manager = get_face_manager()
         people = face_manager.list_people()
-        return people
+        return face_schema.PeopleListResponse(
+            people=people,
+            total=len(people)
+        )
     except Exception as e:
         logger.error(f"Error listing people: {e}")
         raise HTTPException(status_code=500, detail=str(e))

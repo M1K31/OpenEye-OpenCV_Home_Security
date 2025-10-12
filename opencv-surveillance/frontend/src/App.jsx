@@ -6,16 +6,25 @@ import axios from 'axios';
 import { ThemeProvider } from './context/ThemeContext';
 import authService from './services/authService';
 // REMOVED: import './themes.css'; - Now in main.jsx
-import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
+
+// New Layout Components
+import MainLayout from './layouts/MainLayout';
+
+// New Section Components
+import LiveDashboard from './sections/LiveDashboard';
+
+// Working Pages (formerly "Legacy Pages")
+import RecordingsPage from './pages/RecordingsPage';
+import CameraManagementPage from './pages/CameraManagementPage';
+import CameraDiscoveryPage from './pages/CameraDiscoveryPage';
 import FaceManagementPage from './pages/FaceManagementPage';
 import AlertSettingsPage from './pages/AlertSettingsPage';
-import CameraDiscoveryPage from './pages/CameraDiscoveryPage';
-import CameraManagementPage from './pages/CameraManagementPage';
+import SystemSettingsPage from './pages/SystemSettingsPage';
 import ThemeSelectorPage from './pages/ThemeSelectorPage';
-import SettingsPage from './pages/SettingsPage';
+
+// Legacy Pages (for setup and login)
+import LoginPage from './pages/LoginPage';
 import FirstRunSetup from './pages/FirstRunSetup';
-import RecordingsPage from './pages/RecordingsPage';
 
 // Auth service automatically sets up axios interceptors
 // for token management and automatic refresh
@@ -93,42 +102,21 @@ function App() {
             path="/login"
             element={!token ? <LoginPage setToken={handleSetToken} /> : <Navigate to="/" />}
           />
+          {/* Protected Routes - All wrapped in MainLayout */}
           <Route
             path="/"
-            element={token ? <DashboardPage onLogout={handleLogout} /> : <Navigate to="/login" />}
-          />
-          <Route
-            path="/face-management"
-            element={token ? <FaceManagementPage /> : <Navigate to="/login" />}
-          />
-          <Route
-            path="/camera-discovery"
-            element={token ? <CameraDiscoveryPage /> : <Navigate to="/login" />}
-          />
-          <Route
-            path="/camera-management"
-            element={token ? <CameraManagementPage /> : <Navigate to="/login" />}
-          />
-          <Route
-            path="/theme-selector"
-            element={token ? <ThemeSelectorPage /> : <Navigate to="/login" />}
-          />
-          <Route
-            path="/alerts"
-            element={token ? <AlertSettingsPage /> : <Navigate to="/login" />}
-          />
-          <Route
-            path="/settings"
-            element={token ? <SettingsPage /> : <Navigate to="/login" />}
-          />
-          <Route
-            path="/recordings"
-            element={token ? <RecordingsPage /> : <Navigate to="/login" />}
-          />
-          <Route
-            path="/dashboard"
-            element={token ? <DashboardPage onLogout={handleLogout} /> : <Navigate to="/login" />}
-          />
+            element={token ? <MainLayout onLogout={handleLogout} /> : <Navigate to="/login" />}
+          >
+            {/* Section-based Navigation with Working Pages */}
+            <Route index element={<LiveDashboard />} />
+            <Route path="events" element={<RecordingsPage />} />
+            <Route path="cameras" element={<CameraManagementPage />} />
+            <Route path="cameras/discovery" element={<CameraDiscoveryPage />} />
+            <Route path="faces" element={<FaceManagementPage />} />
+            <Route path="system" element={<SystemSettingsPage />} />
+            <Route path="system/alerts" element={<AlertSettingsPage />} />
+            <Route path="themes" element={<ThemeSelectorPage />} />
+          </Route>
         </Routes>
       </Router>
     </ThemeProvider>

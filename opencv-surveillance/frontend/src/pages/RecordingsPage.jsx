@@ -1,7 +1,7 @@
 // Copyright (c) 2025 Mikel Smart
 // This file is part of OpenEye-OpenCV_Home_Security
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import apiClient from '../api/apiClient';
 import { useNavigate } from 'react-router-dom';
 
 const RecordingsPage = () => {
@@ -23,7 +23,7 @@ const RecordingsPage = () => {
 
   const loadCameras = async () => {
     try {
-      const response = await axios.get('/api/cameras/');
+      const response = await apiClient.get('/cameras/');
       // Handle both formats: direct array or { cameras: [] }
       setCameras(Array.isArray(response.data) ? response.data : (response.data.cameras || []));
     } catch (err) {
@@ -35,9 +35,11 @@ const RecordingsPage = () => {
   const loadRecordings = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/recordings/');
-      // Ensure we always have an array
-      setRecordings(Array.isArray(response.data) ? response.data : []);
+      const response = await apiClient.get('/recordings/');
+      // Handle wrapped response or legacy array response
+      const recordingsData = response.data?.recordings || 
+        (Array.isArray(response.data) ? response.data : []);
+      setRecordings(recordingsData);
       setError('');
     } catch (err) {
       console.error('Error loading recordings:', err);
@@ -50,13 +52,14 @@ const RecordingsPage = () => {
 
   const loadSnapshots = async () => {
     try {
-      // For now, snapshots come from the snapshot_path in motion events
-      // We'll load from the recordings API and filter for those with snapshots
-      const response = await axios.get('/api/motion-events/');
-      const events = Array.isArray(response.data) ? response.data : [];
+      // Load motion events (includes events with AND without face detection)
+      const response = await apiClient.get('/motion-events/?limit=100');
+      // Handle wrapped response (backward compatible with v3.5.2)
+      const events = response.data.events || response.data;
+      const snapshotsData = Array.isArray(events) ? events : [];
       // Filter only events that have a snapshot_path
-      const snapshotsData = events.filter(event => event.snapshot_path);
-      setSnapshots(snapshotsData);
+      const filtered = snapshotsData.filter(event => event.snapshot_path);
+      setSnapshots(filtered);
     } catch (err) {
       console.error('Error loading snapshots:', err);
       setSnapshots([]);
@@ -69,7 +72,7 @@ const RecordingsPage = () => {
     }
     
     try {
-      await axios.delete(`/api/recordings/${recordingId}`);
+      await apiClient.delete(`/recordings/${recordingId}`);
       loadRecordings();
     } catch (err) {
       console.error('Error deleting recording:', err);
@@ -78,12 +81,12 @@ const RecordingsPage = () => {
   };
 
   const deleteSnapshot = async (eventId) => {
-    if (!window.confirm('Are you sure you want to delete this snapshot?')) {
+    if (!window.confirm('Are you sure you want to delete this motion event snapshot?')) {
       return;
     }
     
     try {
-      await axios.delete(`/api/motion-events/${eventId}`);
+      await apiClient.delete(`/motion-events/${eventId}`);
       loadSnapshots();
     } catch (err) {
       console.error('Error deleting snapshot:', err);
@@ -99,6 +102,35 @@ const RecordingsPage = () => {
 
   const formatDate = (timestamp) => {
     return new Date(timestamp).toLocaleString();
+  };
+
+  /**
+   * Convert file system path to web URL
+   * Maps absolute paths to mounted static file endpoints
+   */
+  const convertPathToUrl = (filePath) => {
+    if (!filePath) return '';
+    
+    // If already a properly formatted web URL, return as-is
+    if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
+      return filePath;
+    }
+    
+    // If it's already a relative web path (starts with /data/ or /legacy/), return as-is
+    if (filePath.startsWith('/data/') || filePath.startsWith('/legacy/') || filePath.startsWith('/recordings/') || filePath.startsWith('/faces/')) {
+      return filePath;
+    }
+
+    // Extract just the filename from the full path
+    const filename = filePath.split('/').pop();
+    
+    // Check if this is a legacy snapshot (in data/snapshots directory)
+    if (filePath.includes('data/snapshots') || filePath.includes('data\\snapshots')) {
+      return `/legacy/snapshots/${filename}`;
+    }
+    
+    // Default to custom snapshots path (for absolute paths like /Volumes/...)
+    return `/data/snapshots/${filename}`;
   };
 
   const filteredRecordings = filterCamera === 'all' 
@@ -234,10 +266,14 @@ const RecordingsPage = () => {
                 filteredSnapshots.map((snapshot) => (
                   <div key={snapshot.id} style={styles.snapshotCard}>
                     <img
-                      src={snapshot.snapshot_path}
+                      src={convertPathToUrl(snapshot.snapshot_path)}
                       alt={snapshot.camera_id}
                       style={styles.snapshotImage}
                       onClick={() => setSelectedRecording(snapshot)}
+                      onError={(e) => {
+                        console.error('Failed to load snapshot:', snapshot.snapshot_path);
+                        e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999"%3E❌%3C/text%3E%3C/svg%3E';
+                      }}
                     />
                     <div style={styles.snapshotInfo}>
                       <p style={styles.snapshotCamera}>{snapshot.camera_id}</p>
@@ -250,7 +286,7 @@ const RecordingsPage = () => {
                     </div>
                     <div style={styles.snapshotActions}>
                       <a
-                        href={snapshot.snapshot_path}
+                        href={convertPathToUrl(snapshot.snapshot_path)}
                         download
                         style={styles.downloadButtonSmall}
                       >
@@ -282,9 +318,13 @@ const RecordingsPage = () => {
               ✕
             </button>
             <img
-              src={selectedRecording.snapshot_path}
+              src={convertPathToUrl(selectedRecording.snapshot_path)}
               alt={selectedRecording.camera_id}
               style={styles.modalImage}
+              onError={(e) => {
+                console.error('Failed to load modal snapshot:', selectedRecording.snapshot_path);
+                e.target.alt = '❌ Image failed to load';
+              }}
             />
             <div style={styles.modalInfo}>
               <h3>{selectedRecording.camera_id}</h3>

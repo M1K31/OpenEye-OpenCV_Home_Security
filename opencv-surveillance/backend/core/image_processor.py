@@ -4,6 +4,7 @@
 Image Quality Processor for OpenEye v3.5.0
 Provides granular image adjustments: brightness, contrast, saturation, sharpness
 """
+from typing import Optional
 import cv2
 import numpy as np
 

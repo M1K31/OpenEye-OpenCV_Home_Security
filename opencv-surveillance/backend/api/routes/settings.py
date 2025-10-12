@@ -49,6 +49,9 @@ class SystemSettingsUpdate(BaseModel):
     )
     faces_path: Optional[str] = Field(
         None, description="Path to faces directory")
+    snapshots_path: Optional[str] = Field(
+        None, description="Path to motion detection snapshots directory"
+    )
     display_mode: Optional[str] = Field(
         None, pattern="^(grid|vertical|horizontal|cycle)$"
     )

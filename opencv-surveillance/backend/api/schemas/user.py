@@ -14,6 +14,12 @@ class UserCreate(UserBase):
     password: str
 
 
+class UserLogin(BaseModel):
+    """Schema for login with JSON credentials"""
+    username: str
+    password: str
+
+
 class User(UserBase):
     id: int
     is_active: bool

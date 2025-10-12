@@ -11,6 +11,8 @@ import time
 import threading
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any
+from pathlib import Path
+from datetime import datetime
 from .motion_detector import MotionDetector
 from .image_processor import ImageProcessor
 from .video_processor import VideoProcessor, VideoSettings
@@ -19,7 +21,7 @@ from .face_detection import FaceDetector
 import asyncio
 from backend.core.alert_manager import get_alert_manager
 from backend.database.session import SessionLocal
-from backend.database.models import Camera as CameraModel
+from backend.database.models import Camera as CameraModel, MotionDetectionEvent
 
 
 class Camera(ABC):
@@ -48,6 +50,7 @@ class Camera(ABC):
         self.last_motion_time = 0
         self.post_motion_cooldown = 5  # Default, can be overridden from DB
         self.last_faces_detected = []
+        self.current_motion_event_id = None  # Track current motion event for face linking
 
         # Load settings from database or use defaults
         settings = db_settings or {}
@@ -85,6 +88,7 @@ class Camera(ABC):
         recordings_path = settings.get("recordings_path", "recordings")
         max_recording_duration = settings.get("max_recording_duration", 300)
         faces_path = settings.get("faces_path", "faces")
+        snapshots_path = settings.get("snapshots_path", "data/snapshots")
 
         self.recorder = Recorder(
             output_dir=recordings_path,
@@ -92,6 +96,9 @@ class Camera(ABC):
         self.face_detector = FaceDetector(
             enabled=enable_face_detection, faces_dir=faces_path
         )
+        
+        # Store snapshots path for motion detection
+        self.snapshots_path = snapshots_path
 
         # Store settings for later updates
         self._db_settings = settings
@@ -231,6 +238,140 @@ class Camera(ABC):
         except Exception as e:
             print(f"Error reloading settings from database: {e}")
 
+    def _save_motion_snapshot(
+        self, frame: np.ndarray, motion_areas: list
+    ) -> Optional[str]:
+        """
+        Save a motion detection snapshot to disk.
+
+        Args:
+            frame: The frame with motion detected
+            motion_areas: List of motion area dictionaries
+
+        Returns:
+            Path to the saved snapshot or None if save failed
+        """
+        try:
+            # Create snapshots directory if it doesn't exist
+            # Use custom path from settings or default
+            snapshots_dir = Path(self.snapshots_path)
+            snapshots_dir.mkdir(parents=True, exist_ok=True)
+
+            # Generate filename with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+            camera_name = self.camera_id or "unknown"
+            filename = f"motion_{camera_name}_{timestamp}.jpg"
+            snapshot_path = snapshots_dir / filename
+
+            # Save the frame
+            success = cv2.imwrite(str(snapshot_path), frame)
+
+            if success:
+                return str(snapshot_path)
+            else:
+                print(f"Failed to save snapshot to {snapshot_path}")
+                return None
+
+        except Exception as e:
+            print(f"Error saving motion snapshot: {e}")
+            return None
+
+    def _create_motion_event(
+        self,
+        frame: np.ndarray,
+        motion_areas: list,
+        snapshot_path: Optional[str] = None,
+    ) -> Optional[int]:
+        """
+        Create a MotionDetectionEvent in the database.
+
+        Args:
+            frame: The frame where motion was detected
+            motion_areas: List of motion area dictionaries
+            snapshot_path: Path to the saved snapshot (optional)
+
+        Returns:
+            The ID of the created motion event or None if creation failed
+        """
+        if not self.camera_id:
+            return None
+
+        try:
+            db = SessionLocal()
+
+            # Calculate total motion area and percentage
+            frame_area = frame.shape[0] * frame.shape[1]
+            total_motion_area = sum(area.get("area", 0)
+                                    for area in motion_areas)
+            motion_percentage = (total_motion_area /
+                                 frame_area * 100) if frame_area > 0 else 0
+
+            # Get recording path if currently recording
+            recording_path = None
+            if self.recorder.is_recording and hasattr(self.recorder, "filename"):
+                recording_path = self.recorder.filename
+
+            # Create motion event
+            motion_event = MotionDetectionEvent(
+                camera_id=self.camera_id,
+                motion_area=total_motion_area,
+                motion_percentage=motion_percentage,
+                contour_count=len(motion_areas),
+                snapshot_path=snapshot_path,
+                frame_width=frame.shape[1],
+                frame_height=frame.shape[0],
+                recording_path=recording_path,
+            )
+
+            db.add(motion_event)
+            db.commit()
+            db.refresh(motion_event)
+
+            event_id = motion_event.id
+            db.close()
+
+            print(
+                f"Created motion event {event_id} for camera {
+                    self.camera_id}: {
+                    motion_percentage:.1f}% motion, {
+                    len(motion_areas)} contours")
+            return event_id
+
+        except Exception as e:
+            print(f"Error creating motion event in database: {e}")
+            if 'db' in locals():
+                db.close()
+            return None
+
+    def _update_motion_event_faces(self, motion_event_id: int, face_count: int):
+        """
+        Update a motion event with the number of faces detected.
+
+        Args:
+            motion_event_id: ID of the motion event to update
+            face_count: Number of faces detected
+        """
+        if not motion_event_id:
+            return
+
+        try:
+            db = SessionLocal()
+            motion_event = db.query(MotionDetectionEvent).filter(
+                MotionDetectionEvent.id == motion_event_id
+            ).first()
+
+            if motion_event:
+                motion_event.faces_detected = face_count
+                db.commit()
+                print(
+                    f"Updated motion event {motion_event_id} with {face_count} faces detected")
+
+            db.close()
+        except Exception as e:
+            print(f"Error updating motion event with faces: {e}")
+            if 'db' in locals():
+                db.close()
+
 
 class MockCamera(Camera):
     """Enhanced MockCamera with granular controls"""
@@ -310,6 +451,13 @@ class MockCamera(Camera):
 
         # Trigger motion alert if motion detected
         if self.motion_detected:
+            # Save snapshot and create database record
+            snapshot_path = self._save_motion_snapshot(
+                processed_frame, motion_areas)
+            self.current_motion_event_id = self._create_motion_event(
+                processed_frame, motion_areas, snapshot_path
+            )
+
             try:
                 alert_manager = get_alert_manager()
                 camera_id = self.camera_id or "mock_cam"
@@ -322,6 +470,8 @@ class MockCamera(Camera):
                                 event_data={
                                     "timestamp": time.time(),
                                     "motion_areas": motion_areas,
+                                    "motion_event_id": self.current_motion_event_id,
+                                    "snapshot_path": snapshot_path,
                                 },
                             ),
                             loop,
@@ -331,12 +481,22 @@ class MockCamera(Camera):
                     pass
             except Exception as e:
                 print(f"Error triggering motion alert: {e}")
+        else:
+            # Clear motion event when no motion detected
+            self.current_motion_event_id = None
 
         # Face detection
         if self.face_detector.enabled:
             processed_frame, self.last_faces_detected = (
                 self.face_detector.process_frame(
                     processed_frame, self.motion_detected))
+
+            # Update motion event with face count if faces detected
+            if self.last_faces_detected and self.current_motion_event_id:
+                self._update_motion_event_faces(
+                    self.current_motion_event_id, len(
+                        self.last_faces_detected)
+                )
 
             # Log faces to recorder if recording
             if self.recorder.is_recording and self.last_faces_detected:
@@ -436,6 +596,16 @@ class RTSPCamera(Camera):
 
         # Trigger motion alert if motion detected
         if self.motion_detected:
+            print(f"🔴 [RTSP] MOTION DETECTED! Camera: {self.camera_id}")
+            # Save snapshot and create database record
+            snapshot_path = self._save_motion_snapshot(
+                processed_frame, motion_areas)
+            print(f"📸 [RTSP] Snapshot saved: {snapshot_path}")
+            self.current_motion_event_id = self._create_motion_event(
+                processed_frame, motion_areas, snapshot_path
+            )
+            print(f"✅ [RTSP] Motion event created: ID={self.current_motion_event_id}")
+
             try:
                 alert_manager = get_alert_manager()
                 camera_id = self.camera_id or "rtsp_cam"
@@ -448,6 +618,8 @@ class RTSPCamera(Camera):
                                 event_data={
                                     "timestamp": time.time(),
                                     "motion_areas": motion_areas,
+                                    "motion_event_id": self.current_motion_event_id,
+                                    "snapshot_path": snapshot_path,
                                 },
                             ),
                             loop,
@@ -457,12 +629,22 @@ class RTSPCamera(Camera):
                     pass
             except Exception as e:
                 print(f"Error triggering motion alert: {e}")
+        else:
+            # Clear motion event when no motion detected
+            self.current_motion_event_id = None
 
         # Face detection
         if self.face_detector.enabled:
             processed_frame, self.last_faces_detected = (
                 self.face_detector.process_frame(
                     processed_frame, self.motion_detected))
+
+            # Update motion event with face count if faces detected
+            if self.last_faces_detected and self.current_motion_event_id:
+                self._update_motion_event_faces(
+                    self.current_motion_event_id, len(
+                        self.last_faces_detected)
+                )
 
             # Log faces to recorder if recording
             if self.recorder.is_recording and self.last_faces_detected:
@@ -574,6 +756,7 @@ class CameraManager:
                         "recordings_path", "recordings"
                     ),
                     "faces_path": system_settings.get("faces_path", "faces"),
+                    "snapshots_path": system_settings.get("snapshots_path", "data/snapshots"),
                     "max_recording_duration": int(
                         system_settings.get("max_recording_duration", 300)
                     ),

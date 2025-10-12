@@ -1,0 +1,322 @@
+/* Copyright (c) 2025 Mikel Smart
+ * OpenEye MainLayout Styles - HIG Split View Architecture
+ */
+
+.main-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background-color: var(--bg-main);
+}
+
+/* ===================
+   TOP BAR
+   =================== */
+.main-layout-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 60px;
+  padding: 0 20px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-panel);
+  box-shadow: 0 2px 8px var(--shadow);
+  z-index: 100;
+  flex-shrink: 0;
+}
+
+/* Aqua Security Theme - Frosted Glass Header */
+html.aquasecurity-theme .main-layout-header {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.sidebar-toggle {
+  display: none; /* Hidden on desktop, shown on mobile */
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid var(--border-input);
+  color: var(--text-primary);
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sidebar-toggle:hover {
+  background: var(--bg-hover);
+}
+
+.app-title {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
+}
+
+html.aquasecurity-theme .app-title {
+  color: #00AEEF;
+  text-shadow: 0 0 10px rgba(0, 174, 239, 0.3);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.system-status {
+  font-size: 14px;
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  background: var(--bg-input);
+  border-radius: 999px;
+  border: 1px solid var(--border-input);
+}
+
+html.aquasecurity-theme .system-status {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #00AEEF;
+}
+
+.user-menu-button {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-input);
+  color: var(--text-primary);
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.user-menu-button:hover {
+  background: var(--bg-hover);
+  transform: translateY(-1px);
+}
+
+/* User Menu Container */
+.user-menu-container {
+  position: relative;
+}
+
+/* User Menu Dropdown */
+.user-menu-dropdown {
+  position: absolute;
+  top: 50px;
+  right: 0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-input);
+  border-radius: 12px;
+  padding: 8px;
+  min-width: 150px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+}
+
+html.aquasecurity-theme .user-menu-dropdown {
+  background: rgba(26, 26, 29, 0.95);
+  backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid rgba(0, 174, 239, 0.3);
+  box-shadow: 0 4px 20px rgba(0, 174, 239, 0.2);
+}
+
+.logout-button {
+  width: 100%;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.logout-button:hover {
+  background: var(--bg-hover);
+}
+
+html.aquasecurity-theme .logout-button:hover {
+  background: rgba(0, 174, 239, 0.15);
+  color: #00AEEF;
+}
+
+/* ===================
+   SPLIT VIEW CONTAINER
+   =================== */
+.split-view-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ===================
+   CONTENT PANE
+   =================== */
+.content-pane {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 24px;
+  background: var(--bg-main);
+  transition: margin-left 0.3s ease;
+}
+
+/* Smooth scrolling */
+.content-pane {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar for content pane */
+.content-pane::-webkit-scrollbar {
+  width: 12px;
+}
+
+.content-pane::-webkit-scrollbar-track {
+  background: var(--bg-main);
+}
+
+.content-pane::-webkit-scrollbar-thumb {
+  background: var(--bg-panel);
+  border-radius: 6px;
+}
+
+.content-pane::-webkit-scrollbar-thumb:hover {
+  background: var(--state-active);
+}
+
+/* Expanded state when sidebar is collapsed */
+.content-pane.expanded {
+  margin-left: 0;
+}
+
+/* ===================
+   RESPONSIVE DESIGN
+   =================== */
+
+/* Tablet (768px - 1024px) */
+@media (max-width: 1024px) {
+  .content-pane {
+    padding: 16px;
+  }
+
+  .system-status {
+    display: none; /* Hide status on smaller screens */
+  }
+}
+
+/* Mobile (< 768px) */
+@media (max-width: 768px) {
+  .sidebar-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .main-layout-header {
+    height: 56px;
+    padding: 0 16px;
+  }
+
+  .app-title {
+    font-size: 20px;
+  }
+
+  .content-pane {
+    padding: 12px;
+  }
+
+  .header-right {
+    gap: 12px;
+  }
+}
+
+/* Small Mobile (< 480px) */
+@media (max-width: 480px) {
+  .app-title {
+    font-size: 18px;
+  }
+
+  .main-layout-header {
+    height: 52px;
+    padding: 0 12px;
+  }
+
+  .content-pane {
+    padding: 8px;
+  }
+}
+
+/* ===================
+   LOADING STATES
+   =================== */
+.content-pane.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--bg-panel);
+  border-top-color: var(--theme-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+html.aquasecurity-theme .loading-spinner {
+  border-top-color: #00AEEF;
+  box-shadow: 0 0 20px rgba(0, 174, 239, 0.3);
+}
+
+/* ===================
+   ACCESSIBILITY
+   =================== */
+.main-layout-header button:focus,
+.user-menu-button:focus {
+  outline: 2px solid var(--theme-primary);
+  outline-offset: 2px;
+}
+
+html.aquasecurity-theme .main-layout-header button:focus,
+html.aquasecurity-theme .user-menu-button:focus {
+  outline-color: #00AEEF;
+  box-shadow: 0 0 0 3px rgba(0, 174, 239, 0.2);
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .content-pane,
+  .sidebar-toggle,
+  .user-menu-button,
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -14,6 +14,7 @@ import cv2
 import numpy as np
 import face_recognition
 import logging
+from typing import Tuple, List, Dict, Optional
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 import pickle

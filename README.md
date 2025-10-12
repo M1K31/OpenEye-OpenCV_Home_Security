@@ -508,7 +508,7 @@ OpenEye exposes motion sensors and occupancy sensors to HomeKit automatically. A
 
 ## 🎨 Themes
 
-OpenEye includes 8 superhero-inspired themes:
+OpenEye includes 9 unique themes:
 
 1. **Default** - Professional dark theme
 2. **Superman** - Classic red and blue
@@ -518,6 +518,7 @@ OpenEye includes 8 superhero-inspired themes:
 6. **Aquaman** - Ocean depths
 7. **Cyborg** - Tech enhanced
 8. **Green Lantern** - Willpower green
+9. **Aqua Security** - Modern liquid glass with frosted transparency
 
 **To change theme**: Click **Themes** button → Select theme → Apply
 

@@ -21,6 +21,7 @@ export const THEMES = {
   AQUAMAN: 'aman',
   CYBORG: 'cyborg',
   GREEN_LANTERN: 'glantern',
+  AQUA_SECURITY: 'aquasecurity',
 };
 
 export const ThemeProvider = ({ children }) => {

@@ -1,0 +1,433 @@
+/* Copyright (c) 2025 Mikel Smart
+ * Live Dashboard Section Styles
+ */
+
+.live-dashboard {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 20px;
+}
+
+/* ===================
+   GLOBAL STATUS BAR
+   =================== */
+.global-status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-panel);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px var(--shadow);
+}
+
+html.aquasecurity-theme .global-status-bar {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.status-icon {
+  font-size: 20px;
+  color: var(--color-success);
+}
+
+html.aquasecurity-theme .status-icon {
+  color: #00AEEF;
+  text-shadow: 0 0 10px rgba(0, 174, 239, 0.5);
+}
+
+.status-text {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.timeline-toggle {
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid var(--border-input);
+  color: var(--text-primary);
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.timeline-toggle:hover {
+  background: var(--bg-hover);
+  transform: translateY(-1px);
+}
+
+/* ===================
+   DASHBOARD CONTAINER
+   =================== */
+.dashboard-container {
+  display: flex;
+  gap: 20px;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ===================
+   CAMERA GRID
+   =================== */
+.camera-grid-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  transition: width 0.3s ease;
+}
+
+.camera-grid-container.with-timeline {
+  max-width: calc(100% - 320px);
+}
+
+.camera-grid-container.full-width {
+  max-width: 100%;
+}
+
+.section-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.camera-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+  padding-bottom: 20px;
+}
+
+.camera-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-panel);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 8px var(--shadow);
+  transition: all 0.2s ease;
+}
+
+.camera-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px var(--shadow);
+}
+
+html.aquasecurity-theme .camera-card {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.camera-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.camera-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-badge.active {
+  background: var(--color-success);
+  color: white;
+}
+
+.status-badge.inactive {
+  background: var(--color-error);
+  color: white;
+}
+
+html.aquasecurity-theme .status-badge.active {
+  background: #00AEEF;
+  color: #1A1A1D;
+  box-shadow: 0 0 10px rgba(0, 174, 239, 0.3);
+}
+
+.camera-feed {
+  aspect-ratio: 16/9;
+  background: var(--bg-input);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 12px;
+  position: relative;
+}
+
+.feed-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.feed-offline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 8px;
+  color: var(--text-secondary);
+}
+
+.feed-offline span {
+  font-size: 40px;
+  opacity: 0.5;
+}
+
+.camera-info {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.info-item {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ===================
+   EVENT TIMELINE
+   =================== */
+.event-timeline {
+  width: 300px;
+  flex-shrink: 0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-panel);
+  border-radius: 12px;
+  padding: 16px;
+  overflow-y: auto;
+  box-shadow: 0 2px 8px var(--shadow);
+}
+
+html.aquasecurity-theme .event-timeline {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.timeline-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+  color: var(--text-primary);
+}
+
+.timeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.timeline-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-input);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.timeline-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--theme-primary);
+  transform: translateX(4px);
+}
+
+html.aquasecurity-theme .timeline-item {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+html.aquasecurity-theme .timeline-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #00AEEF;
+  box-shadow: 0 0 10px rgba(0, 174, 239, 0.2);
+}
+
+.event-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.event-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.event-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.event-subtitle {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+  font-style: italic;
+}
+
+.event-camera {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.event-time {
+  font-size: 11px;
+  color: var(--text-secondary);
+  opacity: 0.7;
+  margin: 0;
+}
+
+.event-badge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 2px 8px;
+  background: var(--state-success);
+  color: white;
+  border-radius: 999px;
+  margin-top: 4px;
+}
+
+/* Clickable timeline items */
+.timeline-item.clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.timeline-item.clickable:hover {
+  background: var(--bg-hover);
+  transform: translateX(4px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.timeline-item.clickable:active {
+  transform: translateX(2px);
+}
+
+html.aquasecurity-theme .timeline-item.clickable:hover {
+  background: rgba(0, 174, 239, 0.1);
+  border-left-color: #00AEEF;
+  box-shadow: 0 2px 12px rgba(0, 174, 239, 0.2);
+}
+
+.timeline-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 20px;
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+.timeline-empty span {
+  font-size: 40px;
+}
+
+/* ===================
+   EMPTY STATE
+   =================== */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  gap: 16px;
+  color: var(--text-secondary);
+}
+
+.empty-icon {
+  font-size: 64px;
+  opacity: 0.5;
+}
+
+.empty-state p {
+  font-size: 16px;
+  margin: 0;
+}
+
+/* ===================
+   RESPONSIVE DESIGN
+   =================== */
+@media (max-width: 1200px) {
+  .camera-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+
+  .event-timeline {
+    width: 260px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .dashboard-container {
+    flex-direction: column;
+  }
+
+  .camera-grid-container.with-timeline {
+    max-width: 100%;
+  }
+
+  .event-timeline {
+    width: 100%;
+    max-height: 300px;
+  }
+
+  .camera-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .camera-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .global-status-bar {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .timeline-toggle {
+    width: 100%;
+  }
+}

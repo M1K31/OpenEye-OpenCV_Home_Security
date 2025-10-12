@@ -7,21 +7,201 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased] - 2025-10-12
+## [Unreleased]
+
+### Added
+- **Complete API Migration** - All frontend pages now use centralized apiClient
+  - Migrated 7 pages: SystemSettingsPage, DashboardPage, FaceManagementPage, CameraManagementPage, RecordingsPage, AlertSettingsPage, CameraDiscoveryPage
+  - Automatic JWT token injection
+  - Graceful 401 error handling
+  - Public endpoint bypass for unauthenticated routes
+  - No more console spam when not logged in
+
+- **Event-to-Recording Linking** - Database improvements for better event tracking
+  - Added `recording_id` foreign key to FaceDetectionEvent model
+  - Added bi-directional relationship between FaceDetectionEvent and RecordingEvent
+  - Frontend timeline events now link directly to source recordings
+  - Click any event to jump to its recording playback
+
+- **Comprehensive API Documentation** - New docs/ directory structure
+  - Created `docs/API_REFERENCE.md` with complete API endpoint documentation
+  - Created `docs/TODO.md` with development checklist and roadmap
+  - Consolidated all API audit documents into reference guide
+  - Removed temporary audit documents from project root
+
+- **HIG Split View Layout** - Complete Apple Human Interface Guidelines implementation
+  - Persistent sidebar navigation with 6 sections (Dashboard, Events, Cameras, Faces, System, Themes)
+  - Frosted glass effects with 20px backdrop blur and color saturation
+  - Responsive breakpoints: 1024px (tablet), 768px (mobile), 480px (small mobile)
+  - MainLayout component with fixed header and dynamic content pane
+  - Section-based routing replacing old page-based navigation
+  - Mobile-friendly collapsible sidebar with hamburger menu
+  - Accessibility features: keyboard navigation, screen reader support, reduced motion support
+
+- **Live Dashboard Section** - Real-time camera monitoring and event timeline
+  - Camera grid with auto-fill columns (minmax 320px)
+  - Collapsible event timeline (300px right panel)
+  - Real-time API integration with auto-refresh every 10 seconds
+  - Merged motion events and face detection events in unified timeline
+  - Clickable events linked to recordings with recording_id
+  - Event metadata display: duration, confidence, face counts
+  - "Recording Available" badge on all linked events
+  - Error handling with fallback states
+
+- **Centralized API Client** - No more 401 error spam!
+  - Automatic JWT token injection for authenticated requests
+  - Smart public endpoint bypass (no auth for /token, /setup/status)
+  - Graceful 401 handling (only redirects if token existed and expired)
+  - No more console spam when unauthenticated
+  - Request/response interceptors for consistent error handling
+  - Helper functions: isAuthenticated(), validateToken(), setToken(), clearAuth()
+
+- **API Integration Audit Document** - Complete backend-frontend mapping
+  - All 80+ API endpoints documented
+  - Data structure schemas for each endpoint
+  - Frontend component → API endpoint mapping
+  - Identified integration gaps and opportunities
+  - Phase-based implementation recommendations
+
+- **Aqua Security Theme** - New modern liquid glass theme with frosted transparency
+  - Frosted glass/liquid glass aesthetic with backdrop blur effects
+  - Dynamic cyan accents (#00AEEF) on deep charcoal background (#1A1A1D)
+  - Modern glassmorphism design with 20px blur strength
+  - Enhanced depth with subtle shadows and transparency layers
+  - Pill-shaped buttons with smooth cubic-bezier transitions
+  - Full compatibility with existing component system
 
 ### Changed
-- **Project Organization** - Restructured documentation for better maintainability
-  - Created `/docs` folder structure with subdirectories: `releases/`, `archived-releases/`, `development/`
-  - Moved all version-specific and development documentation to appropriate folders
-  - Consolidated duplicate documentation files
-  - Removed hardcoded development paths from all documentation
+- **All Frontend Pages** - Migrated to centralized API client
+  - SystemSettingsPage: 5 API calls migrated
+  - DashboardPage: 4 API calls migrated
+  - FaceManagementPage: 10 API calls migrated (including file upload)
+  - CameraManagementPage: 4 API calls migrated
+  - RecordingsPage: 5 API calls migrated
+  - AlertSettingsPage: 6 API calls migrated
+  - CameraDiscoveryPage: 5 API calls migrated
+  - Total: 39 API calls standardized with authentication handling
 
-### Removed
-- **Development Artifacts** - Cleaned up development-only files
-  - Removed backup files (`README.md.backup`)
-  - Removed server logs and test databases from repository
-  - Excluded archives folder from version control
-  - Updated `.gitignore` to prevent future inclusion of development artifacts
+- **Database Schema** - Improved data model relationships
+  - FaceDetectionEvent now includes `recording_id` FK (nullable)
+  - RecordingEvent includes `face_detections` relationship
+  - Camera model `last_active` renamed to `last_active_at` for consistency
+  - All timestamp fields now use consistent `*_at` naming convention
+
+- **Authentication System** - Improved to prevent 401 spam
+  - Created apiClient.js replacing direct axios calls
+  - Only adds Authorization header when token exists
+  - Skips auth for public endpoints automatically
+  - Redirects to login only if token expired (not missing)
+  - Prevents redirect loops on login page
+
+- **Event Timeline** - Enhanced with rich metadata
+  - Merged motion events (recordings) with face detections
+  - Shows "Motion + Face" combined events
+  - Displays person names for face detections
+  - Shows confidence percentage for face recognition
+  - Shows duration for motion recordings
+  - Hover effects with Aqua Security cyan glow
+  - Clickable with cursor:pointer and visual feedback
+
+- **Camera Grid** - Fixed API integration
+  - Now uses correct field names: camera_id, is_active (not id, active)
+  - Handles API response structure: {cameras: [...], total: number}
+  - Added error handling for stream failures with SVG fallback
+  - Displays resolution and motion detection status
+
+- **Routing Architecture** - Section-based vs page-based
+  - Old: /dashboard, /face-management, /camera-discovery (separate pages)
+  - New: /, /events, /cameras, /faces, /system, /themes (nested routes)
+  - React Router Outlet for dynamic content rendering
+  - All sections share MainLayout wrapper (header + sidebar)
+  - No page reloads, smooth client-side transitions
+
+- **Global Button Style** - Applied pill-shaped buttons (border-radius: 999px) to all themes
+  - Smooth transitions with cubic-bezier easing (0.2s)
+  - Subtle lift effect on hover (translateY(-1px))
+  - Enhanced box shadows for depth
+  - Each theme retains its unique color palette
+  - Consistent padding (8px 20px) and font-weight (500)
+
+- **Input Fields** - Updated with rounded corners (12px) for modern consistency
+- **Cards/Panels** - Added rounded corners (12px) and subtle shadows across all themes
+- **Theme System** - Updated from 8 to 9 available themes
+
+### Fixed
+- **401 Authentication Error Spam** - No more console spam!
+  - Created centralized API client with smart interceptors
+  - Only attempts authentication when token exists
+  - Public endpoints bypass authentication
+  - Graceful error handling prevents redirect loops
+
+- **Timeline Event Data Structure** - Fixed multiple API format issues
+  - Added array validation before .map() calls
+  - Handle multiple response structures (array, {recordings: []}, {detections: []})
+  - Added fallback keys for event rendering
+  - Merged recording and detection timestamps correctly
+
+- **Camera Feed Not Working** - Fixed stream display
+  - Corrected API field names (camera_id vs id, is_active vs active)
+  - Added onError handler for stream failures
+  - Displays SVG fallback when stream unavailable
+  - Fixed Authorization header injection
+
+- **Placeholder Data** - Replaced with real API data
+  - Timeline now shows actual recordings from /api/recordings/
+  - Face detections from /api/history/detections
+  - Camera list from /api/cameras/ with correct structure
+  - All events include complete metadata (timestamps, faces, durations)
+
+- **Backend Type Annotations** - Added missing typing imports for Python 3.12 compatibility
+  - Fixed `Optional` import in `backend/core/image_processor.py`
+  - Fixed `Tuple, List, Dict` imports in `backend/core/face_detection.py`
+  - Fixed typing imports in `backend/core/facial_recognition_system.py`
+  - Resolved `NameError` issues preventing server startup
+
+### Documentation
+- Created `docs/API_REFERENCE.md` - Complete API documentation (700+ lines)
+- Created `docs/TODO.md` - Development checklist and roadmap
+- Created `IMPLEMENTATION_SUMMARY_v3.5.2.md` - Complete task implementation summary
+- Removed `API_INTEGRATION_AUDIT_v3.5.2.md` - Consolidated into API_REFERENCE
+- Removed `API_NAMING_CONSISTENCY_AUDIT_v3.5.2.md` - Consolidated into API_REFERENCE
+- Removed `API_CONSISTENCY_FIXES_v3.5.2.md` - Consolidated into TODO.md
+- Updated CHANGELOG.md with comprehensive Phase 1 and Phase 2 changes
+
+### Technical Notes
+- Frontend requires rebuild after changes: `npm run build`
+- Latest build hash: `index-211a1e2f.js` (226.46 kB gzipped: 74.82 kB)
+- API client is now the standard way to make backend calls
+- All components should import apiClient, not axios directly (except public endpoints)
+- List API responses now wrapped with metadata: {items: [...], total: N, filtered: N}
+- Frontend uses backward-compatible handlers (supports both wrapped and legacy array responses)
+- Recording events include full metadata: faces_detected, known_faces_detected, duration_seconds
+- Every recording has a unique recording_id that links to playback
+- Face detections now include recording_id FK linking back to source video
+- Database migration script: `scripts/migrate_database_v3.5.2.py`
+- Run migration: `cd opencv-surveillance && source venv/bin/activate && python scripts/migrate_database_v3.5.2.py`
+- Theme applies via CSS class on `html` element for maximum specificity
+- Button styles are global, theme-specific colors take precedence
+- All UI elements now have consistent rounded corners for modern aesthetic
+
+### Known Issues
+- WebSocket connection shows 403 errors (token validation issue - not yet fixed)
+- Some legacy page components still exist but are unused
+- Camera Manager, AI & Faces, System & Alerts sections are placeholders (Phase 2)
+- Themes section needs existing ThemeSelectorPage migration
+
+### Next Phase (v3.5.3)
+- Wrap all list API responses with metadata objects
+- Remove duplicate `/api/users/login` endpoint
+- Implement full Events & History section (master-detail timeline)
+- Implement full Camera Manager section (detection zones, configuration)
+- Implement full AI & Faces section (gallery, enrollment workflow)
+- Implement full System & Alerts section (iOS-style settings)
+- Connect WebSocket for real-time updates (fix 403 auth issue)
+- Remove legacy page components
+- Add recording playback modal
+- Implement face detection filtering in timeline
+- Create database migrations for schema changes
 
 ---
 

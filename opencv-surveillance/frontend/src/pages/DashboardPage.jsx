@@ -2,7 +2,7 @@
 // This file is part of OpenEye-OpenCV_Home_Security
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import apiClient from '../api/apiClient';
 import FaceManagementPage from './FaceManagementPage';
 import wsService from '../services/WebSocketService';
 
@@ -22,7 +22,7 @@ const DashboardPage = ({ onLogout }) => {
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const response = await axios.get('/api/settings');
+        const response = await apiClient.get('/settings');
         setSystemSettings(response.data);
         // Set display mode from settings
         if (response.data.display_mode) {
@@ -51,7 +51,7 @@ const DashboardPage = ({ onLogout }) => {
   useEffect(() => {
     const loadCameras = async () => {
       try {
-        const response = await axios.get('/api/cameras/');
+        const response = await apiClient.get('/cameras/');
         // API returns { cameras: [...], total: n }
         setCameras(response.data.cameras || []);
       } catch (error) {
@@ -66,7 +66,7 @@ const DashboardPage = ({ onLogout }) => {
   useEffect(() => {
     const loadDetections = async () => {
       try {
-        const response = await axios.get('/api/faces/detections');
+        const response = await apiClient.get('/faces/detections');
         setRecentDetections(response.data);
       } catch (error) {
         console.error('Error loading detections:', error);
@@ -75,7 +75,7 @@ const DashboardPage = ({ onLogout }) => {
 
     const loadStats = async () => {
       try {
-        const response = await axios.get('/api/faces/statistics');
+        const response = await apiClient.get('/faces/statistics');
         setStatistics(response.data);
       } catch (error) {
         console.error('Error loading statistics:', error);
