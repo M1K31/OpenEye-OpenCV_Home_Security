@@ -1,6 +1,6 @@
 # OpenEye - Advanced Home Security with OpenCV & AI Face Recognition
 
-![Version](https://img.shields.io/badge/version-3.3.8-blue.svg)
+![Version](https://img.shields.io/badge/version-3.5.1.4-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![OpenCV](https://img.shields.io/badge/OpenCV-4.8+-red.svg)
 ![License](https://img.shields.io/badge/license-MIT-yellow.svg)
@@ -60,6 +60,15 @@ A **100% free and open-source** AI-powered surveillance system using **OpenCV** 
 - 🎯 **First-Run Wizard** - Easy setup for new installations
 - 📱 **Responsive Design** - Works on desktop, tablet, mobile
 - 🔐 **Multi-User Support** - Admin, User, Viewer roles
+
+### System Configuration (v3.5.1+)
+- ⚙️ **System Settings Page** - Comprehensive configuration interface
+- 📁 **Custom Storage Paths** - Configure recording and face image directories
+- ✅ **Path Validation** - Verify paths with auto-creation support
+- 🖼️ **Display Modes** - Grid, Vertical, Horizontal, or Auto-Cycle layouts
+- 🎛️ **Granular Camera Controls** - Per-camera motion/recording/face detection toggles
+- ⏱️ **Recording Settings** - Configurable duration and cycle intervals
+- 💾 **Persistent Settings** - All settings saved to database
 
 ### Notifications (Phase 3)
 - 📧 **Email Alerts** - SMTP notifications (FREE with Gmail)
