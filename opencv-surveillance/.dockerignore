@@ -45,6 +45,20 @@ data/logs/*
 *.db
 *.db-journal
 
+# Recordings and media files (development data)
+recordings/
+custom_recordings/
+faces/
+*.mp4
+*.avi
+*.mkv
+*.mov
+*.jpeg
+*.jpg
+*.png
+*.pkl
+face_encodings.pkl
+
 # Git
 .git/
 .gitignore
