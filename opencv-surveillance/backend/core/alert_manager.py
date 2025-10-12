@@ -6,8 +6,8 @@ Alert Manager - Coordinates alert triggering and notification sending
 """
 
 import logging
-from typing import Dict, Any, Optional, List
-from datetime import datetime, timedelta
+from typing import Dict, Any, Optional
+from datetime import datetime
 from sqlalchemy.orm import Session
 
 from backend.services.notification_service import get_notification_service
@@ -73,8 +73,8 @@ class AlertManager:
 
         # Too soon - throttle
         logger.info(
-            f"Alert throttled: {throttle_key} (last sent {time_since_last:.0f}s ago)"
-        )
+            f"Alert throttled: {throttle_key} (last sent {
+                time_since_last:.0f}s ago)")
         return False
 
     def _is_quiet_hours(self, config: alert_models.AlertConfiguration) -> bool:
@@ -93,8 +93,10 @@ class AlertManager:
         now = datetime.now().time()
 
         try:
-            start_time = datetime.strptime(config.quiet_hours_start, "%H:%M").time()
-            end_time = datetime.strptime(config.quiet_hours_end, "%H:%M").time()
+            start_time = datetime.strptime(
+                config.quiet_hours_start, "%H:%M").time()
+            end_time = datetime.strptime(
+                config.quiet_hours_end, "%H:%M").time()
 
             # Handle overnight quiet hours (e.g., 22:00 to 07:00)
             if start_time > end_time:
@@ -121,7 +123,7 @@ class AlertManager:
             # Get all alert configurations
             configs = (
                 db.query(alert_models.AlertConfiguration)
-                .filter(alert_models.AlertConfiguration.motion_alerts_enabled == True)
+                .filter(alert_models.AlertConfiguration.motion_alerts_enabled)
                 .all()
             )
 
@@ -179,19 +181,20 @@ class AlertManager:
                     db.query(alert_models.AlertConfiguration)
                     .filter(
                         alert_models.AlertConfiguration.face_recognition_alerts_enabled
-                        == True
+
                     )
                     .all()
                 )
                 subject = f"Known Person Detected: {person_name}"
-                message = f"{person_name} detected on camera {camera_id} (confidence: {confidence:.1%})"
+                message = f"{person_name} detected on camera {camera_id} (confidence: {
+                    confidence:.1%})"
             else:
                 event_type = "face_unknown"
                 configs = (
                     db.query(alert_models.AlertConfiguration)
                     .filter(
                         alert_models.AlertConfiguration.unknown_face_alerts_enabled
-                        == True
+
                     )
                     .all()
                 )
@@ -243,16 +246,17 @@ class AlertManager:
             configs = (
                 db.query(alert_models.AlertConfiguration)
                 .filter(
-                    alert_models.AlertConfiguration.recording_alerts_enabled == True
+                    alert_models.AlertConfiguration.recording_alerts_enabled
                 )
                 .all()
             )
 
             event_type = (
-                "recording_started" if recording_started else "recording_stopped"
-            )
-            subject = f"Recording {'Started' if recording_started else 'Stopped'}"
-            message = f"Camera {camera_id} {'started' if recording_started else 'stopped'} recording"
+                "recording_started" if recording_started else "recording_stopped")
+            subject = f"Recording {
+                'Started' if recording_started else 'Stopped'}"
+            message = f"Camera {camera_id} {
+                'started' if recording_started else 'stopped'} recording"
 
             for config in configs:
                 throttle_key = f"{event_type}_{camera_id}"

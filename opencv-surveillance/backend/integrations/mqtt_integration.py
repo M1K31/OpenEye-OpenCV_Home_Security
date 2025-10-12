@@ -123,8 +123,9 @@ class MQTTIntegration:
         """
         try:
             logger.info(
-                f"Connecting to MQTT broker at {self.config.host}:{self.config.port}"
-            )
+                f"Connecting to MQTT broker at {
+                    self.config.host}:{
+                    self.config.port}")
             self.client.connect(
                 self.config.host, self.config.port, self.config.keepalive
             )
@@ -175,14 +176,16 @@ class MQTTIntegration:
                 5: "Connection refused - not authorized",
             }
             logger.error(
-                f"Connection failed: {error_messages.get(rc, f'Unknown error {rc}')}"
-            )
+                f"Connection failed: {
+                    error_messages.get(
+                        rc, f'Unknown error {rc}')}")
 
     def _on_disconnect(self, client, userdata, rc):
         """Callback when disconnected from broker"""
         self.connected = False
         if rc != 0:
-            logger.warning(f"Unexpected disconnection from MQTT broker (code: {rc})")
+            logger.warning(
+                f"Unexpected disconnection from MQTT broker (code: {rc})")
         else:
             logger.info("Disconnected from MQTT broker")
 
@@ -212,7 +215,8 @@ class MQTTIntegration:
 
     def _on_subscribe(self, client, userdata, mid, granted_qos):
         """Callback when subscription is confirmed"""
-        logger.debug(f"Subscription confirmed (mid: {mid}, QoS: {granted_qos})")
+        logger.debug(
+            f"Subscription confirmed (mid: {mid}, QoS: {granted_qos})")
 
     def _resubscribe(self):
         """Resubscribe to all topics after reconnection"""
@@ -245,7 +249,8 @@ class MQTTIntegration:
             if isinstance(payload, dict):
                 payload = json.dumps(payload)
 
-            result = self.client.publish(topic, payload, qos=qos.value, retain=retain)
+            result = self.client.publish(
+                topic, payload, qos=qos.value, retain=retain)
 
             if result.rc == mqtt.MQTT_ERR_SUCCESS:
                 logger.debug(f"Published to {topic}: {payload}")
@@ -324,7 +329,10 @@ class MQTTIntegration:
         zones: List[str] = None,
     ):
         """Publish motion detection event"""
-        data = {"detected": detected, "confidence": confidence, "zones": zones or []}
+        data = {
+            "detected": detected,
+            "confidence": confidence,
+            "zones": zones or []}
 
         # Publish to motion-specific topic
         topic = f"{self.config.base_topic}/camera/{camera_id}/motion"
@@ -359,9 +367,11 @@ class MQTTIntegration:
         event_type = "recording_started" if recording else "recording_stopped"
         self.publish_camera_event(camera_id, event_type, data)
 
-    def publish_snapshot(
-        self, camera_id: str, image_bytes: bytes, metadata: Dict[str, Any] = None
-    ):
+    def publish_snapshot(self,
+                         camera_id: str,
+                         image_bytes: bytes,
+                         metadata: Dict[str,
+                                        Any] = None):
         """
         Publish camera snapshot
 
@@ -468,8 +478,8 @@ if __name__ == "__main__":
             while True:
                 # Publish motion detection
                 mqtt_integration.publish_motion_detected(
-                    "camera_1", True, confidence=0.92, zones=["zone_1", "zone_2"]
-                )
+                    "camera_1", True, confidence=0.92, zones=[
+                        "zone_1", "zone_2"])
 
                 time.sleep(2)
 

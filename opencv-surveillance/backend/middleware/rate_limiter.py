@@ -32,7 +32,8 @@ class RateLimiter(BaseHTTPMiddleware):
         # Start cleanup task
         asyncio.create_task(self.cleanup_old_requests())
 
-        logger.info(f"Rate limiter initialized: {requests_per_minute} requests/minute")
+        logger.info(
+            f"Rate limiter initialized: {requests_per_minute} requests/minute")
 
     async def dispatch(self, request: Request, call_next):
         """Process each request with rate limiting"""
@@ -84,7 +85,8 @@ class RateLimiter(BaseHTTPMiddleware):
             clients_to_remove = []
             for client_ip, timestamps in self.request_counts.items():
                 # Remove timestamps older than 1 minute
-                self.request_counts[client_ip] = [t for t in timestamps if now - t < 60]
+                self.request_counts[client_ip] = [
+                    t for t in timestamps if now - t < 60]
 
                 # If no recent requests, remove client entry
                 if not self.request_counts[client_ip]:

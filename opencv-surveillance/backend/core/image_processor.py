@@ -6,7 +6,6 @@ Provides granular image adjustments: brightness, contrast, saturation, sharpness
 """
 import cv2
 import numpy as np
-from typing import Optional, Tuple
 
 
 class ImageProcessor:
@@ -51,7 +50,8 @@ class ImageProcessor:
         self.contrast = max(0.5, min(3.0, contrast))
         self.saturation = max(0.0, min(2.0, saturation))
         self.sharpness = sharpness.lower() if sharpness else "none"
-        self.noise_reduction_strength = max(0, min(100, noise_reduction_strength))
+        self.noise_reduction_strength = max(
+            0, min(100, noise_reduction_strength))
 
         # Get sharpness kernel
         self.sharpness_kernel = self.SHARPNESS_KERNELS.get(
@@ -92,7 +92,8 @@ class ImageProcessor:
             )
 
         if noise_reduction_strength is not None:
-            self.noise_reduction_strength = max(0, min(100, noise_reduction_strength))
+            self.noise_reduction_strength = max(
+                0, min(100, noise_reduction_strength))
 
     def adjust_brightness(self, frame: np.ndarray) -> np.ndarray:
         """
@@ -189,7 +190,11 @@ class ImageProcessor:
         kernel_size = min(kernel_size, 21)  # Cap at 21
 
         # Apply bilateral filter for noise reduction while preserving edges
-        return cv2.bilateralFilter(frame, kernel_size, kernel_size * 2, kernel_size / 2)
+        return cv2.bilateralFilter(
+            frame,
+            kernel_size,
+            kernel_size * 2,
+            kernel_size / 2)
 
     def process(self, frame: np.ndarray) -> np.ndarray:
         """

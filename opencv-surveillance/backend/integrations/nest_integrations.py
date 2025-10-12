@@ -104,7 +104,8 @@ class NestIntegration:
         try:
             with open(self.credentials_file, "r") as f:
                 cred_data = json.load(f)
-                self.credentials = Credentials.from_authorized_user_info(cred_data)
+                self.credentials = Credentials.from_authorized_user_info(
+                    cred_data)
                 logger.info("Loaded existing Nest credentials")
         except FileNotFoundError:
             logger.info("No existing credentials found")
@@ -157,8 +158,7 @@ class NestIntegration:
         )
 
         auth_url, _ = flow.authorization_url(
-            access_type="offline", include_granted_scopes="true", prompt="consent"
-        )
+            access_type="offline", include_granted_scopes="true", prompt="consent")
 
         logger.info(f"Authorization URL: {auth_url}")
         return auth_url, flow
@@ -260,8 +260,7 @@ class NestIntegration:
 
         endpoint = f"{device_id}:executeCommand"
         command_data = {
-            "command": "sdm.devices.commands.CameraLiveStream.GenerateRtspStream"
-        }
+            "command": "sdm.devices.commands.CameraLiveStream.GenerateRtspStream"}
 
         try:
             response = await self._make_request("POST", endpoint, command_data)

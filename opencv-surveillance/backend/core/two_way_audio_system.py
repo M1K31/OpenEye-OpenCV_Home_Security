@@ -10,6 +10,8 @@ audio capture, playback, and recording. Includes echo cancellation and
 noise suppression.
 """
 
+from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, WebSocket
 import asyncio
 import logging
 import numpy as np
@@ -69,8 +71,9 @@ class AudioCapture:
         self.audio_queue: Queue = Queue(maxsize=100)
 
         logger.info(
-            f"Audio capture initialized: {config.sample_rate}Hz, {config.channels}ch"
-        )
+            f"Audio capture initialized: {
+                config.sample_rate}Hz, {
+                config.channels}ch")
 
     def list_devices(self) -> List[Dict]:
         """List available audio input devices"""
@@ -169,7 +172,7 @@ class AudioCapture:
         """Get next audio frame from queue"""
         try:
             return self.audio_queue.get(timeout=0.1)
-        except:
+        except BaseException:
             return None
 
     def __del__(self):
@@ -196,8 +199,9 @@ class AudioPlayback:
         self.playback_queue: Queue = Queue(maxsize=100)
 
         logger.info(
-            f"Audio playback initialized: {config.sample_rate}Hz, {config.channels}ch"
-        )
+            f"Audio playback initialized: {
+                config.sample_rate}Hz, {
+                config.channels}ch")
 
     def list_devices(self) -> List[Dict]:
         """List available audio output devices"""
@@ -350,9 +354,8 @@ class WebRTCAudioSession:
         # WebRTC peer connection
         rtc_config = RTCConfiguration(
             iceServers=[
-                RTCIceServer(urls=ice_servers or ["stun:stun.l.google.com:19302"])
-            ]
-        )
+                RTCIceServer(
+                    urls=ice_servers or ["stun:stun.l.google.com:19302"])])
         self.pc = RTCPeerConnection(configuration=rtc_config)
 
         # Audio capture and playback
@@ -599,8 +602,6 @@ class TwoWayAudioManager:
 
 
 # Example usage for FastAPI integration
-from fastapi import FastAPI, WebSocket
-from fastapi.responses import HTMLResponse
 
 app = FastAPI()
 audio_manager = TwoWayAudioManager()
@@ -620,41 +621,41 @@ async def index():
         <button id="start">Start Audio</button>
         <button id="stop">Stop Audio</button>
         <div id="status"></div>
-        
+
         <script>
             const ws = new WebSocket('ws://localhost:8000/ws/audio/camera_1');
             let pc = null;
-            
+
             document.getElementById('start').onclick = async () => {
                 pc = new RTCPeerConnection({
                     iceServers: [{urls: 'stun:stun.l.google.com:19302'}]
                 });
-                
+
                 // Get user audio
                 const stream = await navigator.mediaDevices.getUserMedia({audio: true});
                 stream.getTracks().forEach(track => pc.addTrack(track, stream));
-                
+
                 // Handle incoming audio
                 pc.ontrack = event => {
                     const audio = new Audio();
                     audio.srcObject = event.streams[0];
                     audio.play();
                 };
-                
+
                 // Create offer
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
-                
+
                 // Send offer to server
                 ws.send(JSON.stringify({
                     type: 'offer',
                     sdp: offer.sdp
                 }));
             };
-            
+
             ws.onmessage = async (event) => {
                 const message = JSON.parse(event.data);
-                
+
                 if (message.type === 'answer') {
                     await pc.setRemoteDescription({
                         type: 'answer',

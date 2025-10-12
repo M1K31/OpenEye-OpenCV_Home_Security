@@ -25,7 +25,7 @@ class VideoSettings:
         try:
             width, height = self.resolution.split("x")
             return (int(width), int(height))
-        except:
+        except BaseException:
             return (1920, 1080)  # Default fallback
 
 
@@ -204,7 +204,8 @@ class VideoProcessor:
         x_offset = (target_width - new_w) // 2
         y_offset = (target_height - new_h) // 2
 
-        canvas[y_offset : y_offset + new_h, x_offset : x_offset + new_w] = resized
+        canvas[y_offset: y_offset + new_h,
+               x_offset: x_offset + new_w] = resized
 
         return canvas
 
@@ -271,7 +272,8 @@ class VideoProcessor:
         # Factor in target bitrate as upper limit
         return min(bandwidth, self.settings.bitrate_kbps)
 
-    def get_recommended_resolution(self, available_bandwidth_kbps: float) -> str:
+    def get_recommended_resolution(
+            self, available_bandwidth_kbps: float) -> str:
         """
         Recommend optimal resolution based on available bandwidth.
 
@@ -323,13 +325,12 @@ class VideoProcessor:
             Dictionary with processing stats
         """
         total_frames = self.frames_processed + self.frames_skipped
-        skip_rate = (
-            (self.frames_skipped / total_frames * 100) if total_frames > 0 else 0
-        )
+        skip_rate = ((self.frames_skipped / total_frames * 100)
+                     if total_frames > 0 else 0)
 
         actual_fps = (
-            1.0 / self.avg_processing_time if self.avg_processing_time > 0 else 0
-        )
+            1.0 /
+            self.avg_processing_time if self.avg_processing_time > 0 else 0)
 
         return {
             "settings": {
@@ -341,9 +342,15 @@ class VideoProcessor:
             "performance": {
                 "frames_processed": self.frames_processed,
                 "frames_skipped": self.frames_skipped,
-                "skip_rate_percent": round(skip_rate, 2),
-                "avg_processing_time_ms": round(self.avg_processing_time * 1000, 2),
-                "actual_fps": round(actual_fps, 2),
+                "skip_rate_percent": round(
+                    skip_rate,
+                    2),
+                "avg_processing_time_ms": round(
+                    self.avg_processing_time * 1000,
+                    2),
+                "actual_fps": round(
+                    actual_fps,
+                    2),
             },
         }
 

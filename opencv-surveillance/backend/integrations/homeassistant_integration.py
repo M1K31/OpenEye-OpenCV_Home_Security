@@ -100,8 +100,9 @@ class HomeAssistantIntegration:
             self.client.connect(self.mqtt_host, self.mqtt_port, 60)
             self.client.loop_start()
             logger.info(
-                f"Connecting to MQTT broker at {self.mqtt_host}:{self.mqtt_port}"
-            )
+                f"Connecting to MQTT broker at {
+                    self.mqtt_host}:{
+                    self.mqtt_port}")
         except Exception as e:
             logger.error(f"Failed to connect to MQTT broker: {e}")
             raise
@@ -147,7 +148,11 @@ class HomeAssistantIntegration:
         # Implement command handling (start recording, snapshot, etc.)
         # This would integrate with your camera manager
 
-    def register_camera(self, camera_id: str, camera_name: str, stream_url: str):
+    def register_camera(
+            self,
+            camera_id: str,
+            camera_name: str,
+            stream_url: str):
         """
         Register a camera with Home Assistant via MQTT discovery
 
@@ -164,8 +169,10 @@ class HomeAssistantIntegration:
         camera_config = {
             "name": camera_name,
             "unique_id": f"opencv_surveillance_camera_{camera_id}",
-            "topic": f"{self.state_prefix}/{camera_id}/image",
-            "availability_topic": f"{self.state_prefix}/{camera_id}/availability",
+            "topic": f"{
+                self.state_prefix}/{camera_id}/image",
+            "availability_topic": f"{
+                self.state_prefix}/{camera_id}/availability",
             "device": asdict(device),
             "icon": "mdi:cctv",
         }
@@ -176,7 +183,10 @@ class HomeAssistantIntegration:
 
         discovery_topic = f"{self.discovery_prefix}/camera/{camera_id}/config"
 
-        self.client.publish(discovery_topic, json.dumps(camera_config), retain=True)
+        self.client.publish(
+            discovery_topic,
+            json.dumps(camera_config),
+            retain=True)
 
         # Set camera as available
         self.client.publish(
@@ -204,10 +214,12 @@ class HomeAssistantIntegration:
         sensor_config = {
             "name": f"{camera_name} Motion",
             "unique_id": f"opencv_surveillance_motion_{camera_id}",
-            "state_topic": f"{self.state_prefix}/{camera_id}/motion",
+            "state_topic": f"{
+                self.state_prefix}/{camera_id}/motion",
             "device_class": "motion",
             "device": asdict(device),
-            "availability_topic": f"{self.state_prefix}/{camera_id}/availability",
+            "availability_topic": f"{
+                self.state_prefix}/{camera_id}/availability",
             "payload_on": "ON",
             "payload_off": "OFF",
         }
@@ -216,7 +228,10 @@ class HomeAssistantIntegration:
             f"{self.discovery_prefix}/binary_sensor/{camera_id}_motion/config"
         )
 
-        self.client.publish(discovery_topic, json.dumps(sensor_config), retain=True)
+        self.client.publish(
+            discovery_topic,
+            json.dumps(sensor_config),
+            retain=True)
 
         logger.info(f"Registered motion sensor for {camera_name}")
 
@@ -235,8 +250,11 @@ class HomeAssistantIntegration:
         logger.debug(f"Published motion state for {camera_id}: {state}")
 
     def publish_face_detected_event(
-        self, camera_id: str, face_name: str, confidence: float, timestamp: datetime
-    ):
+            self,
+            camera_id: str,
+            face_name: str,
+            confidence: float,
+            timestamp: datetime):
         """
         Publish face detection event
 
@@ -257,7 +275,8 @@ class HomeAssistantIntegration:
         topic = f"{self.state_prefix}/events/face_detected"
 
         self.client.publish(topic, json.dumps(event_data), retain=False)
-        logger.info(f"Published face detection event for {camera_id}: {face_name}")
+        logger.info(
+            f"Published face detection event for {camera_id}: {face_name}")
 
     def publish_camera_snapshot(self, camera_id: str, image_bytes: bytes):
         """
@@ -305,7 +324,11 @@ class HomeAssistantIntegration:
 
         logger.info(f"Unregistered camera {camera_id} from Home Assistant")
 
-    def publish_system_sensor(self, sensor_name: str, state: Any, unit: str = None):
+    def publish_system_sensor(
+            self,
+            sensor_name: str,
+            state: Any,
+            unit: str = None):
         """
         Publish system-level sensor (CPU usage, storage, etc.)
 
@@ -333,8 +356,12 @@ class HomeAssistantIntegration:
             if unit:
                 sensor_config["unit_of_measurement"] = unit
 
-            discovery_topic = f"{self.discovery_prefix}/sensor/{sensor_id}/config"
-            self.client.publish(discovery_topic, json.dumps(sensor_config), retain=True)
+            discovery_topic = f"{
+                self.discovery_prefix}/sensor/{sensor_id}/config"
+            self.client.publish(
+                discovery_topic,
+                json.dumps(sensor_config),
+                retain=True)
             self.registered_entities[sensor_id] = sensor_config
 
         # Publish state

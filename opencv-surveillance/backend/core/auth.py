@@ -160,7 +160,8 @@ def require_role(allowed_roles: list):
         if current_user.role not in allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Access denied. Required roles: {', '.join(allowed_roles)}",
+                detail=f"Access denied. Required roles: {
+                    ', '.join(allowed_roles)}",
             )
         return current_user
 
@@ -170,4 +171,5 @@ def require_role(allowed_roles: list):
 # Convenience dependencies for common role checks
 require_admin = require_role(["admin"])
 require_user = require_role(["admin", "user"])  # Admin or User (not Viewer)
-require_any_authenticated = Depends(get_current_active_user)  # Any authenticated user
+require_any_authenticated = Depends(
+    get_current_active_user)  # Any authenticated user

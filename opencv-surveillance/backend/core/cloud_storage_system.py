@@ -11,14 +11,12 @@ sync, retention policies, and bandwidth management.
 """
 
 import logging
-import asyncio
 from typing import Optional, List, Dict, Callable
 from pathlib import Path
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 from enum import Enum
 import json
-import hashlib
 import threading
 from queue import Queue
 import os
@@ -106,9 +104,8 @@ class S3Storage:
 
         logger.info(f"S3 storage initialized for bucket: {config.bucket_name}")
 
-    def upload_file(
-        self, local_path: str, remote_path: str, metadata: Optional[Dict] = None
-    ) -> bool:
+    def upload_file(self, local_path: str, remote_path: str,
+                    metadata: Optional[Dict] = None) -> bool:
         """Upload file to S3"""
         try:
             key = f"{self.config.prefix}/{remote_path}".lstrip("/")
@@ -135,7 +132,8 @@ class S3Storage:
         try:
             key = f"{self.config.prefix}/{remote_path}".lstrip("/")
 
-            self.s3_client.download_file(self.config.bucket_name, key, local_path)
+            self.s3_client.download_file(
+                self.config.bucket_name, key, local_path)
 
             logger.info(f"Downloaded {key} from S3")
             return True
@@ -149,7 +147,8 @@ class S3Storage:
         try:
             key = f"{self.config.prefix}/{remote_path}".lstrip("/")
 
-            self.s3_client.delete_object(Bucket=self.config.bucket_name, Key=key)
+            self.s3_client.delete_object(
+                Bucket=self.config.bucket_name, Key=key)
 
             logger.info(f"Deleted {key} from S3")
             return True
@@ -208,11 +207,12 @@ class GoogleCloudStorage:
         self.client = gcs.Client()
         self.bucket = self.client.bucket(config.bucket_name)
 
-        logger.info(f"GCS storage initialized for bucket: {config.bucket_name}")
+        logger.info(
+            f"GCS storage initialized for bucket: {
+                config.bucket_name}")
 
-    def upload_file(
-        self, local_path: str, remote_path: str, metadata: Optional[Dict] = None
-    ) -> bool:
+    def upload_file(self, local_path: str, remote_path: str,
+                    metadata: Optional[Dict] = None) -> bool:
         """Upload file to GCS"""
         try:
             blob_name = f"{self.config.prefix}/{remote_path}".lstrip("/")
@@ -267,7 +267,8 @@ class GoogleCloudStorage:
         try:
             full_prefix = f"{self.config.prefix}/{prefix}".lstrip("/")
 
-            blobs = self.client.list_blobs(self.config.bucket_name, prefix=full_prefix)
+            blobs = self.client.list_blobs(
+                self.config.bucket_name, prefix=full_prefix)
 
             files = []
             for blob in blobs:
@@ -306,18 +307,20 @@ class AzureBlobStorage:
             config.bucket_name
         )
 
-        logger.info(f"Azure storage initialized for container: {config.bucket_name}")
+        logger.info(
+            f"Azure storage initialized for container: {
+                config.bucket_name}")
 
-    def upload_file(
-        self, local_path: str, remote_path: str, metadata: Optional[Dict] = None
-    ) -> bool:
+    def upload_file(self, local_path: str, remote_path: str,
+                    metadata: Optional[Dict] = None) -> bool:
         """Upload file to Azure"""
         try:
             blob_name = f"{self.config.prefix}/{remote_path}".lstrip("/")
             blob_client = self.container_client.get_blob_client(blob_name)
 
             with open(local_path, "rb") as data:
-                blob_client.upload_blob(data, overwrite=True, metadata=metadata)
+                blob_client.upload_blob(
+                    data, overwrite=True, metadata=metadata)
 
             logger.info(f"Uploaded {local_path} to Azure: {blob_name}")
             return True
@@ -440,7 +443,8 @@ class CloudStorageManager:
             return
 
         self.running = True
-        self.upload_thread = threading.Thread(target=self._upload_worker, daemon=True)
+        self.upload_thread = threading.Thread(
+            target=self._upload_worker, daemon=True)
         self.upload_thread.start()
 
         logger.info("Upload worker started")
@@ -529,7 +533,7 @@ class CloudStorageManager:
         try:
             self.upload_queue.put(task, block=False)
             logger.debug(f"Queued upload: {local_path} -> {remote_path}")
-        except:
+        except BaseException:
             logger.error("Upload queue full")
 
     def upload_file_sync(
@@ -566,8 +570,10 @@ class CloudStorageManager:
         return provider.upload_file(local_path, remote_path, metadata)
 
     def download_file(
-        self, remote_path: str, local_path: str, provider_name: Optional[str] = None
-    ) -> bool:
+            self,
+            remote_path: str,
+            local_path: str,
+            provider_name: Optional[str] = None) -> bool:
         """Download file from cloud storage"""
         provider_name = provider_name or self.primary_provider
 
@@ -645,7 +651,7 @@ class CloudStorageManager:
                     "storage_used": storage_size,
                     "storage_used_gb": round(storage_size / (1024**3), 2),
                 }
-            except:
+            except BaseException:
                 pass
 
         return stats

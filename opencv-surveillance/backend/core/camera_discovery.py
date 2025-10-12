@@ -6,7 +6,6 @@ Discovers RTSP/IP cameras on network and USB cameras connected to the system.
 """
 import cv2
 import socket
-import subprocess
 import platform
 import logging
 import asyncio
@@ -70,8 +69,7 @@ class CameraDiscovery:
 
                         usb_cameras.append(camera_info)
                         logger.info(
-                            f"Found USB camera at index {index}: {width}x{height} @ {fps}fps"
-                        )
+                            f"Found USB camera at index {index}: {width}x{height} @ {fps}fps")
 
                     cap.release()
 
@@ -79,7 +77,9 @@ class CameraDiscovery:
                 logger.debug(f"No camera at index {index}: {e}")
                 continue
 
-        logger.info(f"USB camera discovery complete. Found {len(usb_cameras)} cameras")
+        logger.info(
+            f"USB camera discovery complete. Found {
+                len(usb_cameras)} cameras")
         return usb_cameras
 
     def _get_device_path(self, index: int) -> str:
@@ -108,7 +108,8 @@ class CameraDiscovery:
         Returns:
             List of discovered network cameras (returns partial results if timeout)
         """
-        logger.info(f"Starting network camera discovery... (timeout: {timeout}s)")
+        logger.info(
+            f"Starting network camera discovery... (timeout: {timeout}s)")
         self.scanning = True
         network_cameras = []
 
@@ -133,7 +134,8 @@ class CameraDiscovery:
 
                     # Limit scanning to reasonable subnet sizes
                     if network.num_addresses > 256:
-                        logger.warning(f"Subnet {subnet_cidr} too large, skipping")
+                        logger.warning(
+                            f"Subnet {subnet_cidr} too large, skipping")
                         continue
 
                     # Scan each IP in the subnet
@@ -142,18 +144,20 @@ class CameraDiscovery:
                         for port in rtsp_ports:
                             tasks.append(self._check_rtsp_port(str(ip), port))
 
-                    # Run scans concurrently (in batches to avoid overwhelming network)
+                    # Run scans concurrently (in batches to avoid overwhelming
+                    # network)
                     batch_size = 50
                     for i in range(0, len(tasks), batch_size):
-                        batch = tasks[i : i + batch_size]
+                        batch = tasks[i: i + batch_size]
                         results = await asyncio.gather(*batch, return_exceptions=True)
 
                         for result in results:
                             if result and not isinstance(result, Exception):
                                 network_cameras.append(result)
                                 logger.info(
-                                    f"Found camera at {result['ip']}:{result['port']}"
-                                )
+                                    f"Found camera at {
+                                        result['ip']}:{
+                                        result['port']}")
 
             except Exception as e:
                 logger.error(f"Error during network discovery: {e}")
@@ -162,12 +166,12 @@ class CameraDiscovery:
             # Run scan with timeout
             await asyncio.wait_for(_do_scan(), timeout=timeout)
             logger.info(
-                f"Network camera discovery complete. Found {len(network_cameras)} cameras"
-            )
+                f"Network camera discovery complete. Found {
+                    len(network_cameras)} cameras")
         except asyncio.TimeoutError:
             logger.warning(
-                f"Network scan timed out after {timeout}s. Returning {len(network_cameras)} cameras found so far"
-            )
+                f"Network scan timed out after {timeout}s. Returning {
+                    len(network_cameras)} cameras found so far")
         except Exception as e:
             logger.error(f"Unexpected error during network discovery: {e}")
         finally:
@@ -297,7 +301,8 @@ class CameraDiscovery:
             Test result with status and details
         """
         try:
-            camera_type = camera_config.get("camera_type", camera_config.get("type"))
+            camera_type = camera_config.get(
+                "camera_type", camera_config.get("type"))
             source = camera_config.get("source")
 
             if not source:
@@ -319,7 +324,9 @@ class CameraDiscovery:
             cap.release()
 
             if not ret:
-                return {"success": False, "error": "Failed to read from camera"}
+                return {
+                    "success": False,
+                    "error": "Failed to read from camera"}
 
             return {
                 "success": True,

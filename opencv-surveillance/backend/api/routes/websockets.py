@@ -16,7 +16,6 @@ from backend.core.websocket_manager import ws_manager
 from backend.core.auth import get_current_active_user, SECRET_KEY, ALGORITHM
 from backend.database.session import get_db
 from backend.database.models import User
-from backend.api.schemas import user as user_schema
 
 logger = logging.getLogger(__name__)
 
@@ -166,7 +165,7 @@ async def websocket_statistics_endpoint(
                         if data.startswith("{")
                         else {"type": "text", "content": data}
                     )
-                except:
+                except Exception:
                     message = {"type": "text", "content": data}
 
                 # Handle different message types
@@ -183,7 +182,9 @@ async def websocket_statistics_endpoint(
                 elif message_type == "subscribe":
                     # Handle subscription (future feature)
                     event_types = message.get("event_types", [])
-                    logger.info(f"User {user.username} subscribed to: {event_types}")
+                    logger.info(
+                        f"User {
+                            user.username} subscribed to: {event_types}")
                     await ws_manager.send_personal_message(
                         {"type": "subscription_confirmed", "event_types": event_types},
                         connection_id,
@@ -193,8 +194,8 @@ async def websocket_statistics_endpoint(
                     # Handle unsubscription (future feature)
                     event_types = message.get("event_types", [])
                     logger.info(
-                        f"User {user.username} unsubscribed from: {event_types}"
-                    )
+                        f"User {
+                            user.username} unsubscribed from: {event_types}")
                     await ws_manager.send_personal_message(
                         {
                             "type": "unsubscription_confirmed",
@@ -205,16 +206,18 @@ async def websocket_statistics_endpoint(
 
                 else:
                     logger.debug(
-                        f"Unknown message type from {user.username}: {message_type}"
-                    )
+                        f"Unknown message type from {
+                            user.username}: {message_type}")
 
             except WebSocketDisconnect:
-                logger.info(f"WebSocket disconnect signal from {user.username}")
+                logger.info(
+                    f"WebSocket disconnect signal from {
+                        user.username}")
                 break
             except Exception as e:
                 logger.error(
-                    f"Error handling WebSocket message from {user.username}: {e}"
-                )
+                    f"Error handling WebSocket message from {
+                        user.username}: {e}")
                 # Don't break on message handling errors, continue listening
 
     except Exception as e:
@@ -226,7 +229,8 @@ async def websocket_statistics_endpoint(
 
 
 @router.get("/status")
-async def websocket_status(current_user: User = Depends(get_current_active_user)):
+async def websocket_status(
+        current_user: User = Depends(get_current_active_user)):
     """
     Get WebSocket connection statistics.
 
@@ -239,5 +243,6 @@ async def websocket_status(current_user: User = Depends(get_current_active_user)
     return {
         "status": "operational",
         "statistics": stats,
-        "user_connections": ws_manager.get_user_connection_count(current_user.id),
+        "user_connections": ws_manager.get_user_connection_count(
+            current_user.id),
     }

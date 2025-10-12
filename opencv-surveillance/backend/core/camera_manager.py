@@ -64,12 +64,12 @@ class Camera(ABC):
 
         # Initialize Image Processor with quality controls
         self.image_processor = ImageProcessor(
-            brightness=settings.get("brightness", 0),
-            contrast=settings.get("contrast", 1.0),
-            saturation=settings.get("saturation", 1.0),
-            sharpness=settings.get("sharpness", "none"),
-            noise_reduction_strength=settings.get("noise_reduction_strength", 0),
-        )
+            brightness=settings.get(
+                "brightness", 0), contrast=settings.get(
+                "contrast", 1.0), saturation=settings.get(
+                "saturation", 1.0), sharpness=settings.get(
+                    "sharpness", "none"), noise_reduction_strength=settings.get(
+                        "noise_reduction_strength", 0), )
 
         # Initialize Video Processor with quality settings
         video_settings = VideoSettings(
@@ -87,8 +87,8 @@ class Camera(ABC):
         faces_path = settings.get("faces_path", "faces")
 
         self.recorder = Recorder(
-            output_dir=recordings_path, max_recording_duration=max_recording_duration
-        )
+            output_dir=recordings_path,
+            max_recording_duration=max_recording_duration)
         self.face_detector = FaceDetector(
             enabled=enable_face_detection, faces_dir=faces_path
         )
@@ -223,7 +223,9 @@ class Camera(ABC):
                 # Update other settings
                 self.post_motion_cooldown = db_camera.post_motion_cooldown
 
-                print(f"Settings reloaded for camera '{self.camera_id}' from database")
+                print(
+                    f"Settings reloaded for camera '{
+                        self.camera_id}' from database")
 
             db.close()
         except Exception as e:
@@ -333,8 +335,8 @@ class MockCamera(Camera):
         # Face detection
         if self.face_detector.enabled:
             processed_frame, self.last_faces_detected = (
-                self.face_detector.process_frame(processed_frame, self.motion_detected)
-            )
+                self.face_detector.process_frame(
+                    processed_frame, self.motion_detected))
 
             # Log faces to recorder if recording
             if self.recorder.is_recording and self.last_faces_detected:
@@ -349,10 +351,12 @@ class MockCamera(Camera):
 
         if self.recorder.is_recording:
             # Add recording indicator to the processed frame for streaming
-            cv2.circle(processed_frame, (self.width - 30, 30), 10, (0, 0, 255), -1)
+            cv2.circle(processed_frame, (self.width - 30, 30),
+                       10, (0, 0, 255), -1)
             self.recorder.write(clean_frame)  # Write clean frame to file
 
-            # Stop recording if: no motion for cooldown period OR max duration exceeded
+            # Stop recording if: no motion for cooldown period OR max duration
+            # exceeded
             if (
                 not self.motion_detected
                 and (time.time() - self.last_motion_time > self.post_motion_cooldown)
@@ -457,8 +461,8 @@ class RTSPCamera(Camera):
         # Face detection
         if self.face_detector.enabled:
             processed_frame, self.last_faces_detected = (
-                self.face_detector.process_frame(processed_frame, self.motion_detected)
-            )
+                self.face_detector.process_frame(
+                    processed_frame, self.motion_detected))
 
             # Log faces to recorder if recording
             if self.recorder.is_recording and self.last_faces_detected:
@@ -476,7 +480,8 @@ class RTSPCamera(Camera):
             height, width, _ = clean_frame.shape
             # Add recording indicator to the processed frame for streaming
             cv2.circle(processed_frame, (width - 30, 30), 10, (0, 0, 255), -1)
-            self.recorder.write(clean_frame)  # Write original clean frame to file
+            # Write original clean frame to file
+            self.recorder.write(clean_frame)
 
             if not self.motion_detected and (
                 time.time() - self.last_motion_time > self.post_motion_cooldown
@@ -505,7 +510,8 @@ class CameraManager:
             cls._instance._lock = threading.Lock()
         return cls._instance
 
-    def _load_camera_settings(self, camera_id: str) -> Optional[Dict[str, Any]]:
+    def _load_camera_settings(
+            self, camera_id: str) -> Optional[Dict[str, Any]]:
         """Load camera settings from database and merge with system settings"""
         try:
             db = SessionLocal()
@@ -538,8 +544,8 @@ class CameraManager:
 
             # Load camera-specific settings
             db_camera = (
-                db.query(CameraModel).filter(CameraModel.camera_id == camera_id).first()
-            )
+                db.query(CameraModel).filter(
+                    CameraModel.camera_id == camera_id).first())
 
             if db_camera:
                 settings = {
@@ -601,7 +607,8 @@ class CameraManager:
             # Load settings from database
             db_settings = self._load_camera_settings(camera_id)
             if db_settings:
-                print(f"Loaded settings for camera '{camera_id}' from database")
+                print(
+                    f"Loaded settings for camera '{camera_id}' from database")
             else:
                 print(f"Using default settings for camera '{camera_id}'")
 
@@ -629,8 +636,7 @@ class CameraManager:
                 camera.recorder.camera_id = camera_id
                 self.cameras[camera_id] = camera
                 print(
-                    f"Camera '{camera_id}' added and started (face detection: {enable_face_detection})."
-                )
+                    f"Camera '{camera_id}' added and started (face detection: {enable_face_detection}).")
             else:
                 print(f"Failed to start camera '{camera_id}'.")
 

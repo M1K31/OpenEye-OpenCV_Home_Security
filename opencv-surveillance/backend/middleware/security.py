@@ -30,7 +30,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Strict-Transport-Security"] = (
             "max-age=31536000; includeSubDomains"
         )
-        # Updated CSP to allow data URIs for images (used by inline SVGs and base64 images)
+        # Updated CSP to allow data URIs for images (used by inline SVGs and
+        # base64 images)
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "img-src 'self' data:; "
@@ -53,7 +54,10 @@ class IPWhitelistMiddleware(BaseHTTPMiddleware):
         self.enabled = len(self.allowed_ips) > 0
 
         if self.enabled:
-            logger.info(f"IP whitelist enabled for: {', '.join(self.allowed_ips)}")
+            logger.info(
+                f"IP whitelist enabled for: {
+                    ', '.join(
+                        self.allowed_ips)}")
         else:
             logger.info("IP whitelist disabled - all IPs allowed")
 
@@ -108,8 +112,11 @@ class SQLInjectionProtection(BaseHTTPMiddleware):
         # Check query parameters
         for key, value in request.query_params.items():
             if self.check_sql_injection(str(value)):
-                logger.warning(f"SQL injection attempt detected in query param: {key}")
-                raise HTTPException(status_code=400, detail="Invalid input detected")
+                logger.warning(
+                    f"SQL injection attempt detected in query param: {key}")
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid input detected")
 
         # Check path parameters
         if self.check_sql_injection(str(request.url.path)):

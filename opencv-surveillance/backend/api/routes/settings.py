@@ -8,7 +8,7 @@ Handles global system settings including storage paths and display preferences
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List, Optional, Dict, Any
+from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 import os
 import json
@@ -31,7 +31,8 @@ class SystemSettingBase(BaseModel):
     setting_type: str = Field(
         default="string", description="Type: string, int, float, boolean, json"
     )
-    description: Optional[str] = Field(None, description="Description of the setting")
+    description: Optional[str] = Field(
+        None, description="Description of the setting")
 
 
 class SystemSettingResponse(SystemSettingBase):
@@ -46,7 +47,8 @@ class SystemSettingsUpdate(BaseModel):
     recordings_path: Optional[str] = Field(
         None, description="Path to recordings directory"
     )
-    faces_path: Optional[str] = Field(None, description="Path to faces directory")
+    faces_path: Optional[str] = Field(
+        None, description="Path to faces directory")
     display_mode: Optional[str] = Field(
         None, pattern="^(grid|vertical|horizontal|cycle)$"
     )
@@ -108,15 +110,14 @@ async def get_all_settings(
             if setting.setting_type == "int":
                 settings_dict[setting.setting_key] = int(setting.setting_value)
             elif setting.setting_type == "float":
-                settings_dict[setting.setting_key] = float(setting.setting_value)
+                settings_dict[setting.setting_key] = float(
+                    setting.setting_value)
             elif setting.setting_type == "boolean":
                 settings_dict[setting.setting_key] = setting.setting_value.lower() in (
-                    "true",
-                    "1",
-                    "yes",
-                )
+                    "true", "1", "yes", )
             elif setting.setting_type == "json":
-                settings_dict[setting.setting_key] = json.loads(setting.setting_value)
+                settings_dict[setting.setting_key] = json.loads(
+                    setting.setting_value)
             else:
                 settings_dict[setting.setting_key] = setting.setting_value
         except (ValueError, json.JSONDecodeError):
@@ -167,7 +168,7 @@ async def update_settings(
                 value = str(value)
 
             # Set the setting
-            db_setting = crud.set_system_setting(db, key, value, setting_type)
+            crud.set_system_setting(db, key, value, setting_type)
             updated_settings[key] = value
 
     return updated_settings
@@ -176,7 +177,8 @@ async def update_settings(
 # ============================================================================
 # PATH VALIDATION ENDPOINTS
 # ============================================================================
-# NOTE: This MUST come before /settings/{setting_key} to avoid path parameter matching!
+# NOTE: This MUST come before /settings/{setting_key} to avoid path
+# parameter matching!
 
 
 @router.post("/settings/validate-path", response_model=PathValidationResponse)
@@ -203,7 +205,7 @@ async def validate_path(
             exists = True
             is_directory = True
             writable = os.access(abs_path, os.W_OK)
-        except Exception as e:
+        except Exception:
             writable = False
 
     return PathValidationResponse(

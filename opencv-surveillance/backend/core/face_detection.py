@@ -5,10 +5,8 @@ Face Detector - Integrates face recognition with camera streams
 Designed to work alongside motion detection in the OpenEye surveillance system
 """
 
-import cv2
 import numpy as np
 import logging
-from typing import Tuple, List, Dict, Optional
 from datetime import datetime
 from backend.core.face_recognition import get_face_manager
 import asyncio
@@ -41,8 +39,7 @@ class FaceDetector:
         self.max_buffer_size = 10
 
         logger.info(
-            f"FaceDetector initialized (enabled={enabled}, faces_dir={faces_dir})"
-        )
+            f"FaceDetector initialized (enabled={enabled}, faces_dir={faces_dir})")
 
     def set_enabled(self, enabled: bool):
         """Enable or disable face detection"""
@@ -66,7 +63,9 @@ class FaceDetector:
         if self.last_detection_time is None:
             return True
 
-        time_since_last = (datetime.now() - self.last_detection_time).total_seconds()
+        time_since_last = (
+            datetime.now() -
+            self.last_detection_time).total_seconds()
         return time_since_last >= self.detection_cooldown
 
     def process_frame(
@@ -121,7 +120,7 @@ class FaceDetector:
                 # Trim buffer to max size
                 if len(self.detections_buffer) > self.max_buffer_size:
                     self.detections_buffer = self.detections_buffer[
-                        -self.max_buffer_size :
+                        -self.max_buffer_size:
                     ]
 
                 logger.info(

@@ -12,9 +12,10 @@ from datetime import datetime
 class CameraBase(BaseModel):
     """Base camera schema with common fields"""
 
-    camera_id: str = Field(
-        ..., description="Unique camera identifier", min_length=1, max_length=100
-    )
+    camera_id: str = Field(...,
+                           description="Unique camera identifier",
+                           min_length=1,
+                           max_length=100)
     camera_type: str = Field(
         ...,
         description="Camera type: rtsp, mock, usb",
@@ -35,7 +36,8 @@ class CameraBase(BaseModel):
     motion_threshold: Optional[int] = Field(
         50, ge=1, le=100, description="Detection threshold percentage"
     )
-    noise_reduction: Optional[str] = Field("medium", pattern="^(low|medium|high)$")
+    noise_reduction: Optional[str] = Field(
+        "medium", pattern="^(low|medium|high)$")
     detect_shadows: Optional[bool] = True
     detection_zones: Optional[str] = Field(
         None, description="JSON string defining detection zone grid"
@@ -56,7 +58,8 @@ class CameraBase(BaseModel):
     brightness: Optional[int] = Field(0, ge=-100, le=100)
     contrast: Optional[float] = Field(1.0, ge=0.5, le=3.0)
     saturation: Optional[float] = Field(1.0, ge=0.0, le=2.0)
-    sharpness: Optional[str] = Field("none", pattern="^(none|low|medium|high)$")
+    sharpness: Optional[str] = Field(
+        "none", pattern="^(none|low|medium|high)$")
     noise_reduction_strength: Optional[int] = Field(0, ge=0, le=100)
 
 

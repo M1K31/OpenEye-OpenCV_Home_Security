@@ -62,7 +62,10 @@ async def discover_usb_cameras():
 
     except Exception as e:
         logger.error(f"Error discovering USB cameras: {e}")
-        raise HTTPException(status_code=500, detail=f"Discovery failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Discovery failed: {
+                str(e)}")
 
 
 @router.post("/cameras/discover/network", status_code=200)
@@ -82,7 +85,8 @@ async def discover_network_cameras(
         Confirmation that discovery has started
     """
     if discovery_service.scanning:
-        raise HTTPException(status_code=409, detail="Network scan already in progress")
+        raise HTTPException(status_code=409,
+                            detail="Network scan already in progress")
 
     # Start discovery in background
     background_tasks.add_task(_run_network_discovery, request.subnet)
@@ -99,7 +103,9 @@ async def _run_network_discovery(subnet: Optional[str]):
     try:
         cameras = await discovery_service.discover_network_cameras(subnet)
         discovery_service.discovered_cameras = cameras
-        logger.info(f"Network discovery completed. Found {len(cameras)} cameras")
+        logger.info(
+            f"Network discovery completed. Found {
+                len(cameras)} cameras")
     except Exception as e:
         logger.error(f"Network discovery failed: {e}")
 
@@ -147,7 +153,9 @@ async def test_camera_connection(request: CameraTestRequest):
 
 
 @router.post("/cameras/quick-add", status_code=201)
-async def quick_add_camera(request: QuickAddRequest, db: Session = Depends(get_db)):
+async def quick_add_camera(
+        request: QuickAddRequest,
+        db: Session = Depends(get_db)):
     """
     Quickly add a discovered camera with auto-configured settings.
 
@@ -165,8 +173,8 @@ async def quick_add_camera(request: QuickAddRequest, db: Session = Depends(get_d
         existing_camera = crud.get_camera_by_id(db, request.camera_id)
         if existing_camera:
             raise HTTPException(
-                status_code=400, detail=f"Camera '{request.camera_id}' already exists"
-            )
+                status_code=400, detail=f"Camera '{
+                    request.camera_id}' already exists")
 
         # Also check in-memory camera manager
         if camera_manager.get_camera(request.camera_id):
@@ -183,7 +191,10 @@ async def quick_add_camera(request: QuickAddRequest, db: Session = Depends(get_d
         if not test_result.get("success"):
             raise HTTPException(
                 status_code=400,
-                detail=f"Camera test failed: {test_result.get('error', 'Unknown error')}",
+                detail=f"Camera test failed: {
+                    test_result.get(
+                        'error',
+                        'Unknown error')}",
             )
 
         # Save to database FIRST for persistence
@@ -224,7 +235,8 @@ async def quick_add_camera(request: QuickAddRequest, db: Session = Depends(get_d
 
         return {
             "success": True,
-            "message": f"Camera '{request.camera_id}' added successfully and saved to database",
+            "message": f"Camera '{
+                request.camera_id}' added successfully and saved to database",
             "camera": {
                 "camera_id": request.camera_id,
                 "type": request.camera_type,
@@ -237,7 +249,10 @@ async def quick_add_camera(request: QuickAddRequest, db: Session = Depends(get_d
         raise
     except Exception as e:
         logger.error(f"Error adding camera: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to add camera: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to add camera: {
+                str(e)}")
 
 
 @router.get("/cameras/discover/help", status_code=200)

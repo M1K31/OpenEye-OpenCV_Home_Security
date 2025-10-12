@@ -9,6 +9,9 @@ This module provides a complete timeline interface for browsing events,
 playing back recordings, exporting clips, and managing video storage.
 """
 
+from pydantic import BaseModel
+from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, HTTPException
 import cv2
 import logging
 from typing import List, Dict, Optional, Tuple, Generator
@@ -113,10 +116,13 @@ class VideoPlayer:
         self.playback_speed = 1.0
 
         logger.info(
-            f"Video loaded: {self.frame_count} frames, {self.fps} FPS, {self.duration:.2f}s"
-        )
+            f"Video loaded: {
+                self.frame_count} frames, {
+                self.fps} FPS, {
+                self.duration:.2f}s")
 
-    def get_frame(self, frame_number: Optional[int] = None) -> Optional[np.ndarray]:
+    def get_frame(self,
+                  frame_number: Optional[int] = None) -> Optional[np.ndarray]:
         """
         Get specific frame or current frame
 
@@ -446,7 +452,10 @@ class PlaybackManager:
         self.clips_dir = Path(clips_dir)
 
         # Create directories
-        for directory in [self.recordings_dir, self.thumbnails_dir, self.clips_dir]:
+        for directory in [
+                self.recordings_dir,
+                self.thumbnails_dir,
+                self.clips_dir]:
             directory.mkdir(parents=True, exist_ok=True)
 
         # Active players
@@ -454,7 +463,10 @@ class PlaybackManager:
 
         logger.info("Playback manager initialized")
 
-    def create_player(self, session_id: str, video_path: str) -> Optional[VideoPlayer]:
+    def create_player(
+            self,
+            session_id: str,
+            video_path: str) -> Optional[VideoPlayer]:
         """
         Create video player
 
@@ -621,7 +633,8 @@ class PlaybackManager:
                     player.close()
 
                 except Exception as e:
-                    logger.error(f"Error processing recording {video_file}: {e}")
+                    logger.error(
+                        f"Error processing recording {video_file}: {e}")
 
         # Sort by timestamp (newest first)
         recordings.sort(key=lambda r: r["timestamp"], reverse=True)
@@ -630,9 +643,6 @@ class PlaybackManager:
 
 
 # Example FastAPI integration
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 
 app = FastAPI()
 timeline_db = TimelineDatabase()
@@ -659,8 +669,10 @@ async def get_timeline_events(
     end_time = datetime.fromisoformat(end_date) if end_date else None
 
     events = timeline_db.query_events(
-        camera_id=camera_id, start_time=start_time, end_time=end_time, limit=limit
-    )
+        camera_id=camera_id,
+        start_time=start_time,
+        end_time=end_time,
+        limit=limit)
 
     return {"events": [e.to_dict() for e in events]}
 
@@ -697,7 +709,8 @@ async def export_clip(
     output_name: Optional[str] = None,
 ):
     """Export video clip"""
-    clip_path = playback_mgr.export_clip(video_path, start_time, end_time, output_name)
+    clip_path = playback_mgr.export_clip(
+        video_path, start_time, end_time, output_name)
 
     if clip_path:
         return {"clip_path": clip_path}

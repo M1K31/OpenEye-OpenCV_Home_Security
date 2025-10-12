@@ -40,9 +40,10 @@ def get_hourly_activity(
 
     # Get face detections by hour
     query = db.query(
-        func.extract("hour", models.FaceDetectionEvent.detected_at).label("hour"),
-        func.count(models.FaceDetectionEvent.id).label("count"),
-    ).filter(models.FaceDetectionEvent.detected_at >= cutoff)
+        func.extract(
+            "hour", models.FaceDetectionEvent.detected_at).label("hour"), func.count(
+            models.FaceDetectionEvent.id).label("count"), ).filter(
+                models.FaceDetectionEvent.detected_at >= cutoff)
 
     if camera_id:
         query = query.filter(models.FaceDetectionEvent.camera_id == camera_id)

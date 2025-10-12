@@ -21,7 +21,11 @@ class CloudStorageService:
     Supports: AWS S3, Google Cloud Storage, Azure Blob Storage
     """
 
-    def __init__(self, provider: str = "s3", bucket_name: str = None, **credentials):
+    def __init__(
+            self,
+            provider: str = "s3",
+            bucket_name: str = None,
+            **credentials):
         """
         Initialize cloud storage service
 
@@ -68,7 +72,11 @@ class CloudStorageService:
             logger.error(f"Failed to initialize S3: {e}")
             raise
 
-    def _init_gcs(self, credentials_path: str = None, project_id: str = None, **kwargs):
+    def _init_gcs(
+            self,
+            credentials_path: str = None,
+            project_id: str = None,
+            **kwargs):
         """Initialize Google Cloud Storage client"""
         try:
             from google.cloud import storage as gcs
@@ -88,8 +96,7 @@ class CloudStorageService:
             from azure.storage.blob import BlobServiceClient
 
             self.client = BlobServiceClient.from_connection_string(
-                connection_string or os.getenv("AZURE_STORAGE_CONNECTION_STRING")
-            )
+                connection_string or os.getenv("AZURE_STORAGE_CONNECTION_STRING"))
             logger.info("Azure Blob Storage client initialized")
         except Exception as e:
             logger.error(f"Failed to initialize Azure: {e}")
@@ -133,7 +140,8 @@ class CloudStorageService:
         try:
             extra_args = {}
             if metadata:
-                extra_args["Metadata"] = {k: str(v) for k, v in metadata.items()}
+                extra_args["Metadata"] = {
+                    k: str(v) for k, v in metadata.items()}
 
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(
@@ -224,7 +232,8 @@ class CloudStorageService:
             elif self.provider == "gcs":
                 bucket = self.client.bucket(self.bucket_name)
                 blob = bucket.blob(remote_path)
-                url = blob.generate_signed_url(expiration=timedelta(seconds=expiration))
+                url = blob.generate_signed_url(
+                    expiration=timedelta(seconds=expiration))
                 return url
 
             elif self.provider == "azure":
@@ -239,7 +248,9 @@ class CloudStorageService:
                     expiry=datetime.utcnow() + timedelta(seconds=expiration),
                 )
 
-                url = f"https://{self.client.account_name}.blob.core.windows.net/{self.bucket_name}/{remote_path}?{sas_token}"
+                url = f"https://{
+                    self.client.account_name}.blob.core.windows.net/{
+                    self.bucket_name}/{remote_path}?{sas_token}"
                 return url
 
         except Exception as e:
@@ -302,5 +313,6 @@ def initialize_storage_service(
 ) -> CloudStorageService:
     """Initialize cloud storage service"""
     global _storage_service
-    _storage_service = CloudStorageService(provider, bucket_name, **credentials)
+    _storage_service = CloudStorageService(
+        provider, bucket_name, **credentials)
     return _storage_service

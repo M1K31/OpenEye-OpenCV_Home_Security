@@ -25,7 +25,9 @@ router = APIRouter()
     response_model=camera_schema.CameraResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def create_camera(camera: camera_schema.CameraCreate, db: Session = Depends(get_db)):
+def create_camera(
+        camera: camera_schema.CameraCreate,
+        db: Session = Depends(get_db)):
     """
     Create a new camera configuration and start monitoring
 
@@ -62,7 +64,8 @@ def create_camera(camera: camera_schema.CameraCreate, db: Session = Depends(get_
             crud.delete_camera(db, camera.camera_id)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to start camera '{camera.camera_id}'. Check source URL and logs.",
+                detail=f"Failed to start camera '{
+                    camera.camera_id}'. Check source URL and logs.",
             )
     except Exception as e:
         crud.delete_camera(db, camera.camera_id)
@@ -142,12 +145,14 @@ def patch_camera(
         is_enabled = update_data.get("is_active")
 
         if is_enabled:
-            # Enable camera: stop it first if running, then start with updated config
+            # Enable camera: stop it first if running, then start with updated
+            # config
             if camera_manager.get_camera(camera_id):
                 camera_manager.remove_camera(camera_id)
             try:
                 # Use updated values if provided, otherwise use existing
-                camera_type = update_data.get("camera_type", db_camera.camera_type)
+                camera_type = update_data.get(
+                    "camera_type", db_camera.camera_type)
                 source = update_data.get("source", db_camera.source)
                 face_detection = update_data.get(
                     "face_detection_enabled", db_camera.face_detection_enabled
@@ -254,7 +259,8 @@ def delete_camera(camera_id: str, db: Session = Depends(get_db)):
     return {"message": f"Camera '{camera_id}' deleted successfully"}
 
 
-@router.post("/{camera_id}/deactivate", response_model=camera_schema.CameraResponse)
+@router.post("/{camera_id}/deactivate",
+             response_model=camera_schema.CameraResponse)
 def deactivate_camera(camera_id: str, db: Session = Depends(get_db)):
     """
     Deactivate camera (soft delete - keeps configuration)
@@ -280,7 +286,8 @@ def deactivate_camera(camera_id: str, db: Session = Depends(get_db)):
     return updated_camera
 
 
-@router.post("/{camera_id}/activate", response_model=camera_schema.CameraResponse)
+@router.post("/{camera_id}/activate",
+             response_model=camera_schema.CameraResponse)
 def activate_camera(camera_id: str, db: Session = Depends(get_db)):
     """
     Activate previously deactivated camera
@@ -315,7 +322,8 @@ def activate_camera(camera_id: str, db: Session = Depends(get_db)):
     return updated_camera
 
 
-@router.get("/{camera_id}/status", response_model=camera_schema.CameraStatusResponse)
+@router.get("/{camera_id}/status",
+            response_model=camera_schema.CameraStatusResponse)
 def get_camera_status(camera_id: str, db: Session = Depends(get_db)):
     """
     Get real-time camera status
@@ -470,7 +478,8 @@ def capture_snapshot(camera_id: str, db: Session = Depends(get_db)):
 # ============================================================================
 
 
-@router.get("/discover/usb", response_model=camera_schema.CameraDiscoveryUSBResponse)
+@router.get("/discover/usb",
+            response_model=camera_schema.CameraDiscoveryUSBResponse)
 def discover_usb_cameras():
     """
     Discover connected USB webcams
@@ -504,9 +513,8 @@ def discover_usb_cameras():
     return {"cameras": discovered_cameras, "total": len(discovered_cameras)}
 
 
-@router.get(
-    "/discover/network", response_model=camera_schema.CameraDiscoveryNetworkResponse
-)
+@router.get("/discover/network",
+            response_model=camera_schema.CameraDiscoveryNetworkResponse)
 def discover_network_cameras():
     """
     Discover ONVIF-compatible network cameras
