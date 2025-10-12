@@ -16,6 +16,9 @@ surveillance.db
 *.log
 backend.log
 frontend.log
+server.log
+docker-build.log
+docker-rebuild.log
 
 # Environment variables
 .env
@@ -25,8 +28,16 @@ node_modules/
 dist/
 .DS_Store
 
-# Recordings
+# Recordings and media files
 recordings/
+faces/
+*.mp4
+*.avi
+*.mkv
+*.jpeg
+*.jpg
+*.png
+face_encodings.pkl
 
 # Verification scripts
 jules-scratch/
@@ -57,3 +68,15 @@ config/
 
 # OS additional
 Thumbs.db
+.DS_Store
+._*
+
+# Development data and test files
+data/
+test-data/
+test-faces/
+test-recordings/
+custom_recordings/
+
+# Archives
+archives/
