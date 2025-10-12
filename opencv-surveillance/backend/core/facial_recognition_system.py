@@ -14,7 +14,6 @@ import cv2
 import numpy as np
 import face_recognition
 import logging
-from typing import List, Dict, Tuple, Optional, Set
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 import pickle
@@ -22,7 +21,6 @@ import json
 from pathlib import Path
 import threading
 from queue import Queue
-import time
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +97,8 @@ class FaceDetector:
             )
             logger.info("Using Haar Cascade fallback for face detection")
 
-    def detect_faces(self, frame: np.ndarray) -> List[Tuple[int, int, int, int]]:
+    def detect_faces(
+            self, frame: np.ndarray) -> List[Tuple[int, int, int, int]]:
         """
         Detect faces in frame
 
@@ -114,14 +113,14 @@ class FaceDetector:
         else:
             return self._detect_haar(frame)
 
-    def _detect_dnn(self, frame: np.ndarray) -> List[Tuple[int, int, int, int]]:
+    def _detect_dnn(
+            self, frame: np.ndarray) -> List[Tuple[int, int, int, int]]:
         """Detect faces using DNN model"""
         (h, w) = frame.shape[:2]
 
         # Prepare blob from frame
-        blob = cv2.dnn.blobFromImage(
-            cv2.resize(frame, (300, 300)), 1.0, (300, 300), (104.0, 177.0, 123.0)
-        )
+        blob = cv2.dnn.blobFromImage(cv2.resize(
+            frame, (300, 300)), 1.0, (300, 300), (104.0, 177.0, 123.0))
 
         # Forward pass
         self.net.setInput(blob)
@@ -141,7 +140,8 @@ class FaceDetector:
 
         return faces
 
-    def _detect_haar(self, frame: np.ndarray) -> List[Tuple[int, int, int, int]]:
+    def _detect_haar(
+            self, frame: np.ndarray) -> List[Tuple[int, int, int, int]]:
         """Detect faces using Haar Cascade"""
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         detected_faces = self.face_cascade.detectMultiScale(
@@ -232,7 +232,8 @@ class FaceRecognitionSystem:
                             self.known_encodings.append(encoding)
                             self.known_names.append(person.name)
 
-                    logger.info(f"Loaded {len(self.people)} people from database")
+                    logger.info(
+                        f"Loaded {len(self.people)} people from database")
         except Exception as e:
             logger.error(f"Error loading face database: {e}")
 
@@ -278,24 +279,28 @@ class FaceRecognitionSystem:
                 )
 
                 if len(face_locations) == 0:
-                    logger.warning(f"No face detected in image {idx} for {name}")
+                    logger.warning(
+                        f"No face detected in image {idx} for {name}")
                     continue
 
                 if len(face_locations) > 1:
-                    logger.warning(f"Multiple faces detected in image {idx} for {name}")
+                    logger.warning(
+                        f"Multiple faces detected in image {idx} for {name}")
                     # Use the largest face
                     face_locations = [
                         max(face_locations, key=lambda x: (x[2] - x[0]) * (x[1] - x[3]))
                     ]
 
                 # Generate encoding
-                face_encodings = face_recognition.face_encodings(image, face_locations)
+                face_encodings = face_recognition.face_encodings(
+                    image, face_locations)
 
                 if len(face_encodings) > 0:
                     encodings.append(face_encodings[0])
 
                     # Save face image
-                    image_path = self.face_images_dir / f"{person_id}_{idx}.jpg"
+                    image_path = self.face_images_dir / \
+                        f"{person_id}_{idx}.jpg"
                     cv2.imwrite(str(image_path), image)
                     saved_paths.append(str(image_path))
 
@@ -324,8 +329,8 @@ class FaceRecognitionSystem:
             self._save_database()
 
             logger.info(
-                f"Added {name} to face database with {len(encodings)} encodings"
-            )
+                f"Added {name} to face database with {
+                    len(encodings)} encodings")
             return True
 
         except Exception as e:
@@ -344,7 +349,7 @@ class FaceRecognitionSystem:
         for image_path in person.face_images:
             try:
                 Path(image_path).unlink()
-            except:
+            except BaseException:
                 pass
 
         # Remove from database
@@ -387,14 +392,16 @@ class FaceRecognitionSystem:
 
         # Generate encodings for detected faces
         try:
-            face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
+            face_encodings = face_recognition.face_encodings(
+                rgb_frame, face_locations)
         except Exception as e:
             logger.error(f"Error encoding faces: {e}")
             return []
 
         # Match faces
         faces = []
-        for face_encoding, face_location in zip(face_encodings, face_locations):
+        for face_encoding, face_location in zip(
+                face_encodings, face_locations):
             # Check cache first
             encoding_hash = hash(face_encoding.tobytes())
             cache_key = f"{camera_id}_{encoding_hash}"
@@ -407,7 +414,8 @@ class FaceRecognitionSystem:
                 name, confidence = self._match_face(face_encoding)
 
                 # Update cache
-                self._recognition_cache[cache_key] = (name, confidence, datetime.now())
+                self._recognition_cache[cache_key] = (
+                    name, confidence, datetime.now())
 
             # Create Face object
             face = Face(
@@ -444,7 +452,8 @@ class FaceRecognitionSystem:
             return "unknown", 0.0
 
         # Calculate distances
-        distances = face_recognition.face_distance(self.known_encodings, face_encoding)
+        distances = face_recognition.face_distance(
+            self.known_encodings, face_encoding)
 
         # Find best match
         min_distance = min(distances)
@@ -473,7 +482,7 @@ class FaceRecognitionSystem:
                     _, frame, face_location = task
                     self._save_unknown_face(frame, face_location)
 
-            except:
+            except BaseException:
                 continue
 
     def _save_unknown_face(self, frame: np.ndarray, face_location: Tuple):
@@ -484,8 +493,8 @@ class FaceRecognitionSystem:
             # Extract face region with padding
             padding = 20
             face_image = frame[
-                max(0, top - padding) : min(frame.shape[0], bottom + padding),
-                max(0, left - padding) : min(frame.shape[1], right + padding),
+                max(0, top - padding): min(frame.shape[0], bottom + padding),
+                max(0, left - padding): min(frame.shape[1], right + padding),
             ]
 
             # Save image
@@ -541,7 +550,8 @@ class FaceRecognitionSystem:
                 label = f"{face.name} ({face.confidence:.2f})"
 
                 # Background for text
-                label_size, _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
+                label_size, _ = cv2.getTextSize(
+                    label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
                 cv2.rectangle(
                     annotated,
                     (left, bottom - label_size[1] - 10),
@@ -646,7 +656,10 @@ if __name__ == "__main__":
 
             # Print detections
             for face in faces:
-                print(f"Detected: {face.name} (confidence: {face.confidence:.2f})")
+                print(
+                    f"Detected: {
+                        face.name} (confidence: {
+                        face.confidence:.2f})")
 
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break

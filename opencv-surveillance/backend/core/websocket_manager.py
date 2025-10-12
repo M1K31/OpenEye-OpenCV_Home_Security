@@ -67,8 +67,11 @@ class WebSocketConnectionManager:
         self._lock = asyncio.Lock()
 
     async def connect(
-        self, websocket: WebSocket, user_id: int, username: str, connection_id: str
-    ) -> bool:
+            self,
+            websocket: WebSocket,
+            user_id: int,
+            username: str,
+            connection_id: str) -> bool:
         """
         Accept and register a new WebSocket connection.
 
@@ -83,7 +86,9 @@ class WebSocketConnectionManager:
         """
         async with self._lock:
             # Check rate limiting
-            user_connection_count = len(self.user_connections.get(user_id, set()))
+            user_connection_count = len(
+                self.user_connections.get(
+                    user_id, set()))
             if user_connection_count >= self.max_connections_per_user:
                 logger.warning(
                     f"User {username} (ID: {user_id}) exceeded max connections "
@@ -148,10 +153,10 @@ class WebSocketConnectionManager:
                 await connection.send_json(message)
             except RuntimeError as e:
                 # Expected disconnection - silently cleanup
-                if "disconnected" in str(e).lower() or "accept" in str(e).lower():
+                if "disconnected" in str(
+                        e).lower() or "accept" in str(e).lower():
                     logger.debug(
-                        f"WebSocket connection {connection_id} closed during send (expected)"
-                    )
+                        f"WebSocket connection {connection_id} closed during send (expected)")
                     await self.disconnect(connection_id)
                 else:
                     logger.error(f"Failed to send personal message: {e}")
@@ -180,16 +185,20 @@ class WebSocketConnectionManager:
                 await connection.send_json(message)
             except RuntimeError as e:
                 # Expected disconnection - log at debug level
-                if "disconnected" in str(e).lower() or "accept" in str(e).lower():
+                if "disconnected" in str(
+                        e).lower() or "accept" in str(e).lower():
                     logger.debug(
-                        f"WebSocket connection {connection_id} closed during broadcast (expected)"
-                    )
+                        f"WebSocket connection {connection_id} closed during broadcast (expected)")
                     disconnected.append(connection_id)
                 else:
-                    logger.error(f"Failed to broadcast to {connection.username}: {e}")
+                    logger.error(
+                        f"Failed to broadcast to {
+                            connection.username}: {e}")
                     disconnected.append(connection_id)
             except Exception as e:
-                logger.error(f"Failed to broadcast to {connection.username}: {e}")
+                logger.error(
+                    f"Failed to broadcast to {
+                        connection.username}: {e}")
                 disconnected.append(connection_id)
 
         # Clean up failed connections
@@ -215,7 +224,9 @@ class WebSocketConnectionManager:
                 try:
                     await connection.send_json(message)
                 except Exception as e:
-                    logger.error(f"Failed to send to {connection.username}: {e}")
+                    logger.error(
+                        f"Failed to send to {
+                            connection.username}: {e}")
                     disconnected.append(connection_id)
 
         # Clean up failed connections
@@ -261,7 +272,10 @@ async def broadcast_statistics_update(statistics: dict):
     await ws_manager.broadcast(message)
 
 
-async def broadcast_camera_event(camera_id: int, event_type: str, event_data: dict):
+async def broadcast_camera_event(
+        camera_id: int,
+        event_type: str,
+        event_data: dict):
     """
     Broadcast camera event to all connected clients.
 

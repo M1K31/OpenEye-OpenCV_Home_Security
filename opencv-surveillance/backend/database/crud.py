@@ -17,7 +17,9 @@ from backend.core.auth import (
 
 
 def get_user_by_username(db: Session, username: str):
-    return db.query(models.User).filter(models.User.username == username).first()
+    return db.query(
+        models.User).filter(
+        models.User.username == username).first()
 
 
 def create_user(db: Session, user: user_schema.UserCreate):
@@ -25,8 +27,9 @@ def create_user(db: Session, user: user_schema.UserCreate):
         user.password
     )  # FIXED: Changed from get_password_hash
     db_user = models.User(
-        username=user.username, email=user.email, hashed_password=hashed_password
-    )
+        username=user.username,
+        email=user.email,
+        hashed_password=hashed_password)
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
@@ -40,7 +43,9 @@ def create_user(db: Session, user: user_schema.UserCreate):
 
 def get_camera_by_id(db: Session, camera_id: str) -> Optional[models.Camera]:
     """Get camera by camera_id"""
-    return db.query(models.Camera).filter(models.Camera.camera_id == camera_id).first()
+    return db.query(
+        models.Camera).filter(
+        models.Camera.camera_id == camera_id).first()
 
 
 def get_camera_by_pk(db: Session, id: int) -> Optional[models.Camera]:
@@ -48,14 +53,15 @@ def get_camera_by_pk(db: Session, id: int) -> Optional[models.Camera]:
     return db.query(models.Camera).filter(models.Camera.id == id).first()
 
 
-def get_cameras(db: Session, skip: int = 0, limit: int = 100) -> List[models.Camera]:
+def get_cameras(db: Session, skip: int = 0,
+                limit: int = 100) -> List[models.Camera]:
     """Get list of cameras with pagination"""
     return db.query(models.Camera).offset(skip).limit(limit).all()
 
 
 def get_active_cameras(db: Session) -> List[models.Camera]:
     """Get only active cameras"""
-    return db.query(models.Camera).filter(models.Camera.is_active == True).all()
+    return db.query(models.Camera).filter(models.Camera.is_active).all()
 
 
 def create_camera(db: Session, camera_data: dict) -> models.Camera:
@@ -107,7 +113,8 @@ def deactivate_camera(db: Session, camera_id: str) -> Optional[models.Camera]:
     return db_camera
 
 
-def update_camera_last_active(db: Session, camera_id: str) -> Optional[models.Camera]:
+def update_camera_last_active(db: Session,
+                              camera_id: str) -> Optional[models.Camera]:
     """Update last_active timestamp"""
     db_camera = get_camera_by_id(db, camera_id)
     if not db_camera:
@@ -149,7 +156,8 @@ def get_face_detection_events(
         query = query.filter(models.FaceDetectionEvent.camera_id == camera_id)
 
     if person_name:
-        query = query.filter(models.FaceDetectionEvent.person_name == person_name)
+        query = query.filter(
+            models.FaceDetectionEvent.person_name == person_name)
 
     return (
         query.order_by(models.FaceDetectionEvent.detected_at.desc())
@@ -164,7 +172,9 @@ def get_face_detection_events(
 # ============================================================================
 
 
-def create_recording_event(db: Session, event_data: dict) -> models.RecordingEvent:
+def create_recording_event(
+        db: Session,
+        event_data: dict) -> models.RecordingEvent:
     """Create a new recording event"""
     db_event = models.RecordingEvent(**event_data)
     db.add(db_event)
@@ -178,8 +188,9 @@ def update_recording_event(
 ) -> Optional[models.RecordingEvent]:
     """Update recording event (e.g., when recording ends)"""
     db_event = (
-        db.query(models.RecordingEvent).filter(models.RecordingEvent.id == id).first()
-    )
+        db.query(
+            models.RecordingEvent).filter(
+            models.RecordingEvent.id == id).first())
     if not db_event:
         return None
 
@@ -191,9 +202,10 @@ def update_recording_event(
     return db_event
 
 
-def get_recording_events(
-    db: Session, camera_id: Optional[str] = None, skip: int = 0, limit: int = 100
-) -> List[models.RecordingEvent]:
+def get_recording_events(db: Session,
+                         camera_id: Optional[str] = None,
+                         skip: int = 0,
+                         limit: int = 100) -> List[models.RecordingEvent]:
     """Get recording events with optional filtering"""
     query = db.query(models.RecordingEvent)
 

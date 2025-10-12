@@ -9,6 +9,7 @@ This module manages webhook subscriptions, retries, and delivery of camera event
 to external HTTP endpoints. Supports filtering, authentication, and delivery tracking.
 """
 
+from aiohttp import web
 import json
 import logging
 import asyncio
@@ -187,7 +188,7 @@ class WebhookManager:
         """
         # Validate URL
         parsed = urlparse(url)
-        if not parsed.scheme in ["http", "https"]:
+        if parsed.scheme not in ["http", "https"]:
             raise ValueError(f"Invalid URL scheme: {parsed.scheme}")
 
         # Validate events
@@ -305,8 +306,10 @@ class WebhookManager:
             self.session = aiohttp.ClientSession()
 
     async def _deliver_webhook(
-        self, webhook: WebhookConfig, payload: WebhookPayload, retry_count: int = 0
-    ) -> WebhookDelivery:
+            self,
+            webhook: WebhookConfig,
+            payload: WebhookPayload,
+            retry_count: int = 0) -> WebhookDelivery:
         """
         Deliver webhook to endpoint
 
@@ -362,15 +365,17 @@ class WebhookManager:
                     webhook.total_deliveries += 1
                     webhook.last_triggered = datetime.now().isoformat()
                     logger.info(
-                        f"Webhook {webhook.id} delivered successfully "
-                        f"(status: {response.status}, time: {delivery.response_time:.2f}ms)"
-                    )
+                        f"Webhook {
+                            webhook.id} delivered successfully " f"(status: {
+                            response.status}, time: {
+                            delivery.response_time:.2f}ms)")
                 else:
                     delivery.error = f"HTTP {response.status}"
                     webhook.failed_deliveries += 1
                     logger.warning(
-                        f"Webhook {webhook.id} failed with status {response.status}"
-                    )
+                        f"Webhook {
+                            webhook.id} failed with status {
+                            response.status}")
 
         except asyncio.TimeoutError:
             delivery.error = "Request timeout"
@@ -434,9 +439,8 @@ class WebhookManager:
         )
 
         # Deliver webhooks in parallel
-        tasks = [
-            self._deliver_webhook(webhook, payload) for webhook in matching_webhooks
-        ]
+        tasks = [self._deliver_webhook(webhook, payload)
+                 for webhook in matching_webhooks]
 
         await asyncio.gather(*tasks)
 
@@ -482,14 +486,16 @@ class WebhookManager:
         if not webhook:
             return {}
 
-        deliveries = [d for d in self.delivery_history if d.webhook_id == webhook_id]
+        deliveries = [
+            d for d in self.delivery_history if d.webhook_id == webhook_id]
 
         successful = sum(1 for d in deliveries if d.success)
         failed = sum(1 for d in deliveries if not d.success)
 
         avg_response_time = 0
         if deliveries:
-            response_times = [d.response_time for d in deliveries if d.response_time]
+            response_times = [
+                d.response_time for d in deliveries if d.response_time]
             if response_times:
                 avg_response_time = sum(response_times) / len(response_times)
 
@@ -497,7 +503,10 @@ class WebhookManager:
             "webhook_id": webhook_id,
             "total_deliveries": webhook.total_deliveries,
             "failed_deliveries": webhook.failed_deliveries,
-            "success_rate": (successful / len(deliveries) * 100) if deliveries else 0,
+            "success_rate": (
+                successful /
+                len(deliveries) *
+                100) if deliveries else 0,
             "avg_response_time_ms": avg_response_time,
             "last_triggered": webhook.last_triggered,
         }
@@ -509,7 +518,6 @@ class WebhookManager:
 
 
 # Example webhook receiver (for testing)
-from aiohttp import web
 
 
 async def webhook_receiver(request):
@@ -520,11 +528,11 @@ async def webhook_receiver(request):
 
     payload = await request.text()
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Received webhook: {event_type}")
     print(f"Signature: {signature}")
     print(f"Payload: {payload}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     return web.Response(text="OK")
 
@@ -541,9 +549,13 @@ async def main():
     manager.register_webhook(
         webhook_id="webhook_1",
         url="http://localhost:8080/webhook",
-        events=[WebhookEvent.MOTION_DETECTED.value, WebhookEvent.FACE_DETECTED.value],
+        events=[
+            WebhookEvent.MOTION_DETECTED.value,
+            WebhookEvent.FACE_DETECTED.value],
         secret="my_secret_key",
-        camera_ids=["camera_1", "camera_2"],
+        camera_ids=[
+            "camera_1",
+            "camera_2"],
     )
 
     manager.register_webhook(

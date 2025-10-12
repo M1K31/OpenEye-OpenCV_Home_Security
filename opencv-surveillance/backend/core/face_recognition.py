@@ -22,9 +22,8 @@ class FaceRecognitionManager:
     Manages face recognition operations including training, recognition, and storage
     """
 
-    def __init__(
-        self, faces_folder: str = "faces", encodings_file: str = "face_encodings.pkl"
-    ):
+    def __init__(self, faces_folder: str = "faces",
+                 encodings_file: str = "face_encodings.pkl"):
         """
         Initialize the face recognition manager
 
@@ -69,7 +68,9 @@ class FaceRecognitionManager:
     def set_recognition_threshold(self, threshold: float):
         """Set recognition confidence threshold (0.0 - 1.0, lower = stricter)"""
         self.recognition_threshold = max(0.0, min(1.0, threshold))
-        logger.info(f"Recognition threshold set to: {self.recognition_threshold}")
+        logger.info(
+            f"Recognition threshold set to: {
+                self.recognition_threshold}")
 
     def train_face_recognition(self) -> Dict:
         """
@@ -86,7 +87,10 @@ class FaceRecognitionManager:
 
         if not os.path.exists(self.faces_folder):
             logger.warning(f"Faces folder not found: {self.faces_folder}")
-            return {"total_people": 0, "total_encodings": 0, "training_time": 0}
+            return {
+                "total_people": 0,
+                "total_encodings": 0,
+                "training_time": 0}
 
         people_count = 0
         encodings_count = 0
@@ -213,7 +217,8 @@ class FaceRecognitionManager:
         )
 
         # Get face encodings
-        face_encodings = face_recognition.face_encodings(small_frame, face_locations)
+        face_encodings = face_recognition.face_encodings(
+            small_frame, face_locations)
 
         detected_faces = []
 
@@ -273,7 +278,8 @@ class FaceRecognitionManager:
             )
 
             # Draw label text
-            label = f"{name} ({confidence:.2f})" if name != "Unknown" else "Unknown"
+            label = f"{name} ({
+                confidence:.2f})" if name != "Unknown" else "Unknown"
             cv2.putText(
                 frame,
                 label,
@@ -287,7 +293,8 @@ class FaceRecognitionManager:
         # Update statistics
         if detected_faces:
             self.last_recognition_time = datetime.now()
-            self.statistics["last_recognition"] = self.last_recognition_time.isoformat()
+            self.statistics["last_recognition"] = self.last_recognition_time.isoformat(
+            )
             self.statistics["recognitions_today"] += len(detected_faces)
 
         return frame, detected_faces
@@ -372,9 +379,9 @@ class FaceRecognitionManager:
                 ]
             )
 
-            people.append(
-                {"name": person_name, "photo_count": photo_count, "path": person_path}
-            )
+            people.append({"name": person_name,
+                           "photo_count": photo_count,
+                           "path": person_path})
 
         return sorted(people, key=lambda x: x["name"])
 
@@ -407,7 +414,7 @@ def get_face_manager(faces_folder: str = "faces") -> FaceRecognitionManager:
     elif _face_manager.faces_folder != faces_folder:
         # Reinitialize if faces folder changed
         logger.info(
-            f"Faces folder changed from {_face_manager.faces_folder} to {faces_folder}"
-        )
+            f"Faces folder changed from {
+                _face_manager.faces_folder} to {faces_folder}")
         _face_manager = FaceRecognitionManager(faces_folder=faces_folder)
     return _face_manager

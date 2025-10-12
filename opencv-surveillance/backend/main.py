@@ -48,8 +48,8 @@ load_dotenv()
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 # Initialize FastAPI application
@@ -106,9 +106,11 @@ async def startup_event():
         for setting in settings_list:
             try:
                 if setting.setting_type == "int":
-                    system_settings[setting.setting_key] = int(setting.setting_value)
+                    system_settings[setting.setting_key] = int(
+                        setting.setting_value)
                 elif setting.setting_type == "float":
-                    system_settings[setting.setting_key] = float(setting.setting_value)
+                    system_settings[setting.setting_key] = float(
+                        setting.setting_value)
                 elif setting.setting_type == "boolean":
                     system_settings[setting.setting_key] = (
                         setting.setting_value.lower() == "true"
@@ -123,8 +125,7 @@ async def startup_event():
         faces_path = system_settings.get("faces_path", "faces")
 
         logger.info(
-            f"System settings loaded - Recordings: {recordings_path}, Faces: {faces_path}"
-        )
+            f"System settings loaded - Recordings: {recordings_path}, Faces: {faces_path}")
     finally:
         db.close()
 
@@ -142,7 +143,8 @@ async def startup_event():
     logger.info("Required directories created successfully")
 
     # Initialize face recognition manager with configured path
-    logger.info(f"Initializing face recognition with faces directory: {faces_path}")
+    logger.info(
+        f"Initializing face recognition with faces directory: {faces_path}")
     face_manager = get_face_manager(faces_folder=faces_path)
     logger.info(
         f"Face recognition initialized: {len(face_manager.known_face_names)} known faces"
@@ -166,9 +168,13 @@ async def startup_event():
                         enable_face_detection=db_camera.face_detection_enabled,
                     )
                     loaded_count += 1
-                    logger.info(f"Loaded camera '{db_camera.camera_id}' from database")
+                    logger.info(
+                        f"Loaded camera '{
+                            db_camera.camera_id}' from database")
                 except Exception as e:
-                    logger.error(f"Failed to load camera '{db_camera.camera_id}': {e}")
+                    logger.error(
+                        f"Failed to load camera '{
+                            db_camera.camera_id}': {e}")
         logger.info(f"Loaded {loaded_count} camera(s) from database")
     finally:
         db.close()
@@ -218,14 +224,26 @@ app.include_router(
     face_history.router, prefix="/api/faces", tags=["Face Detection History"]
 )
 
-app.include_router(alerts.router, prefix="/api", tags=["Alerts & Notifications"])
+app.include_router(
+    alerts.router,
+    prefix="/api",
+    tags=["Alerts & Notifications"])
 
-app.include_router(integrations.router, prefix="/api", tags=["Smart Home Integrations"])
+app.include_router(
+    integrations.router,
+    prefix="/api",
+    tags=["Smart Home Integrations"])
 
 # Phase 6: New routers for advanced features
-app.include_router(recordings.router, prefix="/api", tags=["Recordings & Playback"])
+app.include_router(
+    recordings.router,
+    prefix="/api",
+    tags=["Recordings & Playback"])
 
-app.include_router(analytics.router, prefix="/api", tags=["Advanced Analytics"])
+app.include_router(
+    analytics.router,
+    prefix="/api",
+    tags=["Advanced Analytics"])
 
 # WebSocket routes for real-time updates
 app.include_router(websockets.router, prefix="/api", tags=["WebSockets"])
@@ -328,7 +346,10 @@ async def system_info():
             "face_statistics": camera.get_face_statistics(),
         }
 
-    return {"cameras": cameras_info, "total_cameras": len(camera_manager.cameras)}
+    return {
+        "cameras": cameras_info,
+        "total_cameras": len(
+            camera_manager.cameras)}
 
 
 # Mount static files for frontend (must be last to not override API routes)
@@ -336,8 +357,12 @@ frontend_path = Path(__file__).parent.parent / "frontend" / "dist"
 if frontend_path.exists():
     # Serve static assets (JS, CSS, images)
     app.mount(
-        "/assets", StaticFiles(directory=str(frontend_path / "assets")), name="assets"
-    )
+        "/assets",
+        StaticFiles(
+            directory=str(
+                frontend_path /
+                "assets")),
+        name="assets")
 
     # Catch-all route for SPA - must be last
     @app.get("/{full_path:path}")
@@ -358,5 +383,8 @@ if frontend_path.exists():
 
 if __name__ == "__main__":
     uvicorn.run(
-        "backend.main:app", host="0.0.0.0", port=8000, reload=True, log_level="info"
-    )
+        "backend.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        log_level="info")

@@ -41,7 +41,9 @@ class StatisticsBroadcaster:
 
         self.is_running = True
         self.task = asyncio.create_task(self._broadcast_loop())
-        logger.info(f"Statistics broadcaster started (interval: {self.interval}s)")
+        logger.info(
+            f"Statistics broadcaster started (interval: {
+                self.interval}s)")
 
     async def stop(self):
         """Stop the broadcasting service."""
@@ -106,10 +108,16 @@ class StatisticsBroadcaster:
             # Combine all statistics
             return {
                 "face_recognition": {
-                    "total_people": face_stats.get("total_people", 0),
-                    "recognitions_today": face_stats.get("recognitions_today", 0),
+                    "total_people": face_stats.get(
+                        "total_people",
+                        0),
+                    "recognitions_today": face_stats.get(
+                        "recognitions_today",
+                        0),
                     "last_recognition": face_stats.get("last_recognition"),
-                    "unknown_faces_today": face_stats.get("unknown_faces_today", 0),
+                    "unknown_faces_today": face_stats.get(
+                        "unknown_faces_today",
+                        0),
                 },
                 "cameras": camera_stats,
                 "timestamp": datetime.utcnow().isoformat(),

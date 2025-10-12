@@ -57,14 +57,16 @@ def get_recent_face_detections(
 
     # Filter by time
     time_threshold = datetime.utcnow() - timedelta(hours=hours)
-    query = query.filter(models.FaceDetectionEvent.detected_at >= time_threshold)
+    query = query.filter(
+        models.FaceDetectionEvent.detected_at >= time_threshold)
 
     # Optional filters
     if camera_id:
         query = query.filter(models.FaceDetectionEvent.camera_id == camera_id)
 
     if person_name:
-        query = query.filter(models.FaceDetectionEvent.person_name == person_name)
+        query = query.filter(
+            models.FaceDetectionEvent.person_name == person_name)
 
     # Order by most recent and limit
     query = query.order_by(desc(models.FaceDetectionEvent.detected_at))
@@ -192,7 +194,8 @@ def get_recent_recordings(
     if camera_id:
         query = query.filter(models.RecordingEvent.camera_id == camera_id)
 
-    return query.order_by(desc(models.RecordingEvent.started_at)).limit(limit).all()
+    return query.order_by(
+        desc(models.RecordingEvent.started_at)).limit(limit).all()
 
 
 def create_system_log(

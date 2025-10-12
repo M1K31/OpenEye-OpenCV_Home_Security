@@ -63,13 +63,23 @@ def get_db():
         db.close()
 
 
-@router.get("/history/detections", response_model=List[FaceDetectionEventResponse])
+@router.get("/history/detections",
+            response_model=List[FaceDetectionEventResponse])
 def get_detection_history(
-    camera_id: Optional[str] = Query(None, description="Filter by camera ID"),
-    person_name: Optional[str] = Query(None, description="Filter by person name"),
-    hours: int = Query(24, description="Number of hours to look back"),
-    limit: int = Query(50, description="Maximum number of results", le=500),
-    db: Session = Depends(get_db),
+        camera_id: Optional[str] = Query(
+            None,
+            description="Filter by camera ID"),
+    person_name: Optional[str] = Query(
+            None,
+            description="Filter by person name"),
+        hours: int = Query(
+            24,
+            description="Number of hours to look back"),
+        limit: int = Query(
+            50,
+            description="Maximum number of results",
+            le=500),
+        db: Session = Depends(get_db),
 ):
     """
     Get recent face detection events with optional filters
@@ -138,9 +148,8 @@ def get_detection_statistics(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get(
-    "/history/person/{person_name}", response_model=List[FaceDetectionEventResponse]
-)
+@router.get("/history/person/{person_name}",
+            response_model=List[FaceDetectionEventResponse])
 def get_person_history(
     person_name: str,
     limit: int = Query(100, description="Maximum number of results", le=500),
@@ -208,7 +217,9 @@ def get_recording_history(
 
 @router.post("/history/cleanup")
 def cleanup_old_data(
-    days_to_keep: int = Query(30, description="Number of days of data to keep"),
+        days_to_keep: int = Query(
+            30,
+            description="Number of days of data to keep"),
     db: Session = Depends(get_db),
 ):
     """

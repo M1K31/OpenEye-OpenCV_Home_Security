@@ -12,7 +12,6 @@ from typing import Optional, List
 from datetime import datetime, timedelta
 import os
 import json
-from pathlib import Path
 
 from backend.database.session import SessionLocal
 from backend.database import models
@@ -97,8 +96,8 @@ def list_recordings(
 
     # Order by most recent
     recordings = (
-        query.order_by(models.RecordingEvent.started_at.desc()).limit(limit).all()
-    )
+        query.order_by(
+            models.RecordingEvent.started_at.desc()).limit(limit).all())
 
     return recordings
 
@@ -124,7 +123,8 @@ def get_recording_details(recording_id: int, db: Session = Depends(get_db)):
         with open(metadata_path, "r") as f:
             metadata = json.load(f)
 
-    return {"recording": RecordingResponse.from_orm(recording), "metadata": metadata}
+    return {"recording": RecordingResponse.from_orm(
+        recording), "metadata": metadata}
 
 
 @router.get("/recordings/{recording_id}/download")
@@ -229,7 +229,8 @@ def cleanup_old_recordings(
             os.remove(recording.recording_path)
             freed_space += file_size
 
-        metadata_path = recording.recording_path.replace(".mp4", "_metadata.json")
+        metadata_path = recording.recording_path.replace(
+            ".mp4", "_metadata.json")
         if os.path.exists(metadata_path):
             os.remove(metadata_path)
 

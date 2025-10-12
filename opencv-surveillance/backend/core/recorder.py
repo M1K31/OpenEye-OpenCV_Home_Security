@@ -30,7 +30,8 @@ class Recorder:
         self.writer = None
         self.filename = ""
         self.metadata_filename = ""
-        self.max_recording_duration = max_recording_duration  # Maximum recording time in seconds (default: 5 minutes)
+        # Maximum recording time in seconds (default: 5 minutes)
+        self.max_recording_duration = max_recording_duration
 
         # NEW: Track face detections during recording
         self.detected_faces = []
@@ -76,8 +77,8 @@ class Recorder:
 
                 if self.writer.isOpened():
                     print(
-                        f"Successfully initialized video writer with codec '{codec_name}' for {self.filename}"
-                    )
+                        f"Successfully initialized video writer with codec '{codec_name}' for {
+                            self.filename}")
                     break
                 else:
                     # Clean up the writer object
@@ -89,8 +90,8 @@ class Recorder:
 
         if not self.writer or not self.writer.isOpened():
             print(
-                f"Error: Could not open video writer for {self.filename} with any available codec"
-            )
+                f"Error: Could not open video writer for {
+                    self.filename} with any available codec")
             return
 
         self.is_recording = True
@@ -148,8 +149,8 @@ class Recorder:
         duration = (datetime.now() - self.recording_start_time).total_seconds()
         if duration >= self.max_recording_duration:
             print(
-                f"Maximum recording duration ({self.max_recording_duration}s) reached. Stopping recording."
-            )
+                f"Maximum recording duration ({
+                    self.max_recording_duration}s) reached. Stopping recording.")
             return True
         return False
 
@@ -167,20 +168,26 @@ class Recorder:
             self.writer = None
 
             # Calculate recording duration
-            duration = (datetime.now() - self.recording_start_time).total_seconds()
+            duration = (
+                datetime.now() -
+                self.recording_start_time).total_seconds()
 
             # Get file size
             file_size = (
-                os.path.getsize(self.filename) if os.path.exists(self.filename) else 0
-            )
+                os.path.getsize(
+                    self.filename) if os.path.exists(
+                    self.filename) else 0)
 
             # NEW: Save metadata
             self._save_metadata(duration, file_size)
 
             print(f"Stopped recording. Video saved to {self.filename}")
             print(
-                f"Duration: {duration:.2f}s, Frames: {self.frame_count}, Faces detected: {len(self.detected_faces)}"
-            )
+                f"Duration: {
+                    duration:.2f}s, Frames: {
+                    self.frame_count}, Faces detected: {
+                    len(
+                        self.detected_faces)}")
 
             # NEW: Trigger recording stopped alert
             try:
@@ -211,7 +218,9 @@ class Recorder:
         """
         Saves recording metadata to a JSON file.
         """
-        if not hasattr(self, "metadata_filename") or not self.metadata_filename:
+        if not hasattr(
+                self,
+                "metadata_filename") or not self.metadata_filename:
             return
 
         metadata = {
@@ -299,7 +308,8 @@ class Recorder:
             return None
 
         duration = (datetime.now() - self.recording_start_time).total_seconds()
-        unique_people = set(face.get("name", "Unknown") for face in self.detected_faces)
+        unique_people = set(face.get("name", "Unknown")
+                            for face in self.detected_faces)
 
         return {
             "filename": os.path.basename(self.filename),

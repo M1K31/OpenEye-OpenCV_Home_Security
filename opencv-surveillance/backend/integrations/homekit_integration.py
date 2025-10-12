@@ -66,7 +66,8 @@ class HomeKitCamera(Accessory):
         from pyhap.characteristic import Characteristic
 
         motion_service = self.add_preload_service("MotionSensor")
-        self.motion_detected_char = motion_service.get_characteristic("MotionDetected")
+        self.motion_detected_char = motion_service.get_characteristic(
+            "MotionDetected")
 
         logger.info(f"Added motion sensor service to {self.display_name}")
 
@@ -84,12 +85,15 @@ class HomeKitCamera(Accessory):
         stream_service = self.add_preload_service("CameraRTPStreamManagement")
 
         # Setup supported video/audio configurations
-        self.setup_stream_config = stream_service.get_characteristic("SetupEndpoints")
+        self.setup_stream_config = stream_service.get_characteristic(
+            "SetupEndpoints")
         self.selected_stream_config = stream_service.get_characteristic(
             "SelectedRTPStreamConfiguration"
         )
 
-        logger.info(f"Camera stream service configured for {self.display_name}")
+        logger.info(
+            f"Camera stream service configured for {
+                self.display_name}")
 
     def get_snapshot(self, width: int = 1920, height: int = 1080) -> bytes:
         """
@@ -215,8 +219,8 @@ class HomeKitBridge(Bridge):
         self.cameras[camera_id] = camera
 
         logger.info(
-            f"Added {'doorbell' if is_doorbell else 'camera'} {camera_name} to bridge"
-        )
+            f"Added {
+                'doorbell' if is_doorbell else 'camera'} {camera_name} to bridge")
 
     def remove_camera(self, camera_id: str):
         """Remove camera from bridge"""
@@ -299,7 +303,11 @@ class HomeKitIntegration:
             camera_source: Function that returns camera frames
             is_doorbell: Whether this is a doorbell camera
         """
-        self.bridge.add_camera(camera_id, camera_name, camera_source, is_doorbell)
+        self.bridge.add_camera(
+            camera_id,
+            camera_name,
+            camera_source,
+            is_doorbell)
 
     def update_motion(self, camera_id: str, detected: bool):
         """Update motion detection state for a camera"""

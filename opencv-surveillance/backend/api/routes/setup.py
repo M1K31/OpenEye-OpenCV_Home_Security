@@ -37,16 +37,19 @@ class SetupInitializeRequest(BaseModel):
         # This provides better UX - passwords "just work"
 
         if not re.search(r"[A-Z]", v):
-            errors.append("Password must contain at least one uppercase letter")
+            errors.append(
+                "Password must contain at least one uppercase letter")
 
         if not re.search(r"[a-z]", v):
-            errors.append("Password must contain at least one lowercase letter")
+            errors.append(
+                "Password must contain at least one lowercase letter")
 
         if not re.search(r"\d", v):
             errors.append("Password must contain at least one number")
 
         if not re.search(r'[!@#$%^&*(),.?":{}|<>]', v):
-            errors.append("Password must contain at least one special character")
+            errors.append(
+                "Password must contain at least one special character")
 
         if errors:
             raise ValueError(", ".join(errors))
@@ -92,7 +95,8 @@ async def initialize_setup(request: SetupInitializeRequest):
             )
 
         # Check if username is taken
-        existing_user = db.query(User).filter(User.username == request.username).first()
+        existing_user = db.query(User).filter(
+            User.username == request.username).first()
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -100,7 +104,8 @@ async def initialize_setup(request: SetupInitializeRequest):
             )
 
         # Check if email is taken
-        existing_email = db.query(User).filter(User.email == request.email).first()
+        existing_email = db.query(User).filter(
+            User.email == request.email).first()
         if existing_email:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -136,7 +141,9 @@ async def initialize_setup(request: SetupInitializeRequest):
         raise
     except ValueError as e:
         # Password validation error
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e))
     except Exception as e:
         db.rollback()
         raise HTTPException(

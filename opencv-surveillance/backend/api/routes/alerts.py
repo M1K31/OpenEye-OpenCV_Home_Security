@@ -108,8 +108,10 @@ def get_db():
 
 @router.get("/alerts/config", response_model=List[AlertConfigResponse])
 def get_alert_configurations(
-    user_id: int = Query(1, description="User ID"), db: Session = Depends(get_db)
-):
+        user_id: int = Query(
+            1,
+            description="User ID"),
+        db: Session = Depends(get_db)):
     """
     Get alert configurations for a user
 
@@ -124,7 +126,9 @@ def get_alert_configurations(
     return configs
 
 
-@router.post("/alerts/config", response_model=AlertConfigResponse, status_code=201)
+@router.post("/alerts/config",
+             response_model=AlertConfigResponse,
+             status_code=201)
 def create_alert_configuration(
     config: AlertConfigCreate, db: Session = Depends(get_db)
 ):
@@ -144,7 +148,8 @@ def create_alert_configuration(
     if existing:
         raise HTTPException(
             status_code=400,
-            detail=f"Alert configuration already exists for user {config.user_id}. Use PUT to update.",
+            detail=f"Alert configuration already exists for user {
+                config.user_id}. Use PUT to update.",
         )
 
     # Create new configuration
@@ -170,7 +175,8 @@ def update_alert_configuration(
     )
 
     if not db_config:
-        raise HTTPException(status_code=404, detail="Alert configuration not found")
+        raise HTTPException(status_code=404,
+                            detail="Alert configuration not found")
 
     # Update fields
     for key, value in config.model_dump().items():
@@ -195,7 +201,8 @@ def delete_alert_configuration(config_id: int, db: Session = Depends(get_db)):
     )
 
     if not db_config:
-        raise HTTPException(status_code=404, detail="Alert configuration not found")
+        raise HTTPException(status_code=404,
+                            detail="Alert configuration not found")
 
     db.delete(db_config)
     db.commit()
@@ -205,11 +212,20 @@ def delete_alert_configuration(config_id: int, db: Session = Depends(get_db)):
 
 @router.get("/alerts/logs", response_model=List[NotificationLogResponse])
 def get_notification_logs(
-    event_type: Optional[str] = Query(None, description="Filter by event type"),
-    camera_id: Optional[str] = Query(None, description="Filter by camera ID"),
-    channel: Optional[str] = Query(None, description="Filter by channel"),
-    limit: int = Query(50, description="Maximum number of results", le=500),
-    db: Session = Depends(get_db),
+        event_type: Optional[str] = Query(
+            None,
+            description="Filter by event type"),
+    camera_id: Optional[str] = Query(
+            None,
+            description="Filter by camera ID"),
+        channel: Optional[str] = Query(
+            None,
+            description="Filter by channel"),
+        limit: int = Query(
+            50,
+            description="Maximum number of results",
+            le=500),
+        db: Session = Depends(get_db),
 ):
     """
     Get notification logs with optional filters
@@ -219,10 +235,12 @@ def get_notification_logs(
     query = db.query(alert_models.NotificationLog)
 
     if event_type:
-        query = query.filter(alert_models.NotificationLog.event_type == event_type)
+        query = query.filter(
+            alert_models.NotificationLog.event_type == event_type)
 
     if camera_id:
-        query = query.filter(alert_models.NotificationLog.camera_id == camera_id)
+        query = query.filter(
+            alert_models.NotificationLog.camera_id == camera_id)
 
     if channel:
         query = query.filter(alert_models.NotificationLog.channel == channel)
@@ -253,7 +271,8 @@ async def test_alert(request: TestAlertRequest, db: Session = Depends(get_db)):
     )
 
     if not config:
-        raise HTTPException(status_code=404, detail="Alert configuration not found")
+        raise HTTPException(status_code=404,
+                            detail="Alert configuration not found")
 
     notification_service = get_notification_service()
 
@@ -273,12 +292,12 @@ async def test_alert(request: TestAlertRequest, db: Session = Depends(get_db)):
     elif request.channel == "sms":
         if not config.sms_enabled or not config.phone_number:
             raise HTTPException(
-                status_code=400, detail="SMS not enabled or phone number not set"
-            )
+                status_code=400,
+                detail="SMS not enabled or phone number not set")
 
         success, error = notification_service.send_sms(
-            to_number=config.phone_number, message=f"[OpenEye Test] {request.message}"
-        )
+            to_number=config.phone_number, message=f"[OpenEye Test] {
+                request.message}")
 
     elif request.channel == "push":
         if not config.push_enabled or not config.push_token:
@@ -318,8 +337,9 @@ async def test_alert(request: TestAlertRequest, db: Session = Depends(get_db)):
         }
     else:
         raise HTTPException(
-            status_code=500, detail=f"Failed to send test {request.channel}: {error}"
-        )
+            status_code=500,
+            detail=f"Failed to send test {
+                request.channel}: {error}")
 
 
 @router.get("/alerts/statistics")

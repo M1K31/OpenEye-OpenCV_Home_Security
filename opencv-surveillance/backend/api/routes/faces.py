@@ -23,7 +23,8 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/faces/people", response_model=List[face_schema.Person])
-def list_people(current_user: user_schema.User = Depends(get_current_active_user)):
+def list_people(current_user: user_schema.User = Depends(
+        get_current_active_user)):
     """
     Get list of all people in the face recognition system
 
@@ -38,7 +39,9 @@ def list_people(current_user: user_schema.User = Depends(get_current_active_user
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/faces/people", response_model=face_schema.Person, status_code=201)
+@router.post("/faces/people",
+             response_model=face_schema.Person,
+             status_code=201)
 def add_person(
     person: face_schema.PersonCreate,
     current_user: user_schema.User = Depends(require_user),
@@ -53,7 +56,9 @@ def add_person(
 
         # Validate person name
         if not person.name or not person.name.strip():
-            raise HTTPException(status_code=400, detail="Person name cannot be empty")
+            raise HTTPException(
+                status_code=400,
+                detail="Person name cannot be empty")
 
         # Sanitize name
         clean_name = "".join(
@@ -73,7 +78,10 @@ def add_person(
 
         # Return person info
         person_path = os.path.join(face_manager.faces_folder, clean_name)
-        return face_schema.Person(name=clean_name, photo_count=0, path=person_path)
+        return face_schema.Person(
+            name=clean_name,
+            photo_count=0,
+            path=person_path)
 
     except HTTPException:
         raise
@@ -84,8 +92,8 @@ def add_person(
 
 @router.get("/faces/people/{person_name}", response_model=face_schema.Person)
 def get_person(
-    person_name: str, current_user: user_schema.User = Depends(get_current_active_user)
-):
+        person_name: str,
+        current_user: user_schema.User = Depends(get_current_active_user)):
     """
     Get details for a specific person
 
@@ -156,7 +164,9 @@ def update_person(
         ).strip()
 
         if not clean_name:
-            raise HTTPException(status_code=400, detail="Invalid new person name")
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid new person name")
 
         # Check if new name already exists
         new_path = os.path.join(face_manager.faces_folder, clean_name)
@@ -190,7 +200,8 @@ def update_person(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete("/faces/people/{person_name}", response_model=face_schema.DeleteResponse)
+@router.delete("/faces/people/{person_name}",
+               response_model=face_schema.DeleteResponse)
 def delete_person(
     person_name: str, current_user: user_schema.User = Depends(require_admin)
 ):
@@ -209,8 +220,7 @@ def delete_person(
             )
 
         return face_schema.DeleteResponse(
-            success=True, message=f"Person '{person_name}' deleted successfully"
-        )
+            success=True, message=f"Person '{person_name}' deleted successfully")
 
     except HTTPException:
         raise
@@ -219,12 +229,11 @@ def delete_person(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get(
-    "/faces/people/{person_name}/photos", response_model=List[face_schema.PhotoInfo]
-)
+@router.get("/faces/people/{person_name}/photos",
+            response_model=List[face_schema.PhotoInfo])
 def list_person_photos(
-    person_name: str, current_user: user_schema.User = Depends(get_current_active_user)
-):
+        person_name: str,
+        current_user: user_schema.User = Depends(get_current_active_user)):
     """
     List all photos for a specific person
 
@@ -253,9 +262,9 @@ def list_person_photos(
                             filename=filename,
                             path=file_path,
                             size_bytes=file_stats.st_size,
-                            uploaded_at=datetime.fromtimestamp(file_stats.st_mtime),
-                        )
-                    )
+                            uploaded_at=datetime.fromtimestamp(
+                                file_stats.st_mtime),
+                        ))
 
         # Sort by upload date (newest first)
         photos.sort(key=lambda x: x.uploaded_at, reverse=True)
@@ -269,9 +278,8 @@ def list_person_photos(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post(
-    "/faces/people/{person_name}/photos", response_model=face_schema.UploadResponse
-)
+@router.post("/faces/people/{person_name}/photos",
+             response_model=face_schema.UploadResponse)
 async def upload_photos(
     person_name: str,
     files: List[UploadFile] = File(...),
@@ -360,7 +368,9 @@ def delete_person_photo(
         # Check if file exists
         file_path = os.path.join(person_path, filename)
         if not os.path.exists(file_path):
-            raise HTTPException(status_code=404, detail=f"Photo '{filename}' not found")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Photo '{filename}' not found")
 
         # Validate file type
         if not filename.lower().endswith((".jpg", ".jpeg", ".png")):
@@ -403,8 +413,9 @@ def train_face_recognition(
             total_encodings=result["total_encodings"],
             training_time=result["training_time"],
             success=True,
-            message=f"Training completed: {result['total_encodings']} encodings "
-            f"for {result['total_people']} people",
+            message=f"Training completed: {
+                result['total_encodings']} encodings " f"for {
+                result['total_people']} people",
         )
 
     except Exception as e:
@@ -534,9 +545,9 @@ def enable_face_detection(
             content={
                 "camera_id": camera_id,
                 "face_detection_enabled": enabled,
-                "message": f"Face detection {'enabled' if enabled else 'disabled'} for camera '{camera_id}'",
-            }
-        )
+                "message": f"Face detection {
+                    'enabled' if enabled else 'disabled'} for camera '{camera_id}'",
+            })
 
     except HTTPException:
         raise

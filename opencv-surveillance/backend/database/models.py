@@ -59,7 +59,10 @@ class FaceDetectionEvent(Base):
     frame_height = Column(Integer, nullable=True)
 
     def __repr__(self):
-        return f"<FaceDetection(person={self.person_name}, confidence={self.confidence:.2f}, time={self.detected_at})>"
+        return f"<FaceDetection(person={
+            self.person_name}, confidence={
+            self.confidence:.2f}, time={
+            self.detected_at})>"
 
 
 class Camera(Base):
@@ -88,10 +91,12 @@ class Camera(Base):
     motion_threshold = Column(Integer, default=50)  # varThreshold 1-100
     noise_reduction = Column(String, default="medium")  # low, medium, high
     detect_shadows = Column(Boolean, default=True)
-    detection_zones = Column(String, nullable=True)  # JSON string for zone grid
+    # JSON string for zone grid
+    detection_zones = Column(String, nullable=True)
 
     # Recording settings
-    recording_enabled = Column(Boolean, default=False)  # CHANGED: Default to False
+    # CHANGED: Default to False
+    recording_enabled = Column(Boolean, default=False)
     post_motion_cooldown = Column(Integer, default=5)
 
     # Video quality settings
@@ -110,7 +115,10 @@ class Camera(Base):
 
     # Metadata
     created_at = Column(DateTime, default=datetime.utcnow)
-    last_active = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_active = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow)
     is_active = Column(Boolean, default=True)
 
     def __repr__(self):
@@ -144,7 +152,9 @@ class RecordingEvent(Base):
     frame_count = Column(Integer, nullable=True)
 
     def __repr__(self):
-        return f"<Recording(camera={self.camera_id}, started={self.started_at})>"
+        return f"<Recording(camera={
+            self.camera_id}, started={
+            self.started_at})>"
 
 
 class SystemLog(Base):
@@ -157,13 +167,17 @@ class SystemLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     log_level = Column(String, index=True)  # INFO, WARNING, ERROR, CRITICAL
-    component = Column(String, index=True)  # camera_manager, face_recognition, etc.
+    # camera_manager, face_recognition, etc.
+    component = Column(String, index=True)
     message = Column(String)
     details = Column(String, nullable=True)  # JSON string for additional data
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     def __repr__(self):
-        return f"<SystemLog({self.log_level}: {self.component} - {self.message})>"
+        return f"<SystemLog({
+            self.log_level}: {
+            self.component} - {
+            self.message})>"
 
 
 class SystemSettings(Base):
@@ -175,11 +189,16 @@ class SystemSettings(Base):
     __tablename__ = "system_settings"
 
     id = Column(Integer, primary_key=True, index=True)
-    setting_key = Column(String, unique=True, index=True)  # Unique key for each setting
+    # Unique key for each setting
+    setting_key = Column(String, unique=True, index=True)
     setting_value = Column(String)  # Value stored as string (JSON if complex)
-    setting_type = Column(String, default="string")  # string, int, float, boolean, json
+    # string, int, float, boolean, json
+    setting_type = Column(String, default="string")
     description = Column(String, nullable=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow)
 
     def __repr__(self):
         return f"<SystemSettings({self.setting_key}={self.setting_value})>"

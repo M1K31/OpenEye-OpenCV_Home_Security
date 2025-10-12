@@ -5,7 +5,7 @@ Pydantic schemas for face recognition API
 """
 
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import Optional
 from datetime import datetime
 
 
@@ -62,7 +62,8 @@ class FaceDetection(BaseModel):
     """Schema for a detected face"""
 
     name: str = Field(..., description="Recognized person name or 'Unknown'")
-    confidence: float = Field(..., description="Recognition confidence (0.0-1.0)")
+    confidence: float = Field(...,
+                              description="Recognition confidence (0.0-1.0)")
     location: FaceLocation
     timestamp: str = Field(..., description="ISO format timestamp")
     motion_detected: Optional[bool] = Field(
@@ -101,7 +102,8 @@ class FaceSettings(BaseModel):
     """Schema for face recognition settings"""
 
     enabled: bool = Field(True, description="Enable face recognition")
-    detection_method: str = Field("hog", description="Detection method: 'hog' or 'cnn'")
+    detection_method: str = Field(
+        "hog", description="Detection method: 'hog' or 'cnn'")
     recognition_threshold: float = Field(
         0.6, description="Recognition confidence threshold"
     )

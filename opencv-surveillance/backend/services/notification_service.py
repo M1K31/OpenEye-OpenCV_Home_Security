@@ -28,7 +28,8 @@ class NotificationService:
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
         self.smtp_username = os.getenv("SMTP_USERNAME", "")
         self.smtp_password = os.getenv("SMTP_PASSWORD", "")
-        self.smtp_from_address = os.getenv("SMTP_FROM_ADDRESS", self.smtp_username)
+        self.smtp_from_address = os.getenv(
+            "SMTP_FROM_ADDRESS", self.smtp_username)
 
         # Twilio configuration for SMS
         self.twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID", "")
@@ -36,7 +37,8 @@ class NotificationService:
         self.twilio_from_number = os.getenv("TWILIO_FROM_NUMBER", "")
 
         # Firebase configuration for push notifications
-        self.firebase_credentials_path = os.getenv("FIREBASE_CREDENTIALS_PATH", "")
+        self.firebase_credentials_path = os.getenv(
+            "FIREBASE_CREDENTIALS_PATH", "")
 
         # Initialize Twilio client if credentials are provided
         self.twilio_client = None
@@ -102,7 +104,10 @@ class NotificationService:
             logger.error(error_msg)
             return False, error_msg
 
-    def send_sms(self, to_number: str, message: str) -> tuple[bool, Optional[str]]:
+    def send_sms(self,
+                 to_number: str,
+                 message: str) -> tuple[bool,
+                                        Optional[str]]:
         """
         Send an SMS notification via Twilio
 
@@ -121,7 +126,9 @@ class NotificationService:
                 body=message, from_=self.twilio_from_number, to=to_number
             )
 
-            logger.info(f"SMS sent successfully to {to_number}, SID: {message_obj.sid}")
+            logger.info(
+                f"SMS sent successfully to {to_number}, SID: {
+                    message_obj.sid}")
             return True, None
 
         except Exception as e:
@@ -151,7 +158,8 @@ class NotificationService:
             # Initialize Firebase if not already done
             if not firebase_admin._apps:
                 if os.path.exists(self.firebase_credentials_path):
-                    cred = credentials.Certificate(self.firebase_credentials_path)
+                    cred = credentials.Certificate(
+                        self.firebase_credentials_path)
                     firebase_admin.initialize_app(cred)
                 else:
                     return False, "Firebase credentials not found"
@@ -192,10 +200,12 @@ class NotificationService:
                     webhook_url, json=payload, timeout=aiohttp.ClientTimeout(total=10)
                 ) as response:
                     if response.status in [200, 201, 202, 204]:
-                        logger.info(f"Webhook sent successfully to {webhook_url}")
+                        logger.info(
+                            f"Webhook sent successfully to {webhook_url}")
                         return True, None
                     else:
-                        error_msg = f"Webhook returned status {response.status}"
+                        error_msg = f"Webhook returned status {
+                            response.status}"
                         logger.warning(error_msg)
                         return False, error_msg
 

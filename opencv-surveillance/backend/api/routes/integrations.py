@@ -5,7 +5,7 @@
 Smart Home Integrations API Routes
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Optional
 
@@ -37,7 +37,8 @@ class NestConfig(BaseModel):
     refresh_token: str
 
 
-# Placeholder endpoints - actual implementations use the existing integration files
+# Placeholder endpoints - actual implementations use the existing
+# integration files
 
 
 @router.post("/integrations/homeassistant/configure")
@@ -66,7 +67,7 @@ def configure_homekit(config: HomeKitConfig):
     # Note: Uses homekit_integration.py which is already implemented
     return {
         "success": True,
-        "message": f"HomeKit bridge configuration received",
+        "message": "HomeKit bridge configuration received",
         "note": "Uses existing homekit_integration.py module",
     }
 

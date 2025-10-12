@@ -78,19 +78,20 @@ class MotionDetector:
 
         # Create background subtractor with configurable parameters
         self.back_sub = cv2.createBackgroundSubtractorMOG2(
-            history=500, varThreshold=var_threshold, detectShadows=detect_shadows
-        )
+            history=500, varThreshold=var_threshold, detectShadows=detect_shadows)
 
         # Parse detection zones if provided
         self.detection_mask = None
         if detection_zones:
             try:
-                self.detection_mask = self._create_detection_mask(detection_zones)
+                self.detection_mask = self._create_detection_mask(
+                    detection_zones)
             except Exception as e:
                 print(f"Warning: Could not parse detection zones: {e}")
                 self.detection_mask = None
 
-    def _create_detection_mask(self, detection_zones_json: str) -> Optional[np.ndarray]:
+    def _create_detection_mask(
+            self, detection_zones_json: str) -> Optional[np.ndarray]:
         """
         Creates a binary mask from detection zones JSON.
 
@@ -112,7 +113,8 @@ class MotionDetector:
             if not zones or len(zones) != grid_height:
                 return None
 
-            # Create binary mask (will be resized to frame size during detection)
+            # Create binary mask (will be resized to frame size during
+            # detection)
             mask = np.zeros((grid_height, grid_width), dtype=np.uint8)
 
             for y, row in enumerate(zones):
@@ -146,15 +148,16 @@ class MotionDetector:
         """
         if sensitivity is not None:
             self.sensitivity = max(1, min(10, sensitivity))
-            self.min_contour_area = self.SENSITIVITY_MAP.get(self.sensitivity, 500)
+            self.min_contour_area = self.SENSITIVITY_MAP.get(
+                self.sensitivity, 500)
 
         if noise_reduction is not None:
             noise_reduction = noise_reduction.lower()
             self.blur_kernel, self.morph_iterations = self.NOISE_REDUCTION_MAP.get(
-                noise_reduction, self.NOISE_REDUCTION_MAP["medium"]
-            )
+                noise_reduction, self.NOISE_REDUCTION_MAP["medium"])
 
-        # Note: var_threshold and detect_shadows require recreating the background subtractor
+        # Note: var_threshold and detect_shadows require recreating the
+        # background subtractor
         if var_threshold is not None or detect_shadows is not None:
             current_threshold = var_threshold if var_threshold is not None else 50
             current_shadows = detect_shadows if detect_shadows is not None else True
@@ -219,9 +222,8 @@ class MotionDetector:
             (x, y, w, h) = cv2.boundingRect(contour)
 
             # Store motion area info
-            motion_areas.append(
-                {"x": int(x), "y": int(y), "w": int(w), "h": int(h), "area": int(area)}
-            )
+            motion_areas.append({"x": int(x), "y": int(
+                y), "w": int(w), "h": int(h), "area": int(area)})
 
             # Draw bounding box on frame
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)

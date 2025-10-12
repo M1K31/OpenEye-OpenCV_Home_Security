@@ -15,7 +15,6 @@ import asyncio
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage
-from typing import List, Dict, Optional, Set
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -58,7 +57,8 @@ class AlertRule:
     # Trigger conditions
     event_types: List[str] = field(default_factory=list)
     camera_ids: Optional[List[str]] = None  # None = all cameras
-    time_range: Optional[Dict[str, str]] = None  # {"start": "22:00", "end": "06:00"}
+    # {"start": "22:00", "end": "06:00"}
+    time_range: Optional[Dict[str, str]] = None
     days_of_week: Optional[List[int]] = None  # 0-6 (Monday-Sunday)
 
     # Notification settings
@@ -142,7 +142,8 @@ class EmailNotifier:
             msg["Subject"] = notification.subject
             msg["From"] = self.from_email
             msg["To"] = notification.recipient
-            msg["Date"] = notification.timestamp.strftime("%a, %d %b %Y %H:%M:%S %z")
+            msg["Date"] = notification.timestamp.strftime(
+                "%a, %d %b %Y %H:%M:%S %z")
 
             # Priority header
             if notification.priority == AlertPriority.CRITICAL:
@@ -159,7 +160,8 @@ class EmailNotifier:
                 try:
                     with open(attachment_path, "rb") as f:
                         img = MIMEImage(f.read())
-                        img.add_header("Content-ID", f"<{Path(attachment_path).name}>")
+                        img.add_header("Content-ID",
+                                       f"<{Path(attachment_path).name}>")
                         msg.attach(img)
                 except Exception as e:
                     logger.error(f"Error attaching {attachment_path}: {e}")
@@ -205,13 +207,13 @@ class EmailNotifier:
                 .priority-high { border-left: 5px solid #fd7e14; }
                 .priority-medium { border-left: 5px solid #ffc107; }
                 .priority-low { border-left: 5px solid #28a745; }
-                .button { 
-                    display: inline-block; 
-                    padding: 10px 20px; 
-                    background: #007bff; 
-                    color: white; 
-                    text-decoration: none; 
-                    border-radius: 5px; 
+                .button {
+                    display: inline-block;
+                    padding: 10px 20px;
+                    background: #007bff;
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 5px;
                 }
             </style>
         </head>
@@ -223,7 +225,7 @@ class EmailNotifier:
                 <div class="content priority-{{ priority }}">
                     <h3>{{ subject }}</h3>
                     <p>{{ body }}</p>
-                    
+
                     {% if data %}
                     <table style="width:100%; border-collapse: collapse;">
                         {% for key, value in data.items() %}
@@ -234,7 +236,7 @@ class EmailNotifier:
                         {% endfor %}
                     </table>
                     {% endif %}
-                    
+
                     <p style="margin-top: 20px;">
                         <a href="{{ dashboard_url }}" class="button">View Dashboard</a>
                     </p>
@@ -279,7 +281,8 @@ class SMSNotifier:
         """Send SMS notification"""
         try:
             # Twilio API endpoint
-            url = f"https://api.twilio.com/2010-04-01/Accounts/{self.account_sid}/Messages.json"
+            url = f"https://api.twilio.com/2010-04-01/Accounts/{
+                self.account_sid}/Messages.json"
 
             # Prepare SMS body (limited to 160 characters)
             sms_body = f"{notification.subject}\n{notification.body[:100]}"
@@ -344,7 +347,8 @@ class PushNotifier:
                 "data": notification.data,
             }
 
-            response = requests.post(self.fcm_url, headers=headers, json=payload)
+            response = requests.post(
+                self.fcm_url, headers=headers, json=payload)
 
             response.raise_for_status()
 
@@ -475,24 +479,29 @@ class WebhookNotifier:
             response.raise_for_status()
 
             logger.info(
-                f"Webhook notification sent to {self.webhook_url} (status: {response.status_code})"
-            )
+                f"Webhook notification sent to {
+                    self.webhook_url} (status: {
+                    response.status_code})")
             notification.delivered = True
             notification.delivery_time = datetime.now()
             return True
 
         except requests.exceptions.Timeout:
             logger.error(
-                f"Webhook request timed out after {self.timeout}s: {self.webhook_url}"
-            )
+                f"Webhook request timed out after {
+                    self.timeout}s: {
+                    self.webhook_url}")
             notification.error = f"Timeout after {self.timeout}s"
             return False
 
         except requests.exceptions.HTTPError as e:
             logger.error(
-                f"Webhook HTTP error {e.response.status_code}: {self.webhook_url}"
-            )
-            notification.error = f"HTTP {e.response.status_code}: {e.response.text}"
+                f"Webhook HTTP error {
+                    e.response.status_code}: {
+                    self.webhook_url}")
+            notification.error = f"HTTP {
+                e.response.status_code}: {
+                e.response.text}"
             return False
 
         except Exception as e:
@@ -615,7 +624,10 @@ class AlertManager:
         except Exception as e:
             logger.error(f"Error saving alert rules: {e}")
 
-    def register_notifier(self, channel: NotificationChannel, notifier: object):
+    def register_notifier(
+            self,
+            channel: NotificationChannel,
+            notifier: object):
         """Register notification provider"""
         self.notifiers[channel] = notifier
         logger.info(f"Registered notifier for {channel.value}")
@@ -639,11 +651,13 @@ class AlertManager:
             return False
 
         # Check event type
-        if rule.event_types and event_data.get("event_type") not in rule.event_types:
+        if rule.event_types and event_data.get(
+                "event_type") not in rule.event_types:
             return False
 
         # Check camera
-        if rule.camera_ids and event_data.get("camera_id") not in rule.camera_ids:
+        if rule.camera_ids and event_data.get(
+                "camera_id") not in rule.camera_ids:
             return False
 
         # Check time range
@@ -692,7 +706,8 @@ class AlertManager:
 
         # Check max per hour
         hour_ago = now - timedelta(hours=1)
-        recent_triggers = [t for t in self._trigger_history[rule_id] if t > hour_ago]
+        recent_triggers = [
+            t for t in self._trigger_history[rule_id] if t > hour_ago]
 
         if len(recent_triggers) >= rule.max_per_hour:
             return False
@@ -759,7 +774,9 @@ class AlertManager:
                     notification.delivered = success
                     notification.delivery_time = datetime.now()
                 else:
-                    logger.error(f"No notifier registered for {notification.channel}")
+                    logger.error(
+                        f"No notifier registered for {
+                            notification.channel}")
                     notification.error = "No notifier registered"
 
                 # Store delivery history

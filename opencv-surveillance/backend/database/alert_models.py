@@ -55,7 +55,10 @@ class AlertConfiguration(Base):
     camera_settings = Column(JSON, default={})
 
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow)
 
     def __repr__(self):
         return f"<AlertConfiguration(id={self.id}, user_id={self.user_id})>"
@@ -96,7 +99,10 @@ class NotificationLog(Base):
     sent_at = Column(DateTime, nullable=True)
 
     def __repr__(self):
-        return f"<NotificationLog(id={self.id}, event={self.event_type}, channel={self.channel})>"
+        return f"<NotificationLog(id={
+            self.id}, event={
+            self.event_type}, channel={
+            self.channel})>"
 
 
 class AlertThrottle(Base):
@@ -118,4 +124,6 @@ class AlertThrottle(Base):
     alert_count = Column(Integer, default=1)
 
     def __repr__(self):
-        return f"<AlertThrottle(key={self.throttle_key}, last={self.last_alert_time})>"
+        return f"<AlertThrottle(key={
+            self.throttle_key}, last={
+            self.last_alert_time})>"
