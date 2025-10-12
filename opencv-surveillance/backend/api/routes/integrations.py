@@ -14,6 +14,7 @@ router = APIRouter()
 
 # Pydantic Models
 
+
 class HomeAssistantConfig(BaseModel):
     ha_url: str
     ha_token: str
@@ -38,6 +39,7 @@ class NestConfig(BaseModel):
 
 # Placeholder endpoints - actual implementations use the existing integration files
 
+
 @router.post("/integrations/homeassistant/configure")
 async def configure_home_assistant(config: HomeAssistantConfig):
     """Configure Home Assistant integration"""
@@ -45,7 +47,7 @@ async def configure_home_assistant(config: HomeAssistantConfig):
     return {
         "success": True,
         "message": "Home Assistant integration configured",
-        "note": "Uses existing homeassistant_integration.py module"
+        "note": "Uses existing homeassistant_integration.py module",
     }
 
 
@@ -54,7 +56,7 @@ def get_home_assistant_status():
     """Get Home Assistant integration status"""
     return {
         "enabled": False,
-        "note": "Configure via /integrations/homeassistant/configure endpoint"
+        "note": "Configure via /integrations/homeassistant/configure endpoint",
     }
 
 
@@ -65,7 +67,7 @@ def configure_homekit(config: HomeKitConfig):
     return {
         "success": True,
         "message": f"HomeKit bridge configuration received",
-        "note": "Uses existing homekit_integration.py module"
+        "note": "Uses existing homekit_integration.py module",
     }
 
 
@@ -74,7 +76,7 @@ def get_homekit_status():
     """Get HomeKit integration status"""
     return {
         "enabled": False,
-        "note": "Configure via /integrations/homekit/configure endpoint"
+        "note": "Configure via /integrations/homekit/configure endpoint",
     }
 
 
@@ -85,7 +87,7 @@ def configure_nest(config: NestConfig):
     return {
         "success": True,
         "message": "Google Nest integration configured",
-        "note": "Uses existing nest_integrations.py module"
+        "note": "Uses existing nest_integrations.py module",
     }
 
 
@@ -94,14 +96,11 @@ def get_nest_status():
     """Get Nest integration status"""
     return {
         "enabled": False,
-        "note": "Configure via /integrations/nest/configure endpoint"
+        "note": "Configure via /integrations/nest/configure endpoint",
     }
 
 
 @router.get("/integrations/nest/devices")
 async def list_nest_devices():
     """List all Google Nest devices"""
-    return {
-        "devices": [],
-        "note": "Configure Nest integration first"
-    }
+    return {"devices": [], "note": "Configure Nest integration first"}

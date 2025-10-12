@@ -18,7 +18,20 @@ from dotenv import load_dotenv
 
 from backend.database.session import engine, SessionLocal
 from backend.database import models, alert_models
-from backend.api.routes import users, cameras, faces, face_history, alerts, integrations, recordings, analytics, discovery, setup, websockets, settings
+from backend.api.routes import (
+    users,
+    cameras,
+    faces,
+    face_history,
+    alerts,
+    integrations,
+    recordings,
+    analytics,
+    discovery,
+    setup,
+    websockets,
+    settings,
+)
 from backend.core.camera_manager import manager as camera_manager
 from backend.core.websocket_manager import broadcast_statistics_update
 from backend.core.face_recognition import get_face_manager
@@ -27,7 +40,7 @@ from backend.middleware.rate_limiter import RateLimiter
 from backend.middleware.security import (
     SecurityHeadersMiddleware,
     IPWhitelistMiddleware,
-    SQLInjectionProtection
+    SQLInjectionProtection,
 )
 
 # Load environment variables from .env file
@@ -35,8 +48,7 @@ load_dotenv()
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -46,7 +58,7 @@ app = FastAPI(
     description="OpenCV-powered surveillance system with face recognition, motion detection, and video recording",
     version="3.5.1.4",  # Path validation fix and settings enhancements
     docs_url="/api/docs",
-    redoc_url="/api/redoc"
+    redoc_url="/api/redoc",
 )
 
 # Configure CORS
@@ -74,60 +86,74 @@ async def startup_event():
     On startup, create database tables and add default cameras.
     """
     logger.info("Starting OpenEye Surveillance System...")
-    
+
     # Create database tables
     logger.info("Creating database tables...")
     models.Base.metadata.create_all(bind=engine)
     alert_models.Base.metadata.create_all(bind=engine)
     logger.info("Database tables created successfully")
-    
+
     # Initialize system settings with defaults
     db = SessionLocal()
     try:
         from backend.database import crud
+
         crud.initialize_default_settings(db)
         settings_list = crud.get_all_system_settings(db)
-        
+
         # Convert list to dictionary
         system_settings = {}
         for setting in settings_list:
             try:
-                if setting.setting_type == 'int':
+                if setting.setting_type == "int":
                     system_settings[setting.setting_key] = int(setting.setting_value)
-                elif setting.setting_type == 'float':
+                elif setting.setting_type == "float":
                     system_settings[setting.setting_key] = float(setting.setting_value)
-                elif setting.setting_type == 'boolean':
-                    system_settings[setting.setting_key] = setting.setting_value.lower() == 'true'
+                elif setting.setting_type == "boolean":
+                    system_settings[setting.setting_key] = (
+                        setting.setting_value.lower() == "true"
+                    )
                 else:
                     system_settings[setting.setting_key] = setting.setting_value
             except (ValueError, AttributeError):
                 system_settings[setting.setting_key] = setting.setting_value
-        
+
         # Get configured paths
-        recordings_path = system_settings.get('recordings_path', 'recordings')
-        faces_path = system_settings.get('faces_path', 'faces')
-        
-        logger.info(f"System settings loaded - Recordings: {recordings_path}, Faces: {faces_path}")
+        recordings_path = system_settings.get("recordings_path", "recordings")
+        faces_path = system_settings.get("faces_path", "faces")
+
+        logger.info(
+            f"System settings loaded - Recordings: {recordings_path}, Faces: {faces_path}"
+        )
     finally:
         db.close()
-    
+
     # Create required directories based on system settings
     logger.info("Creating required directories...")
-    required_dirs = [recordings_path, faces_path, 'data', 'data/snapshots', 'data/thumbnails']
+    required_dirs = [
+        recordings_path,
+        faces_path,
+        "data",
+        "data/snapshots",
+        "data/thumbnails",
+    ]
     for dir_path in required_dirs:
         Path(dir_path).mkdir(parents=True, exist_ok=True)
     logger.info("Required directories created successfully")
-    
+
     # Initialize face recognition manager with configured path
     logger.info(f"Initializing face recognition with faces directory: {faces_path}")
     face_manager = get_face_manager(faces_folder=faces_path)
-    logger.info(f"Face recognition initialized: {len(face_manager.known_face_names)} known faces")
-    
+    logger.info(
+        f"Face recognition initialized: {len(face_manager.known_face_names)} known faces"
+    )
+
     # Load existing cameras from database
     logger.info("Loading cameras from database...")
     db = SessionLocal()
     try:
         from backend.database import crud
+
         db_cameras = crud.get_active_cameras(db)
         loaded_count = 0
         for db_camera in db_cameras:
@@ -137,7 +163,7 @@ async def startup_event():
                         camera_id=db_camera.camera_id,
                         camera_type=db_camera.camera_type,
                         source=db_camera.source,
-                        enable_face_detection=db_camera.face_detection_enabled
+                        enable_face_detection=db_camera.face_detection_enabled,
                     )
                     loaded_count += 1
                     logger.info(f"Loaded camera '{db_camera.camera_id}' from database")
@@ -146,15 +172,17 @@ async def startup_event():
         logger.info(f"Loaded {loaded_count} camera(s) from database")
     finally:
         db.close()
-    
+
     # Start statistics broadcaster
     logger.info("Starting statistics broadcaster...")
     broadcaster = get_broadcaster()
     await broadcaster.start()
     logger.info("Statistics broadcaster started successfully")
-    
+
     logger.info("OpenEye Surveillance System started successfully!")
-    logger.info("Features enabled: Motion Detection, Face Recognition, Video Recording, Real-time WebSocket Updates")
+    logger.info(
+        "Features enabled: Motion Detection, Face Recognition, Video Recording, Real-time WebSocket Updates"
+    )
 
 
 @app.on_event("shutdown")
@@ -163,95 +191,50 @@ async def shutdown_event():
     On shutdown, clean up resources.
     """
     logger.info("Shutting down OpenEye Surveillance System...")
-    
+
     # Stop statistics broadcaster
     logger.info("Stopping statistics broadcaster...")
     broadcaster = get_broadcaster()
     await broadcaster.stop()
-    
+
     # Stop all cameras
     for camera_id in list(camera_manager.cameras.keys()):
         camera_manager.remove_camera(camera_id)
-    
+
     logger.info("OpenEye Surveillance System shutdown complete")
 
 
 # Include all API routers (ONCE)
-app.include_router(
-    users.router,
-    prefix="/api",
-    tags=["Authentication"]
-)
+app.include_router(users.router, prefix="/api", tags=["Authentication"])
 
 # Camera Discovery - MUST be before /api/cameras to avoid route conflicts
-app.include_router(
-    discovery.router,
-    prefix="/api",
-    tags=["Camera Discovery"]
-)
+app.include_router(discovery.router, prefix="/api", tags=["Camera Discovery"])
+
+app.include_router(cameras.router, prefix="/api/cameras", tags=["Cameras"])
+
+app.include_router(faces.router, prefix="/api", tags=["Face Recognition"])
 
 app.include_router(
-    cameras.router,
-    prefix="/api/cameras",
-    tags=["Cameras"]
+    face_history.router, prefix="/api/faces", tags=["Face Detection History"]
 )
 
-app.include_router(
-    faces.router,
-    prefix="/api",
-    tags=["Face Recognition"]
-)
+app.include_router(alerts.router, prefix="/api", tags=["Alerts & Notifications"])
 
-app.include_router(
-    face_history.router,
-    prefix="/api/faces",
-    tags=["Face Detection History"]
-)
-
-app.include_router(
-    alerts.router,
-    prefix="/api",
-    tags=["Alerts & Notifications"]
-)
-
-app.include_router(
-    integrations.router,
-    prefix="/api",
-    tags=["Smart Home Integrations"]
-)
+app.include_router(integrations.router, prefix="/api", tags=["Smart Home Integrations"])
 
 # Phase 6: New routers for advanced features
-app.include_router(
-    recordings.router,
-    prefix="/api",
-    tags=["Recordings & Playback"]
-)
+app.include_router(recordings.router, prefix="/api", tags=["Recordings & Playback"])
 
-app.include_router(
-    analytics.router,
-    prefix="/api",
-    tags=["Advanced Analytics"]
-)
+app.include_router(analytics.router, prefix="/api", tags=["Advanced Analytics"])
 
 # WebSocket routes for real-time updates
-app.include_router(
-    websockets.router,
-    prefix="/api",
-    tags=["WebSockets"]
-)
+app.include_router(websockets.router, prefix="/api", tags=["WebSockets"])
 
 # System Settings
-app.include_router(
-    settings.router,
-    prefix="/api",
-    tags=["System Settings"]
-)
+app.include_router(settings.router, prefix="/api", tags=["System Settings"])
 
 # First-Run Setup
-app.include_router(
-    setup.router,
-    tags=["First-Run Setup"]
-)
+app.include_router(setup.router, tags=["First-Run Setup"])
 
 
 @app.get("/")
@@ -261,7 +244,7 @@ async def read_root():
     """
     frontend_path = Path(__file__).parent.parent / "frontend" / "dist"
     index_file = frontend_path / "index.html"
-    
+
     if index_file.exists():
         return FileResponse(index_file)
     else:
@@ -280,11 +263,11 @@ async def read_root():
                 "Automatic video recording",
                 "Multi-camera support",
                 "Historical analytics",
-                "REST API access"
+                "REST API access",
             ],
             "documentation": "/api/docs",
             "status": "operational",
-            "note": "Frontend not built. Build the React app or access API at /api/docs"
+            "note": "Frontend not built. Build the React app or access API at /api/docs",
         }
 
 
@@ -307,10 +290,10 @@ async def api_root():
             "Automatic video recording",
             "Multi-camera support",
             "Historical analytics",
-            "REST API access"
+            "REST API access",
         ],
         "documentation": "/api/docs",
-        "status": "operational"
+        "status": "operational",
     }
 
 
@@ -320,12 +303,12 @@ async def health_check():
     Health check endpoint
     """
     active_cameras = len(camera_manager.cameras)
-    
+
     return {
         "status": "healthy",
         "active_cameras": active_cameras,
         "face_recognition": "available",
-        "database": "connected"
+        "database": "connected",
     }
 
 
@@ -335,28 +318,27 @@ async def system_info():
     Get system information and statistics
     """
     cameras_info = {}
-    
+
     for camera_id, camera in camera_manager.cameras.items():
         cameras_info[camera_id] = {
             "type": camera.__class__.__name__,
             "is_running": camera.is_running,
             "is_recording": camera.recorder.is_recording,
             "face_detection_enabled": camera.face_detector.enabled,
-            "face_statistics": camera.get_face_statistics()
+            "face_statistics": camera.get_face_statistics(),
         }
-    
-    return {
-        "cameras": cameras_info,
-        "total_cameras": len(camera_manager.cameras)
-    }
+
+    return {"cameras": cameras_info, "total_cameras": len(camera_manager.cameras)}
 
 
 # Mount static files for frontend (must be last to not override API routes)
 frontend_path = Path(__file__).parent.parent / "frontend" / "dist"
 if frontend_path.exists():
     # Serve static assets (JS, CSS, images)
-    app.mount("/assets", StaticFiles(directory=str(frontend_path / "assets")), name="assets")
-    
+    app.mount(
+        "/assets", StaticFiles(directory=str(frontend_path / "assets")), name="assets"
+    )
+
     # Catch-all route for SPA - must be last
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
@@ -367,7 +349,7 @@ if frontend_path.exists():
         # Don't intercept API routes
         if full_path.startswith("api/"):
             return {"error": "Not found"}
-        
+
         index_file = frontend_path / "index.html"
         if index_file.exists():
             return FileResponse(index_file)
@@ -376,9 +358,5 @@ if frontend_path.exists():
 
 if __name__ == "__main__":
     uvicorn.run(
-        "backend.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
+        "backend.main:app", host="0.0.0.0", port=8000, reload=True, log_level="info"
     )

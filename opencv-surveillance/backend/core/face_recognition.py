@@ -22,7 +22,9 @@ class FaceRecognitionManager:
     Manages face recognition operations including training, recognition, and storage
     """
 
-    def __init__(self, faces_folder: str = "faces", encodings_file: str = "face_encodings.pkl"):
+    def __init__(
+        self, faces_folder: str = "faces", encodings_file: str = "face_encodings.pkl"
+    ):
         """
         Initialize the face recognition manager
 
@@ -36,14 +38,14 @@ class FaceRecognitionManager:
         self.known_face_names = []
         self.face_locations = []
         self.face_names = []
-        self.detection_method = 'hog'  # 'hog' for CPU, 'cnn' for GPU
+        self.detection_method = "hog"  # 'hog' for CPU, 'cnn' for GPU
         self.recognition_threshold = 0.6
         self.last_recognition_time = None
         self.statistics = {
-            'total_people': 0,
-            'total_encodings': 0,
-            'recognitions_today': 0,
-            'last_recognition': None
+            "total_people": 0,
+            "total_encodings": 0,
+            "recognitions_today": 0,
+            "last_recognition": None,
         }
 
         # Create faces folder if it doesn't exist
@@ -52,11 +54,13 @@ class FaceRecognitionManager:
         # Load existing encodings if available
         self.load_encodings()
 
-        logger.info(f"FaceRecognitionManager initialized with {len(self.known_face_names)} known faces")
+        logger.info(
+            f"FaceRecognitionManager initialized with {len(self.known_face_names)} known faces"
+        )
 
     def set_detection_method(self, method: str):
         """Set face detection method: 'hog' (CPU) or 'cnn' (GPU)"""
-        if method in ['hog', 'cnn']:
+        if method in ["hog", "cnn"]:
             self.detection_method = method
             logger.info(f"Detection method set to: {method}")
         else:
@@ -82,7 +86,7 @@ class FaceRecognitionManager:
 
         if not os.path.exists(self.faces_folder):
             logger.warning(f"Faces folder not found: {self.faces_folder}")
-            return {'total_people': 0, 'total_encodings': 0, 'training_time': 0}
+            return {"total_people": 0, "total_encodings": 0, "training_time": 0}
 
         people_count = 0
         encodings_count = 0
@@ -99,7 +103,7 @@ class FaceRecognitionManager:
 
             # Load all images for this person
             for image_file in os.listdir(person_path):
-                if not image_file.lower().endswith(('.jpg', '.jpeg', '.png')):
+                if not image_file.lower().endswith((".jpg", ".jpeg", ".png")):
                     continue
 
                 image_path = os.path.join(person_path, image_file)
@@ -108,8 +112,7 @@ class FaceRecognitionManager:
                     # Load image and get face encodings
                     image = face_recognition.load_image_file(image_path)
                     face_encodings = face_recognition.face_encodings(
-                        image,
-                        model='large'  # Use large model for better accuracy
+                        image, model="large"  # Use large model for better accuracy
                     )
 
                     if len(face_encodings) > 0:
@@ -130,13 +133,13 @@ class FaceRecognitionManager:
         training_time = (datetime.now() - start_time).total_seconds()
 
         # Update statistics
-        self.statistics['total_people'] = people_count
-        self.statistics['total_encodings'] = encodings_count
+        self.statistics["total_people"] = people_count
+        self.statistics["total_encodings"] = encodings_count
 
         result = {
-            'total_people': people_count,
-            'total_encodings': encodings_count,
-            'training_time': training_time
+            "total_people": people_count,
+            "total_encodings": encodings_count,
+            "training_time": training_time,
         }
 
         logger.info(f"Training complete: {result}")
@@ -146,12 +149,12 @@ class FaceRecognitionManager:
         """Save face encodings to file"""
         try:
             data = {
-                'encodings': self.known_face_encodings,
-                'names': self.known_face_names,
-                'threshold': self.recognition_threshold,
-                'method': self.detection_method
+                "encodings": self.known_face_encodings,
+                "names": self.known_face_names,
+                "threshold": self.recognition_threshold,
+                "method": self.detection_method,
             }
-            with open(self.encodings_file, 'wb') as f:
+            with open(self.encodings_file, "wb") as f:
                 pickle.dump(data, f)
             logger.info(f"Encodings saved to: {self.encodings_file}")
         except Exception as e:
@@ -164,24 +167,28 @@ class FaceRecognitionManager:
             return
 
         try:
-            with open(self.encodings_file, 'rb') as f:
+            with open(self.encodings_file, "rb") as f:
                 data = pickle.load(f)
 
-            self.known_face_encodings = data.get('encodings', [])
-            self.known_face_names = data.get('names', [])
-            self.recognition_threshold = data.get('threshold', 0.6)
-            self.detection_method = data.get('method', 'hog')
+            self.known_face_encodings = data.get("encodings", [])
+            self.known_face_names = data.get("names", [])
+            self.recognition_threshold = data.get("threshold", 0.6)
+            self.detection_method = data.get("method", "hog")
 
             # Update statistics
-            self.statistics['total_encodings'] = len(self.known_face_encodings)
-            self.statistics['total_people'] = len(set(self.known_face_names))
+            self.statistics["total_encodings"] = len(self.known_face_encodings)
+            self.statistics["total_people"] = len(set(self.known_face_names))
 
-            logger.info(f"Loaded {len(self.known_face_encodings)} encodings for "
-                       f"{len(set(self.known_face_names))} people")
+            logger.info(
+                f"Loaded {len(self.known_face_encodings)} encodings for "
+                f"{len(set(self.known_face_names))} people"
+            )
         except Exception as e:
             logger.error(f"Error loading encodings: {e}")
 
-    def recognize_faces_in_frame(self, frame: np.ndarray) -> Tuple[np.ndarray, List[Dict]]:
+    def recognize_faces_in_frame(
+        self, frame: np.ndarray
+    ) -> Tuple[np.ndarray, List[Dict]]:
         """
         Detect and recognize faces in a video frame
 
@@ -202,8 +209,7 @@ class FaceRecognitionManager:
 
         # Detect faces
         face_locations = face_recognition.face_locations(
-            small_frame,
-            model=self.detection_method
+            small_frame, model=self.detection_method
         )
 
         # Get face encodings
@@ -212,7 +218,9 @@ class FaceRecognitionManager:
         detected_faces = []
 
         # Process each detected face
-        for (top, right, bottom, left), face_encoding in zip(face_locations, face_encodings):
+        for (top, right, bottom, left), face_encoding in zip(
+            face_locations, face_encodings
+        ):
             # Scale back up face locations
             top *= 4
             right *= 4
@@ -223,7 +231,7 @@ class FaceRecognitionManager:
             matches = face_recognition.compare_faces(
                 self.known_face_encodings,
                 face_encoding,
-                tolerance=self.recognition_threshold
+                tolerance=self.recognition_threshold,
             )
 
             name = "Unknown"
@@ -231,8 +239,7 @@ class FaceRecognitionManager:
 
             # Calculate face distances
             face_distances = face_recognition.face_distance(
-                self.known_face_encodings,
-                face_encoding
+                self.known_face_encodings, face_encoding
             )
 
             if len(face_distances) > 0:
@@ -242,35 +249,46 @@ class FaceRecognitionManager:
                     confidence = 1.0 - face_distances[best_match_index]
 
             # Store detection info
-            detected_faces.append({
-                'name': name,
-                'confidence': float(confidence),
-                'location': {
-                    'top': int(top),
-                    'right': int(right),
-                    'bottom': int(bottom),
-                    'left': int(left)
-                },
-                'timestamp': datetime.now().isoformat()
-            })
+            detected_faces.append(
+                {
+                    "name": name,
+                    "confidence": float(confidence),
+                    "location": {
+                        "top": int(top),
+                        "right": int(right),
+                        "bottom": int(bottom),
+                        "left": int(left),
+                    },
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
 
             # Draw rectangle around face
             color = (0, 255, 0) if name != "Unknown" else (0, 0, 255)
             cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
 
             # Draw label background
-            cv2.rectangle(frame, (left, bottom - 35), (right, bottom), color, cv2.FILLED)
+            cv2.rectangle(
+                frame, (left, bottom - 35), (right, bottom), color, cv2.FILLED
+            )
 
             # Draw label text
             label = f"{name} ({confidence:.2f})" if name != "Unknown" else "Unknown"
-            cv2.putText(frame, label, (left + 6, bottom - 6),
-                       cv2.FONT_HERSHEY_DUPLEX, 0.6, (255, 255, 255), 1)
+            cv2.putText(
+                frame,
+                label,
+                (left + 6, bottom - 6),
+                cv2.FONT_HERSHEY_DUPLEX,
+                0.6,
+                (255, 255, 255),
+                1,
+            )
 
         # Update statistics
         if detected_faces:
             self.last_recognition_time = datetime.now()
-            self.statistics['last_recognition'] = self.last_recognition_time.isoformat()
-            self.statistics['recognitions_today'] += len(detected_faces)
+            self.statistics["last_recognition"] = self.last_recognition_time.isoformat()
+            self.statistics["recognitions_today"] += len(detected_faces)
 
         return frame, detected_faces
 
@@ -316,6 +334,7 @@ class FaceRecognitionManager:
 
         try:
             import shutil
+
             shutil.rmtree(person_path)
             logger.info(f"Deleted person: {person_name}")
 
@@ -345,18 +364,19 @@ class FaceRecognitionManager:
                 continue
 
             # Count photos
-            photo_count = len([
-                f for f in os.listdir(person_path)
-                if f.lower().endswith(('.jpg', '.jpeg', '.png'))
-            ])
+            photo_count = len(
+                [
+                    f
+                    for f in os.listdir(person_path)
+                    if f.lower().endswith((".jpg", ".jpeg", ".png"))
+                ]
+            )
 
-            people.append({
-                'name': person_name,
-                'photo_count': photo_count,
-                'path': person_path
-            })
+            people.append(
+                {"name": person_name, "photo_count": photo_count, "path": person_path}
+            )
 
-        return sorted(people, key=lambda x: x['name'])
+        return sorted(people, key=lambda x: x["name"])
 
     def get_statistics(self) -> Dict:
         """Get face recognition statistics"""
@@ -374,10 +394,10 @@ _face_manager: Optional[FaceRecognitionManager] = None
 def get_face_manager(faces_folder: str = "faces") -> FaceRecognitionManager:
     """
     Get or create the global face recognition manager instance
-    
+
     Args:
         faces_folder: Directory containing person subdirectories with face images
-        
+
     Returns:
         Global FaceRecognitionManager instance
     """
@@ -386,6 +406,8 @@ def get_face_manager(faces_folder: str = "faces") -> FaceRecognitionManager:
         _face_manager = FaceRecognitionManager(faces_folder=faces_folder)
     elif _face_manager.faces_folder != faces_folder:
         # Reinitialize if faces folder changed
-        logger.info(f"Faces folder changed from {_face_manager.faces_folder} to {faces_folder}")
+        logger.info(
+            f"Faces folder changed from {_face_manager.faces_folder} to {faces_folder}"
+        )
         _face_manager = FaceRecognitionManager(faces_folder=faces_folder)
     return _face_manager

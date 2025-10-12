@@ -15,7 +15,6 @@ import asyncio
 from backend.core.alert_manager import get_alert_manager
 
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -41,7 +40,9 @@ class FaceDetector:
         self.detections_buffer = []  # Store recent detections
         self.max_buffer_size = 10
 
-        logger.info(f"FaceDetector initialized (enabled={enabled}, faces_dir={faces_dir})")
+        logger.info(
+            f"FaceDetector initialized (enabled={enabled}, faces_dir={faces_dir})"
+        )
 
     def set_enabled(self, enabled: bool):
         """Enable or disable face detection"""
@@ -68,7 +69,9 @@ class FaceDetector:
         time_since_last = (datetime.now() - self.last_detection_time).total_seconds()
         return time_since_last >= self.detection_cooldown
 
-    def process_frame(self, frame: np.ndarray, motion_detected: bool = False) -> Tuple[np.ndarray, List[Dict]]:
+    def process_frame(
+        self, frame: np.ndarray, motion_detected: bool = False
+    ) -> Tuple[np.ndarray, List[Dict]]:
         """
         Process a frame for face detection and recognition
 
@@ -84,7 +87,9 @@ class FaceDetector:
 
         try:
             # Perform face recognition
-            annotated_frame, detected_faces = self.face_manager.recognize_faces_in_frame(frame)
+            annotated_frame, detected_faces = (
+                self.face_manager.recognize_faces_in_frame(frame)
+            )
 
             # Update last detection time
             self.last_detection_time = datetime.now()
@@ -92,31 +97,37 @@ class FaceDetector:
             # Add detections to buffer
             if detected_faces:
                 for face in detected_faces:
-                    face['motion_detected'] = motion_detected
+                    face["motion_detected"] = motion_detected
                     self.detections_buffer.append(face)
-                    
+
                     # NEW: Trigger face recognition alert
                     try:
                         alert_manager = get_alert_manager()
-                        camera_id = getattr(self, 'camera_id', 'unknown')
-                        is_known = face['name'] != 'Unknown'
-                        
-                        asyncio.create_task(alert_manager.trigger_face_recognition_alert(
-                            camera_id=camera_id,
-                            person_name=face['name'],
-                            confidence=face['confidence'],
-                            is_known=is_known,
-                            event_data=face
-                        ))
+                        camera_id = getattr(self, "camera_id", "unknown")
+                        is_known = face["name"] != "Unknown"
+
+                        asyncio.create_task(
+                            alert_manager.trigger_face_recognition_alert(
+                                camera_id=camera_id,
+                                person_name=face["name"],
+                                confidence=face["confidence"],
+                                is_known=is_known,
+                                event_data=face,
+                            )
+                        )
                     except Exception as e:
                         logger.error(f"Error triggering face alert: {e}")
 
                 # Trim buffer to max size
                 if len(self.detections_buffer) > self.max_buffer_size:
-                    self.detections_buffer = self.detections_buffer[-self.max_buffer_size:]
+                    self.detections_buffer = self.detections_buffer[
+                        -self.max_buffer_size :
+                    ]
 
-                logger.info(f"Detected {len(detected_faces)} face(s): "
-                          f"{[f['name'] for f in detected_faces]}")
+                logger.info(
+                    f"Detected {len(detected_faces)} face(s): "
+                    f"{[f['name'] for f in detected_faces]}"
+                )
 
             return annotated_frame, detected_faces
 
@@ -148,12 +159,18 @@ class FaceDetector:
         Returns:
             Dictionary with statistics
         """
-        unique_people = set(d['name'] for d in self.detections_buffer if d['name'] != 'Unknown')
+        unique_people = set(
+            d["name"] for d in self.detections_buffer if d["name"] != "Unknown"
+        )
 
         return {
-            'enabled': self.enabled,
-            'total_detections': len(self.detections_buffer),
-            'unique_people_detected': len(unique_people),
-            'last_detection_time': self.last_detection_time.isoformat() if self.last_detection_time else None,
-            'face_manager_ready': self.face_manager.is_available()
+            "enabled": self.enabled,
+            "total_detections": len(self.detections_buffer),
+            "unique_people_detected": len(unique_people),
+            "last_detection_time": (
+                self.last_detection_time.isoformat()
+                if self.last_detection_time
+                else None
+            ),
+            "face_manager_ready": self.face_manager.is_available(),
         }

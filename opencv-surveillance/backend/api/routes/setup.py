@@ -17,37 +17,40 @@ router = APIRouter(prefix="/api/setup", tags=["setup"])
 
 class SetupInitializeRequest(BaseModel):
     """Request model for initializing admin account."""
+
     username: str = Field(..., min_length=3, max_length=50)
     email: EmailStr
-    password: str = Field(..., min_length=8)  # No character limit, but we validate bytes
+    password: str = Field(
+        ..., min_length=8
+    )  # No character limit, but we validate bytes
 
-    @validator('password')
+    @validator("password")
     def validate_password_strength(cls, v):
         """Validate password meets security requirements."""
         errors = []
-        
+
         if len(v) < 8:
             errors.append("Password must be at least 8 characters long")
-        
+
         # Note: We don't reject passwords > 72 bytes here.
         # The hash_password() function will automatically truncate them.
         # This provides better UX - passwords "just work"
-        
-        if not re.search(r'[A-Z]', v):
+
+        if not re.search(r"[A-Z]", v):
             errors.append("Password must contain at least one uppercase letter")
-        
-        if not re.search(r'[a-z]', v):
+
+        if not re.search(r"[a-z]", v):
             errors.append("Password must contain at least one lowercase letter")
-        
-        if not re.search(r'\d', v):
+
+        if not re.search(r"\d", v):
             errors.append("Password must contain at least one number")
-        
+
         if not re.search(r'[!@#$%^&*(),.?":{}|<>]', v):
             errors.append("Password must contain at least one special character")
-        
+
         if errors:
             raise ValueError(", ".join(errors))
-        
+
         return v
 
 
@@ -59,17 +62,15 @@ async def check_setup_status():
     """
     try:
         db = next(get_db())
-        
+
         # Check if any admin user exists
         admin_user = db.query(User).filter(User.role == "admin").first()
-        
-        return {
-            "setup_complete": admin_user is not None
-        }
+
+        return {"setup_complete": admin_user is not None}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to check setup status: {str(e)}"
+            detail=f"Failed to check setup status: {str(e)}",
         )
 
 
@@ -81,31 +82,31 @@ async def initialize_setup(request: SetupInitializeRequest):
     """
     try:
         db = next(get_db())
-        
+
         # Check if admin already exists
         existing_admin = db.query(User).filter(User.role == "admin").first()
         if existing_admin:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Setup has already been completed. Admin user exists."
+                detail="Setup has already been completed. Admin user exists.",
             )
-        
+
         # Check if username is taken
         existing_user = db.query(User).filter(User.username == request.username).first()
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Username is already taken"
+                detail="Username is already taken",
             )
-        
+
         # Check if email is taken
         existing_email = db.query(User).filter(User.email == request.email).first()
         if existing_email:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email is already registered"
+                detail="Email is already registered",
             )
-        
+
         # Create admin user
         hashed_pw = hash_password(request.password)
         admin_user = User(
@@ -113,13 +114,13 @@ async def initialize_setup(request: SetupInitializeRequest):
             email=request.email,
             hashed_password=hashed_pw,
             role="admin",
-            is_active=True
+            is_active=True,
         )
-        
+
         db.add(admin_user)
         db.commit()
         db.refresh(admin_user)
-        
+
         return {
             "success": True,
             "message": "Admin account created successfully",
@@ -127,21 +128,18 @@ async def initialize_setup(request: SetupInitializeRequest):
                 "id": admin_user.id,
                 "username": admin_user.username,
                 "email": admin_user.email,
-                "role": admin_user.role
-            }
+                "role": admin_user.role,
+            },
         }
-        
+
     except HTTPException:
         raise
     except ValueError as e:
         # Password validation error
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to initialize setup: {str(e)}"
+            detail=f"Failed to initialize setup: {str(e)}",
         )
