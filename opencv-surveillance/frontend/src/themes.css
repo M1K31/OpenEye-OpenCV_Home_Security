@@ -355,6 +355,151 @@ html.fman-theme body {
 }
 
 /* ===================
+   AQUA SECURITY THEME (Liquid Glass)
+   =================== */
+html.aquasecurity-theme,
+html.aquasecurity-theme body {
+  /* Color Palette Variables */
+  --color-primary-bg: #1A1A1D;             /* Deep Charcoal (Main Background) */
+  --color-secondary-bg: rgba(255, 255, 255, 0.15); /* Light Frosted Glass Base (15% White) */
+  --color-accent: #00AEEF;                 /* Dynamic Cyan (Highlight, Status) */
+  --color-text-primary: #FFFFFF;           /* Pure White for high contrast */
+  --color-text-secondary: rgba(255, 255, 255, 0.7); /* Semi-transparent White for hierarchy */
+  
+  /* Glass/Depth Variables */
+  --glass-blur-strength: 20px;             /* Defines the strength of the blur effect */
+  --glass-saturation: 150%;                /* Increases saturation beneath the glass */
+  --shadow-subtle: 0 4px 12px rgba(0, 0, 0, 0.4); /* Provides depth */
+  --border-radius-primary: 12px;           /* Standard rounded corners */
+  --font-family: 'Inter', system-ui, -apple-system, sans-serif; /* High-clarity typeface */
+  
+  /* Standard Variables (for compatibility with existing components) */
+  --bg-main: #1A1A1D;
+  --bg-panel: rgba(255, 255, 255, 0.15);
+  --bg-input: rgba(255, 255, 255, 0.1);
+  --bg-hover: rgba(255, 255, 255, 0.2);
+  
+  --text-primary: #FFFFFF;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-link: #00AEEF;
+  
+  --border-panel: rgba(255, 255, 255, 0.1);
+  --border-input: rgba(255, 255, 255, 0.2);
+  
+  --state-active: rgba(0, 174, 239, 0.3);
+  --color-success: #10B981;
+  --color-error: #EF4444;
+  --color-warning: #F59E0B;
+  
+  /* Theme-specific variables */
+  --theme-primary: #00AEEF;
+  --theme-primary-dark: #0088CC;
+  --theme-secondary: rgba(255, 255, 255, 0.15);
+  --theme-background: #1A1A1D;
+  --theme-text: #FFFFFF;
+  --theme-text-secondary: rgba(255, 255, 255, 0.7);
+  --theme-card-bg: rgba(255, 255, 255, 0.15);
+  --theme-border: rgba(255, 255, 255, 0.1);
+  --theme-accent: #00AEEF;
+  --theme-success: #10B981;
+  --theme-error: #EF4444;
+  --theme-warning: #F59E0B;
+  --theme-code-bg: rgba(0, 0, 0, 0.3);
+  
+  /* Shadow */
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  
+  background-color: var(--color-primary-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-family);
+}
+
+/* CRITICAL: Applies the Liquid Glass/Frosted Glass Blur Effect */
+html.aquasecurity-theme .sidebar,
+html.aquasecurity-theme nav,
+html.aquasecurity-theme [role="navigation"] {
+  background: var(--color-secondary-bg);
+  backdrop-filter: blur(var(--glass-blur-strength)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-blur-strength)) saturate(var(--glass-saturation));
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: var(--shadow-subtle);
+  transition: all 0.3s ease-out;
+}
+
+/* UI Cards, Panels, and Modals - Half the blur for content clarity */
+html.aquasecurity-theme .ui-card,
+html.aquasecurity-theme .card,
+html.aquasecurity-theme .panel,
+html.aquasecurity-theme .modal-overlay,
+html.aquasecurity-theme section {
+  background: var(--color-secondary-bg);
+  backdrop-filter: blur(calc(var(--glass-blur-strength) / 2));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur-strength) / 2));
+  border-radius: var(--border-radius-primary);
+  box-shadow: var(--shadow-subtle);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Interactive Elements (Buttons and Navigation) */
+html.aquasecurity-theme button,
+html.aquasecurity-theme .btn,
+html.aquasecurity-theme .btn-primary {
+  background-color: var(--color-accent);
+  color: var(--color-primary-bg);
+  border-radius: 999px; /* Pill shape */
+  border: none;
+  padding: 8px 16px;
+  transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+  font-weight: 500;
+}
+
+html.aquasecurity-theme button:hover,
+html.aquasecurity-theme .btn:hover,
+html.aquasecurity-theme .btn-primary:hover {
+  background-color: color-mix(in srgb, var(--color-accent) 90%, #FFFFFF);
+  box-shadow: 0 0 15px rgba(0, 174, 239, 0.5);
+  transform: translateY(-1px);
+}
+
+html.aquasecurity-theme .nav-item.active {
+  background-color: var(--color-accent);
+  color: var(--color-primary-bg);
+  border-radius: 999px;
+  box-shadow: 0 0 10px rgba(0, 174, 239, 0.3);
+}
+
+/* Icon/Text Styling */
+html.aquasecurity-theme .icon-active {
+  color: var(--color-accent);
+}
+
+html.aquasecurity-theme .text-secondary {
+  color: var(--color-text-secondary);
+}
+
+/* Inputs for consistent feel */
+html.aquasecurity-theme input,
+html.aquasecurity-theme textarea,
+html.aquasecurity-theme select,
+html.aquasecurity-theme .ui-input {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--color-text-primary);
+  border-radius: 6px;
+  padding: 8px;
+  transition: all 0.2s ease;
+}
+
+html.aquasecurity-theme input:focus,
+html.aquasecurity-theme textarea:focus,
+html.aquasecurity-theme select:focus,
+html.aquasecurity-theme .ui-input:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(0, 174, 239, 0.1);
+  outline: none;
+}
+
+/* ===================
    GLOBAL COMPONENT STYLES
    =================== */
 
@@ -371,13 +516,16 @@ body {
   min-height: 100vh;
 }
 
-/* Panels & Cards */
+/* Panels & Cards - Rounded corners for modern look */
 .panel,
 .card,
 section {
   background-color: var(--bg-panel);
   border: 1px solid var(--border-panel);
   color: var(--text-primary);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 8px var(--shadow);
 }
 
 /* Headers */
@@ -394,18 +542,25 @@ a:hover {
   opacity: 0.8;
 }
 
-/* Buttons */
+/* Buttons - Pill-shaped style for all themes */
 button,
 .btn {
   background-color: var(--bg-panel);
   border: 1px solid var(--border-input);
   color: var(--text-primary);
+  border-radius: 999px; /* Pill shape */
+  padding: 8px 20px;
+  font-weight: 500;
+  transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+  cursor: pointer;
 }
 
 button:hover,
 .btn:hover {
   background-color: var(--bg-hover);
   border-color: var(--border-input);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px var(--shadow);
 }
 
 button:active,
@@ -413,6 +568,7 @@ button:active,
 button.active,
 .btn.active {
   background-color: var(--state-active);
+  transform: translateY(0);
 }
 
 .btn-primary,
@@ -422,11 +578,23 @@ button.primary {
   color: #ffffff;
 }
 
+.btn-primary:hover,
+button.primary:hover {
+  background-color: var(--theme-primary-dark);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
 .btn-success,
 button.success {
   background-color: var(--color-success);
   border-color: var(--color-success);
   color: #ffffff;
+}
+
+.btn-success:hover,
+button.success:hover {
+  background-color: var(--success-dark);
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
 }
 
 .btn-danger,
@@ -436,6 +604,12 @@ button.danger {
   color: #ffffff;
 }
 
+.btn-danger:hover,
+button.danger:hover {
+  background-color: #c82333;
+  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
+}
+
 .btn-warning,
 button.warning {
   background-color: var(--color-warning);
@@ -443,13 +617,22 @@ button.warning {
   color: #000000;
 }
 
-/* Input Fields */
+.btn-warning:hover,
+button.warning:hover {
+  background-color: #e0a800;
+  box-shadow: 0 4px 12px rgba(255, 193, 7, 0.4);
+}
+
+/* Input Fields - Rounded corners to match button style */
 input,
 textarea,
 select {
   background-color: var(--bg-input);
   border: 1px solid var(--border-input);
   color: var(--text-primary);
+  border-radius: 12px;
+  padding: 8px 16px;
+  transition: all 0.2s ease;
 }
 
 input::placeholder,
@@ -463,7 +646,7 @@ textarea:focus,
 select:focus {
   border-color: var(--theme-primary);
   outline: none;
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
 }
 
 /* Labels */

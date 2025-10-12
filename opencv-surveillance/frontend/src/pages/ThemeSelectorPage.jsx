@@ -60,6 +60,12 @@ const ThemeSelectorPage = ({ embedded = false }) => {
       description: 'Willpower green - cosmic power glow',
       colors: ['#00a064', '#007447', '#222'],
     },
+    [THEMES.AQUA_SECURITY]: {
+      name: 'Aqua Security',
+      icon: '💧',
+      description: 'Liquid glass - modern frosted transparency',
+      colors: ['#1A1A1D', '#00AEEF', '#FFFFFF'],
+    },
   };
 
   const applyTheme = (theme) => {

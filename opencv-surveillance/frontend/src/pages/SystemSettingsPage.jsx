@@ -1,12 +1,13 @@
 // Copyright (c) 2025 Mikel Smart
 // This file is part of OpenEye-OpenCV_Home_Security
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import apiClient from '../api/apiClient';
 
 const SystemSettingsPage = ({ embedded = false }) => {
   const [settings, setSettings] = useState({
     recordings_path: '',
     faces_path: '',
+    snapshots_path: '',
     display_mode: 'grid',
     cycle_interval: 5,
     max_recording_duration: 300,
@@ -17,16 +18,23 @@ const SystemSettingsPage = ({ embedded = false }) => {
   const [message, setMessage] = useState({ type: '', text: '' });
   const [pathValidation, setPathValidation] = useState({});
   const [cameras, setCameras] = useState([]);
+  const [pendingCameraUpdates, setPendingCameraUpdates] = useState({});
+  const updateTimersRef = useRef({});
 
   // Load settings and cameras
   useEffect(() => {
     loadSettings();
     loadCameras();
+
+    // Cleanup: clear all pending timers on unmount
+    return () => {
+      Object.values(updateTimersRef.current).forEach(timer => clearTimeout(timer));
+    };
   }, []);
 
   const loadSettings = async () => {
     try {
-      const response = await axios.get('/api/settings');
+      const response = await apiClient.get('/settings');
       setSettings(response.data);
       setLoading(false);
     } catch (error) {
@@ -38,7 +46,7 @@ const SystemSettingsPage = ({ embedded = false }) => {
 
   const loadCameras = async () => {
     try {
-      const response = await axios.get('/api/cameras/');
+      const response = await apiClient.get('/cameras/');
       setCameras(response.data.cameras || []);
     } catch (error) {
       console.error('Error loading cameras:', error);
@@ -63,7 +71,7 @@ const SystemSettingsPage = ({ embedded = false }) => {
       };
       console.log('Request data:', requestData);
       
-      const response = await axios.post('/api/settings/validate-path', requestData);
+      const response = await apiClient.post('/settings/validate-path', requestData);
       console.log('Validation response:', response.data);
 
       const isValid = response.data.exists && response.data.is_directory && response.data.writable;
@@ -120,7 +128,7 @@ const SystemSettingsPage = ({ embedded = false }) => {
     setSettings(prev => ({ ...prev, [field]: value }));
     
     // Don't validate paths if they're empty
-    if (field === 'recordings_path' || field === 'faces_path') {
+    if (field === 'recordings_path' || field === 'faces_path' || field === 'snapshots_path') {
       if (value && value.trim() !== '') {
         // Debounce validation to avoid excessive API calls
         clearTimeout(window.pathValidationTimeout);
@@ -137,7 +145,7 @@ const SystemSettingsPage = ({ embedded = false }) => {
 
     try {
       // Skip path validation for now - just save
-      const response = await axios.patch('/api/settings', settings);
+      const response = await apiClient.patch('/settings', settings);
       setMessage({ type: 'success', text: '✓ Settings saved successfully! Restart server for changes to take effect.' });
       setSaving(false);
     } catch (error) {
@@ -150,20 +158,51 @@ const SystemSettingsPage = ({ embedded = false }) => {
     }
   };
 
-  const handleCameraFeatureToggle = async (cameraId, feature, enabled) => {
-    try {
-      await axios.patch(`/api/cameras/${cameraId}`, {
-        [feature]: enabled
-      });
-      
-      // Reload cameras to reflect changes
-      loadCameras();
-      setMessage({ type: 'success', text: `✓ Camera ${feature} updated` });
-    } catch (error) {
-      console.error('Error updating camera:', error);
-      setMessage({ type: 'error', text: 'Failed to update camera settings' });
+  const handleCameraFeatureToggle = useCallback((cameraId, feature, value) => {
+    // Update local state immediately for smooth UI
+    setCameras(prevCameras => 
+      prevCameras.map(cam => 
+        cam.camera_id === cameraId ? { ...cam, [feature]: value } : cam
+      )
+    );
+
+    // Store pending update
+    setPendingCameraUpdates(prev => ({
+      ...prev,
+      [cameraId]: {
+        ...prev[cameraId],
+        [feature]: value
+      }
+    }));
+
+    // Clear existing timer for this camera
+    if (updateTimersRef.current[cameraId]) {
+      clearTimeout(updateTimersRef.current[cameraId]);
     }
-  };
+
+    // Set new timer to send update after 500ms of no changes
+    updateTimersRef.current[cameraId] = setTimeout(async () => {
+      try {
+        const updates = pendingCameraUpdates[cameraId] || { [feature]: value };
+        await apiClient.patch(`/cameras/${cameraId}`, updates);
+        
+        // Clear pending updates for this camera
+        setPendingCameraUpdates(prev => {
+          const newPending = { ...prev };
+          delete newPending[cameraId];
+          return newPending;
+        });
+        
+        // Reload cameras to get server state
+        await loadCameras();
+      } catch (error) {
+        console.error('Error updating camera:', error);
+        setMessage({ type: 'error', text: 'Failed to update camera settings' });
+        // Reload to revert to server state
+        loadCameras();
+      }
+    }, 500); // 500ms debounce
+  }, [pendingCameraUpdates]);
 
   // Helper function to get camera setting value with safe defaults
   const getCameraValue = (camera, property, defaultValue) => {
@@ -179,8 +218,17 @@ const SystemSettingsPage = ({ embedded = false }) => {
   // This function now serves as a helper to guide users
   const handleDirectorySelect = (pathType) => {
     // Show a helpful dialog with path examples
-    const pathName = pathType === 'recordings_path' ? 'recordings' : 'face images';
-    const defaultPath = pathType === 'recordings_path' ? 'recordings' : 'faces';
+    let pathName, defaultPath;
+    if (pathType === 'recordings_path') {
+      pathName = 'recordings';
+      defaultPath = 'recordings';
+    } else if (pathType === 'faces_path') {
+      pathName = 'face images';
+      defaultPath = 'faces';
+    } else if (pathType === 'snapshots_path') {
+      pathName = 'motion detection snapshots';
+      defaultPath = 'data/snapshots';
+    }
     
     const userPath = prompt(
       `Enter the full path where you want to store ${pathName}:\n\n` +
@@ -306,6 +354,39 @@ const SystemSettingsPage = ({ embedded = false }) => {
                 color: pathValidation.faces_path.valid ? 'var(--color-success)' : 'var(--color-error)'
               }}>
                 {pathValidation.faces_path.message}
+              </div>
+            )}
+          </div>
+
+          <div style={styles.formGroup}>
+            <label style={styles.label}>
+              <span style={styles.labelText}>Snapshots Path</span>
+              <span style={styles.labelHint}>Full path to directory where motion detection snapshots are saved (e.g., /path/to/snapshots)</span>
+            </label>
+            <div style={styles.pathInputContainer}>
+              <input
+                type="text"
+                value={settings.snapshots_path}
+                onChange={(e) => handleInputChange('snapshots_path', e.target.value)}
+                onBlur={(e) => validatePath(e.target.value, 'snapshots_path')}
+                style={styles.pathInput}
+                placeholder="data/snapshots"
+              />
+              <button
+                onClick={() => handleDirectorySelect('snapshots_path')}
+                style={styles.browseButton}
+                type="button"
+                title="Enter path with helpful examples"
+              >
+                📁 Set Path
+              </button>
+            </div>
+            {pathValidation.snapshots_path && (
+              <div style={{
+                ...styles.validationMessage,
+                color: pathValidation.snapshots_path.valid ? 'var(--color-success)' : 'var(--color-error)'
+              }}>
+                {pathValidation.snapshots_path.message}
               </div>
             )}
           </div>
@@ -469,13 +550,13 @@ const SystemSettingsPage = ({ embedded = false }) => {
                       <div style={styles.sliderRow}>
                         <label style={styles.sliderLabel}>
                           <span style={styles.sliderText}>Brightness</span>
-                          <span style={styles.sliderValue}>{getCameraValue(camera, 'brightness', 50)}%</span>
+                          <span style={styles.sliderValue}>{getCameraValue(camera, 'brightness', 0)}</span>
                         </label>
                         <input
                           type="range"
-                          min="0"
+                          min="-100"
                           max="100"
-                          value={getCameraValue(camera, 'brightness', 50)}
+                          value={getCameraValue(camera, 'brightness', 0)}
                           onChange={(e) => handleCameraFeatureToggle(
                             camera.camera_id,
                             'brightness',
@@ -483,62 +564,64 @@ const SystemSettingsPage = ({ embedded = false }) => {
                           )}
                           style={styles.slider}
                         />
-                        <span style={styles.sliderHint}>Adjust camera brightness (0-100%)</span>
+                        <span style={styles.sliderHint}>Adjust camera brightness (-100 to 100, 0=normal)</span>
                       </div>
 
                       {/* Contrast Control */}
                       <div style={styles.sliderRow}>
                         <label style={styles.sliderLabel}>
                           <span style={styles.sliderText}>Contrast</span>
-                          <span style={styles.sliderValue}>{getCameraValue(camera, 'contrast', 50)}%</span>
+                          <span style={styles.sliderValue}>{getCameraValue(camera, 'contrast', 1.0).toFixed(1)}</span>
                         </label>
                         <input
                           type="range"
-                          min="0"
-                          max="100"
-                          value={getCameraValue(camera, 'contrast', 50)}
+                          min="0.5"
+                          max="3.0"
+                          step="0.1"
+                          value={getCameraValue(camera, 'contrast', 1.0)}
                           onChange={(e) => handleCameraFeatureToggle(
                             camera.camera_id,
                             'contrast',
-                            parseInt(e.target.value)
+                            parseFloat(e.target.value)
                           )}
                           style={styles.slider}
                         />
-                        <span style={styles.sliderHint}>Adjust camera contrast (0-100%)</span>
+                        <span style={styles.sliderHint}>Adjust camera contrast (0.5 to 3.0, 1.0=normal)</span>
                       </div>
 
                       {/* Saturation Control */}
                       <div style={styles.sliderRow}>
                         <label style={styles.sliderLabel}>
                           <span style={styles.sliderText}>Saturation</span>
-                          <span style={styles.sliderValue}>{getCameraValue(camera, 'saturation', 50)}%</span>
+                          <span style={styles.sliderValue}>{getCameraValue(camera, 'saturation', 1.0).toFixed(1)}</span>
                         </label>
                         <input
                           type="range"
-                          min="0"
-                          max="100"
-                          value={getCameraValue(camera, 'saturation', 50)}
+                          min="0.0"
+                          max="2.0"
+                          step="0.1"
+                          value={getCameraValue(camera, 'saturation', 1.0)}
                           onChange={(e) => handleCameraFeatureToggle(
                             camera.camera_id,
                             'saturation',
-                            parseInt(e.target.value)
+                            parseFloat(e.target.value)
                           )}
                           style={styles.slider}
                         />
-                        <span style={styles.sliderHint}>Adjust color saturation (0-100%)</span>
+                        <span style={styles.sliderHint}>Adjust color saturation (0.0 to 2.0, 1.0=normal)</span>
                       </div>
 
                       {/* Motion Sensitivity */}
                       <div style={styles.sliderRow}>
                         <label style={styles.sliderLabel}>
                           <span style={styles.sliderText}>Motion Sensitivity</span>
-                          <span style={styles.sliderValue}>{getCameraValue(camera, 'motion_sensitivity', 50)}%</span>
+                          <span style={styles.sliderValue}>{getCameraValue(camera, 'motion_sensitivity', 5)}</span>
                         </label>
                         <input
                           type="range"
-                          min="0"
-                          max="100"
-                          value={getCameraValue(camera, 'motion_sensitivity', 50)}
+                          min="1"
+                          max="10"
+                          value={getCameraValue(camera, 'motion_sensitivity', 5)}
                           onChange={(e) => handleCameraFeatureToggle(
                             camera.camera_id,
                             'motion_sensitivity',
@@ -546,29 +629,28 @@ const SystemSettingsPage = ({ embedded = false }) => {
                           )}
                           style={styles.slider}
                         />
-                        <span style={styles.sliderHint}>Lower = less sensitive, Higher = more sensitive</span>
+                        <span style={styles.sliderHint}>1 = Low sensitivity (large movements only), 10 = High sensitivity (small movements)</span>
                       </div>
 
                       {/* FPS Control */}
                       <div style={styles.sliderRow}>
                         <label style={styles.sliderLabel}>
                           <span style={styles.sliderText}>Frame Rate (FPS)</span>
-                          <span style={styles.sliderValue}>{getCameraValue(camera, 'fps', 15)}</span>
+                          <span style={styles.sliderValue}>{getCameraValue(camera, 'fps_target', 15)}</span>
                         </label>
                         <input
                           type="range"
-                          min="5"
+                          min="1"
                           max="30"
-                          step="5"
-                          value={getCameraValue(camera, 'fps', 15)}
+                          value={getCameraValue(camera, 'fps_target', 15)}
                           onChange={(e) => handleCameraFeatureToggle(
                             camera.camera_id,
-                            'fps',
+                            'fps_target',
                             parseInt(e.target.value)
                           )}
                           style={styles.slider}
                         />
-                        <span style={styles.sliderHint}>Frames per second (5-30 FPS)</span>
+                        <span style={styles.sliderHint}>Frames per second (1-30 FPS)</span>
                       </div>
 
                       {/* Resolution Control */}

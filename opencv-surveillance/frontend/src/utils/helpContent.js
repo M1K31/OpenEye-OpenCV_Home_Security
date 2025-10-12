@@ -144,8 +144,8 @@ export const HELP_CONTENT = {
 
   // Themes
   THEMES: {
-    title: "Superhero Themes",
-    description: "Choose from 8 superhero-inspired themes: Sman (Classic red/blue), Bman (Dark knight), W Woman (Warrior gold), Flah (Speed red), Aman (Ocean teal), Cy (Tech silver), G Lantern (Willpower green), and Default (Professional blue). Access via Dashboard → 'Themes'. Theme persists across sessions."
+    title: "Application Themes",
+    description: "Choose from 9 unique themes: Default (Professional blue), Sman (Classic red/blue), Bman (Dark knight), W Woman (Warrior gold), Flah (Speed red), Aman (Ocean teal), Cy (Tech silver), G Lantern (Willpower green), and Aqua Security (Liquid glass with modern frosted transparency). Access via Dashboard → 'Themes'. Theme persists across sessions."
   },
 
   // Live Streaming

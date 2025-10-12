@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  openeye-test:
+    image: openeye-test:v3.5.0-local
+    container_name: openeye-phase2-test
+    ports:
+      - "8001:8000"  # Using port 8001 to avoid conflicts
+    volumes:
+      - ./test-data:/app/data
+      - ./test-recordings:/app/recordings
+      - ./test-faces:/app/faces
+    environment:
+      - SECRET_KEY=test_secret_key_for_phase2_testing_only_do_not_use_in_production
+      - JWT_SECRET_KEY=test_jwt_secret_key_for_phase2_testing_only_do_not_use
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+    restart: unless-stopped

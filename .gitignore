@@ -1,0 +1,92 @@
+# Logs
+*.log
+server.log
+
+# Database files
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+surveillance.db
+openeye.db
+
+# Media files - Images
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.ico
+
+# Media files - Videos
+*.mp4
+*.avi
+*.mov
+*.wmv
+*.flv
+*.mkv
+*.webm
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# OS files
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+
+# Development data and test files
+data/
+test-data/
+test-faces/
+test-recordings/
+faces/
+recordings/
+snapshots/
+
+# Archives
+archives/
+
+# Backups
+*.backup
+*.bak
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# Node modules (frontend)
+opencv-surveillance/frontend/node_modules/
+opencv-surveillance/frontend/dist/
+opencv-surveillance/frontend/.cache/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Build artifacts
+build/
+dist/
+*.egg-info/

@@ -1,7 +1,7 @@
 // Copyright (c) 2025 Mikel Smart
 // This file is part of OpenEye-OpenCV_Home_Security
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import apiClient from '../api/apiClient';
 
 const CameraDiscoveryPage = ({ onBack }) => {
   const [usbCameras, setUsbCameras] = useState([]);
@@ -16,7 +16,7 @@ const CameraDiscoveryPage = ({ onBack }) => {
     if (scanning.network) {
       interval = setInterval(async () => {
         try {
-          const response = await axios.get('/api/cameras/discover/status');
+          const response = await apiClient.get('/cameras/discover/status');
           if (!response.data.scanning) {
             setNetworkCameras(response.data.cameras || []);
             setScanning(prev => ({ ...prev, network: false }));
@@ -35,7 +35,7 @@ const CameraDiscoveryPage = ({ onBack }) => {
     setSuccess(null);
 
     try {
-      const response = await axios.post('/api/cameras/discover/usb');
+      const response = await apiClient.post('/cameras/discover/usb');
       setUsbCameras(response.data.cameras || []);
       setSuccess(`Found ${response.data.count} USB camera(s)`);
     } catch (err) {
@@ -52,7 +52,7 @@ const CameraDiscoveryPage = ({ onBack }) => {
     setNetworkCameras([]); // Clear previous results
 
     try {
-      await axios.post('/api/cameras/discover/network', { subnet: null });
+      await apiClient.post('/cameras/discover/network', { subnet: null });
       setSuccess('Network scan started. This may take 30-60 seconds...');
     } catch (err) {
       setError(`Network discovery failed: ${err.response?.data?.detail || err.message}`);
@@ -62,7 +62,7 @@ const CameraDiscoveryPage = ({ onBack }) => {
 
   const testCamera = async (camera) => {
     try {
-      const response = await axios.post('/api/cameras/discover/test', {
+      const response = await apiClient.post('/cameras/discover/test', {
         camera_type: camera.type,
         source: camera.source || camera.index?.toString() || camera.auto_config?.source
       });
@@ -93,7 +93,7 @@ const CameraDiscoveryPage = ({ onBack }) => {
         enabled: true
       };
 
-      await axios.post('/api/cameras/quick-add', config);
+      await apiClient.post('/cameras/quick-add', config);
       setSuccess(`✅ Camera "${camera.name}" added successfully!`);
       
       // Remove from discovered list

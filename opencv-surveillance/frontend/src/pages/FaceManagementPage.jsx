@@ -2,7 +2,7 @@
 // This file is part of OpenEye-OpenCV_Home_Security
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import apiClient from '../api/apiClient';
 import HelpButton from '../components/HelpButton';
 import { HELP_CONTENT } from '../utils/helpContent';
 import './FaceManagementPage.css';
@@ -35,8 +35,11 @@ const FaceManagementPage = ({ embedded = false }) => {
 
   const loadPeople = async () => {
     try {
-      const response = await axios.get('/api/faces/people');
-      setPeople(response.data);
+      const response = await apiClient.get('/faces/people');
+      // Handle wrapped response or legacy array response
+      const peopleData = response.data?.people || 
+        (Array.isArray(response.data) ? response.data : []);
+      setPeople(peopleData);
     } catch (error) {
       showMessage('Error loading people: ' + error.message, 'error');
     }
@@ -44,7 +47,7 @@ const FaceManagementPage = ({ embedded = false }) => {
 
   const loadStatistics = async () => {
     try {
-      const response = await axios.get('/api/faces/statistics');
+      const response = await apiClient.get('/faces/statistics');
       setStatistics(response.data);
     } catch (error) {
       console.error('Error loading statistics:', error);
@@ -53,7 +56,7 @@ const FaceManagementPage = ({ embedded = false }) => {
 
   const loadSettings = async () => {
     try {
-      const response = await axios.get('/api/faces/settings');
+      const response = await apiClient.get('/faces/settings');
       setSettings(response.data);
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -69,7 +72,7 @@ const FaceManagementPage = ({ embedded = false }) => {
 
     setLoading(true);
     try {
-      await axios.post('/api/faces/people', { name: newPersonName });
+      await apiClient.post('/faces/people', { name: newPersonName });
       showMessage(`Added person: ${newPersonName}`, 'success');
       setNewPersonName('');
       loadPeople();
@@ -87,7 +90,7 @@ const FaceManagementPage = ({ embedded = false }) => {
 
     setLoading(true);
     try {
-      await axios.delete(`/api/faces/people/${personName}`);
+      await apiClient.delete(`/faces/people/${personName}`);
       showMessage(`Deleted person: ${personName}`, 'success');
       loadPeople();
       loadStatistics();
@@ -127,7 +130,7 @@ const FaceManagementPage = ({ embedded = false }) => {
     console.log('[FaceManagement] FormData created, sending to API...');
     
     try {
-      const response = await axios.post(`/api/faces/people/${personName}/photos`, formData, {
+      const response = await apiClient.post(`/faces/people/${personName}/photos`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       console.log('[FaceManagement] Upload response:', response.data);
@@ -148,7 +151,7 @@ const FaceManagementPage = ({ embedded = false }) => {
     setIsTraining(true);
     showMessage('🔄 Training model... This may take a minute.', 'warning');
     try {
-      const response = await axios.post('/api/faces/train', {});
+      const response = await apiClient.post('/faces/train', {});
       showMessage('✅ ' + response.data.message, 'success');
       loadStatistics();
     } catch (error) {
@@ -161,7 +164,7 @@ const FaceManagementPage = ({ embedded = false }) => {
   const updateSettings = async () => {
     setLoading(true);
     try {
-      await axios.put('/api/faces/settings', settings);
+      await apiClient.put('/faces/settings', settings);
       showMessage('Settings updated successfully', 'success');
     } catch (error) {
       showMessage('Error updating settings: ' + error.message, 'error');

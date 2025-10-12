@@ -49,6 +49,7 @@ class FaceDetectionEvent(Base):
 
     # Recording information
     recording_path = Column(String, nullable=True)
+    recording_id = Column(Integer, ForeignKey('recording_events.id'), nullable=True, index=True)
     snapshot_path = Column(String, nullable=True)
 
     # Motion detection context
@@ -57,6 +58,9 @@ class FaceDetectionEvent(Base):
     # Additional metadata
     frame_width = Column(Integer, nullable=True)
     frame_height = Column(Integer, nullable=True)
+
+    # Relationship
+    recording = relationship("RecordingEvent", back_populates="face_detections")
 
     def __repr__(self):
         return f"<FaceDetection(person={
@@ -115,7 +119,7 @@ class Camera(Base):
 
     # Metadata
     created_at = Column(DateTime, default=datetime.utcnow)
-    last_active = Column(
+    last_active_at = Column(
         DateTime,
         default=datetime.utcnow,
         onupdate=datetime.utcnow)
@@ -151,10 +155,55 @@ class RecordingEvent(Base):
     file_size_bytes = Column(Integer, nullable=True)
     frame_count = Column(Integer, nullable=True)
 
+    # Relationships
+    face_detections = relationship("FaceDetectionEvent", back_populates="recording")
+    motion_detections = relationship("MotionDetectionEvent", back_populates="recording")
+
     def __repr__(self):
         return f"<Recording(camera={
             self.camera_id}, started={
             self.started_at})>"
+
+
+class MotionDetectionEvent(Base):
+    """
+    Motion detection event model
+    Tracks all motion events, including those without face detection
+    Separate from FaceDetectionEvent to capture motion-only activity
+    """
+
+    __tablename__ = "motion_detection_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    camera_id = Column(String, index=True)
+    detected_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # Motion details
+    motion_area = Column(Integer, nullable=True)  # Size of motion area in pixels
+    motion_percentage = Column(Float, nullable=True)  # Percentage of frame with motion
+    contour_count = Column(Integer, nullable=True)  # Number of motion contours detected
+
+    # Snapshot information
+    snapshot_path = Column(String, nullable=True)
+    frame_width = Column(Integer, nullable=True)
+    frame_height = Column(Integer, nullable=True)
+
+    # Recording linkage
+    recording_id = Column(Integer, ForeignKey('recording_events.id'), nullable=True, index=True)
+    recording_path = Column(String, nullable=True)
+
+    # Face detection context
+    faces_detected = Column(Integer, default=0)  # How many faces were in this motion event
+    face_detection_ids = Column(String, nullable=True)  # JSON array of face detection IDs
+
+    # Motion zone information (which zones triggered)
+    triggered_zones = Column(String, nullable=True)  # JSON array of zone indices
+
+    # Relationship
+    recording = relationship("RecordingEvent", back_populates="motion_detections")
+
+    def __repr__(self):
+        return f"<MotionDetection(camera={self.camera_id}, area={self.motion_area}, time={self.detected_at})>"
 
 
 class SystemLog(Base):

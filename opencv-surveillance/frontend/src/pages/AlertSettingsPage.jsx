@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import apiClient from '../api/apiClient';
 import HelpButton from '../components/HelpButton';
 import { HELP_CONTENT } from '../utils/helpContent';
 import './AlertSettingsPage.css';
@@ -27,7 +27,7 @@ const AlertSettingsPage = ({ embedded = false }) => {
 
   const loadConfiguration = async () => {
     try {
-      const response = await axios.get('/api/alerts/config?user_id=1');
+      const response = await apiClient.get('/alerts/config?user_id=1');
       if (response.data.length > 0) {
         setConfig(response.data[0]);
       } else {
@@ -81,7 +81,7 @@ const AlertSettingsPage = ({ embedded = false }) => {
 
   const loadStatistics = async () => {
     try {
-      const response = await axios.get('/api/alerts/statistics?days=7');
+      const response = await apiClient.get('/alerts/statistics?days=7');
       setStats(response.data);
     } catch (error) {
       console.error('Error loading statistics:', error);
@@ -90,8 +90,11 @@ const AlertSettingsPage = ({ embedded = false }) => {
 
   const loadLogs = async () => {
     try {
-      const response = await axios.get('/api/alerts/logs?limit=20');
-      setLogs(response.data);
+      const response = await apiClient.get('/alerts/logs?limit=20');
+      // Handle wrapped response or legacy array response
+      const logsData = response.data?.logs || 
+        (Array.isArray(response.data) ? response.data : []);
+      setLogs(logsData);
     } catch (error) {
       console.error('Error loading logs:', error);
     }
@@ -116,12 +119,12 @@ const AlertSettingsPage = ({ embedded = false }) => {
       if (cleanConfig.id) {
         // Update existing
         console.log('[AlertSettings] Updating existing config ID:', cleanConfig.id);
-        await axios.put(`/api/alerts/config/${cleanConfig.id}`, cleanConfig);
+        await apiClient.put(`/alerts/config/${cleanConfig.id}`, cleanConfig);
         showMessage('Configuration updated successfully', 'success');
       } else {
         // Create new
         console.log('[AlertSettings] Creating new config');
-        const response = await axios.post('/api/alerts/config', cleanConfig);
+        const response = await apiClient.post('/alerts/config', cleanConfig);
         setConfig(response.data);
         showMessage('Configuration created successfully', 'success');
       }
@@ -141,7 +144,7 @@ const AlertSettingsPage = ({ embedded = false }) => {
   const testAlert = async (channel) => {
     setTesting(true);
     try {
-      await axios.post('/api/alerts/test', {
+      await apiClient.post('/alerts/test', {
         alert_config_id: config.id,
         channel: channel,
         message: 'This is a test alert from OpenEye'

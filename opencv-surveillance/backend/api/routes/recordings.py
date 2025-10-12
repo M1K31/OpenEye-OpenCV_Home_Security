@@ -48,6 +48,12 @@ class RecordingSearchRequest(BaseModel):
     limit: int = 50
 
 
+class RecordingListResponse(BaseModel):
+    recordings: List[RecordingResponse]
+    total: int
+    filtered: int
+
+
 # Dependency
 
 
@@ -62,7 +68,7 @@ def get_db():
 # Endpoints
 
 
-@router.get("/recordings/", response_model=List[RecordingResponse])
+@router.get("/recordings/", response_model=RecordingListResponse)
 def list_recordings(
     camera_id: Optional[str] = Query(None),
     start_date: Optional[str] = Query(None),
@@ -74,6 +80,9 @@ def list_recordings(
     """
     List recordings with optional filters
     """
+    # Get total count before filtering
+    total_count = db.query(models.RecordingEvent).count()
+    
     query = db.query(models.RecordingEvent)
 
     # Apply filters
@@ -94,12 +103,19 @@ def list_recordings(
         else:
             query = query.filter(models.RecordingEvent.faces_detected == 0)
 
+    # Get filtered count
+    filtered_count = query.count()
+    
     # Order by most recent
     recordings = (
         query.order_by(
             models.RecordingEvent.started_at.desc()).limit(limit).all())
 
-    return recordings
+    return RecordingListResponse(
+        recordings=recordings,
+        total=total_count,
+        filtered=filtered_count
+    )
 
 
 @router.get("/recordings/{recording_id}")

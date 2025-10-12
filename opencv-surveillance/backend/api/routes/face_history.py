@@ -54,6 +54,12 @@ class RecordingEventResponse(BaseModel):
         orm_mode = True
 
 
+class FaceDetectionListResponse(BaseModel):
+    detections: List[FaceDetectionEventResponse]
+    total: int
+    filtered: int
+
+
 def get_db():
     """Dependency to get database session"""
     db = SessionLocal()
@@ -64,7 +70,7 @@ def get_db():
 
 
 @router.get("/history/detections",
-            response_model=List[FaceDetectionEventResponse])
+            response_model=FaceDetectionListResponse)
 def get_detection_history(
         camera_id: Optional[str] = Query(
             None,
@@ -90,6 +96,12 @@ def get_detection_history(
     - **limit**: Maximum number of results (default: 50, max: 500)
     """
     try:
+        # Import models for count query
+        from backend.database import models
+        
+        # Get total count before filtering
+        total_count = db.query(models.FaceDetectionEvent).count()
+        
         events = face_crud.get_recent_face_detections(
             db=db,
             camera_id=camera_id,
@@ -119,7 +131,11 @@ def get_detection_history(
                 )
             )
 
-        return results
+        return FaceDetectionListResponse(
+            detections=results,
+            total=total_count,
+            filtered=len(results)
+        )
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

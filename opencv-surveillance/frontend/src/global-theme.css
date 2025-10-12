@@ -49,7 +49,7 @@ body {
 .card {
   background-color: var(--bg-panel);
   border: 1px solid var(--border-panel);
-  border-radius: 8px;
+  border-radius: 12px; /* Rounded corners */
   padding: 20px;
   margin-bottom: 20px;
   box-shadow: 0 2px 8px var(--shadow);
@@ -73,17 +73,17 @@ a:hover {
   text-decoration: underline;
 }
 
-/* Buttons */
+/* Buttons - Pill-shaped style */
 button,
 .btn {
   background-color: var(--bg-panel);
   border: 1px solid var(--border-panel);
   color: var(--text-primary);
   padding: 10px 20px;
-  border-radius: 6px;
+  border-radius: 999px; /* Pill shape */
   cursor: pointer;
   font-size: 14px;
-  transition: all 0.2s;
+  transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
   font-weight: 500;
 }
 
@@ -91,6 +91,8 @@ button:hover,
 .btn:hover {
   background-color: var(--bg-hover);
   border-color: var(--border-input);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px var(--shadow);
 }
 
 button:active,
@@ -98,6 +100,7 @@ button:active,
 button.active,
 .btn.active {
   background-color: var(--state-active);
+  transform: translateY(0);
 }
 
 button:disabled,

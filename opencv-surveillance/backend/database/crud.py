@@ -115,12 +115,12 @@ def deactivate_camera(db: Session, camera_id: str) -> Optional[models.Camera]:
 
 def update_camera_last_active(db: Session,
                               camera_id: str) -> Optional[models.Camera]:
-    """Update last_active timestamp"""
+    """Update last_active_at timestamp"""
     db_camera = get_camera_by_id(db, camera_id)
     if not db_camera:
         return None
 
-    db_camera.last_active = datetime.utcnow()
+    db_camera.last_active_at = datetime.utcnow()
     db.commit()
     db.refresh(db_camera)
     return db_camera
@@ -333,6 +333,11 @@ def initialize_default_settings(db: Session):
             "Directory where video recordings are saved",
         ),
         "faces_path": ("faces", "string", "Directory where face images are saved"),
+        "snapshots_path": (
+            "data/snapshots",
+            "string",
+            "Directory where motion detection snapshots are saved",
+        ),
         "display_mode": (
             "grid",
             "string",

@@ -116,7 +116,7 @@ class CameraResponse(CameraBase):
     id: int
     is_active: bool
     created_at: datetime
-    last_active: datetime
+    last_active_at: datetime
 
     class Config:
         from_attributes = True
