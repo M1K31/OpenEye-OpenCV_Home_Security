@@ -217,3 +217,74 @@ def get_system_logs(
         query = query.filter(models.SystemLog.component == component)
     
     return query.order_by(models.SystemLog.created_at.desc()).offset(skip).limit(limit).all()
+
+
+# ============================================================================
+# SYSTEM SETTINGS CRUD OPERATIONS
+# ============================================================================
+
+def get_system_setting(db: Session, setting_key: str) -> Optional[models.SystemSettings]:
+    """Get a system setting by key"""
+    return db.query(models.SystemSettings).filter(models.SystemSettings.setting_key == setting_key).first()
+
+
+def get_all_system_settings(db: Session) -> List[models.SystemSettings]:
+    """Get all system settings"""
+    return db.query(models.SystemSettings).all()
+
+
+def set_system_setting(db: Session, setting_key: str, setting_value: str, setting_type: str = 'string', description: str = None) -> models.SystemSettings:
+    """Set or update a system setting"""
+    db_setting = get_system_setting(db, setting_key)
+    
+    if db_setting:
+        # Update existing setting
+        db_setting.setting_value = setting_value
+        db_setting.setting_type = setting_type
+        if description:
+            db_setting.description = description
+        db_setting.updated_at = datetime.utcnow()
+    else:
+        # Create new setting
+        db_setting = models.SystemSettings(
+            setting_key=setting_key,
+            setting_value=setting_value,
+            setting_type=setting_type,
+            description=description
+        )
+        db.add(db_setting)
+    
+    db.commit()
+    db.refresh(db_setting)
+    return db_setting
+
+
+def delete_system_setting(db: Session, setting_key: str) -> bool:
+    """Delete a system setting"""
+    db_setting = get_system_setting(db, setting_key)
+    if not db_setting:
+        return False
+    
+    db.delete(db_setting)
+    db.commit()
+    return True
+
+
+def initialize_default_settings(db: Session):
+    """Initialize default system settings if they don't exist"""
+    import os
+    
+    defaults = {
+        'recordings_path': ('recordings', 'string', 'Directory where video recordings are saved'),
+        'faces_path': ('faces', 'string', 'Directory where face images are saved'),
+        'display_mode': ('grid', 'string', 'Camera display mode: grid, vertical, horizontal, cycle'),
+        'cycle_interval': ('5', 'int', 'Seconds between camera switches in cycle mode'),
+        'max_recording_duration': ('300', 'int', 'Maximum recording duration in seconds'),
+        'theme': ('dark', 'string', 'UI theme: light or dark'),
+    }
+    
+    for key, (value, stype, desc) in defaults.items():
+        existing = get_system_setting(db, key)
+        if not existing:
+            set_system_setting(db, key, value, stype, desc)
+

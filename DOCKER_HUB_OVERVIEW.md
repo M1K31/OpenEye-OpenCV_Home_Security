@@ -188,6 +188,16 @@ docker-compose down
 4. **Upload faces** for recognition
 5. **Customize** theme and settings
 
+## Extras for Administrators
+
+- **Token Refresh UI**: The frontend will prompt users with a "Session Expired" modal when a JWT token expires; re-authenticating inside the modal refreshes the token and retries the failed request automatically.
+
+- **Audit Script**: For maintainers, run `opencv-surveillance/scripts/audit-system.py` to validate backend class/method coverage and Phase compliance.
+
+> Quick recovery: If the session modal fails, see the "Troubleshooting: Session & Token Refresh" section in the API docs (`opencv-surveillance/docs/API_DOCUMENTATION.md`) or the User Guide (`opencv-surveillance/docs/USER_GUIDE.md`).
+
+
+
 ---
 
 ## 🎥 Camera Support

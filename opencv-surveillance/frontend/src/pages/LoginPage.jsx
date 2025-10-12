@@ -1,6 +1,6 @@
 // Copyright (c) 2025 Mikel Smart
 // This file is part of OpenEye-OpenCV_Home_Security
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
 const LoginPage = ({ setToken }) => {
@@ -8,6 +8,30 @@ const LoginPage = ({ setToken }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+
+  // Clear any expired or invalid tokens when login page loads
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        // Decode JWT token to check expiration
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const isExpired = Date.now() > payload.exp * 1000;
+        
+        if (isExpired) {
+          console.log('Clearing expired token');
+          localStorage.removeItem('token');
+          localStorage.removeItem('token_timestamp');
+          setError('Your session has expired. Please log in again.');
+        }
+      } catch (e) {
+        // Token is malformed, clear it
+        console.log('Clearing invalid token');
+        localStorage.removeItem('token');
+        localStorage.removeItem('token_timestamp');
+      }
+    }
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();

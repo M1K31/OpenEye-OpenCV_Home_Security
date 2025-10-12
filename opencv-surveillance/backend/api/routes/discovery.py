@@ -4,13 +4,16 @@
 Camera Discovery API Routes
 Endpoints for discovering and auto-configuring cameras
 """
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from pydantic import BaseModel
 from typing import List, Dict, Optional
 import logging
+from sqlalchemy.orm import Session
 
 from backend.core.camera_discovery import discovery_service
 from backend.core.camera_manager import manager as camera_manager
+from backend.database.session import get_db
+from backend.database import crud
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -147,22 +150,33 @@ async def test_camera_connection(request: CameraTestRequest):
 
 
 @router.post("/cameras/quick-add", status_code=201)
-async def quick_add_camera(request: QuickAddRequest):
+async def quick_add_camera(request: QuickAddRequest, db: Session = Depends(get_db)):
     """
     Quickly add a discovered camera with auto-configured settings.
     
+    Saves camera to database AND starts it in camera_manager for persistence.
+    
     Args:
         request: Camera configuration from discovery
+        db: Database session
     
     Returns:
         Success message with camera details
     """
     try:
-        # Check if camera already exists
-        if camera_manager.get_camera(request.camera_id):
+        # Check if camera already exists in database
+        existing_camera = crud.get_camera_by_id(db, request.camera_id)
+        if existing_camera:
             raise HTTPException(
                 status_code=400,
                 detail=f"Camera '{request.camera_id}' already exists"
+            )
+        
+        # Also check in-memory camera manager
+        if camera_manager.get_camera(request.camera_id):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Camera '{request.camera_id}' is already running"
             )
         
         # Test the camera connection first
@@ -177,24 +191,46 @@ async def quick_add_camera(request: QuickAddRequest):
                 detail=f"Camera test failed: {test_result.get('error', 'Unknown error')}"
             )
         
-        # Add the camera
-        camera_manager.add_camera(
-            camera_id=request.camera_id,
-            camera_type=request.camera_type,
-            source=request.source
-        )
+        # Save to database FIRST for persistence
+        camera_data = {
+            'camera_id': request.camera_id,
+            'camera_type': request.camera_type,
+            'source': request.source,
+            'face_detection_enabled': True,  # Default settings
+            'motion_detection_enabled': True,
+            'recording_enabled': True,
+            'is_active': True
+        }
+        db_camera = crud.create_camera(db, camera_data)
         
-        # Verify it's running
-        camera = camera_manager.get_camera(request.camera_id)
-        if not camera or not camera.is_running:
+        # Then add to camera_manager to start streaming
+        try:
+            camera_manager.add_camera(
+                camera_id=request.camera_id,
+                camera_type=request.camera_type,
+                source=request.source
+            )
+            
+            # Verify it's running
+            camera = camera_manager.get_camera(request.camera_id)
+            if not camera or not camera.is_running:
+                # If camera fails to start, remove from database
+                crud.delete_camera(db, request.camera_id)
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to start camera '{request.camera_id}'"
+                )
+        except Exception as e:
+            # If camera manager fails, remove from database
+            crud.delete_camera(db, request.camera_id)
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to start camera '{request.camera_id}'"
+                detail=f"Error starting camera: {str(e)}"
             )
         
         return {
             "success": True,
-            "message": f"Camera '{request.camera_id}' added successfully",
+            "message": f"Camera '{request.camera_id}' added successfully and saved to database",
             "camera": {
                 "camera_id": request.camera_id,
                 "type": request.camera_type,
