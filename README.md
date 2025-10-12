@@ -1,6 +1,6 @@
 # OpenEye - Advanced Home Security with OpenCV & AI Face Recognition
 
-![Version](https://img.shields.io/badge/version-3.5.1.4-blue.svg)
+![Version](https://img.shields.io/badge/version-3.5.2-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![OpenCV](https://img.shields.io/badge/OpenCV-4.8+-red.svg)
 ![License](https://img.shields.io/badge/license-MIT-yellow.svg)

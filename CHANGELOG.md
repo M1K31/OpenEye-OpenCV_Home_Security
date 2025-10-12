@@ -7,6 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.5.2] - 2025-10-12
+
+### Fixed
+- **Snapshot Display Bug** - Fixed critical issue where snapshot thumbnails showed broken images
+  - Root cause: Database stores absolute file system paths but frontend tried to use them as URLs
+  - Solution: Added `convertPathToUrl()` function in RecordingsPage.jsx to convert paths to web URLs
+  - Fixed path detection logic to handle both custom storage paths and legacy default paths
+  - Download button now works correctly with converted paths
+  - All snapshots load properly with HTTP 200 responses
+
+- **Path Validation** - Advanced settings now auto-verify storage paths
+  - Added visual feedback for valid/invalid paths
+  - Improved user experience when configuring custom storage locations
+
+- **Slider Validation** - Fixed input validation issues in advanced settings
+  - Range sliders now properly enforce min/max values
+  - Improved user feedback for invalid inputs
+
+### Improved
+- **Docker Build Optimization** - Reduced build context from 8GB to ~50MB (99% reduction)
+  - Updated `.dockerignore` with comprehensive exclusions
+  - Excluded venv/ (5.8GB), all media files, Python cache, test data
+  - Build times significantly improved
+  - Image size remains optimized at 2GB (compresses to ~650MB on Docker Hub)
+
+- **Project Cleanup** - Enhanced repository organization and security
+  - Updated `.gitignore` with comprehensive media file exclusions
+  - Removed all Python cache files (__pycache__, *.pyc)
+  - Excluded 1,089 media files (snapshots, videos) from git
+  - No personal data or surveillance footage in repository
+  - Proper separation of code vs user data
+
+- **Documentation** - Consolidated and organized project documentation
+  - Moved deployment docs to `docs/deployment/`
+  - Moved development docs to `docs/development/`
+  - Removed redundant session summaries and task-specific documents
+  - All release information consolidated in CHANGELOG.md
+  - Created comprehensive deployment verification report
+  - Only essential files remain in project root
+
+### Deployment
+- **Automated Deployment Scripts** - New tools for easy deployment
+  - `deploy.sh` - Interactive script for GitHub and Docker Hub deployment
+  - `prepare-deployment.sh` - Pre-deployment checks and cleanup
+  - `cleanup-docs.sh` - Documentation organization automation
+
+- **Docker Hub** - Published images now available
+  - Repository: `im1k31s/openeye-opencv_home_security`
+  - Tags: `v3.5.2` and `latest`
+  - Multi-stage optimized build
+  - No media files included in images
+
+- **GitHub** - Repository fully synced and updated
+  - All changes committed and pushed
+  - Documentation organized in proper structure
+  - Privacy-compliant (no surveillance data exposed)
+
+### Security
+- **Privacy Protection** - No sensitive data exposed
+  - Verified zero media files in GitHub repository (current and history)
+  - Verified zero media files in Docker Hub images
+  - All user data (faces, recordings, snapshots) remains local only
+  - Database files properly excluded
+  - Environment files properly excluded
+
+---
+
 ## [Unreleased]
 
 ### Added

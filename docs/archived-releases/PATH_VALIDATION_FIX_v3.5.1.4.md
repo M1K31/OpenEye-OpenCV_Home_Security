@@ -72,7 +72,7 @@ POST /api/settings/validate-path HTTP/1.1" 200 OK
 ✅ **Request Format:**
 ```javascript
 {
-  path: '/Volumes/ASSD/GitProjects/Rec',
+  path: '/path/to/recordings',
   create_if_missing: true
 }
 ```
@@ -80,11 +80,11 @@ POST /api/settings/validate-path HTTP/1.1" 200 OK
 ✅ **Response Format:**
 ```json
 {
-  "path": "/Volumes/ASSD/GitProjects/Rec",
+  "path": "/path/to/recordings",
   "exists": true,
   "is_directory": true,
   "writable": true,
-  "absolute_path": "/Volumes/ASSD/GitProjects/Rec"
+  "absolute_path": "/path/to/recordings"
 }
 ```
 

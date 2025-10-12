@@ -220,7 +220,7 @@ The Aqua Security theme implementation is successful if:
 
 ### Restart Server
 ```bash
-cd /Volumes/Storage/Dev/GitHubProjects/OpenEye-OpenCV_Home_Security
+cd /path/to/openeye
 lsof -ti:8000 | xargs kill -9 2>/dev/null
 ./start-local.sh
 ```

@@ -18,7 +18,7 @@
 
 ### 2. Path Sanitization
 - ✅ Removed hardcoded development paths from documentation
-  - Changed `/Volumes/Storage/Dev/GitHubProjects/OpenEye-OpenCV_Home_Security` to `/path/to/OpenEye-OpenCV_Home_Security`
+  - Changed `/path/to/openeye` to `/path/to/OpenEye-OpenCV_Home_Security`
   - Updated QUICK_REFERENCE.md with generic paths
   - Updated TEST_RESULTS_2025-10-11.md with relative paths
 - ✅ All documentation now uses example paths suitable for public viewing
