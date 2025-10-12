@@ -12,7 +12,7 @@
 - **Snapshots Saved**: ✅ All snapshots saved to `data/snapshots/`
 - **Database**: ✅ All events logged correctly
 - **API**: ✅ Endpoints returning data correctly
-- **Recording**: ✅ Linked to `/Volumes/ASSD/GitProjects/Rec/motion_20251012_123253.mp4`
+- **Recording**: ✅ Linked to `/path/to/recordings/motion_20251012_123253.mp4`
 
 ---
 
@@ -28,7 +28,7 @@
   "motion_percentage": 6.79%,
   "contour_count": 76,
   "snapshot_path": "data/snapshots/motion_usb_camera_0_20251012_123815_681689.jpg",
-  "recording_path": "/Volumes/ASSD/GitProjects/Rec/motion_20251012_123253.mp4",
+  "recording_path": "/path/to/recordings/motion_20251012_123253.mp4",
   "frame_width": 1920,
   "frame_height": 1080,
   "faces_detected": 0
@@ -72,7 +72,7 @@
 - **Verified**: 1,064+ snapshots saved successfully
 
 ### 5. Recording Integration ✅
-- **Custom Path**: `/Volumes/ASSD/GitProjects/Rec/`
+- **Custom Path**: `/path/to/recordings/`
 - **Linkage**: Motion events linked to recording files
 - **Metadata**: Recording path stored in each motion event
 
@@ -137,7 +137,7 @@
 ### Recording Integration
 - ✅ Motion events linked to video recordings
 - ✅ Custom recording path support
-- ✅ Recording path: `/Volumes/ASSD/GitProjects/Rec/`
+- ✅ Recording path: `/path/to/recordings/`
 - ✅ Metadata preserved
 
 ### Face Detection Integration
@@ -222,7 +222,7 @@ Frontend: GET /api/motion-events/
 
 ### ✅ Scenario 6: Custom Paths
 - **Action**: Use custom recording path
-- **Result**: Recordings saved to /Volumes/ASSD/GitProjects/Rec/
+- **Result**: Recordings saved to /path/to/recordings/
 - **Status**: PASS
 
 ### ✅ Scenario 7: Maximum Sensitivity
@@ -252,8 +252,8 @@ Frontend: GET /api/motion-events/
 ```
 
 ### Custom Paths
-- **Recordings**: `/Volumes/ASSD/GitProjects/Rec/`
-- **Faces**: `/Volumes/ASSD/GitProjects/Faces/`
+- **Recordings**: `/path/to/recordings/`
+- **Faces**: `/path/to/faces/`
 - **Snapshots**: `data/snapshots/`
 
 ### Server Status

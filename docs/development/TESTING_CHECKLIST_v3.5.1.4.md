@@ -48,14 +48,14 @@
 
 - [ ] **Recordings Path**
   - Click "📝 Set Path" button
-  - Enter custom path (e.g., `/Volumes/ASSD/GitProjects/Rec`)
+  - Enter custom path (e.g., `/path/to/recordings`)
   - Verify green checkmark appears
   - Verify message shows "Valid and writable"
   - Try invalid path - verify red X appears
 
 - [ ] **Faces Path**
   - Click "📝 Set Path" button
-  - Enter custom path (e.g., `/Volumes/ASSD/GitProjects/Faces`)
+  - Enter custom path (e.g., `/path/to/faces`)
   - Verify validation feedback
   - Try invalid path - verify error message
 

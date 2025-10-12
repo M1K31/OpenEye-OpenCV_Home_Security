@@ -323,7 +323,7 @@ ws.onmessage = (event) => {
 
 ### Start Server
 ```bash
-cd /Volumes/Storage/Dev/GitHubProjects/OpenEye-OpenCV_Home_Security
+cd /path/to/openeye
 ./start-local.sh
 ```
 

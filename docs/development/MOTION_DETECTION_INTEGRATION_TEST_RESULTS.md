@@ -52,7 +52,7 @@ GET /api/motion-events/ → {
 - ✅ Camera `usb_camera_0` loaded and started
 - ✅ Motion detection enabled (sensitivity: 5, threshold: 50)
 - ✅ Auto-reload working
-- ✅ Custom paths detected: Recordings=/Volumes/ASSD/GitProjects/Rec, Faces=/Volumes/ASSD/GitProjects/Faces
+- ✅ Custom paths detected: Recordings=/path/to/recordings, Faces=/path/to/faces
 
 ## Current Status
 
@@ -117,7 +117,7 @@ Move in front of the USB camera to trigger motion detection.
 
 4. **Test with Custom Paths**:
    - Verify snapshots saved to correct locations
-   - Test with user's custom paths (/Volumes/ASSD/GitProjects/*)
+   - Test with user's custom paths (/path/to/storage/*)
 
 5. **End-to-End Face+Motion Test**:
    - Trigger motion with face in view

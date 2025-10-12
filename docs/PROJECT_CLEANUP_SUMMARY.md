@@ -65,7 +65,7 @@ This cleanup was performed to ensure the OpenEye project is production-ready for
 
 **Before:**
 ```bash
-cd /Volumes/Storage/Dev/GitHubProjects/OpenEye-OpenCV_Home_Security
+cd /path/to/openeye
 ```
 
 **After:**
