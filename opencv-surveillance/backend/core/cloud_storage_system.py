@@ -450,12 +450,28 @@ class CloudStorageManager:
         logger.info("Upload worker started")
 
     def stop_upload_worker(self):
-        """Stop upload worker"""
+        """Stop upload worker gracefully"""
+        if not self.upload_thread or not self.upload_thread.is_alive():
+            logger.debug("Upload worker not running")
+            return
+        
+        logger.info("Stopping cloud storage upload worker...")
+        
+        # Set running flag to False
         self.running = False
-        if self.upload_thread:
-            self.upload_thread.join(timeout=5)
-
-        logger.info("Upload worker stopped")
+        
+        # Wait for thread to finish with timeout
+        self.upload_thread.join(timeout=5.0)
+        
+        if self.upload_thread.is_alive():
+            logger.error("Cloud storage upload thread did not stop within timeout")
+        else:
+            logger.info("Cloud storage upload worker stopped successfully")
+            
+            # Log queue status
+            queue_size = self.upload_queue.qsize()
+            if queue_size > 0:
+                logger.warning(f"Upload queue has {queue_size} pending task(s) that were not processed")
 
     def _upload_worker(self):
         """Background worker for processing uploads"""

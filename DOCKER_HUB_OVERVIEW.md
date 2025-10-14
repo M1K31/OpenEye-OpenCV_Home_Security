@@ -1,6 +1,6 @@
 # OpenEye - Advanced Home Security System
 
-![Version](https://img.shields.io/badge/version-3.5.2-blue.svg) ![License](https://img.shields.io/badge/license-MIT-yellow.svg) ![Cost](https://img.shields.io/badge/cost-$0/month-success.svg)
+![Version](https://img.shields.io/badge/version-3.5.3-blue.svg) ![License](https://img.shields.io/badge/license-MIT-yellow.svg) ![Cost](https://img.shields.io/badge/cost-$0/month-success.svg)
 
 **100% free and open-source** AI-powered surveillance with face recognition, motion detection, and smart home integration. Your data stays on your hardware - no subscriptions, no cloud dependencies.
 
@@ -42,6 +42,17 @@
 - 👥 **Multi-User** - Admin, User, Viewer roles
 
 **Cost**: $0/month forever • **Privacy**: All data stays local • **Control**: You own everything
+
+---
+
+## 🆕 What's New in v3.5.3 (October 2025)
+
+### Stability & Reliability Improvements
+- ✅ **Process Cleanup** - All processes now exit cleanly without force quit
+- ✅ **Database Initialization** - Fixed crash on first run with fresh database
+- ✅ **Session Management** - Enhanced OAuth2 authentication and themed login modal
+
+See [CHANGELOG.md](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/blob/main/CHANGELOG.md) for full details.
 
 ---
 

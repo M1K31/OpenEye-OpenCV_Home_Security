@@ -3,6 +3,40 @@
 
 set -e
 
+# Global variable to track uvicorn PID
+UVICORN_PID=""
+
+# Cleanup function for graceful shutdown
+cleanup() {
+    echo ""
+    echo "🛑 Shutting down OpenEye..."
+    
+    if [ -n "$UVICORN_PID" ] && kill -0 "$UVICORN_PID" 2>/dev/null; then
+        echo "   Sending SIGTERM to PID $UVICORN_PID..."
+        kill -TERM "$UVICORN_PID" 2>/dev/null || true
+        
+        # Wait up to 10 seconds for graceful shutdown
+        for i in {1..10}; do
+            if ! kill -0 "$UVICORN_PID" 2>/dev/null; then
+                echo "   ✓ Server stopped gracefully"
+                break
+            fi
+            sleep 1
+        done
+        
+        # Force kill if still running
+        if kill -0 "$UVICORN_PID" 2>/dev/null; then
+            echo "   ⚠ Force killing server..."
+            kill -9 "$UVICORN_PID" 2>/dev/null || true
+        fi
+    fi
+    
+    echo "   ✓ Cleanup complete"
+}
+
+# Register cleanup trap for EXIT, INT (Ctrl+C), and TERM signals
+trap cleanup EXIT INT TERM
+
 echo "🚀 Starting OpenEye (Native Installation)"
 echo "========================================"
 echo ""
@@ -47,4 +81,12 @@ echo "🎯 Starting OpenEye on http://localhost:8000"
 echo "   Press Ctrl+C to stop"
 echo ""
 
-uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+# Start uvicorn in background and capture PID
+uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload &
+UVICORN_PID=$!
+
+echo "   ✓ Server started with PID: $UVICORN_PID"
+echo ""
+
+# Wait for uvicorn process (will be interrupted by Ctrl+C)
+wait "$UVICORN_PID" 2>/dev/null || true

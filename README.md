@@ -1,6 +1,6 @@
 # OpenEye - Advanced Home Security with OpenCV & AI Face Recognition
 
-![Version](https://img.shields.io/badge/version-3.5.2-blue.svg)
+![Version](https://img.shields.io/badge/version-3.5.3-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![OpenCV](https://img.shields.io/badge/OpenCV-4.8+-red.svg)
 ![License](https://img.shields.io/badge/license-MIT-yellow.svg)
@@ -33,6 +33,27 @@ A **100% free and open-source** AI-powered surveillance system using **OpenCV** 
 - 🚀 **Modern Stack** - FastAPI + React
 - 📊 **Rich Analytics** - Historical tracking and statistics
 - 🎨 **Beautiful UI** - 8 customizable superhero themes
+
+---
+
+## 🆕 Recent Updates (v3.5.3 - Oct 2025)
+
+### Stability Improvements
+- ✅ **Process Cleanup** - Fixed orphaned processes after shutdown
+  - Complete 7-step graceful shutdown sequence
+  - Proper thread cleanup in facial recognition and cloud storage
+  - Signal handlers for SIGINT/SIGTERM
+  - All processes now exit cleanly without force quit
+
+- ✅ **Database Initialization** - Fixed crash on first run with fresh database
+  - Proper initialization sequence: Create DB → Load settings → Mount directories
+  - No more `OperationalError: no such table` on fresh installs
+  - Static files mounted with correct user-configured paths
+
+- ✅ **Session Management** - Enhanced login and session handling
+  - Fixed OAuth2 authentication format (proper urlencoded)
+  - Session expired modal now matches app theme
+  - Improved error handling and user feedback
 
 ---
 

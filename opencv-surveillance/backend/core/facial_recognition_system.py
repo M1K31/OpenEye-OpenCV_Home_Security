@@ -208,6 +208,7 @@ class FaceRecognitionSystem:
 
         # Processing queue for async operations
         self._processing_queue: Queue = Queue()
+        self._stop_event = threading.Event()  # Stop event for graceful shutdown
         self._processing_thread = threading.Thread(
             target=self._process_queue, daemon=True
         )
@@ -475,16 +476,48 @@ class FaceRecognitionSystem:
 
     def _process_queue(self):
         """Background thread to process queued tasks"""
-        while True:
+        logger.info("Facial recognition processing thread started")
+        
+        while not self._stop_event.is_set():
             try:
+                # Use timeout to check stop event periodically
                 task = self._processing_queue.get(timeout=1)
+                
+                # Check for sentinel value indicating shutdown
+                if task is None:
+                    logger.info("Received stop signal in processing queue")
+                    break
 
                 if task[0] == "save_unknown":
                     _, frame, face_location = task
                     self._save_unknown_face(frame, face_location)
 
-            except BaseException:
+            except:
+                # Empty exception to continue on timeout
                 continue
+        
+        logger.info("Facial recognition processing thread stopped")
+
+    def stop_processing(self):
+        """Stop the processing thread gracefully"""
+        if self._processing_thread and self._processing_thread.is_alive():
+            logger.info("Stopping facial recognition processing thread...")
+            
+            # Set stop event
+            self._stop_event.set()
+            
+            # Add sentinel value to unblock queue.get()
+            self._processing_queue.put(None)
+            
+            # Wait for thread to finish (with timeout)
+            self._processing_thread.join(timeout=5.0)
+            
+            if self._processing_thread.is_alive():
+                logger.error("Facial recognition thread did not stop within timeout")
+            else:
+                logger.info("Facial recognition processing thread stopped successfully")
+        else:
+            logger.debug("Facial recognition thread not running")
 
     def _save_unknown_face(self, frame: np.ndarray, face_location: Tuple):
         """Save unknown face to disk for later training"""

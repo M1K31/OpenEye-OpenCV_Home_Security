@@ -139,6 +139,48 @@ class WebSocketConnectionManager:
                     f"Connection: {connection_id}, Total: {len(self.active_connections)})"
                 )
 
+    async def disconnect_all(self):
+        """
+        Disconnect all active WebSocket connections gracefully.
+        Used during server shutdown.
+        """
+        logger.info(f"Disconnecting all WebSocket connections ({len(self.active_connections)} active)...")
+        
+        # Get list of connection IDs to avoid modifying dict during iteration
+        connection_ids = list(self.active_connections.keys())
+        
+        for connection_id in connection_ids:
+            try:
+                connection = self.active_connections.get(connection_id)
+                if connection:
+                    # Send shutdown notification
+                    try:
+                        await connection.websocket.send_json({
+                            "type": "server_shutdown",
+                            "message": "Server is shutting down"
+                        })
+                    except:
+                        pass  # Ignore send errors during shutdown
+                    
+                    # Close the WebSocket with proper close code
+                    try:
+                        await connection.websocket.close(code=1000, reason="Server shutting down")
+                    except:
+                        pass  # Ignore close errors
+                    
+                    # Remove from tracking
+                    await self.disconnect(connection_id)
+                    
+                    logger.debug(f"Disconnected WebSocket: {connection_id}")
+            except Exception as e:
+                logger.error(f"Error disconnecting WebSocket {connection_id}: {e}")
+        
+        # Clear all connection dictionaries
+        self.active_connections.clear()
+        self.user_connections.clear()
+        
+        logger.info("All WebSocket connections disconnected")
+
     async def send_personal_message(self, message: dict, connection_id: str):
         """
         Send a message to a specific connection.
