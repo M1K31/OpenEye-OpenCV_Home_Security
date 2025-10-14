@@ -179,51 +179,56 @@ class AuthService {
 
     const content = document.createElement('div');
     content.style.cssText = `
-      background: white;
+      background: #1a1f2e;
       padding: 30px;
       border-radius: 10px;
       max-width: 500px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(0, 255, 255, 0.3);
     `;
 
     content.innerHTML = `
-      <h2 style="margin-top: 0; color: #333;">Session Expired</h2>
-      <p style="color: #666; margin-bottom: 20px;">
+      <h2 style="margin-top: 0; color: #00ffff; text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);">Session Expired</h2>
+      <p style="color: #b8c5d6; margin-bottom: 20px;">
         Your session has expired. Please log in again to continue.
       </p>
       <div style="margin-bottom: 15px;">
-        <label style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">
+        <label style="display: block; margin-bottom: 5px; color: #00ffff; font-weight: bold;">
           Username:
         </label>
         <input 
           type="text" 
           id="refresh-username" 
-          style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box;"
+          style="width: 100%; padding: 10px; border: 1px solid rgba(0, 255, 255, 0.3); border-radius: 5px; box-sizing: border-box; background: #0d1117; color: #e6edf3;"
           placeholder="Enter username"
         />
       </div>
       <div style="margin-bottom: 20px;">
-        <label style="display: block; margin-bottom: 5px; color: #333; font-weight: bold;">
+        <label style="display: block; margin-bottom: 5px; color: #00ffff; font-weight: bold;">
           Password:
         </label>
         <input 
           type="password" 
           id="refresh-password" 
-          style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box;"
+          style="width: 100%; padding: 10px; border: 1px solid rgba(0, 255, 255, 0.3); border-radius: 5px; box-sizing: border-box; background: #0d1117; color: #e6edf3;"
           placeholder="Enter password"
         />
       </div>
-      <div id="refresh-error" style="color: #dc3545; margin-bottom: 15px; display: none;"></div>
+      <div id="refresh-error" style="color: #ff4444; margin-bottom: 15px; display: none;"></div>
       <div style="display: flex; gap: 10px; justify-content: flex-end;">
         <button 
           id="refresh-cancel-btn"
-          style="padding: 10px 20px; border: 1px solid #ddd; background: white; border-radius: 5px; cursor: pointer;"
+          style="padding: 10px 20px; border: 1px solid rgba(0, 255, 255, 0.3); background: transparent; color: #00ffff; border-radius: 5px; cursor: pointer; transition: all 0.3s;"
+          onmouseover="this.style.background='rgba(0, 255, 255, 0.1)'"
+          onmouseout="this.style.background='transparent'"
         >
           Cancel
         </button>
         <button 
           id="refresh-login-btn"
-          style="padding: 10px 20px; border: none; background: #007bff; color: white; border-radius: 5px; cursor: pointer;"
+          style="padding: 10px 20px; border: none; background: linear-gradient(135deg, #00ffff, #0088ff); color: #000; font-weight: bold; border-radius: 5px; cursor: pointer; transition: all 0.3s;"
+          onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 5px 15px rgba(0, 255, 255, 0.4)'"
+          onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'"
         >
           Login
         </button>
@@ -263,9 +268,15 @@ class AuthService {
       errorDiv.style.display = 'none';
 
       try {
-        const response = await axios.post('/api/users/login', {
-          username,
-          password
+        // Use URLSearchParams for OAuth2 password flow (application/x-www-form-urlencoded)
+        const params = new URLSearchParams();
+        params.append('username', username);
+        params.append('password', password);
+        
+        const response = await axios.post('/api/token', params, {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          }
         });
 
         if (response.data.access_token) {
@@ -324,9 +335,15 @@ class AuthService {
    */
   async login(username, password) {
     try {
-      const response = await axios.post('/api/users/login', {
-        username,
-        password
+      // Use URLSearchParams for OAuth2 password flow (application/x-www-form-urlencoded)
+      const params = new URLSearchParams();
+      params.append('username', username);
+      params.append('password', password);
+      
+      const response = await axios.post('/api/token', params, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
       });
 
       if (response.data.access_token) {

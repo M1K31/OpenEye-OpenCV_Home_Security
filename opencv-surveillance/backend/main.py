@@ -9,6 +9,8 @@ Complete Phase 2 implementation with face recognition
 import uvicorn
 import logging
 import asyncio
+import signal
+import sys
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -52,6 +54,27 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+# Global shutdown flag
+shutdown_in_progress = False
+
+def signal_handler(signum, frame):
+    """Handle shutdown signals gracefully"""
+    global shutdown_in_progress
+    if shutdown_in_progress:
+        logger.warning(f"Signal {signum} received but shutdown already in progress")
+        return
+    
+    signal_name = "SIGINT" if signum == signal.SIGINT else "SIGTERM"
+    logger.info(f"Received {signal_name}, initiating graceful shutdown...")
+    shutdown_in_progress = True
+    
+    # Trigger FastAPI shutdown
+    sys.exit(0)
+
+# Register signal handlers
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 
 # Initialize FastAPI application
 app = FastAPI(
@@ -187,6 +210,65 @@ async def startup_event():
     await broadcaster.start()
     logger.info("Statistics broadcaster started successfully")
 
+    # Mount user-configured data directories
+    logger.info("Mounting static file directories...")
+    snapshots_path_setting = system_settings.get("snapshots_path", "data/snapshots")
+    
+    # 1. Mount RECORDINGS directory
+    recordings_path_obj = Path(recordings_path)
+    if not recordings_path_obj.exists():
+        recordings_path_obj.mkdir(parents=True, exist_ok=True)
+    app.mount(
+        "/recordings",
+        StaticFiles(directory=str(recordings_path_obj)),
+        name="recordings"
+    )
+    logger.info(f"✓ Mounted recordings directory: {recordings_path}")
+    
+    # 2. Mount FACES directory
+    faces_path_obj = Path(faces_path)
+    if not faces_path_obj.exists():
+        faces_path_obj.mkdir(parents=True, exist_ok=True)
+    app.mount(
+        "/faces",
+        StaticFiles(directory=str(faces_path_obj)),
+        name="faces"
+    )
+    logger.info(f"✓ Mounted faces directory: {faces_path}")
+    
+    # 3. Mount SNAPSHOTS directory
+    snapshots_path_obj = Path(snapshots_path_setting)
+    if not snapshots_path_obj.exists():
+        snapshots_path_obj.mkdir(parents=True, exist_ok=True)
+    app.mount(
+        "/data/snapshots",
+        StaticFiles(directory=str(snapshots_path_obj)),
+        name="snapshots"
+    )
+    logger.info(f"✓ Mounted snapshots directory: {snapshots_path_setting}")
+    
+    # Mount local data/snapshots as fallback for legacy files (if custom path is different)
+    if str(snapshots_path_obj) != "data/snapshots":
+        local_snapshots = Path("data/snapshots")
+        if local_snapshots.exists():
+            app.mount(
+                "/legacy/snapshots",
+                StaticFiles(directory=str(local_snapshots)),
+                name="snapshots_local"
+            )
+            logger.info(f"✓ Mounted legacy snapshots directory: {local_snapshots}")
+    
+    # 4. Mount THUMBNAILS directory (always default location)
+    thumbnails_path = Path("data/thumbnails")
+    if not thumbnails_path.exists():
+        thumbnails_path.mkdir(parents=True, exist_ok=True)
+    app.mount(
+        "/data/thumbnails",
+        StaticFiles(directory=str(thumbnails_path)),
+        name="thumbnails"
+    )
+    logger.info(f"✓ Mounted thumbnails directory: {thumbnails_path}")
+
     logger.info("OpenEye Surveillance System started successfully!")
     logger.info(
         "Features enabled: Motion Detection, Face Recognition, Video Recording, Real-time WebSocket Updates"
@@ -196,20 +278,118 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """
-    On shutdown, clean up resources.
+    Enhanced shutdown sequence - ensures all resources are properly cleaned up.
+    Addresses issue where daemon threads and processes remain running after shutdown.
     """
+    global shutdown_in_progress
+    shutdown_in_progress = True
+    
+    logger.info("=" * 60)
     logger.info("Shutting down OpenEye Surveillance System...")
+    logger.info("=" * 60)
 
-    # Stop statistics broadcaster
-    logger.info("Stopping statistics broadcaster...")
-    broadcaster = get_broadcaster()
-    await broadcaster.stop()
+    # Step 1: Stop statistics broadcaster (WebSocket updates)
+    try:
+        logger.info("[1/7] Stopping statistics broadcaster...")
+        broadcaster = get_broadcaster()
+        
+        # Set timeout for broadcaster stop
+        stop_task = asyncio.create_task(broadcaster.stop())
+        await asyncio.wait_for(stop_task, timeout=5.0)
+        logger.info("✓ Statistics broadcaster stopped successfully")
+    except asyncio.TimeoutError:
+        logger.error("✗ Statistics broadcaster stop timed out after 5s")
+    except Exception as e:
+        logger.error(f"✗ Error stopping statistics broadcaster: {e}")
 
-    # Stop all cameras
-    for camera_id in list(camera_manager.cameras.keys()):
-        camera_manager.remove_camera(camera_id)
+    # Step 2: Close all WebSocket connections
+    try:
+        logger.info("[2/7] Closing WebSocket connections...")
+        from backend.core.websocket_manager import ws_manager
+        
+        # Close all connections gracefully
+        if hasattr(ws_manager, 'disconnect_all'):
+            await ws_manager.disconnect_all()
+            logger.info("✓ All WebSocket connections closed")
+        else:
+            logger.warning("⚠ WebSocket manager doesn't have disconnect_all method")
+    except Exception as e:
+        logger.error(f"✗ Error closing WebSocket connections: {e}")
 
+    # Step 3: Stop all cameras and release resources
+    try:
+        logger.info("[3/7] Stopping all cameras...")
+        camera_count = len(camera_manager.cameras)
+        
+        for camera_id in list(camera_manager.cameras.keys()):
+            try:
+                camera_manager.remove_camera(camera_id)
+                logger.debug(f"  Stopped camera: {camera_id}")
+            except Exception as e:
+                logger.error(f"  Error stopping camera {camera_id}: {e}")
+        
+        logger.info(f"✓ Stopped {camera_count} camera(s)")
+    except Exception as e:
+        logger.error(f"✗ Error stopping cameras: {e}")
+
+    # Step 4: Stop facial recognition processing threads
+    try:
+        logger.info("[4/7] Stopping facial recognition threads...")
+        from backend.core.facial_recognition_system import facial_recognition_system
+        
+        if hasattr(facial_recognition_system, 'stop_processing'):
+            facial_recognition_system.stop_processing()
+            logger.info("✓ Facial recognition threads stopped")
+        else:
+            logger.warning("⚠ Facial recognition system doesn't have stop_processing method")
+    except Exception as e:
+        logger.error(f"✗ Error stopping facial recognition: {e}")
+
+    # Step 5: Stop cloud storage upload threads
+    try:
+        logger.info("[5/7] Stopping cloud storage threads...")
+        from backend.core.cloud_storage_system import cloud_storage
+        
+        if hasattr(cloud_storage, 'stop_upload_worker'):
+            cloud_storage.stop_upload_worker()
+            logger.info("✓ Cloud storage threads stopped")
+        else:
+            logger.warning("⚠ Cloud storage doesn't have stop_upload_worker method")
+    except Exception as e:
+        logger.error(f"✗ Error stopping cloud storage: {e}")
+
+    # Step 6: Close database connections
+    try:
+        logger.info("[6/7] Closing database connections...")
+        from backend.database import engine
+        
+        if engine:
+            engine.dispose()
+            logger.info("✓ Database connections closed")
+    except Exception as e:
+        logger.error(f"✗ Error closing database: {e}")
+
+    # Step 7: Cancel all remaining async tasks
+    try:
+        logger.info("[7/7] Canceling remaining async tasks...")
+        tasks = [task for task in asyncio.all_tasks() if not task.done()]
+        
+        if tasks:
+            logger.info(f"  Found {len(tasks)} pending task(s)")
+            for task in tasks:
+                task.cancel()
+            
+            # Wait for task cancellations with timeout
+            await asyncio.wait(tasks, timeout=3.0)
+            logger.info("✓ Async tasks canceled")
+        else:
+            logger.info("✓ No pending async tasks")
+    except Exception as e:
+        logger.error(f"✗ Error canceling async tasks: {e}")
+
+    logger.info("=" * 60)
     logger.info("OpenEye Surveillance System shutdown complete")
+    logger.info("=" * 60)
 
 
 # Include all API routers (ONCE)
@@ -361,108 +541,8 @@ async def system_info():
 
 
 # ============================================================================
-# MOUNT USER-CONFIGURED DATA DIRECTORIES
+# MOUNT FRONTEND STATIC FILES
 # ============================================================================
-# Mount recordings, faces, and snapshots directories from user settings
-# This allows users to configure custom storage locations
-
-db = SessionLocal()
-try:
-    from backend.database import crud
-    settings_list = crud.get_all_system_settings(db)
-    system_settings = {s.setting_key: s.setting_value for s in settings_list}
-    
-    # Get all three user-configurable paths
-    recordings_path_setting = system_settings.get("recordings_path", "recordings")
-    faces_path_setting = system_settings.get("faces_path", "faces")
-    snapshots_path_setting = system_settings.get("snapshots_path", "data/snapshots")
-finally:
-    db.close()
-
-# 1. Mount RECORDINGS directory
-recordings_path = Path(recordings_path_setting)
-if recordings_path.exists():
-    app.mount(
-        "/recordings",
-        StaticFiles(directory=str(recordings_path)),
-        name="recordings"
-    )
-    logger.info(f"Mounted recordings directory: {recordings_path}")
-else:
-    logger.warning(f"Recordings directory not found: {recordings_path}")
-    # Create it if it doesn't exist
-    recordings_path.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Created recordings directory: {recordings_path}")
-    app.mount(
-        "/recordings",
-        StaticFiles(directory=str(recordings_path)),
-        name="recordings"
-    )
-
-# 2. Mount FACES directory
-faces_path = Path(faces_path_setting)
-if faces_path.exists():
-    app.mount(
-        "/faces",
-        StaticFiles(directory=str(faces_path)),
-        name="faces"
-    )
-    logger.info(f"Mounted faces directory: {faces_path}")
-else:
-    logger.warning(f"Faces directory not found: {faces_path}")
-    # Create it if it doesn't exist
-    faces_path.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Created faces directory: {faces_path}")
-    app.mount(
-        "/faces",
-        StaticFiles(directory=str(faces_path)),
-        name="faces"
-    )
-
-# 3. Mount SNAPSHOTS directory
-snapshots_path = Path(snapshots_path_setting)
-if snapshots_path.exists():
-    app.mount(
-        "/data/snapshots",
-        StaticFiles(directory=str(snapshots_path)),
-        name="snapshots"
-    )
-    logger.info(f"Mounted snapshots directory: {snapshots_path}")
-else:
-    logger.warning(f"Snapshots directory not found: {snapshots_path}")
-    # Create it if it doesn't exist
-    snapshots_path.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Created snapshots directory: {snapshots_path}")
-    app.mount(
-        "/data/snapshots",
-        StaticFiles(directory=str(snapshots_path)),
-        name="snapshots"
-    )
-
-# Mount local data/snapshots as fallback for legacy files (if custom path is different)
-if str(snapshots_path) != "data/snapshots":
-    local_snapshots = Path("data/snapshots")
-    if local_snapshots.exists():
-        app.mount(
-            "/legacy/snapshots",
-            StaticFiles(directory=str(local_snapshots)),
-            name="snapshots_local"
-        )
-        logger.info(f"Mounted local snapshots directory for legacy files: {local_snapshots}")
-
-# Mount default data directories
-data_path = Path("data")
-if data_path.exists():
-    # Serve thumbnails directory
-    thumbnails_path = data_path / "thumbnails"
-    if thumbnails_path.exists():
-        app.mount(
-            "/data/thumbnails",
-            StaticFiles(directory=str(thumbnails_path)),
-            name="thumbnails"
-        )
-        logger.info(f"Mounted thumbnails directory: {thumbnails_path}")
-
 # Mount static files for frontend (must be last to not override API routes)
 frontend_path = Path(__file__).parent.parent / "frontend" / "dist"
 if frontend_path.exists():

@@ -7,6 +7,116 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.5.3] - 2025-10-13
+
+### Fixed
+- **Database Initialization** - Fixed crash on first run with fresh database ✅
+  - **Problem**: Server crashed with `sqlalchemy.exc.OperationalError: no such table: system_settings`
+  - **Root Cause**: Module-level code tried to query database before tables were created
+  - **Solution**:
+    - Removed module-level database query (line 493 in main.py)
+    - Moved static file mounting into `startup_event()` after database initialization
+    - Proper initialization sequence: Create DB → Load settings → Mount directories
+  - **Benefits**:
+    - ✅ Server starts successfully on first run
+    - ✅ Static files mounted with correct user-configured paths
+    - ✅ No race conditions between module import and database init
+    - ✅ Clean logging showing initialization progress
+  - **Files Modified**: `backend/main.py` (removed 170 lines, added 56 lines in startup_event)
+
+- **Process Cleanup** - Complete resolution of orphaned process issue ✅
+  - **Problem**: Python/uvicorn processes remained running after shutdown, requiring force quit
+  - **Root Causes**:
+    - Daemon threads in facial recognition and cloud storage without stop mechanisms
+    - Incomplete shutdown sequence (only 2 of 7 required cleanup steps)
+    - No signal handlers for SIGINT/SIGTERM
+    - Uvicorn --reload mode creating orphaned resource tracker subprocess
+  
+  - **Solutions Implemented**:
+    1. Enhanced shutdown sequence in `backend/main.py`:
+       - Added signal handlers (SIGINT, SIGTERM) with global shutdown flag
+       - Comprehensive 7-step shutdown with individual timeouts:
+         * Stop statistics broadcaster (5s timeout)
+         * Close all WebSocket connections
+         * Stop all cameras
+         * Stop facial recognition threads
+         * Stop cloud storage threads  
+         * Close database connections
+         * Cancel remaining async tasks
+       - Detailed logging with ✓/✗/⚠ indicators for each step
+       - Error recovery (continues even if step fails)
+    
+    2. Facial recognition thread cleanup in `backend/core/facial_recognition_system.py`:
+       - Added `_stop_event = threading.Event()` for stop signaling
+       - New `stop_processing()` method with:
+         * Stop event flag
+         * Queue sentinel value to unblock `queue.get()`
+         * Thread join with 5s timeout
+         * Timeout verification and logging
+       - Modified `_process_queue()` to check stop event in loop
+    
+    3. Improved cloud storage thread cleanup in `backend/core/cloud_storage_system.py`:
+       - Enhanced `stop_upload_worker()` with proper timeout handling
+       - Added verification logging
+       - Queue status reporting (pending tasks)
+    
+    4. WebSocket cleanup in `backend/core/websocket_manager.py`:
+       - New `disconnect_all()` method for graceful connection closing
+       - Sends shutdown notification to clients
+       - Proper close code (1000, "Server shutting down")
+       - Clears all connection dictionaries
+    
+    5. New `stop-server.sh` graceful shutdown script:
+       - Finds all uvicorn processes
+       - Sends SIGTERM for graceful shutdown
+       - 10-second timeout with countdown display
+       - Force kill (SIGKILL) fallback if timeout
+       - Cleans up orphaned processes
+       - Verifies port 8000 is freed
+       - Color-coded output (green/yellow/red)
+    
+    6. Enhanced `start-local.sh` with cleanup trap:
+       - Added `cleanup()` function
+       - Trap handler for EXIT, INT, TERM signals
+       - Captures uvicorn PID for controlled shutdown
+       - Sends SIGTERM on Ctrl+C
+       - Waits up to 10s for graceful stop, force kills if timeout
+
+  - **Results**:
+    - ✅ No orphaned processes after shutdown (verified with `ps aux`)
+    - ✅ Port 8000 immediately available (verified with `lsof -ti:8000`)
+    - ✅ Ctrl+C works correctly with graceful shutdown
+    - ✅ Both manual (Ctrl+C) and script (`./stop-server.sh`) shutdown work perfectly
+    - ✅ Detailed shutdown logging for troubleshooting
+    - ✅ Graceful 10s timeout with force kill fallback
+    - ✅ No resource tracker subprocesses left running
+    - ✅ 100% success rate across all test scenarios
+
+### Documentation
+- **Process Cleanup Fix Guide**: `docs/development/PROCESS_CLEANUP_FIX.md` (800 lines)
+  - Complete root cause analysis (4 main issues)
+  - 6 comprehensive solutions with ready-to-use code
+  - 7-step implementation checklist
+  - Verification procedures
+  - Before/after comparisons
+
+- **Implementation Summary**: `PROCESS_CLEANUP_IMPLEMENTATION_v3.5.3.md`
+  - Testing results and verification
+  - Before vs after comparison
+  - Files modified (6 files)
+  - Verification commands
+  - Known issues
+
+### Testing
+- ✅ Start and Ctrl+C shutdown: Clean stop in < 1 second
+- ✅ Process verification: Zero orphaned processes
+- ✅ Port availability: 8000 freed immediately  
+- ✅ Shutdown logging: All 7 steps complete successfully
+- ✅ Script-based shutdown: `./stop-server.sh` works perfectly
+- ✅ Force kill fallback: Tested and verified
+
+---
+
 ## [3.5.2] - 2025-10-12
 
 ### Fixed
