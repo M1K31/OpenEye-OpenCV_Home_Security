@@ -43,7 +43,7 @@ jobs:
     
     - name: Install Python dependencies
       run: |
-        cd opencv-surveillance
+  cd opencv_surveillance
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install pytest pytest-cov pytest-asyncio httpx
@@ -63,7 +63,7 @@ jobs:
     - name: Upload coverage
       uses: codecov/codecov-action@v4
       with:
-        file: ./opencv-surveillance/coverage.xml
+  file: ./opencv_surveillance/coverage.xml
         flags: unittests
         name: codecov-umbrella
       if: matrix.python-version == '3.11'
@@ -82,8 +82,8 @@ jobs:
     - name: Build Docker image (test)
       uses: docker/build-push-action@v5
       with:
-        context: ./opencv-surveillance
-        file: ./opencv-surveillance/Dockerfile
+  context: ./opencv_surveillance
+  file: ./opencv_surveillance/Dockerfile
         push: false
         load: true
         tags: openeye:test

@@ -4,9 +4,9 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import List, Optional
 
-from backend.database import models
+from opencv_surveillance.backend.database import models
 from backend.api.schemas import user as user_schema
-from backend.core.auth import (
+from opencv_surveillance.core.auth import (
     hash_password,
 )  # FIXED: Use consistent hash_password from auth
 
@@ -356,3 +356,156 @@ def initialize_default_settings(db: Session):
         existing = get_system_setting(db, key)
         if not existing:
             set_system_setting(db, key, value, stype, desc)
+
+
+# ============================================================================
+# SPECIALIZED FACE DETECTION CRUD OPERATIONS
+# ============================================================================
+
+
+def get_recent_face_detections(
+    db: Session,
+    camera_id: Optional[str] = None,
+    person_name: Optional[str] = None,
+    limit: int = 50,
+    hours: int = 24,
+) -> List[models.FaceDetectionEvent]:
+    """Get recent face detection events with optional filters"""
+    from sqlalchemy import desc
+    from datetime import timedelta
+
+    query = db.query(models.FaceDetectionEvent)
+
+    # Filter by time
+    time_threshold = datetime.utcnow() - timedelta(hours=hours)
+    query = query.filter(
+        models.FaceDetectionEvent.detected_at >= time_threshold)
+
+    # Optional filters
+    if camera_id:
+        query = query.filter(models.FaceDetectionEvent.camera_id == camera_id)
+
+    if person_name:
+        query = query.filter(
+            models.FaceDetectionEvent.person_name == person_name)
+
+    # Order by most recent and limit
+    query = query.order_by(desc(models.FaceDetectionEvent.detected_at))
+    query = query.limit(limit)
+
+    return query.all()
+
+
+def get_face_detection_statistics(
+    db: Session, camera_id: Optional[str] = None, days: int = 7
+):
+    """Get statistics about face detections"""
+    from sqlalchemy import func, desc
+    from datetime import timedelta
+
+    time_threshold = datetime.utcnow() - timedelta(days=days)
+
+    query = db.query(models.FaceDetectionEvent).filter(
+        models.FaceDetectionEvent.detected_at >= time_threshold
+    )
+
+    if camera_id:
+        query = query.filter(models.FaceDetectionEvent.camera_id == camera_id)
+
+    total_detections = query.count()
+
+    # Count unique people detected
+    unique_people = db.query(
+        func.count(func.distinct(models.FaceDetectionEvent.person_name))
+    ).filter(
+        models.FaceDetectionEvent.detected_at >= time_threshold,
+        models.FaceDetectionEvent.person_name != "Unknown",
+    )
+
+    if camera_id:
+        unique_people = unique_people.filter(
+            models.FaceDetectionEvent.camera_id == camera_id
+        )
+
+    unique_people_count = unique_people.scalar()
+
+    # Get most detected person
+    most_detected = (
+        query.filter(models.FaceDetectionEvent.person_name != "Unknown")
+        .group_by(models.FaceDetectionEvent.person_name)
+        .order_by(desc(func.count(models.FaceDetectionEvent.person_name)))
+        .first()
+    )
+
+    return {
+        "total_detections": total_detections,
+        "unique_people": unique_people_count,
+        "most_detected_person": most_detected.person_name if most_detected else None,
+        "time_period_days": days,
+    }
+
+
+def get_person_detection_history(
+    db: Session, person_name: str, limit: int = 100
+) -> List[models.FaceDetectionEvent]:
+    """Get detection history for a specific person"""
+    from sqlalchemy import desc
+
+    return (
+        db.query(models.FaceDetectionEvent)
+        .filter(models.FaceDetectionEvent.person_name == person_name)
+        .order_by(desc(models.FaceDetectionEvent.detected_at))
+        .limit(limit)
+        .all()
+    )
+
+
+def get_recent_recordings(
+    db: Session, camera_id: Optional[str] = None, limit: int = 20
+) -> List[models.RecordingEvent]:
+    """Get recent recording events"""
+    from sqlalchemy import desc
+
+    query = db.query(models.RecordingEvent)
+
+    if camera_id:
+        query = query.filter(models.RecordingEvent.camera_id == camera_id)
+
+    return query.order_by(
+        desc(models.RecordingEvent.started_at)).limit(limit).all()
+
+
+def cleanup_old_events(db: Session, days_to_keep: int = 30):
+    """Clean up old events from the database"""
+    from datetime import timedelta
+
+    cutoff_date = datetime.utcnow() - timedelta(days=days_to_keep)
+
+    # Delete old face detections
+    face_detections_deleted = (
+        db.query(models.FaceDetectionEvent)
+        .filter(models.FaceDetectionEvent.detected_at < cutoff_date)
+        .delete()
+    )
+
+    # Delete old recordings
+    recordings_deleted = (
+        db.query(models.RecordingEvent)
+        .filter(models.RecordingEvent.started_at < cutoff_date)
+        .delete()
+    )
+
+    # Delete old logs
+    logs_deleted = (
+        db.query(models.SystemLog)
+        .filter(models.SystemLog.created_at < cutoff_date)
+        .delete()
+    )
+
+    db.commit()
+
+    return {
+        "face_detections_deleted": face_detections_deleted,
+        "recordings_deleted": recordings_deleted,
+        "logs_deleted": logs_deleted,
+    }

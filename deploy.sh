@@ -5,12 +5,12 @@
 set -e  # Exit on error
 
 echo "=================================================="
-echo "  OpenEye Deployment Script v3.5.2"
+echo "  OpenEye Deployment Script v3.5.3"
 echo "=================================================="
 echo ""
 
 # Configuration
-VERSION="v3.5.2"
+VERSION="v3.5.3"
 DOCKER_USERNAME="im1k31s"
 DOCKER_IMAGE="openeye-opencv_home_security"
 GITHUB_REPO="M1K31/OpenEye-OpenCV_Home_Security"
@@ -97,7 +97,7 @@ read -p "Build Docker image? (y/N) " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     print_info "Building Docker image..."
-    cd opencv-surveillance
+    cd opencv_surveillance
     
     # Build with version tag
     docker build -t ${DOCKER_USERNAME}/${DOCKER_IMAGE}:${VERSION} .

@@ -1,0 +1,136 @@
+/* Copyright (c) 2025 Mikel Smart
+ * LoadingSkeleton Component Styles
+ * Theme-aware, respects reduce-motion
+ */
+
+.skeleton {
+  background: var(--bg-panel);
+  position: relative;
+  overflow: hidden;
+  margin-bottom: var(--spacing-sm, 8px);
+}
+
+/* Shimmer loading animation */
+.skeleton::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--bg-hover, rgba(255, 255, 255, 0.1)) 50%,
+    transparent 100%
+  );
+  animation: shimmer 1.5s ease-in-out infinite;
+  transform: translateX(-100%);
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Respect reduced motion */
+.skeleton.reduce-motion::after,
+html.reduce-motion .skeleton::after {
+  animation: none;
+  opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    animation: none;
+    opacity: 0.5;
+  }
+}
+
+/* Skeleton Card Container */
+.skeleton-card-container {
+  background: var(--bg-panel);
+  border-radius: var(--radius-md, 12px);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: var(--spacing-md, 16px);
+}
+
+/* Skeleton Camera Card */
+.skeleton-camera-card {
+  background: var(--bg-panel);
+  border-radius: var(--radius-md, 12px);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+}
+
+/* Skeleton List */
+.skeleton-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md, 16px);
+}
+
+.skeleton-list-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md, 16px);
+  padding: var(--spacing-md, 16px);
+  background: var(--bg-panel);
+  border-radius: var(--radius-sm, 8px);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Skeleton Timeline */
+.skeleton-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm, 8px);
+}
+
+.skeleton-timeline-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-md, 16px);
+  padding: var(--spacing-md, 16px);
+  background: var(--bg-panel);
+  border-radius: var(--radius-sm, 8px);
+  border-left: 3px solid var(--border-panel);
+}
+
+/* Pulse animation as fallback for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: pulse 2s ease-in-out infinite;
+  }
+  
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.6;
+    }
+  }
+}
+
+/* Theme-specific adjustments */
+html.aquasecurity-theme .skeleton {
+  background: rgba(255, 255, 255, 0.05);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+html.sman-theme .skeleton::after,
+html.bman-theme .skeleton::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.15) 50%,
+    transparent 100%
+  );
+}

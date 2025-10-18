@@ -8,8 +8,8 @@ from pathlib import Path
 import sys
 sys.path.insert(0, '/Volumes/Storage/Dev/GitHubProjects/OpenEye-OpenCV_Home_Security/opencv-surveillance')
 
-from backend.database.session import SessionLocal
-from backend.database.models import MotionDetectionEvent
+from opencv_surveillance.backend.database.session import SessionLocal
+from opencv_surveillance.backend.database.models import MotionDetectionEvent
 
 def test_motion_event_creation():
     """Test creating a motion event directly"""

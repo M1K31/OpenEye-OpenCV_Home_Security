@@ -11,8 +11,8 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
 
-from backend.database.session import SessionLocal
-from backend.database import face_crud
+from opencv_surveillance.backend.database.session import SessionLocal
+from opencv_surveillance.backend.database import crud
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -30,7 +30,7 @@ class FaceDetectionEventResponse(BaseModel):
     recording_path: Optional[str]
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class FaceStatisticsResponse(BaseModel):
@@ -51,7 +51,7 @@ class RecordingEventResponse(BaseModel):
     known_faces_detected: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class FaceDetectionListResponse(BaseModel):
@@ -97,12 +97,11 @@ def get_detection_history(
     """
     try:
         # Import models for count query
-        from backend.database import models
-        
+        from opencv_surveillance.backend.database import models
         # Get total count before filtering
         total_count = db.query(models.FaceDetectionEvent).count()
-        
-        events = face_crud.get_recent_face_detections(
+
+        events = crud.get_recent_face_detections(
             db=db,
             camera_id=camera_id,
             person_name=person_name,
@@ -154,7 +153,7 @@ def get_detection_statistics(
     - **days**: Number of days to analyze (default: 7)
     """
     try:
-        stats = face_crud.get_face_detection_statistics(
+        stats = crud.get_face_detection_statistics(
             db=db, camera_id=camera_id, days=days
         )
 
@@ -178,7 +177,7 @@ def get_person_history(
     - **limit**: Maximum number of results (default: 100, max: 500)
     """
     try:
-        events = face_crud.get_person_detection_history(
+        events = crud.get_person_detection_history(
             db=db, person_name=person_name, limit=limit
         )
 
@@ -221,7 +220,7 @@ def get_recording_history(
     - **limit**: Maximum number of results (default: 20, max: 100)
     """
     try:
-        recordings = face_crud.get_recent_recordings(
+        recordings = crud.get_recent_recordings(
             db=db, camera_id=camera_id, limit=limit
         )
 
@@ -251,7 +250,7 @@ def cleanup_old_data(
                 status_code=400, detail="Cannot delete data newer than 7 days"
             )
 
-        result = face_crud.cleanup_old_events(db=db, days_to_keep=days_to_keep)
+        result = crud.cleanup_old_events(db=db, days_to_keep=days_to_keep)
 
         return {"message": "Cleanup completed successfully", **result}
 
@@ -274,7 +273,7 @@ def get_detection_timeline(
     - **hours**: Number of hours to analyze (default: 24)
     """
     try:
-        events = face_crud.get_recent_face_detections(
+        events = crud.get_recent_face_detections(
             db=db, camera_id=camera_id, limit=1000, hours=hours
         )
 

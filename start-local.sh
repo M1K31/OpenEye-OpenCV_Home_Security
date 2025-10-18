@@ -42,7 +42,8 @@ echo "========================================"
 echo ""
 
 # Navigate to opencv-surveillance
-cd "$(dirname "$0")/opencv-surveillance"
+# Navigate to opencv_surveillance
+cd "$(dirname "$0")/opencv_surveillance"
 
 # Check if venv exists
 if [ ! -d "venv" ]; then

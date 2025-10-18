@@ -12,9 +12,12 @@ from typing import Optional, List
 from datetime import datetime, timedelta
 import os
 import json
+import zipfile
+import io
+import tempfile
 
-from backend.database.session import SessionLocal
-from backend.database import models
+from opencv_surveillance.backend.database.session import SessionLocal
+from opencv_surveillance.backend.database import models
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -296,3 +299,70 @@ def get_storage_statistics(db: Session = Depends(get_db)):
             (total_size / total_count / (1024**2)) if total_count > 0 else 0
         ),
     }
+
+
+class ExportRequest(BaseModel):
+    """Request model for exporting recordings as ZIP"""
+    recording_ids: List[int]
+
+
+@router.post("/recordings/export")
+def export_recordings_zip(
+    request: ExportRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Export multiple recordings as a ZIP file
+    
+    Args:
+        request: ExportRequest containing list of recording IDs
+        
+    Returns:
+        StreamingResponse with ZIP file
+    """
+    if not request.recording_ids:
+        raise HTTPException(status_code=400, detail="No recording IDs provided")
+    
+    if len(request.recording_ids) > 100:
+        raise HTTPException(
+            status_code=400, 
+            detail="Cannot export more than 100 recordings at once"
+        )
+    
+    # Fetch recordings from database
+    recordings = (
+        db.query(models.RecordingEvent)
+        .filter(models.RecordingEvent.id.in_(request.recording_ids))
+        .all()
+    )
+    
+    if not recordings:
+        raise HTTPException(status_code=404, detail="No recordings found")
+    
+    # Create ZIP file in memory
+    zip_buffer = io.BytesIO()
+    
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for recording in recordings:
+            if not os.path.exists(recording.recording_path):
+                continue
+            
+            # Create a safe filename
+            filename = os.path.basename(recording.recording_path)
+            arcname = f"{recording.camera_id}_{filename}"
+            
+            # Add file to ZIP
+            zip_file.write(recording.recording_path, arcname=arcname)
+    
+    # Reset buffer position
+    zip_buffer.seek(0)
+    
+    # Generate filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    zip_filename = f"recordings_{timestamp}.zip"
+    
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={zip_filename}"}
+    )

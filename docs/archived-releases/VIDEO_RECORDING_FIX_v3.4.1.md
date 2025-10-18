@@ -27,7 +27,7 @@ The recorder was hardcoded to use `mp4v` codec, which requires FFMPEG. Since FFM
 ## ✅ Solution Implemented
 
 ### Code Changes
-**File**: `/opencv-surveillance/backend/core/recorder.py`
+**File**: `/opencv_surveillance/backend/core/recorder.py`
 
 **Before** (Lines 42-56):
 ```python

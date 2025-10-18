@@ -53,7 +53,7 @@ docker push m1k31/openeye-surveillance:latest
 
 ### Code Changes
 
-#### Backend (`opencv-surveillance/backend/`)
+#### Backend (`opencv_surveillance/backend/`)
 - ✅ **api/routes/settings.py** - Fixed route ordering (specific before generic)
 - ✅ **main.py** - Updated version to 3.5.1.4 in 3 locations
 - ✅ **No other backend changes** (pure bug fix)

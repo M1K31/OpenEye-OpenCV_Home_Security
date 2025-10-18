@@ -48,7 +48,7 @@ All **application code changes** work in both Docker and Linux because they shar
 | CSP headers | ✅ | ✅ | **Identical** |
 | API endpoints | ✅ | ✅ | **Identical** |
 
-**Reason:** These are all part of the source code in `/opencv-surveillance/frontend/` and `/opencv-surveillance/backend/`, which is used by both installation methods.
+**Reason:** These are all part of the source code in `/opencv-surveillance/frontend/` and `/opencv_surveillance/backend/`, which is used by both installation methods.
 
 ---
 

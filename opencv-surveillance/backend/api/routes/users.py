@@ -4,10 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
-from backend.database import crud
-from backend.database.session import SessionLocal
+from opencv_surveillance.backend.database import crud
+from opencv_surveillance.backend.database.session import SessionLocal
 from backend.api.schemas import user as user_schema
-from backend.core import auth
+from opencv_surveillance.core import auth
 from datetime import timedelta
 
 router = APIRouter()

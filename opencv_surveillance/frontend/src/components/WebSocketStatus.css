@@ -1,0 +1,148 @@
+.ws-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: help;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.ws-status-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.ws-status-label {
+  line-height: 1;
+}
+
+/* Connected state - Green */
+.ws-status-connected {
+  background: rgba(72, 187, 120, 0.1);
+  color: #38a169;
+  border: 1px solid rgba(72, 187, 120, 0.3);
+}
+
+.ws-status-connected:hover {
+  background: rgba(72, 187, 120, 0.2);
+  border-color: rgba(72, 187, 120, 0.5);
+}
+
+/* Connecting state - Yellow with animation */
+.ws-status-connecting {
+  background: rgba(237, 137, 54, 0.1);
+  color: #dd6b20;
+  border: 1px solid rgba(237, 137, 54, 0.3);
+}
+
+.ws-status-connecting .ws-status-icon {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Disconnected state - Red */
+.ws-status-disconnected {
+  background: rgba(245, 101, 101, 0.1);
+  color: #c53030;
+  border: 1px solid rgba(245, 101, 101, 0.3);
+}
+
+.ws-status-disconnected:hover {
+  background: rgba(245, 101, 101, 0.2);
+  border-color: rgba(245, 101, 101, 0.5);
+}
+
+/* Error state - Red with emphasis */
+.ws-status-error {
+  background: rgba(245, 101, 101, 0.15);
+  color: #c53030;
+  border: 1px solid rgba(245, 101, 101, 0.4);
+}
+
+/* Pulse animation for live indicator */
+.ws-status-pulse {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  background: #38a169;
+  border-radius: 50%;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.9);
+  }
+}
+
+@keyframes pulse-dot {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(1.2);
+  }
+}
+
+/* Minimal variant - icon only */
+.ws-status-minimal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: help;
+  transition: all 0.2s ease;
+}
+
+.ws-status-minimal:hover {
+  transform: scale(1.1);
+}
+
+.ws-status-minimal .ws-status-icon {
+  font-size: 14px;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .ws-status-connected {
+    background: rgba(72, 187, 120, 0.2);
+    color: #68d391;
+  }
+
+  .ws-status-connecting {
+    background: rgba(237, 137, 54, 0.2);
+    color: #f6ad55;
+  }
+
+  .ws-status-disconnected,
+  .ws-status-error {
+    background: rgba(245, 101, 101, 0.2);
+    color: #fc8181;
+  }
+}
+
+/* Responsive - smaller on mobile */
+@media (max-width: 768px) {
+  .ws-status {
+    padding: 3px 8px;
+    font-size: 12px;
+  }
+
+  .ws-status-icon {
+    font-size: 10px;
+  }
+}

@@ -6,13 +6,18 @@ Separate from face detection - tracks ALL motion events including those without 
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, timedelta
 from pathlib import Path
+from pydantic import BaseModel
+import zipfile
+import io
+import os
 
-from backend.database.session import get_db
-from backend.database import models
+from opencv_surveillance.backend.database.session import get_db
+from opencv_surveillance.backend.database import models
 from backend.api.schemas.motion import (
     MotionEventResponse,
     MotionEventListResponse,
@@ -264,3 +269,89 @@ def get_motion_statistics(
         "start_date": cutoff_date.isoformat(),
         "end_date": datetime.utcnow().isoformat()
     }
+
+
+class SnapshotExportRequest(BaseModel):
+    """Request model for exporting snapshots as ZIP"""
+    event_ids: List[int]
+
+
+@router.post("/snapshots/export")
+def export_snapshots_zip(
+    request: SnapshotExportRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Export multiple snapshots as a ZIP file
+    
+    Args:
+        request: SnapshotExportRequest containing list of motion event IDs
+        
+    Returns:
+        StreamingResponse with ZIP file containing snapshot images
+    """
+    if not request.event_ids:
+        raise HTTPException(status_code=400, detail="No event IDs provided")
+    
+    if len(request.event_ids) > 500:
+        raise HTTPException(
+            status_code=400, 
+            detail="Cannot export more than 500 snapshots at once"
+        )
+    
+    # Fetch motion events from database
+    events = (
+        db.query(models.MotionDetectionEvent)
+        .filter(models.MotionDetectionEvent.id.in_(request.event_ids))
+        .filter(models.MotionDetectionEvent.snapshot_path.isnot(None))
+        .all()
+    )
+    
+    if not events:
+        raise HTTPException(status_code=404, detail="No snapshots found for given event IDs")
+    
+    # Create ZIP file in memory
+    zip_buffer = io.BytesIO()
+    
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for event in events:
+            snapshot_path = event.snapshot_path
+            
+            # Handle different path formats
+            if not os.path.isabs(snapshot_path):
+                # Try relative paths from common directories
+                possible_paths = [
+                    snapshot_path,
+                    os.path.join("data/snapshots", os.path.basename(snapshot_path)),
+                    os.path.join("snapshots", os.path.basename(snapshot_path)),
+                ]
+                
+                snapshot_path = None
+                for path in possible_paths:
+                    if os.path.exists(path):
+                        snapshot_path = path
+                        break
+            
+            # Skip if file doesn't exist
+            if not snapshot_path or not os.path.exists(snapshot_path):
+                continue
+            
+            # Create a safe filename with metadata
+            timestamp = event.detected_at.strftime("%Y%m%d_%H%M%S")
+            filename = f"{event.camera_id}_{timestamp}_{event.id}.jpg"
+            
+            # Add file to ZIP
+            zip_file.write(snapshot_path, arcname=filename)
+    
+    # Reset buffer position
+    zip_buffer.seek(0)
+    
+    # Generate ZIP filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    zip_filename = f"snapshots_{timestamp}.zip"
+    
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={zip_filename}"}
+    )
