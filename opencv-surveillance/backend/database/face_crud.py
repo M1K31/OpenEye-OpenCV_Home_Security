@@ -9,7 +9,7 @@ from sqlalchemy import desc, func
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict
 
-from backend.database import models
+from opencv_surveillance.backend.database import models
 
 
 def create_face_detection_event(
@@ -21,6 +21,7 @@ def create_face_detection_event(
     motion_detected: bool = False,
     recording_path: Optional[str] = None,
     snapshot_path: Optional[str] = None,
+    face_encoding: Optional[str] = None,
 ) -> models.FaceDetectionEvent:
     """Create a new face detection event in the database"""
 
@@ -35,6 +36,7 @@ def create_face_detection_event(
         motion_detected=motion_detected,
         recording_path=recording_path,
         snapshot_path=snapshot_path,
+        face_encoding=face_encoding,
         detected_at=datetime.utcnow(),
     )
 

@@ -13,9 +13,9 @@ import logging
 from datetime import datetime
 
 from backend.api.schemas import face as face_schema
-from backend.core.face_recognition import get_face_manager
-from backend.core.camera_manager import manager as camera_manager
-from backend.core.auth import get_current_active_user, require_user, require_admin
+from opencv_surveillance.core.face_recognition import get_face_manager
+from opencv_surveillance.core.camera_manager import manager as camera_manager
+from opencv_surveillance.core.auth import get_current_active_user, require_user, require_admin
 from backend.api.schemas import user as user_schema
 
 router = APIRouter()

@@ -8,7 +8,7 @@ UPDATED to include face detection events tracking
 from sqlalchemy import Boolean, Column, Integer, String, Float, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from backend.database.session import Base
+from opencv_surveillance.backend.database.session import Base
 
 
 class User(Base):
@@ -59,14 +59,60 @@ class FaceDetectionEvent(Base):
     frame_width = Column(Integer, nullable=True)
     frame_height = Column(Integer, nullable=True)
 
-    # Relationship
+    # Face embedding for clustering (pickled numpy array as binary)
+    face_encoding = Column(String, nullable=True)  # Base64 encoded face encoding
+    
+    # Cluster assignment
+    cluster_id = Column(Integer, ForeignKey('face_clusters.id'), nullable=True, index=True)
+
+    # Relationships
     recording = relationship("RecordingEvent", back_populates="face_detections")
+    cluster = relationship("FaceCluster", back_populates="face_detections")
 
     def __repr__(self):
         return f"<FaceDetection(person={
             self.person_name}, confidence={
             self.confidence:.2f}, time={
             self.detected_at})>"
+
+
+class FaceCluster(Base):
+    """
+    Model for storing face clusters
+    Groups similar unknown faces together for identification
+    """
+
+    __tablename__ = "face_clusters"
+
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Cluster information
+    label = Column(String, nullable=True)  # User-assigned label/name
+    is_identified = Column(Boolean, default=False)  # Whether cluster has been identified
+    
+    # Cluster statistics
+    face_count = Column(Integer, default=0)  # Number of faces in cluster
+    avg_confidence = Column(Float, nullable=True)  # Average detection confidence
+    
+    # Representative face (centroid)
+    representative_encoding = Column(String, nullable=True)  # Base64 encoded centroid
+    representative_snapshot_path = Column(String, nullable=True)  # Path to best example
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_seen_at = Column(DateTime, nullable=True)  # Last detection time
+    
+    # Clustering algorithm metadata
+    clustering_algorithm = Column(String, default="dbscan")  # dbscan, kmeans, etc.
+    clustering_params = Column(String, nullable=True)  # JSON string of parameters
+    
+    # Relationships
+    face_detections = relationship("FaceDetectionEvent", back_populates="cluster")
+
+    def __repr__(self):
+        label = self.label or f"Cluster-{self.id}"
+        return f"<FaceCluster(id={self.id}, label={label}, faces={self.face_count})>"
 
 
 class Camera(Base):
@@ -92,7 +138,8 @@ class Camera(Base):
     )  # CHANGED: Default to False
     min_contour_area = Column(Integer, default=500)
     motion_sensitivity = Column(Integer, default=5)  # 1-10 scale (5=medium)
-    motion_threshold = Column(Integer, default=50)  # varThreshold 1-100
+    motion_threshold = Column(Integer, default=50)  # varThreshold 1-100 (pixel sensitivity)
+    motion_percentage_threshold = Column(Float, default=1.0)  # Min % of frame with motion (0.0-100.0)
     noise_reduction = Column(String, default="medium")  # low, medium, high
     detect_shadows = Column(Boolean, default=True)
     # JSON string for zone grid
@@ -251,3 +298,37 @@ class SystemSettings(Base):
 
     def __repr__(self):
         return f"<SystemSettings({self.setting_key}={self.setting_value})>"
+
+
+class AutomationRule(Base):
+    """
+    Automation rules for person-based triggers
+    Executes actions when specific people are detected
+    """
+
+    __tablename__ = "automation_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)  # Human-readable rule name
+    person_name = Column(String, index=True, nullable=False)  # Person to trigger on
+    enabled = Column(Boolean, default=True, index=True)
+    
+    # Conditions (JSON string)
+    # Example: {"cameras": ["front_door"], "time_range": {"start": "08:00", "end": "18:00"}}
+    conditions = Column(String, nullable=True)
+    
+    # Actions to execute (JSON array)
+    # Example: [{"type": "notification", "message": "John detected"}, {"type": "record", "duration": 30}]
+    actions = Column(String, nullable=False)
+    
+    # Cooldown period in seconds (prevent spam)
+    cooldown_seconds = Column(Integer, default=300)  # 5 minutes default
+    last_triggered_at = Column(DateTime, nullable=True)
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    trigger_count = Column(Integer, default=0)  # Track how many times it's triggered
+    
+    def __repr__(self):
+        return f"<AutomationRule(name={self.name}, person={self.person_name}, enabled={self.enabled})>"

@@ -88,7 +88,7 @@ else
     print_error ".gitignore missing!"
 fi
 
-if [ -f "opencv-surveillance/.dockerignore" ]; then
+if [ -f "opencv_surveillance/.dockerignore" ]; then
     print_status ".dockerignore exists"
 else
     print_error ".dockerignore missing!"
@@ -97,7 +97,7 @@ fi
 # Step 6: Check Docker build context size
 echo ""
 echo "Step 6: Estimating Docker build context size..."
-cd opencv-surveillance
+cd opencv_surveillance
 CONTEXT_SIZE=$(du -sh . 2>/dev/null | cut -f1)
 print_status "Docker build context size: $CONTEXT_SIZE"
 
@@ -110,8 +110,8 @@ cd "$PROJECT_ROOT"
 # Step 7: Verify frontend build
 echo ""
 echo "Step 7: Checking frontend build..."
-if [ -d "opencv-surveillance/frontend/dist" ]; then
-    DIST_SIZE=$(du -sh opencv-surveillance/frontend/dist 2>/dev/null | cut -f1)
+if [ -d "opencv_surveillance/frontend/dist" ]; then
+    DIST_SIZE=$(du -sh opencv_surveillance/frontend/dist 2>/dev/null | cut -f1)
     print_status "Frontend dist exists ($DIST_SIZE)"
 else
     print_warning "Frontend dist not found - run 'npm run build' in frontend/"

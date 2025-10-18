@@ -13,9 +13,9 @@ from pydantic import BaseModel, Field
 import os
 import json
 
-from backend.database import crud, models
-from backend.database.session import SessionLocal
-from backend.core import auth
+from opencv_surveillance.backend.database import crud, models
+from opencv_surveillance.backend.database.session import SessionLocal
+from opencv_surveillance.core import auth
 
 router = APIRouter()
 
@@ -62,6 +62,20 @@ class SystemSettingsUpdate(BaseModel):
         None, ge=30, le=1800, description="Max recording seconds"
     )
     theme: Optional[str] = Field(None, pattern="^(light|dark)$")
+    
+    # NEW: Apple HIG Accessibility Settings
+    reduce_motion: Optional[bool] = Field(
+        None, description="Reduce animations for accessibility (Apple HIG)"
+    )
+    use_8pt_grid: Optional[bool] = Field(
+        None, description="Use 8pt grid spacing system (Apple HIG)"
+    )
+    enhanced_touch_targets: Optional[bool] = Field(
+        None, description="Enhance touch targets to 44x44pt minimum (Apple HIG)"
+    )
+    show_focus_indicators: Optional[bool] = Field(
+        None, description="Show keyboard focus indicators (Apple HIG)"
+    )
 
 
 class PathValidationResponse(BaseModel):

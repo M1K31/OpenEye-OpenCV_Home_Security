@@ -195,7 +195,7 @@ Follow the first-run setup wizard to create your admin account.
 ```bash
 # Clone repository
 git clone https://github.com/M1K31/OpenEye-OpenCV_Home_Security.git
-cd OpenEye-OpenCV_Home_Security/opencv-surveillance
+cd OpenEye-OpenCV_Home_Security/opencv_surveillance
 
 # Run the installation script
 ./scripts/install-local.sh
@@ -233,16 +233,16 @@ Access at: **http://localhost:8000**
 
 ### Developer & Maintenance Tools
 
-- **Audit Tool (Phase Verification)**: A lightweight auditor is included at `opencv-surveillance/scripts/audit-system.py`. Run it from the `opencv-surveillance` folder to verify backend classes, methods, and Phase 2/3 compliance. It helps identify naming mismatches and missing APIs.
+- **Audit Tool (Phase Verification)**: A lightweight auditor is included at `opencv_surveillance/scripts/audit-system.py`. Run it from the `opencv_surveillance` folder to verify backend classes, methods, and Phase 2/3 compliance. It helps identify naming mismatches and missing APIs.
 
 ```bash
-cd opencv-surveillance
+cd opencv_surveillance
 python3 scripts/audit-system.py
 ```
 
 - **Token Refresh UX**: The frontend includes an automatic token refresh flow. When a request fails with 401 due to an expired JWT the UI will show an inline "Session Expired" modal asking the user to re-authenticate. After a successful login the original request is retried automatically so the user keeps their current state.
 
-> Quick recovery: If the session modal fails, see the "Troubleshooting: Session & Token Refresh" section in the API docs (`opencv-surveillance/docs/API_DOCUMENTATION.md`) or the User Guide (`opencv-surveillance/docs/USER_GUIDE.md`).
+> Quick recovery: If the session modal fails, see the "Troubleshooting: Session & Token Refresh" section in the API docs (`opencv_surveillance/docs/API_DOCUMENTATION.md`) or the User Guide (`opencv_surveillance/docs/USER_GUIDE.md`).
 
 
 ### Option 3: Manual Installation (Advanced)
@@ -282,7 +282,7 @@ brew install opencv pkg-config cmake python@3.12
 ```bash
 # Clone repository
 git clone https://github.com/M1K31/OpenEye-OpenCV_Home_Security.git
-cd OpenEye-OpenCV_Home_Security/opencv-surveillance
+cd OpenEye-OpenCV_Home_Security/opencv_surveillance
 
 # Create virtual environment
 python3 -m venv venv
@@ -735,6 +735,7 @@ You are free to:
 - **dlib** - Machine learning toolkit for face detection
 - **FastAPI** - Modern, fast Python web framework
 - **React** - UI library for building the interface
+- **Apple Human Interface Guidelines** - Design principles inspiring the UI's 8pt grid system, 44px touch targets, and accessibility features
 
 ---
 

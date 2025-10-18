@@ -6,20 +6,28 @@ OpenEye Surveillance System - Main Application
 Complete Phase 2 implementation with face recognition
 """
 
+# Suppress pkg_resources deprecation warning from face_recognition_models (external package)
+import warnings
+warnings.filterwarnings("ignore", message="pkg_resources is deprecated", category=UserWarning)
+
+# Apply pkg_resources patch BEFORE any imports that use face_recognition
+from opencv_surveillance.core.pkg_resources_patch import patch_face_recognition_models
+patch_face_recognition_models()
+
 import uvicorn
 import logging
 import asyncio
 import signal
 import sys
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 
-from backend.database.session import engine, SessionLocal
-from backend.database import models, alert_models
+from opencv_surveillance.backend.database.session import engine, SessionLocal
+from opencv_surveillance.backend.database import models, alert_models
 from backend.api.routes import (
     users,
     cameras,
@@ -34,17 +42,21 @@ from backend.api.routes import (
     websockets,
     settings,
     motion_events,
+    clusters,
+    automations,
+    two_way_audio,  # <-- Add this line
 )
-from backend.core.camera_manager import manager as camera_manager
-from backend.core.websocket_manager import broadcast_statistics_update
-from backend.core.face_recognition import get_face_manager
-from backend.core.statistics_broadcaster import get_broadcaster
+from opencv_surveillance.core.camera_manager import manager as camera_manager
+from opencv_surveillance.core.websocket_manager import broadcast_statistics_update
+from opencv_surveillance.core.face_recognition import get_face_manager
+from opencv_surveillance.core.statistics_broadcaster import get_broadcaster
 from backend.middleware.rate_limiter import RateLimiter
 from backend.middleware.security import (
     SecurityHeadersMiddleware,
     IPWhitelistMiddleware,
     SQLInjectionProtection,
 )
+from opencv_surveillance.core.two_way_audio_system import audio_manager
 
 # Load environment variables from .env file
 load_dotenv()
@@ -104,6 +116,59 @@ app.add_middleware(RateLimiter, requests_per_minute=1000)
 # To enable, uncomment and add your allowed IPs:
 # app.add_middleware(IPWhitelistMiddleware, allowed_ips=["127.0.0.1", "192.168.1.100"])
 
+# ============================================================================
+# MOUNT STATIC FILES EARLY (before routes to ensure proper precedence)
+# ============================================================================
+# These mounts MUST be defined before the catch-all SPA route
+# to ensure FastAPI routes requests to static files correctly
+
+# Mount recordings directory
+recordings_mount_path = Path("recordings")
+if not recordings_mount_path.exists():
+    recordings_mount_path.mkdir(parents=True, exist_ok=True)
+app.mount(
+    "/recordings",
+    StaticFiles(directory=str(recordings_mount_path)),
+    name="recordings"
+)
+
+# Mount faces directory  
+faces_mount_path = Path("faces")
+if not faces_mount_path.exists():
+    faces_mount_path.mkdir(parents=True, exist_ok=True)
+app.mount(
+    "/faces",
+    StaticFiles(directory=str(faces_mount_path)),
+    name="faces"
+)
+
+# Mount snapshots directory
+snapshots_mount_path = Path("data/snapshots")
+if not snapshots_mount_path.exists():
+    snapshots_mount_path.mkdir(parents=True, exist_ok=True)
+app.mount(
+    "/data/snapshots",
+    StaticFiles(directory=str(snapshots_mount_path)),
+    name="snapshots"
+)
+
+# Mount legacy snapshots endpoint (for backward compatibility)
+app.mount(
+    "/legacy/snapshots",
+    StaticFiles(directory=str(snapshots_mount_path)),
+    name="snapshots_legacy"
+)
+
+# Mount thumbnails directory
+thumbnails_mount_path = Path("data/thumbnails")
+if not thumbnails_mount_path.exists():
+    thumbnails_mount_path.mkdir(parents=True, exist_ok=True)
+app.mount(
+    "/data/thumbnails",
+    StaticFiles(directory=str(thumbnails_mount_path)),
+    name="thumbnails"
+)
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -121,8 +186,7 @@ async def startup_event():
     # Initialize system settings with defaults
     db = SessionLocal()
     try:
-        from backend.database import crud
-
+        from opencv_surveillance.backend.database import crud
         crud.initialize_default_settings(db)
         settings_list = crud.get_all_system_settings(db)
 
@@ -131,15 +195,11 @@ async def startup_event():
         for setting in settings_list:
             try:
                 if setting.setting_type == "int":
-                    system_settings[setting.setting_key] = int(
-                        setting.setting_value)
+                    system_settings[setting.setting_key] = int(setting.setting_value)
                 elif setting.setting_type == "float":
-                    system_settings[setting.setting_key] = float(
-                        setting.setting_value)
+                    system_settings[setting.setting_key] = float(setting.setting_value)
                 elif setting.setting_type == "boolean":
-                    system_settings[setting.setting_key] = (
-                        setting.setting_value.lower() == "true"
-                    )
+                    system_settings[setting.setting_key] = (setting.setting_value.lower() == "true")
                 else:
                     system_settings[setting.setting_key] = setting.setting_value
             except (ValueError, AttributeError):
@@ -149,8 +209,9 @@ async def startup_event():
         recordings_path = system_settings.get("recordings_path", "recordings")
         faces_path = system_settings.get("faces_path", "faces")
 
-        logger.info(
-            f"System settings loaded - Recordings: {recordings_path}, Faces: {faces_path}")
+        logger.info(f"System settings loaded - Recordings: {recordings_path}, Faces: {faces_path}")
+    except Exception as e:
+        logger.error(f"Error loading system settings: {e}")
     finally:
         db.close()
 
@@ -179,8 +240,7 @@ async def startup_event():
     logger.info("Loading cameras from database...")
     db = SessionLocal()
     try:
-        from backend.database import crud
-
+        from opencv_surveillance.backend.database import crud
         db_cameras = crud.get_active_cameras(db)
         loaded_count = 0
         for db_camera in db_cameras:
@@ -193,14 +253,12 @@ async def startup_event():
                         enable_face_detection=db_camera.face_detection_enabled,
                     )
                     loaded_count += 1
-                    logger.info(
-                        f"Loaded camera '{
-                            db_camera.camera_id}' from database")
+                    logger.info(f"Loaded camera '{db_camera.camera_id}' from database")
                 except Exception as e:
-                    logger.error(
-                        f"Failed to load camera '{
-                            db_camera.camera_id}': {e}")
+                    logger.error(f"Failed to load camera '{db_camera.camera_id}': {e}")
         logger.info(f"Loaded {loaded_count} camera(s) from database")
+    except Exception as e:
+        logger.error(f"Error loading cameras from database: {e}")
     finally:
         db.close()
 
@@ -210,64 +268,14 @@ async def startup_event():
     await broadcaster.start()
     logger.info("Statistics broadcaster started successfully")
 
-    # Mount user-configured data directories
-    logger.info("Mounting static file directories...")
-    snapshots_path_setting = system_settings.get("snapshots_path", "data/snapshots")
-    
-    # 1. Mount RECORDINGS directory
-    recordings_path_obj = Path(recordings_path)
-    if not recordings_path_obj.exists():
-        recordings_path_obj.mkdir(parents=True, exist_ok=True)
-    app.mount(
-        "/recordings",
-        StaticFiles(directory=str(recordings_path_obj)),
-        name="recordings"
-    )
-    logger.info(f"✓ Mounted recordings directory: {recordings_path}")
-    
-    # 2. Mount FACES directory
-    faces_path_obj = Path(faces_path)
-    if not faces_path_obj.exists():
-        faces_path_obj.mkdir(parents=True, exist_ok=True)
-    app.mount(
-        "/faces",
-        StaticFiles(directory=str(faces_path_obj)),
-        name="faces"
-    )
-    logger.info(f"✓ Mounted faces directory: {faces_path}")
-    
-    # 3. Mount SNAPSHOTS directory
-    snapshots_path_obj = Path(snapshots_path_setting)
-    if not snapshots_path_obj.exists():
-        snapshots_path_obj.mkdir(parents=True, exist_ok=True)
-    app.mount(
-        "/data/snapshots",
-        StaticFiles(directory=str(snapshots_path_obj)),
-        name="snapshots"
-    )
-    logger.info(f"✓ Mounted snapshots directory: {snapshots_path_setting}")
-    
-    # Mount local data/snapshots as fallback for legacy files (if custom path is different)
-    if str(snapshots_path_obj) != "data/snapshots":
-        local_snapshots = Path("data/snapshots")
-        if local_snapshots.exists():
-            app.mount(
-                "/legacy/snapshots",
-                StaticFiles(directory=str(local_snapshots)),
-                name="snapshots_local"
-            )
-            logger.info(f"✓ Mounted legacy snapshots directory: {local_snapshots}")
-    
-    # 4. Mount THUMBNAILS directory (always default location)
-    thumbnails_path = Path("data/thumbnails")
-    if not thumbnails_path.exists():
-        thumbnails_path.mkdir(parents=True, exist_ok=True)
-    app.mount(
-        "/data/thumbnails",
-        StaticFiles(directory=str(thumbnails_path)),
-        name="thumbnails"
-    )
-    logger.info(f"✓ Mounted thumbnails directory: {thumbnails_path}")
+    # Static file directories are now mounted at application startup (before routes)
+    # This ensures they take precedence over the catch-all SPA route
+    logger.info("Static file directories already mounted during app initialization")
+    logger.info(f"✓ Recordings directory: {recordings_path}")
+    logger.info(f"✓ Faces directory: {faces_path}")
+    logger.info(f"✓ Snapshots directory: data/snapshots")
+    logger.info(f"✓ Legacy snapshots directory: data/snapshots")
+    logger.info(f"✓ Thumbnails directory: data/thumbnails")
 
     logger.info("OpenEye Surveillance System started successfully!")
     logger.info(
@@ -305,7 +313,7 @@ async def shutdown_event():
     # Step 2: Close all WebSocket connections
     try:
         logger.info("[2/7] Closing WebSocket connections...")
-        from backend.core.websocket_manager import ws_manager
+    from opencv_surveillance.core.websocket_manager import ws_manager
         
         # Close all connections gracefully
         if hasattr(ws_manager, 'disconnect_all'):
@@ -332,23 +340,13 @@ async def shutdown_event():
     except Exception as e:
         logger.error(f"✗ Error stopping cameras: {e}")
 
-    # Step 4: Stop facial recognition processing threads
-    try:
-        logger.info("[4/7] Stopping facial recognition threads...")
-        from backend.core.facial_recognition_system import facial_recognition_system
-        
-        if hasattr(facial_recognition_system, 'stop_processing'):
-            facial_recognition_system.stop_processing()
-            logger.info("✓ Facial recognition threads stopped")
-        else:
-            logger.warning("⚠ Facial recognition system doesn't have stop_processing method")
-    except Exception as e:
-        logger.error(f"✗ Error stopping facial recognition: {e}")
+    # Step 4: Face recognition uses stateless get_face_manager() - no cleanup needed
+    logger.info("[4/7] Face recognition uses stateless manager - skipping")
 
     # Step 5: Stop cloud storage upload threads
     try:
         logger.info("[5/7] Stopping cloud storage threads...")
-        from backend.core.cloud_storage_system import cloud_storage
+    from opencv_surveillance.core.cloud_storage_system import cloud_storage
         
         if hasattr(cloud_storage, 'stop_upload_worker'):
             cloud_storage.stop_upload_worker()
@@ -361,8 +359,7 @@ async def shutdown_event():
     # Step 6: Close database connections
     try:
         logger.info("[6/7] Closing database connections...")
-        from backend.database import engine
-        
+        from opencv_surveillance.backend.database import engine
         if engine:
             engine.dispose()
             logger.info("✓ Database connections closed")
@@ -406,6 +403,9 @@ app.include_router(
     face_history.router, prefix="/api/faces", tags=["Face Detection History"]
 )
 
+# Face Clustering - NEW for AI-powered face grouping
+app.include_router(clusters.router, prefix="/api", tags=["Face Clustering"])
+
 app.include_router(
     alerts.router,
     prefix="/api",
@@ -433,11 +433,38 @@ app.include_router(
     prefix="/api",
     tags=["Motion Detection Events"])
 
+app.include_router(
+    two_way_audio.router,
+    prefix="/api/audio",
+    tags=["Two-Way Audio"])
+
+# WebSocket endpoint for two-way audio
+@app.websocket("/ws/audio/{camera_id}")
+async def websocket_audio(websocket: WebSocket, camera_id: str):
+    await websocket.accept()
+    session = await audio_manager.create_session(camera_id)
+    try:
+        while True:
+            data = await websocket.receive_json()
+            if data["type"] == "offer":
+                answer = await session.create_answer(data)
+                await websocket.send_json(answer)
+            elif data["type"] == "answer":
+                await session.set_remote_description(data)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"WebSocket error: {e}")
+    finally:
+        await audio_manager.close_session(camera_id)
+
 # WebSocket routes for real-time updates
 app.include_router(websockets.router, prefix="/api", tags=["WebSockets"])
 
 # System Settings
 app.include_router(settings.router, prefix="/api", tags=["System Settings"])
+
+# Automation Rules - Person-Based Automations
+app.include_router(automations.router, prefix="/api", tags=["Automations"])
 
 # First-Run Setup
 app.include_router(setup.router, tags=["First-Run Setup"])
@@ -561,15 +588,19 @@ if frontend_path.exists():
         """
         Serve the React SPA for all non-API routes
         This enables client-side routing
+        
+        Note: Don't check for static file paths here! FastAPI's mounted
+        StaticFiles will handle them automatically. Only intercept for SPA.
         """
-        # Don't intercept API routes
+        # Only intercept non-API, non-static routes for the SPA
         if full_path.startswith("api/"):
-            return {"error": "Not found"}
+            # API routes are already handled by routers
+            raise HTTPException(status_code=404, detail="Not found")
 
         index_file = frontend_path / "index.html"
         if index_file.exists():
             return FileResponse(index_file)
-        return {"error": "Frontend not found"}
+        raise HTTPException(status_code=404, detail="Frontend not found")
 
 
 if __name__ == "__main__":

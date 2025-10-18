@@ -19,9 +19,9 @@ from .video_processor import VideoProcessor, VideoSettings
 from .recorder import Recorder
 from .face_detection import FaceDetector
 import asyncio
-from backend.core.alert_manager import get_alert_manager
-from backend.database.session import SessionLocal
-from backend.database.models import Camera as CameraModel, MotionDetectionEvent
+from opencv_surveillance.core.alert_manager import get_alert_manager
+from opencv_surveillance.backend.database.session import SessionLocal
+from opencv_surveillance.backend.database.models import Camera as CameraModel, MotionDetectionEvent
 
 
 class Camera(ABC):
@@ -99,6 +99,9 @@ class Camera(ABC):
         
         # Store snapshots path for motion detection
         self.snapshots_path = snapshots_path
+
+        # Store motion percentage threshold (minimum % of frame with motion to trigger event)
+        self.motion_percentage_threshold = settings.get("motion_percentage_threshold", 1.0)
 
         # Store settings for later updates
         self._db_settings = settings
@@ -209,6 +212,9 @@ class Camera(ABC):
                     detect_shadows=db_camera.detect_shadows,
                     detection_zones=db_camera.detection_zones,
                 )
+
+                # Update motion percentage threshold
+                self.motion_percentage_threshold = db_camera.motion_percentage_threshold
 
                 # Update image settings
                 self.update_image_settings(
@@ -449,6 +455,19 @@ class MockCamera(Camera):
             self.motion_detector.detect(processed_frame)
         )
 
+        # Check motion percentage threshold before triggering event
+        if self.motion_detected and motion_areas:
+            # Calculate motion percentage
+            frame_area = processed_frame.shape[0] * processed_frame.shape[1]
+            total_motion_area = sum(area.get("area", 0) for area in motion_areas)
+            motion_percentage = (total_motion_area / frame_area * 100) if frame_area > 0 else 0
+            
+            # Only trigger if motion percentage exceeds threshold
+            if motion_percentage < self.motion_percentage_threshold:
+                # Motion detected but below threshold - ignore it
+                self.motion_detected = False
+                motion_areas = []
+
         # Trigger motion alert if motion detected
         if self.motion_detected:
             # Save snapshot and create database record
@@ -594,6 +613,19 @@ class RTSPCamera(Camera):
             self.motion_detector.detect(processed_frame)
         )
 
+        # Check motion percentage threshold before triggering event
+        if self.motion_detected and motion_areas:
+            # Calculate motion percentage
+            frame_area = processed_frame.shape[0] * processed_frame.shape[1]
+            total_motion_area = sum(area.get("area", 0) for area in motion_areas)
+            motion_percentage = (total_motion_area / frame_area * 100) if frame_area > 0 else 0
+            
+            # Only trigger if motion percentage exceeds threshold
+            if motion_percentage < self.motion_percentage_threshold:
+                # Motion detected but below threshold - ignore it
+                self.motion_detected = False
+                motion_areas = []
+
         # Trigger motion alert if motion detected
         if self.motion_detected:
             print(f"🔴 [RTSP] MOTION DETECTED! Camera: {self.camera_id}")
@@ -699,7 +731,7 @@ class CameraManager:
             db = SessionLocal()
 
             # Load system settings
-            from backend.database.crud import get_all_system_settings
+            from opencv_surveillance.backend.database.crud import get_all_system_settings
 
             settings_list = get_all_system_settings(db)
 

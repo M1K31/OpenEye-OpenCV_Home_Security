@@ -20,7 +20,7 @@ project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from sqlalchemy import create_engine, text
-from backend.database.session import SQLALCHEMY_DATABASE_URL
+from opencv_surveillance.backend.database.session import SQLALCHEMY_DATABASE_URL
 
 
 def upgrade():

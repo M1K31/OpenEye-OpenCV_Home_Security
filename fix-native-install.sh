@@ -8,8 +8,8 @@ echo "🔧 OpenEye Native Installation Fix Script"
 echo "=========================================="
 echo ""
 
-# Navigate to opencv-surveillance directory
-cd "$(dirname "$0")/opencv-surveillance"
+# Navigate to opencv_surveillance directory
+cd "$(dirname "$0")/opencv_surveillance"
 
 echo "📁 Current directory: $(pwd)"
 echo ""

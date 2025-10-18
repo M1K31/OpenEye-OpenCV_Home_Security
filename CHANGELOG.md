@@ -7,7 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [3.5.3] - 2025-10-13
+## [3.5.3] - 2025-10-18
+
+### Fixed
+- **Duplicate Discovery Routes** - Removed duplicate camera discovery endpoints from cameras.py ✅
+  - **Problem**: Discovery endpoints existed in both `discovery.py` and `cameras.py`
+  - **Solution**: Removed duplicates from `cameras.py`, using only dedicated `discovery.py` router
+  - **Benefits**: Single source of truth, easier maintenance, no confusion
+  - **Files Modified**: `backend/api/routes/cameras.py`
+
+- **Setup Route Prefix** - Added `/api/setup` prefix for consistency ✅
+  - **Problem**: Setup routes at `/status` and `/initialize` without `/api` prefix
+  - **Solution**: Added `/api/setup` prefix to setup router
+  - **Benefits**: Consistent URL structure, better security, prevents SPA route conflicts
+  - **New Endpoints**: `/api/setup/status`, `/api/setup/initialize`
+  - **Files Modified**: `backend/main.py`
+
+- **WebSocket Consolidation** - Unified WebSocket endpoint structure ✅
+  - **Problem**: Inconsistent WebSocket URLs (statistics under `/api/ws`, audio under `/ws`)
+  - **Solution**: Moved audio WebSocket to `two_way_audio.py` router
+  - **Benefits**: All WebSockets under `/api/` prefix, better organization
+  - **New Endpoint**: `/api/audio/ws/{camera_id}`
+  - **Files Modified**: `backend/api/routes/two_way_audio.py`, `backend/main.py`
+
+### Added
+- **Error Boundaries** - React error boundaries for graceful error handling ✅
+  - Beautiful fallback UI with error details and recovery actions
+  - Prevents white screen crashes from runtime errors
+  - Dark mode support and mobile responsive
+  - **Files Created**: `frontend/src/components/ErrorBoundary.jsx`, `ErrorBoundary.css`
+  - **Files Modified**: `frontend/src/App.jsx`
+
+- **Request Retry Logic** - Automatic retry with exponential backoff ✅
+  - Retries network errors and server errors (5xx, 429)
+  - Exponential backoff: 1s → 2s → 4s (max 3 retries)
+  - Jitter to prevent thundering herd
+  - Detailed console logging for debugging
+  - **Files Modified**: `frontend/src/api/apiClient.js`
+
+- **WebSocket Status Indicator** - Real-time connection status display ✅
+  - Visual feedback (🟢 connected, 🟡 connecting, 🔴 disconnected)
+  - Shows in sidebar footer with pulse animation
+  - Tooltips with detailed status
+  - Shows reconnection attempts
+  - **Files Created**: `frontend/src/components/WebSocketStatus.jsx`, `WebSocketStatus.css`
+  - **Files Modified**: `frontend/src/layouts/Sidebar.jsx`
+
+### Documentation
+- **API Audit Report** - Complete frontend-backend API audit
+  - 95 endpoints analyzed
+  - All critical issues identified and fixed
+  - Security audit included
+  - **File Created**: `FRONTEND_BACKEND_API_AUDIT_RESULTS.md`
+
+- **Implementation Summary** - Detailed change documentation
+  - Complete testing checklist
+  - Migration guide for developers
+  - Rollback plan included
+  - **File Created**: `CRITICAL_FIXES_AND_IMPROVEMENTS_v3.5.3.md`
+
+### Changed
+- Updated version numbers across all files to 3.5.3
+- Sidebar now displays real-time connection status
+- All pages wrapped in error boundaries for better resilience
+- Frontend bundle size: +~15KB (new features)
+
+---
+
+## [3.5.2] - 2025-10-13
 
 ### Fixed
 - **Database Initialization** - Fixed crash on first run with fresh database ✅
@@ -356,7 +423,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Every recording has a unique recording_id that links to playback
 - Face detections now include recording_id FK linking back to source video
 - Database migration script: `scripts/migrate_database_v3.5.2.py`
-- Run migration: `cd opencv-surveillance && source venv/bin/activate && python scripts/migrate_database_v3.5.2.py`
+- Run migration: `cd opencv_surveillance && source venv/bin/activate && python scripts/migrate_database_v3.5.2.py`
 - Theme applies via CSS class on `html` element for maximum specificity
 - Button styles are global, theme-specific colors take precedence
 - All UI elements now have consistent rounded corners for modern aesthetic

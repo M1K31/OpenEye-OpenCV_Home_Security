@@ -12,8 +12,8 @@ from typing import List, Optional
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
 
-from backend.database.session import SessionLocal
-from backend.database import alert_models
+from opencv_surveillance.backend.database.session import SessionLocal
+from opencv_surveillance.backend.database import alert_models
 
 router = APIRouter()
 

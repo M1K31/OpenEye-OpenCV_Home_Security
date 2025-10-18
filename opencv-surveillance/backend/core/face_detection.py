@@ -9,9 +9,9 @@ from typing import Tuple, List, Dict
 import numpy as np
 import logging
 from datetime import datetime
-from backend.core.face_recognition import get_face_manager
+from opencv_surveillance.core.face_recognition import get_face_manager
 import asyncio
-from backend.core.alert_manager import get_alert_manager
+from opencv_surveillance.core.alert_manager import get_alert_manager
 
 
 logger = logging.getLogger(__name__)

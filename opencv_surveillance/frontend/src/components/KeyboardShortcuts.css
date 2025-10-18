@@ -1,0 +1,236 @@
+/* Copyright (c) 2025 Mikel Smart
+ * KeyboardShortcuts Component Styles
+ */
+
+/* Trigger button - floating bottom right */
+.keyboard-shortcuts-trigger {
+  position: fixed;
+  bottom: var(--spacing-lg, 24px);
+  right: var(--spacing-lg, 24px);
+  min-width: var(--touch-target-min, 44px);
+  min-height: var(--touch-target-min, 44px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--theme-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-pill, 999px);
+  box-shadow: var(--shadow-lg);
+  cursor: pointer;
+  transition: transform var(--anim-fast, 0.15s) var(--anim-ease, ease-out),
+              box-shadow var(--anim-fast, 0.15s) var(--anim-ease, ease-out);
+  z-index: 999;
+}
+
+.keyboard-shortcuts-trigger:hover {
+  transform: scale(1.1);
+  box-shadow: var(--shadow-xl);
+}
+
+.keyboard-shortcuts-trigger:active {
+  transform: scale(0.95);
+}
+
+.keyboard-shortcuts-trigger:focus-visible {
+  outline: 3px solid var(--theme-primary);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--focus-glow), var(--shadow-lg);
+}
+
+@media (prefers-reduced-motion: reduce), (--reduce-motion) {
+  .keyboard-shortcuts-trigger {
+    transition: none;
+  }
+  .keyboard-shortcuts-trigger:hover,
+  .keyboard-shortcuts-trigger:active {
+    transform: none;
+  }
+}
+
+html.reduce-motion .keyboard-shortcuts-trigger {
+  transition: none;
+}
+
+html.reduce-motion .keyboard-shortcuts-trigger:hover,
+html.reduce-motion .keyboard-shortcuts-trigger:active {
+  transform: none;
+}
+
+/* Content */
+.keyboard-shortcuts-content {
+  color: var(--text-primary);
+}
+
+.keyboard-shortcuts-intro {
+  margin-bottom: var(--spacing-xl, 32px);
+  padding: var(--spacing-md, 16px);
+  background: var(--bg-hover);
+  border-radius: var(--radius-md, 12px);
+  border-left: 4px solid var(--theme-primary);
+  line-height: 1.6;
+}
+
+.keyboard-shortcuts-intro kbd {
+  margin: 0 2px;
+}
+
+/* Grid layout */
+.shortcuts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--spacing-xl, 32px);
+  margin-bottom: var(--spacing-xl, 32px);
+}
+
+/* Section */
+.shortcuts-section {
+  background: var(--bg-hover);
+  padding: var(--spacing-lg, 24px);
+  border-radius: var(--radius-md, 12px);
+  border: 1px solid var(--border-panel);
+}
+
+.shortcuts-category {
+  margin: 0 0 var(--spacing-md, 16px) 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Shortcuts list */
+.shortcuts-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md, 16px);
+}
+
+.shortcut-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--spacing-md, 16px);
+  align-items: center;
+}
+
+/* Keys */
+.shortcut-keys {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs, 4px);
+  margin: 0;
+  white-space: nowrap;
+}
+
+kbd.key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  padding: var(--spacing-xs, 4px) var(--spacing-sm, 8px);
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', 'Segoe UI', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text-primary);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-panel);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm, 8px);
+  box-shadow: 0 1px 0 var(--border-panel);
+}
+
+.key-separator {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Description */
+.shortcut-description {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* Footer */
+.shortcuts-footer {
+  padding: var(--spacing-lg, 24px);
+  background: var(--bg-hover);
+  border-radius: var(--radius-md, 12px);
+  border-left: 4px solid var(--theme-accent);
+}
+
+.shortcuts-footer p {
+  margin: 0;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.shortcuts-footer strong {
+  color: var(--text-primary);
+}
+
+/* Shortcut hint (inline with buttons) */
+.shortcut-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: var(--spacing-sm, 8px);
+  opacity: 0.6;
+  font-size: 11px;
+}
+
+kbd.key-small {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  padding: 2px 4px;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', 'Segoe UI', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text-tertiary);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-panel);
+  border-radius: 3px;
+}
+
+.key-separator-small {
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .keyboard-shortcuts-trigger {
+    bottom: var(--spacing-md, 16px);
+    right: var(--spacing-md, 16px);
+  }
+  
+  .shortcuts-grid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-lg, 24px);
+  }
+  
+  .shortcut-item {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-xs, 4px);
+  }
+  
+  .shortcut-keys {
+    justify-content: flex-start;
+  }
+}
+
+/* Theme-specific adjustments */
+html.aquasecurity-theme kbd.key {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+html.sman-theme .keyboard-shortcuts-trigger,
+html.bman-theme .keyboard-shortcuts-trigger {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
