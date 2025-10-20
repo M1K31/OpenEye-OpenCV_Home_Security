@@ -287,3 +287,177 @@ async def initialize_settings(
     """Initialize default system settings"""
     crud.initialize_default_settings(db)
     return {"status": "initialized", "message": "Default settings created"}
+
+
+# ============================================================================
+# STORAGE PATH MANAGEMENT
+# ============================================================================
+
+
+class StoragePathsResponse(BaseModel):
+    """Storage path configuration and statistics"""
+
+    recordings_dir: str = Field(..., description="Current recordings directory path")
+    snapshots_dir: str = Field(..., description="Current snapshots directory path")
+    faces_dir: str = Field(..., description="Current faces directory path")
+    disk_usage: dict = Field(..., description="Disk usage statistics")
+
+
+class StoragePathsUpdate(BaseModel):
+    """Update storage paths with optional migration"""
+
+    recordings_dir: Optional[str] = Field(None, description="New recordings directory")
+    snapshots_dir: Optional[str] = Field(None, description="New snapshots directory")
+    faces_dir: Optional[str] = Field(None, description="New faces directory")
+
+
+@router.get("/settings/storage/paths", response_model=StoragePathsResponse)
+async def get_storage_paths(
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    """
+    Get current storage paths and disk usage
+
+    Returns current configuration and statistics for all storage directories
+    """
+    from backend.core.paths import paths
+
+    return StoragePathsResponse(
+        recordings_dir=str(paths.recordings_dir),
+        snapshots_dir=str(paths.snapshots_dir),
+        faces_dir=str(paths.faces_dir),
+        disk_usage=paths.get_all_disk_usage(),
+    )
+
+
+@router.put("/settings/storage/paths")
+async def update_storage_paths(
+    paths_update: StoragePathsUpdate,
+    migrate: bool = False,
+    current_user: models.User = Depends(auth.require_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Update storage paths with optional file migration
+
+    - **recordings_dir**: New recordings directory path
+    - **snapshots_dir**: New snapshots directory path
+    - **faces_dir**: New faces directory path
+    - **migrate**: If true, move existing files to new locations (default: false)
+
+    **Admin only**
+
+    Example:
+        PUT /api/settings/storage/paths?migrate=true
+        {
+            "recordings_dir": "/mnt/storage/recordings",
+            "snapshots_dir": "/mnt/storage/snapshots"
+        }
+    """
+    from backend.core.paths import paths
+    from backend.utils.migrate_media import migrate_files
+
+    migration_results = {}
+
+    # Migrate recordings if path changed
+    if paths_update.recordings_dir and migrate:
+        old_dir = paths.recordings_dir
+        new_dir = paths_update.recordings_dir
+
+        if old_dir != new_dir:
+            result = migrate_files(
+                media_type="recordings",
+                source_dir=old_dir,
+                dest_dir=new_dir,
+                update_database=True,
+                dry_run=False,
+            )
+            migration_results["recordings"] = result.to_dict()
+
+    # Migrate snapshots if path changed
+    if paths_update.snapshots_dir and migrate:
+        old_dir = paths.snapshots_dir
+        new_dir = paths_update.snapshots_dir
+
+        if old_dir != new_dir:
+            result = migrate_files(
+                media_type="snapshots",
+                source_dir=old_dir,
+                dest_dir=new_dir,
+                update_database=True,
+                dry_run=False,
+            )
+            migration_results["snapshots"] = result.to_dict()
+
+    # Migrate faces if path changed
+    if paths_update.faces_dir and migrate:
+        old_dir = paths.faces_dir
+        new_dir = paths_update.faces_dir
+
+        if old_dir != new_dir:
+            result = migrate_files(
+                media_type="faces",
+                source_dir=old_dir,
+                dest_dir=new_dir,
+                update_database=False,  # Faces don't have DB records
+                dry_run=False,
+            )
+            migration_results["faces"] = result.to_dict()
+
+    # Update PathManager
+    paths.update_paths(
+        recordings_dir=paths_update.recordings_dir,
+        snapshots_dir=paths_update.snapshots_dir,
+        faces_dir=paths_update.faces_dir,
+    )
+
+    # Update database settings
+    if paths_update.recordings_dir:
+        crud.set_system_setting(
+            db, "recordings_path", str(paths.recordings_dir), "string"
+        )
+    if paths_update.snapshots_dir:
+        crud.set_system_setting(
+            db, "snapshots_path", str(paths.snapshots_dir), "string"
+        )
+    if paths_update.faces_dir:
+        crud.set_system_setting(
+            db, "faces_path", str(paths.faces_dir), "string"
+        )
+
+    return {
+        "status": "updated",
+        "paths": {
+            "recordings_dir": str(paths.recordings_dir),
+            "snapshots_dir": str(paths.snapshots_dir),
+            "faces_dir": str(paths.faces_dir),
+        },
+        "migration_results": migration_results if migrate else None,
+    }
+
+
+@router.post("/settings/storage/cleanup")
+async def cleanup_orphaned_records(
+    media_type: str = "all",
+    dry_run: bool = True,
+    current_user: models.User = Depends(auth.require_admin),
+):
+    """
+    Clean up database records for missing media files
+
+    - **media_type**: Type to clean ("snapshots", "recordings", "all")
+    - **dry_run**: If true, only report what would be deleted (default: true)
+
+    **Admin only**
+
+    Example:
+        POST /api/settings/storage/cleanup?media_type=snapshots&dry_run=false
+    """
+    from backend.utils.cleanup_orphaned_records import cleanup_orphaned_records as cleanup
+
+    results = cleanup(media_type=media_type, dry_run=dry_run)
+
+    return {
+        "status": "completed" if not dry_run else "dry_run",
+        "results": results,
+    }

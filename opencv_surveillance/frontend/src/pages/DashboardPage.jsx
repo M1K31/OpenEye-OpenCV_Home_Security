@@ -66,8 +66,9 @@ const DashboardPage = ({ onLogout }) => {
   useEffect(() => {
     const loadDetections = async () => {
       try {
-        const response = await apiClient.get('/faces/detections');
-        setRecentDetections(response.data);
+        const response = await apiClient.get('/history/detections');
+        // Handle wrapped response format {detections: [...], total: N}
+        setRecentDetections(response.data?.detections || response.data || []);
       } catch (error) {
         console.error('Error loading detections:', error);
       }

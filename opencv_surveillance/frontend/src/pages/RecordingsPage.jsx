@@ -122,22 +122,28 @@ const RecordingsPage = () => {
       const response = await apiClient.get(`/recordings/${queryString ? '?' + queryString : ''}`);
       
       // Handle wrapped response or legacy array response
-      const recordingsData = response.data?.recordings || 
+      const recordingsData = response.data?.recordings ||
         (Array.isArray(response.data) ? response.data : []);
-      
+
       if (reset) {
         setRecordings(recordingsData);
       } else {
         setRecordings(prev => [...prev, ...recordingsData]);
       }
-      
+
       // Set total count for pagination
       const total = response.data?.total || recordingsData.length;
       setTotalItems(total);
-      
-      // Check if there are more items
-      const loadedCount = reset ? recordingsData.length : recordings.length + recordingsData.length;
-      setHasMore(loadedCount < total && recordingsData.length === itemsPerPage);
+
+      // Use has_more from API if available, otherwise calculate
+      const apiHasMore = response.data?.has_more;
+      if (apiHasMore !== undefined) {
+        setHasMore(apiHasMore);
+      } else {
+        // Fallback for legacy API responses
+        const loadedCount = reset ? recordingsData.length : recordings.length + recordingsData.length;
+        setHasMore(loadedCount < total && recordingsData.length === itemsPerPage);
+      }
       
       setError('');
     } catch (err) {
@@ -189,13 +195,22 @@ const RecordingsPage = () => {
       const snapshotsData = Array.isArray(events) ? events : [];
       // Filter only events that have a snapshot_path
       const filtered = snapshotsData.filter(event => event.snapshot_path);
-      
+
       if (reset) {
         setSnapshots(filtered);
       } else {
         setSnapshots(prev => [...prev, ...filtered]);
       }
-      
+
+      // Use has_more from API if available
+      const apiHasMore = response.data?.has_more;
+      if (apiHasMore !== undefined) {
+        setHasMore(apiHasMore);
+      } else {
+        // Fallback: check if we got a full page worth of results
+        setHasMore(filtered.length === itemsPerPage);
+      }
+
       // Set total count
       const total = response.data?.total || filtered.length;
       setTotalItems(total);
@@ -362,15 +377,23 @@ const RecordingsPage = () => {
   /**
    * Convert file system path to web URL
    * Maps absolute paths to mounted static file endpoints
+   *
+   * Note: As of v3.5.6, the API returns normalized snapshot paths (just filenames)
+   * without directory prefixes for motion events.
    */
   const convertPathToUrl = (filePath) => {
     if (!filePath) return '';
-    
+
     // If already a properly formatted web URL, return as-is
     if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
       return filePath;
     }
-    
+
+    // If it's already a relative web path (starts with /api/), return as-is
+    if (filePath.startsWith('/api/')) {
+      return filePath;
+    }
+
     // If it's already a relative web path (starts with /data/ or /legacy/), return as-is
     if (filePath.startsWith('/data/') || filePath.startsWith('/legacy/') || filePath.startsWith('/recordings/') || filePath.startsWith('/faces/')) {
       return filePath;
@@ -378,27 +401,28 @@ const RecordingsPage = () => {
 
     // Extract just the filename from the full path
     const filename = filePath.split('/').pop().split('\\').pop(); // Handle both / and \ separators
-    
+
     // Check if this is a snapshot (in data/snapshots directory) - with or without leading slash
     if (filePath.includes('data/snapshots') || filePath.includes('data\\snapshots')) {
-      const url = `/legacy/snapshots/${filename}`;
+      const url = `/api/snapshots/${filename}`;
       console.log('🔄 Converting snapshot path:', filePath, '→', url);
       return url;
     }
-    
+
     // Check if this is a face detection snapshot
     if (filePath.includes('faces') || filePath.includes('Faces')) {
       return `/faces/${filename}`;
     }
-    
+
     // Check if this is a recording
     if (filePath.includes('recordings') || filePath.includes('Recordings')) {
       return `/recordings/${filename}`;
     }
-    
-    // Default fallback - try legacy snapshots
-    console.log('⚠️ Using fallback for path:', filePath, '→ /legacy/snapshots/' + filename);
-    return `/legacy/snapshots/${filename}`;
+
+    // Default: Assume it's a normalized snapshot path (just filename from API)
+    // This handles the v3.5.6+ API response format where snapshot_path is just the filename
+    console.log('📸 Treating as normalized snapshot path:', filePath, '→ /api/snapshots/' + filename);
+    return `/api/snapshots/${filename}`;
   };
 
   // Data is already filtered server-side, no need for client filtering
@@ -546,20 +570,23 @@ const RecordingsPage = () => {
                   </p>
                 </div>
               ) : (
-                displayedRecordings.map((recording) => (
-                  <div key={recording.id} style={styles.recordingCard}>
+                displayedRecordings.map((recording) => {
+                  // API returns recording_id, not id
+                  const recordingId = recording.recording_id || recording.id;
+                  return (
+                  <div key={recordingId} style={styles.recordingCard}>
                     <div style={styles.recordingHeader}>
                       <input
                         type="checkbox"
-                        checked={selectedItems.includes(recording.id)}
-                        onChange={() => toggleItemSelection(recording.id)}
+                        checked={selectedItems.includes(recordingId)}
+                        onChange={() => toggleItemSelection(recordingId)}
                         style={styles.cardCheckbox}
                         onClick={(e) => e.stopPropagation()}
                       />
                     </div>
                     <div style={styles.recordingThumbnail}>
                       <video
-                        src={`/api/recordings/${recording.id}/download`}
+                        src={`/api/recordings/${recordingId}/download`}
                         controls
                         style={styles.videoPreview}
                         preload="metadata"
@@ -586,21 +613,22 @@ const RecordingsPage = () => {
                     </div>
                     <div style={styles.recordingActions}>
                       <a
-                        href={`/api/recordings/${recording.id}/download`}
+                        href={`/api/recordings/${recordingId}/download`}
                         download
                         style={styles.downloadButton}
                       >
                         ⬇️ Download
                       </a>
                       <button
-                        onClick={() => deleteRecording(recording.id)}
+                        onClick={() => deleteRecording(recordingId)}
                         style={styles.deleteButton}
                       >
                         🗑️ Delete
                       </button>
                     </div>
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
           ) : (

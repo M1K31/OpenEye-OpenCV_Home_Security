@@ -76,7 +76,8 @@ def list_motion_events(
         events=events,
         total=total,
         limit=limit,
-        offset=skip
+        offset=skip,
+        has_more=(skip + limit) < total
     )
 
 

@@ -17,7 +17,7 @@ import axios from 'axios';
 // Create axios instance
 const apiClient = axios.create({
   baseURL: '/api',
-  timeout: 30000, // 30 seconds
+  timeout: 90000, // 90 seconds (for long-running operations like camera discovery)
   headers: {
     'Content-Type': 'application/json',
   },

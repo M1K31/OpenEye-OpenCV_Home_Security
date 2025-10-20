@@ -214,34 +214,6 @@ class Recorder:
         self.recording_start_time = None
         self.frame_count = 0
 
-    def _save_metadata(self, duration, file_size):
-        """
-        Saves recording metadata to a JSON file.
-        """
-        if not hasattr(
-                self,
-                "metadata_filename") or not self.metadata_filename:
-            return
-
-        metadata = {
-            "filename": os.path.basename(self.filename),
-            "full_path": self.filename,
-            "start_time": self.recording_start_time.isoformat(),
-            "end_time": datetime.now().isoformat(),
-            "duration_seconds": duration,
-            "frame_count": self.frame_count,
-            "file_size_bytes": file_size,
-            "faces_detected": len(self.detected_faces),
-            "detected_faces": self.detected_faces,
-        }
-
-        try:
-            with open(self.metadata_filename, "w") as f:
-                json.dump(metadata, f, indent=2)
-            print(f"Metadata saved to {self.metadata_filename}")
-        except Exception as e:
-            print(f"Error saving metadata: {e}")
-
     def add_detected_face(self, face_data):
         """
         Add detected face information to the recording metadata.
@@ -257,7 +229,7 @@ class Recorder:
 
     def _save_metadata(self, duration: float, file_size: int):
         """
-        NEW: Save recording metadata to JSON file
+        NEW: Save recording metadata to JSON file and database
         """
         try:
             # Aggregate face detection data
@@ -292,10 +264,46 @@ class Recorder:
                 },
             }
 
+            # Save to JSON file
             with open(self.metadata_filename, "w") as f:
                 json.dump(metadata, f, indent=2)
 
             print(f"Metadata saved to {self.metadata_filename}")
+
+            # NEW: Save to database
+            try:
+                from backend.database.session import SessionLocal
+                from backend.database import crud
+                from backend.core.paths import paths
+
+                db = SessionLocal()
+                try:
+                    # Get relative path for database storage
+                    relative_path = paths.get_relative_path(self.filename)
+
+                    camera_id = getattr(self, "camera_id", "unknown")
+
+                    recording_data = {
+                        "camera_id": camera_id,
+                        "recording_path": relative_path,
+                        "started_at": self.recording_start_time,
+                        "ended_at": datetime.now(),
+                        "duration_seconds": duration,
+                        "motion_detected": True,  # Always true if we're recording
+                        "faces_detected": len(self.detected_faces),
+                        "known_faces_detected": known_faces_count,
+                        "file_size_bytes": file_size,
+                        "frame_count": self.frame_count,
+                    }
+
+                    db_event = crud.create_recording_event(db, recording_data)
+                    print(f"✅ Recording event created in database: ID={db_event.id}")
+
+                finally:
+                    db.close()
+            except Exception as db_error:
+                print(f"⚠️ Failed to save recording to database: {db_error}")
+                # Don't fail the entire operation if database save fails
 
         except Exception as e:
             print(f"Error saving metadata: {e}")

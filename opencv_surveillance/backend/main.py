@@ -44,7 +44,8 @@ from backend.api.routes import (
     motion_events,
     clusters,
     automations,
-    two_way_audio,  # <-- Add this line
+    two_way_audio,
+    timeline,
 )
 from backend.core.camera_manager import manager as camera_manager
 from backend.core.websocket_manager import broadcast_statistics_update
@@ -92,7 +93,7 @@ signal.signal(signal.SIGTERM, signal_handler)
 app = FastAPI(
     title="OpenEye Surveillance System",
     description="OpenCV-powered surveillance system with face recognition, motion detection, and video recording",
-    version="3.5.3",  # Critical fixes and major improvements
+    version="3.5.6",  # Timeline Playback + UI improvements
     docs_url="/api/docs",
     redoc_url="/api/redoc",
 )
@@ -122,50 +123,48 @@ app.add_middleware(RateLimiter, requests_per_minute=1000)
 # These mounts MUST be defined before the catch-all SPA route
 # to ensure FastAPI routes requests to static files correctly
 
+# Import centralized path manager
+from backend.core.paths import paths
+
+# All directories are auto-created by PathManager
 # Mount recordings directory
-recordings_mount_path = Path("recordings")
-if not recordings_mount_path.exists():
-    recordings_mount_path.mkdir(parents=True, exist_ok=True)
 app.mount(
     "/recordings",
-    StaticFiles(directory=str(recordings_mount_path)),
+    StaticFiles(directory=str(paths.recordings_dir)),
     name="recordings"
 )
 
-# Mount faces directory  
-faces_mount_path = Path("faces")
-if not faces_mount_path.exists():
-    faces_mount_path.mkdir(parents=True, exist_ok=True)
+# Mount faces directory
 app.mount(
     "/faces",
-    StaticFiles(directory=str(faces_mount_path)),
+    StaticFiles(directory=str(paths.faces_dir)),
     name="faces"
 )
 
-# Mount snapshots directory
-snapshots_mount_path = Path("data/snapshots")
-if not snapshots_mount_path.exists():
-    snapshots_mount_path.mkdir(parents=True, exist_ok=True)
+# Mount snapshots directory (v3.5.6+: Primary endpoint under /api/)
 app.mount(
-    "/data/snapshots",
-    StaticFiles(directory=str(snapshots_mount_path)),
-    name="snapshots"
+    "/api/snapshots",
+    StaticFiles(directory=str(paths.snapshots_dir)),
+    name="snapshots_api"
 )
 
-# Mount legacy snapshots endpoint (for backward compatibility)
+# Mount snapshots directory (legacy paths for backward compatibility)
+app.mount(
+    "/data/snapshots",
+    StaticFiles(directory=str(paths.snapshots_dir)),
+    name="snapshots_data"
+)
+
 app.mount(
     "/legacy/snapshots",
-    StaticFiles(directory=str(snapshots_mount_path)),
+    StaticFiles(directory=str(paths.snapshots_dir)),
     name="snapshots_legacy"
 )
 
 # Mount thumbnails directory
-thumbnails_mount_path = Path("data/thumbnails")
-if not thumbnails_mount_path.exists():
-    thumbnails_mount_path.mkdir(parents=True, exist_ok=True)
 app.mount(
     "/data/thumbnails",
-    StaticFiles(directory=str(thumbnails_mount_path)),
+    StaticFiles(directory=str(paths.thumbnails_dir)),
     name="thumbnails"
 )
 
@@ -210,32 +209,31 @@ async def startup_event():
             except (ValueError, AttributeError):
                 system_settings[setting.setting_key] = setting.setting_value
 
-        # Get configured paths
-        recordings_path = system_settings.get("recordings_path", "recordings")
-        faces_path = system_settings.get("faces_path", "faces")
+        # Get configured paths from database (if they exist)
+        # These will override PathManager defaults if set
+        db_recordings_path = system_settings.get("recordings_path")
+        db_faces_path = system_settings.get("faces_path")
+
+        # Update PathManager with database settings if they exist
+        if db_recordings_path or db_faces_path:
+            logger.info("Applying custom paths from database settings...")
+            paths.update_paths(
+                recordings_dir=db_recordings_path,
+                faces_dir=db_faces_path
+            )
 
         logger.info(
-            f"System settings loaded - Recordings: {recordings_path}, Faces: {faces_path}")
+            f"System settings loaded - Recordings: {paths.recordings_dir}, Faces: {paths.faces_dir}")
     finally:
         db.close()
 
-    # Create required directories based on system settings
-    logger.info("Creating required directories...")
-    required_dirs = [
-        recordings_path,
-        faces_path,
-        "data",
-        "data/snapshots",
-        "data/thumbnails",
-    ]
-    for dir_path in required_dirs:
-        Path(dir_path).mkdir(parents=True, exist_ok=True)
-    logger.info("Required directories created successfully")
+    # PathManager automatically creates all required directories
+    logger.info("Required directories handled by PathManager")
 
     # Initialize face recognition manager with configured path
     logger.info(
-        f"Initializing face recognition with faces directory: {faces_path}")
-    face_manager = get_face_manager(faces_folder=faces_path)
+        f"Initializing face recognition with faces directory: {paths.faces_dir}")
+    face_manager = get_face_manager(faces_folder=str(paths.faces_dir))
     logger.info(
         f"Face recognition initialized: {len(face_manager.known_face_names)} known faces"
     )
@@ -278,11 +276,11 @@ async def startup_event():
     # Static file directories are now mounted at application startup (before routes)
     # This ensures they take precedence over the catch-all SPA route
     logger.info("Static file directories already mounted during app initialization")
-    logger.info(f"✓ Recordings directory: {recordings_path}")
-    logger.info(f"✓ Faces directory: {faces_path}")
-    logger.info(f"✓ Snapshots directory: data/snapshots")
-    logger.info(f"✓ Legacy snapshots directory: data/snapshots")
-    logger.info(f"✓ Thumbnails directory: data/thumbnails")
+    logger.info(f"✓ Recordings directory: {paths.recordings_dir}")
+    logger.info(f"✓ Faces directory: {paths.faces_dir}")
+    logger.info(f"✓ Snapshots directory: {paths.snapshots_dir}")
+    logger.info(f"✓ Legacy snapshots directory: {paths.snapshots_dir}")
+    logger.info(f"✓ Thumbnails directory: {paths.thumbnails_dir}")
 
     logger.info("OpenEye Surveillance System started successfully!")
     logger.info(
@@ -455,6 +453,9 @@ app.include_router(settings.router, prefix="/api", tags=["System Settings"])
 # Automation Rules - Person-Based Automations
 app.include_router(automations.router, prefix="/api", tags=["Automations"])
 
+# Timeline Playback & Video Navigation
+app.include_router(timeline.router, prefix="/api", tags=["Timeline & Playback"])
+
 # First-Run Setup (with /api/setup prefix for consistency)
 app.include_router(setup.router, prefix="/api/setup", tags=["First-Run Setup"])
 
@@ -473,7 +474,7 @@ async def read_root():
         # Fallback to API info if frontend not built
         return {
             "name": "OpenEye Surveillance System",
-            "version": "3.5.3",
+            "version": "3.5.6",
             "description": "OpenCV-powered surveillance with face recognition",
             "features": [
                 "Motion Detection",

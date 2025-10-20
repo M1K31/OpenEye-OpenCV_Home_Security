@@ -20,6 +20,8 @@ const LiveDashboard = () => {
   const [showTimeline, setShowTimeline] = useState(true);
   const [systemStatus, setSystemStatus] = useState('All systems nominal');
   const [selectedRecording, setSelectedRecording] = useState(null);
+  const [selectedSnapshot, setSelectedSnapshot] = useState(null);
+  const [showSnapshotModal, setShowSnapshotModal] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated()) {
@@ -46,39 +48,63 @@ const LiveDashboard = () => {
 
   const fetchRecentEvents = async () => {
     try {
-      // Fetch both recordings (motion events) and face detections
-      const [recordingsRes, detectionsRes] = await Promise.all([
-        apiClient.get('/recordings/?limit=15'),
-        apiClient.get('/faces/history/detections?limit=15').catch(() => ({ data: { detections: [] } }))
+      // Fetch recordings, motion events (snapshots), and face detections
+      const [recordingsRes, motionEventsRes, detectionsRes] = await Promise.all([
+        apiClient.get('/recordings/?skip=0&limit=15').catch(() => ({ data: { recordings: [], total: 0 } })),
+        apiClient.get('/motion-events/?skip=0&limit=15').catch(() => ({ data: { events: [], total: 0 } })),
+        apiClient.get('/faces/history/detections?skip=0&limit=15').catch(() => ({ data: { detections: [], total: 0 } }))
       ]);
 
       // Recordings from API - handle wrapped response
-      const recordings = recordingsRes.data?.recordings || 
+      const recordings = recordingsRes.data?.recordings ||
         (Array.isArray(recordingsRes.data) ? recordingsRes.data : []);
+
+      // Motion events (snapshots) from API
+      const motionEvents = motionEventsRes.data?.events || [];
 
       // Face detections from API - handle wrapped response
       const detections = detectionsRes.data?.detections || [];
 
       // Merge and create unified timeline events
       const allEvents = [
+        // Video recordings
         ...recordings.map(r => ({
-          id: r.id || r.recording_id,
-          recording_id: r.recording_id,
+          id: r.recording_id || r.id,  // API now returns recording_id
+          recording_id: r.recording_id || r.id,
           type: 'motion',
           camera_id: r.camera_id,
           timestamp: r.started_at,
           duration_seconds: r.duration_seconds,
           faces_detected: r.faces_detected || 0,
           known_faces_detected: r.known_faces_detected || 0,
+          hasRecording: true,
         })),
+        // Motion snapshots (may or may not have recording)
+        ...motionEvents.map(m => ({
+          id: m.id,
+          snapshot_id: m.id,
+          snapshot_path: m.snapshot_path,
+          recording_id: m.recording_id,  // May be null
+          type: 'motion',
+          camera_id: m.camera_id,
+          timestamp: m.detected_at,
+          duration_seconds: 0,
+          faces_detected: m.faces_detected || 0,
+          known_faces_detected: 0,
+          hasRecording: !!m.recording_id,  // Has recording if recording_id exists
+          hasSnapshot: true,
+        })),
+        // Face detections
         ...detections.map(d => ({
           id: d.id,
           recording_id: d.recording_id,
+          snapshot_path: d.snapshot_path,
           type: 'face',
           camera_id: d.camera_id,
           timestamp: d.detected_at,
           person_name: d.person_name || 'Unknown',
           confidence: d.confidence || 0,
+          hasSnapshot: !!d.snapshot_path,
         }))
       ];
 
@@ -99,10 +125,18 @@ const LiveDashboard = () => {
 
   const handleEventClick = (event) => {
     if (event.recording_id) {
-      // Open recording in new tab or navigate to recordings page
-      // For now, navigate to recordings page with the recording highlighted
-      window.location.href = `/recordings#${event.recording_id}`;
+      // Has video recording - navigate to events page (recordings)
+      window.location.href = `/events#${event.recording_id}`;
+    } else if (event.snapshot_path || event.hasSnapshot) {
+      // Has snapshot only - show in modal
+      setSelectedSnapshot(event);
+      setShowSnapshotModal(true);
     }
+  };
+
+  const closeSnapshotModal = () => {
+    setShowSnapshotModal(false);
+    setSelectedSnapshot(null);
   };
 
   const formatEventTitle = (event) => {
@@ -210,11 +244,17 @@ const LiveDashboard = () => {
                 </div>
               ) : (
                 events.map((event, index) => (
-                  <div 
-                    key={event.id || index} 
-                    className={`timeline-item ${event.recording_id ? 'clickable' : ''}`}
+                  <div
+                    key={event.id || index}
+                    className={`timeline-item ${event.recording_id || event.snapshot_path || event.hasSnapshot ? 'clickable' : ''}`}
                     onClick={() => handleEventClick(event)}
-                    title={event.recording_id ? 'Click to view recording' : ''}
+                    title={
+                      event.recording_id
+                        ? 'Click to view recording'
+                        : event.snapshot_path || event.hasSnapshot
+                        ? 'Click to view snapshot'
+                        : ''
+                    }
                   >
                     <div className="event-icon">
                       {event.type === 'face' ? '�' : '�'}
@@ -241,6 +281,56 @@ const LiveDashboard = () => {
           </aside>
         )}
       </div>
+
+      {/* Snapshot Viewer Modal */}
+      {showSnapshotModal && selectedSnapshot && (
+        <div className="snapshot-modal-overlay" onClick={closeSnapshotModal}>
+          <div className="snapshot-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="snapshot-modal-header">
+              <h3>
+                {selectedSnapshot.type === 'face'
+                  ? `Face Detection: ${selectedSnapshot.person_name}`
+                  : 'Motion Detection Snapshot'}
+              </h3>
+              <button className="snapshot-modal-close" onClick={closeSnapshotModal}>
+                ×
+              </button>
+            </div>
+            <div className="snapshot-modal-body">
+              <img
+                src={`/api/snapshots/${selectedSnapshot.snapshot_path}`}
+                alt="Event snapshot"
+                className="snapshot-modal-image"
+                onError={(e) => {
+                  e.target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect fill="%23ddd" width="400" height="300"/><text x="50%" y="50%" text-anchor="middle" fill="%23999">Snapshot not available</text></svg>';
+                }}
+              />
+              <div className="snapshot-modal-info">
+                <p><strong>Camera:</strong> {selectedSnapshot.camera_id}</p>
+                <p><strong>Time:</strong> {new Date(selectedSnapshot.timestamp).toLocaleString()}</p>
+                {selectedSnapshot.type === 'face' && selectedSnapshot.confidence && (
+                  <p><strong>Confidence:</strong> {(selectedSnapshot.confidence * 100).toFixed(1)}%</p>
+                )}
+                {selectedSnapshot.faces_detected > 0 && (
+                  <p><strong>Faces Detected:</strong> {selectedSnapshot.faces_detected}</p>
+                )}
+              </div>
+            </div>
+            <div className="snapshot-modal-footer">
+              <button className="snapshot-modal-button" onClick={closeSnapshotModal}>
+                Close
+              </button>
+              <a
+                href={`/api/snapshots/${selectedSnapshot.snapshot_path}`}
+                download
+                className="snapshot-modal-button snapshot-modal-download"
+              >
+                Download
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -10,9 +10,11 @@ import pickle
 import logging
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime
+from pathlib import Path
 import face_recognition
 import numpy as np
 import cv2
+from backend.core.paths import paths
 
 logger = logging.getLogger(__name__)
 
@@ -22,16 +24,17 @@ class FaceRecognitionManager:
     Manages face recognition operations including training, recognition, and storage
     """
 
-    def __init__(self, faces_folder: str = "faces",
+    def __init__(self, faces_folder: Optional[Path] = None,
                  encodings_file: str = "face_encodings.pkl"):
         """
         Initialize the face recognition manager
 
         Args:
-            faces_folder: Directory containing person subdirectories with face images
+            faces_folder: Directory containing person subdirectories with face images (uses PathManager if None)
             encodings_file: Path to save/load face encodings
         """
-        self.faces_folder = faces_folder
+        # Use PathManager for faces directory
+        self.faces_folder = Path(faces_folder) if faces_folder else paths.faces_dir
         self.encodings_file = encodings_file
         self.known_face_encodings = []
         self.known_face_names = []
@@ -48,7 +51,7 @@ class FaceRecognitionManager:
         }
 
         # Create faces folder if it doesn't exist
-        os.makedirs(self.faces_folder, exist_ok=True)
+        self.faces_folder.mkdir(parents=True, exist_ok=True)
 
         # Load existing encodings if available
         self.load_encodings()
@@ -89,7 +92,7 @@ class FaceRecognitionManager:
         self.known_face_encodings = []
         self.known_face_names = []
 
-        if not os.path.exists(self.faces_folder):
+        if not self.faces_folder.exists():
             logger.warning(f"Faces folder not found: {self.faces_folder}")
             return {
                 "total_people": 0,
@@ -100,21 +103,20 @@ class FaceRecognitionManager:
         encodings_count = 0
 
         # Iterate through each person's folder
-        for person_name in os.listdir(self.faces_folder):
-            person_path = os.path.join(self.faces_folder, person_name)
-
-            if not os.path.isdir(person_path):
+        for person_path in self.faces_folder.iterdir():
+            if not person_path.is_dir():
                 continue
+            person_name = person_path.name
 
             people_count += 1
             logger.info(f"Processing images for: {person_name}")
 
             # Load all images for this person
-            for image_file in os.listdir(person_path):
-                if not image_file.lower().endswith((".jpg", ".jpeg", ".png")):
+            for image_file_path in person_path.iterdir():
+                if not image_file_path.name.lower().endswith((".jpg", ".jpeg", ".png")):
                     continue
 
-                image_path = os.path.join(person_path, image_file)
+                image_path = image_file_path
 
                 try:
                     # Load image and get face encodings
@@ -318,9 +320,9 @@ class FaceRecognitionManager:
         Returns:
             True if successful, False otherwise
         """
-        person_path = os.path.join(self.faces_folder, person_name)
+        person_path = self.faces_folder / person_name
 
-        if os.path.exists(person_path):
+        if person_path.exists():
             logger.warning(f"Person already exists: {person_name}")
             return False
 
@@ -342,7 +344,7 @@ class FaceRecognitionManager:
         Returns:
             True if successful, False otherwise
         """
-        person_path = os.path.join(self.faces_folder, person_name)
+        person_path = self.faces_folder / person_name
 
         if not os.path.exists(person_path):
             logger.warning(f"Person not found: {person_name}")
@@ -373,11 +375,10 @@ class FaceRecognitionManager:
         if not os.path.exists(self.faces_folder):
             return people
 
-        for person_name in os.listdir(self.faces_folder):
-            person_path = os.path.join(self.faces_folder, person_name)
-
-            if not os.path.isdir(person_path):
+        for person_path in self.faces_folder.iterdir():
+            if not person_path.is_dir():
                 continue
+            person_name = person_path.name
 
             # Count photos
             photo_count = len(

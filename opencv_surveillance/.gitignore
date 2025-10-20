@@ -30,14 +30,20 @@ dist/
 
 # Recordings and media files
 recordings/
+snapshots/
 faces/
 *.mp4
 *.avi
 *.mkv
+*.webm
+*.mov
 *.jpeg
 *.jpg
 *.png
+*.gif
+*.bmp
 face_encodings.pkl
+database.pkl
 
 # Verification scripts
 jules-scratch/

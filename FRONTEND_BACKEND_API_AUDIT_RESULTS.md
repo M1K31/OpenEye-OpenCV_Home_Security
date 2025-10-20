@@ -1,609 +1,546 @@
-# Frontend-Backend API Audit Report
-**Date:** October 18, 2025
-**Version:** 3.5.3
-**Scope:** Complete audit of API routes, frontend connections, and backend implementations
-
----
-
-## Executive Summary
-
-### ✅ Overall Status: **GOOD** with Minor Issues
-
-The OpenEye system has a well-structured API architecture with proper separation of concerns. The audit identified **3 critical issues** and **8 recommendations** for improvement.
-
-### Key Findings:
-- ✅ **Route ordering is correct** - Discovery routes properly placed before cameras
-- ✅ **Frontend API client is well-designed** with proper error handling
-- ✅ **WebSocket implementation is robust** with reconnection logic
-- ⚠️ **Duplicate discovery endpoints** found (needs consolidation)
-- ⚠️ **Missing prefix on setup routes** (security concern)
-- ⚠️ **Some frontend pages missing error boundaries**
-
----
-
-## Critical Issues
-
-### 🔴 Issue #1: Duplicate Camera Discovery Endpoints
-
-**Severity:** HIGH
-**Impact:** Route conflicts, inconsistent behavior
-
-**Problem:**
-There are TWO sets of camera discovery endpoints:
-1. **discovery.py** (dedicated router) - `/api/cameras/discover/*`
-2. **cameras.py** (embedded in cameras router) - `/api/cameras/discover/*`
-
-**Evidence:**
-```python
-# discovery.py (Line 45-70)
-@router.post("/cameras/discover/usb")
-@router.post("/cameras/discover/network")
-@router.get("/cameras/discover/status")
-@router.post("/cameras/discover/test")
-@router.post("/cameras/quick-add")
-@router.get("/cameras/discover/help")
-
-# cameras.py (Line 481-524)
-@router.get("/discover/usb")  # With /api/cameras prefix = /api/cameras/discover/usb
-@router.get("/discover/network")
-```
-
-**Current Behavior:**
-- `discovery.py` routes are registered BEFORE `cameras.py` (correct ordering in main.py:404)
-- This prevents conflicts, but creates confusion
-- Both sets are functional but may diverge over time
-
-**Recommendation:**
-1. **REMOVE** the discovery endpoints from `cameras.py` (lines 481-524)
-2. **KEEP ONLY** `discovery.py` as the single source of truth
-3. Update any frontend code using the old endpoints
-
-**Files to Change:**
-- `opencv_surveillance/backend/api/routes/cameras.py`
-- Frontend pages (already using correct endpoints)
-
----
-
-### 🟡 Issue #2: Setup Router Missing `/api` Prefix
-
-**Severity:** MEDIUM
-**Impact:** Security and consistency
-
-**Problem:**
-The setup router is registered WITHOUT the `/api` prefix, creating inconsistent URL structure:
-
-```python
-# main.py (Line 478)
-app.include_router(setup.router, tags=["First-Run Setup"])  # NO PREFIX!
-
-# All other routers:
-app.include_router(users.router, prefix="/api", tags=["Authentication"])
-app.include_router(settings.router, prefix="/api", tags=["System Settings"])
-# etc.
-```
-
-**Current Endpoints:**
-- ❌ `/status` (setup status)
-- ❌ `/initialize` (create admin user)
-
-**Should Be:**
-- ✅ `/api/status` or `/api/setup/status`
-- ✅ `/api/initialize` or `/api/setup/initialize`
-
-**Security Concern:**
-The `/status` endpoint conflicts with potential SPA routes and lacks the `/api` namespace protection.
-
-**Recommendation:**
-```python
-# main.py (Line 478)
-app.include_router(setup.router, prefix="/api/setup", tags=["First-Run Setup"])
-```
-
-**Breaking Change:** YES - Frontend needs update
-- `opencv_surveillance/frontend/src/pages/FirstRunSetup.jsx`
-- `opencv_surveillance/frontend/src/App.jsx`
-
----
-
-### 🟡 Issue #3: WebSocket Route Prefix Inconsistency
-
-**Severity:** MEDIUM
-**Impact:** URL structure confusion
-
-**Problem:**
-WebSocket routes have `/ws` prefix, but are nested under `/api/ws` in registration:
-
-```python
-# websockets.py (Line 22)
-router = APIRouter(prefix="/ws", tags=["websockets"])
-
-# main.py (Line 469)
-app.include_router(websockets.router, prefix="/api", tags=["WebSockets"])
-
-# Resulting URL:
-# /api/ws/statistics (correct)
-```
-
-Additionally, there's a standalone WebSocket endpoint defined directly in main.py:
-
-```python
-# main.py (Line 450-466)
-@app.websocket("/ws/audio/{camera_id}")
-async def websocket_audio(websocket: WebSocket, camera_id: str):
-    # Two-way audio WebSocket
-```
-
-**Inconsistency:**
-- Statistics WebSocket: `/api/ws/statistics` (via router)
-- Audio WebSocket: `/ws/audio/{camera_id}` (direct registration, NO /api prefix)
-
-**Recommendation:**
-1. **Option A (Preferred):** Move audio WebSocket to `two_way_audio.py` router
-2. **Option B:** Change both to `/ws/*` (without `/api` prefix for consistency with WebSocket standards)
-
-**Current Frontend Usage:**
-```javascript
-// WebSocketService.js (Line 54)
-this.url = `${protocol}//${host}/api/ws/statistics?token=${token}`;
-// ✅ Correct - uses /api/ws/statistics
-```
-
----
-
-## API Route Analysis
-
-### Route Registry (95 endpoints)
-
-#### ✅ Properly Structured Routes
-
-| Router | Prefix | Endpoints | Status |
-|--------|--------|-----------|--------|
-| users.py | `/api` | 3 | ✅ Good |
-| cameras.py | `/api/cameras` | 12 | ⚠️ Has duplicates |
-| discovery.py | `/api` | 6 | ✅ Good |
-| faces.py | `/api` | 14 | ✅ Good |
-| face_history.py | `/api/faces` | 6 | ✅ Good |
-| clusters.py | `/api` | 8 | ✅ Good |
-| alerts.py | `/api` | 6 | ✅ Good |
-| recordings.py | `/api` | 8 | ✅ Good |
-| motion_events.py | `/api` | 5 | ✅ Good |
-| analytics.py | `/api` | 2 | ✅ Good |
-| settings.py | `/api` | 7 | ✅ Good |
-| automations.py | `/api` | 9 | ✅ Good |
-| integrations.py | `/api` | 6 | ✅ Good |
-| websockets.py | `/api/ws` | 2 | ⚠️ See Issue #3 |
-| two_way_audio.py | `/api/audio` | 2 | ✅ Good |
-| setup.py | *(none)* | 2 | ❌ See Issue #2 |
-
-### Route Conflicts Detection
-
-**Method:** Analyzed all 95 route definitions for path conflicts
-
-**Results:**
-- ✅ **No direct conflicts found** (thanks to proper ordering in main.py)
-- ⚠️ **Potential conflicts** if ordering changes:
-  - `/api/cameras/discover/*` (discovery.py vs cameras.py)
-  - `/status` (setup.py vs potential SPA routes)
-
-### Critical Route Ordering (main.py)
-
-**CORRECT ORDER (CURRENT):**
-```python
-# Line 404 - Specific before generic
-app.include_router(discovery.router, prefix="/api", tags=["Camera Discovery"])
-app.include_router(cameras.router, prefix="/api/cameras", tags=["Cameras"])
-```
-
-**Why This Matters:**
-FastAPI matches routes in registration order. Specific routes MUST come before generic ones:
-- ✅ `/api/cameras/discover/usb` (specific - matches first)
-- ✅ `/api/cameras/{camera_id}` (generic - matches after)
-
-**If Order Reversed:**
-- ❌ `/api/cameras/discover/usb` would match `/{camera_id}` with camera_id="discover"
-- ❌ Discovery endpoints would break
-
----
-
-## Frontend API Client Analysis
-
-### ✅ API Client Implementation (`apiClient.js`)
-
-**Strengths:**
-1. **Centralized axios instance** with proper base URL
-2. **Automatic token injection** via request interceptor
-3. **Smart 401 handling** - only redirects if token existed (prevents loops)
-4. **Public endpoint bypass** - skips auth for /token, /setup/*
-5. **30-second timeout** - prevents hanging requests
-
-**Code Quality:** EXCELLENT
-
-**Example Usage:**
-```javascript
-// Request interceptor (Line 45-63)
-- Skips auth for public endpoints
-- Adds Bearer token for protected endpoints
-- Only adds token if it exists (prevents 401 spam)
-
-// Response interceptor (Line 71-95)
-- Handles 401 gracefully
-- Only redirects if token expired (not if never logged in)
-- Prevents redirect loops
-```
-
-### ✅ WebSocket Service (`WebSocketService.js`)
-
-**Strengths:**
-1. **Automatic reconnection** with exponential backoff (1s → 30s)
-2. **Connection health monitoring** via ping/pong (every 30s)
-3. **Event subscription system** - clean listener pattern
-4. **Max 10 reconnect attempts** before giving up
-5. **Graceful degradation** - emits error for polling fallback
-
-**Code Quality:** EXCELLENT
-
-**Potential Improvement:**
-Consider adding connection state to UI (connecting/connected/disconnected indicator)
-
----
-
-## Frontend-Backend Connection Mapping
-
-### Verified API Calls (50+ endpoints checked)
-
-| Frontend Page | API Endpoints Used | Status |
-|--------------|-------------------|--------|
-| **LoginPage.jsx** | `/api/token` | ✅ |
-| **FirstRunSetup.jsx** | `/status`, `/initialize` | ⚠️ Needs `/api` prefix |
-| **DashboardPage.jsx** | `/api/settings`, `/api/cameras/`, `/api/faces/detections`, `/api/faces/statistics` | ✅ |
-| **CameraManagementPage.jsx** | `/api/cameras/` (GET, POST, DELETE, PATCH) | ✅ |
-| **CameraDiscoveryPage.jsx** | `/api/cameras/discover/usb`, `/api/cameras/discover/network`, `/api/cameras/discover/test`, `/api/cameras/quick-add` | ✅ |
-| **FaceManagementPage.jsx** | `/api/faces/people`, `/api/faces/statistics`, `/api/faces/train`, `/api/faces/settings` | ✅ |
-| **RecordingsPage.jsx** | `/api/recordings/`, `/api/motion-events/`, DELETE endpoints | ✅ |
-| **AlertSettingsPage.jsx** | `/api/alerts/config`, `/api/alerts/test`, `/api/alerts/statistics` | ✅ |
-| **SystemSettingsPage.jsx** | `/api/settings`, `/api/settings/validate-path` | ✅ |
-| **AutomationsPage.jsx** | `/api/automations/`, `/api/automations/stats/summary`, `/api/faces/people` | ✅ |
-
-### ✅ All Frontend Calls Valid
-
-**Result:** All frontend API calls match existing backend endpoints. No 404 errors expected from path mismatches.
-
----
-
-## Recommendations
-
-### 1. 🔧 Remove Duplicate Discovery Routes
-
-**Priority:** HIGH
-**Effort:** LOW
-**Breaking:** NO
-
-**Action:**
-Delete lines 476-524 from `opencv_surveillance/backend/api/routes/cameras.py`
-
-```python
-# REMOVE THIS SECTION:
-# ============================================================================
-# CAMERA DISCOVERY ENDPOINTS
-# ============================================================================
-@router.get("/discover/usb", ...)
-@router.get("/discover/network", ...)
-```
-
-### 2. 🔧 Add `/api` Prefix to Setup Routes
-
-**Priority:** MEDIUM
-**Effort:** LOW
-**Breaking:** YES
-
-**Action:**
-```python
-# main.py (Line 478)
-- app.include_router(setup.router, tags=["First-Run Setup"])
-+ app.include_router(setup.router, prefix="/api/setup", tags=["First-Run Setup"])
-```
-
-**Frontend Changes:**
-```javascript
-// FirstRunSetup.jsx
-- const response = await apiClient.get('/status');
-+ const response = await apiClient.get('/setup/status');
-
-- await apiClient.post('/initialize', {...});
-+ await apiClient.post('/setup/initialize', {...});
-
-// App.jsx
-- await apiClient.get('/status');
-+ await apiClient.get('/setup/status');
-```
-
-### 3. 🔧 Consolidate WebSocket Endpoints
-
-**Priority:** MEDIUM
-**Effort:** MEDIUM
-**Breaking:** NO (internal only)
-
-**Action:**
-Move the audio WebSocket from `main.py` to `two_way_audio.py`:
-
-```python
-# two_way_audio.py
-from fastapi import WebSocket
-
-@router.websocket("/{camera_id}")
-async def websocket_audio_stream(websocket: WebSocket, camera_id: str):
-    # Move implementation from main.py
-    ...
-```
-
-This makes the URL `/api/audio/{camera_id}` consistent with REST endpoints.
-
-### 4. 📝 Add Error Boundaries to Frontend Pages
-
-**Priority:** LOW
-**Effort:** MEDIUM
-**Breaking:** NO
-
-**Action:**
-Add React Error Boundaries to catch and display runtime errors gracefully:
-
-```jsx
-// components/ErrorBoundary.jsx
-class ErrorBoundary extends React.Component {
-  state = { hasError: false, error: null };
-
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return <ErrorDisplay error={this.state.error} />;
+Next Objectives & Recommendations for OpenEye v3.5.3+
+
+  Based on the comprehensive audit and current codebase analysis, here are the strategic next steps:
+
+  ---
+<!--  🚨 High Priority - Broken Functionality-->
+<!---->
+<!--  1. Fix WebSocket Authentication (CRITICAL)-->
+<!---->
+<!--  Status: Currently broken - returns 403 ForbiddenImpact: Real-time statistics not updating in UILocation: backend/api/routes/websockets.py-->
+<!---->
+<!--  Problem:-->
+<!--  # Current issue: Token validation failing-->
+<!--  WebSocket /ws/statistics returns 403 Forbidden-->
+<!---->
+<!--  Recommendation:-->
+<!--  - Investigate token passing in WebSocket handshake-->
+<!--  - Frontend sends token via query param: ws://localhost:8000/api/ws/statistics?token=...-->
+<!--  - Backend may not be extracting/validating it correctly-->
+<!--  - Check get_current_user_ws() dependency in websockets.py-->
+<!---->
+<!--  Quick Fix Path:-->
+<!--  # In websockets.py - verify this logic-->
+<!--  async def get_current_user_ws(-->
+<!--      websocket: WebSocket,-->
+<!--      token: str = Query(...)-->
+<!--  ):-->
+<!--      # Ensure token is being extracted from query params-->
+<!--      # Ensure JWT validation matches REST API auth-->
+<!---->
+<!--  ----->
+<!--  🔧 High Priority - Code Quality-->
+
+<!--  2. Remove Duplicate API Endpoints-->
+<!---->
+<!--  Impact: Confusion, maintenance burden, potential bugs-->
+<!---->
+<!--  Duplicates Identified:-->
+<!---->
+<!--  1. Login Endpoints (2 duplicates)-->
+<!--    - ✅ Keep: /api/token (main endpoint, OAuth2 compliant)-->
+<!--    - ❌ Remove: /api/users/login in backend/api/routes/users.py-->
+<!--  2. Face Detection Endpoints (2 duplicates)-->
+<!--    - ✅ Keep: /api/history/detections (main endpoint)-->
+<!--    - ❌ Remove: /api/faces/detections in backend/api/routes/faces.py-->
+<!---->
+<!--  Action:-->
+<!--  # users.py - DELETE this endpoint-->
+<!--  @router.post("/login")  # ❌ REMOVE-->
+<!--  def login(...):-->
+<!--      ...-->
+<!---->
+<!--  # faces.py - DELETE this endpoint  -->
+<!--  @router.get("/detections")  # ❌ REMOVE-->
+<!--  def get_detections(...):-->
+<!--      ...-->
+<!---->
+<!--  Testing Required:-->
+<!--  - Grep frontend for /users/login usage → update to /token-->
+<!--  - Grep frontend for /faces/detections → update to /history/detections-->
+
+path manager issue 
+resolve paths used by application 
+
+  ---
+<!--  3. Wrap API Responses with Metadata-->
+<!---->
+<!--  Impact: API consistency, pagination support, better UX-->
+<!---->
+<!--  Current Problem:-->
+<!--  Some endpoints return raw arrays instead of wrapped objects:-->
+<!---->
+<!--  // ❌ BAD - Returns array directly-->
+<!--  GET /api/recordings/ → [{...}, {...}, {...}]-->
+<!---->
+<!--  // ✅ GOOD - Returns object with metadata-->
+<!--  GET /api/recordings/ → {-->
+<!--    "recordings": [{...}, {...}, {...}],-->
+<!--    "total": 42,-->
+<!--    "skip": 0,-->
+<!--    "limit": 10,-->
+<!--    "has_more": true-->
+<!--  }-->
+<!---->
+<!--  Endpoints Needing Fixes:-->
+<!--  1. /api/recordings/ - Returns array-->
+<!--  2. /api/history/detections - Returns array-->
+<!--  3. /api/faces/people - Returns array-->
+<!--  4. /api/alerts/logs - Returns array-->
+<!---->
+<!--  Implementation Example:-->
+<!--  # recordings.py-->
+<!--  @router.get("/recordings/")-->
+<!--  def list_recordings(-->
+<!--      skip: int = 0,-->
+<!--      limit: int = 10,-->
+<!--      db: Session = Depends(get_db)-->
+<!--  ):-->
+<!--      recordings = get_recordings(db, skip=skip, limit=limit)-->
+<!--      total = count_recordings(db)-->
+<!---->
+<!--      return {-->
+<!--          "recordings": recordings,-->
+<!--          "total": total,-->
+<!--          "skip": skip,-->
+<!--          "limit": limit,-->
+<!--          "has_more": (skip + limit) < total-->
+<!--      }-->
+<!---->
+<!--  Frontend Updates Required:-->
+<!--  // Old way-->
+<!--  const recordings = await response.json();-->
+<!---->
+<!--  // New way  -->
+<!--  const { recordings, total, has_more } = await response.json();-->
+
+  ---
+  🎯 Medium Priority - Missing Features
+
+<!--  4. Motion Threshold UI Control-->
+<!---->
+<!--  Status: Backend ready, frontend missingImpact: Users can't configure sensitivity without editing config files-->
+<!---->
+<!--  Current State:-->
+<!--  - ✅ Backend supports motion_percentage_threshold setting-->
+<!--  - ❌ Frontend SystemSettingsPage doesn't expose it-->
+<!---->
+<!--  Implementation:-->
+<!--  // SystemSettingsPage.jsx - Add this control-->
+<!--  <div className="setting-group">-->
+<!--    <label htmlFor="motion-threshold">-->
+<!--      Motion Sensitivity (%)-->
+<!--      <span className="help-text">-->
+<!--        Percentage of frame that must change to trigger motion detection-->
+<!--      </span>-->
+<!--    </label>-->
+<!--    <input-->
+<!--      id="motion-threshold"-->
+<!--      type="number"-->
+<!--      min="0.1"-->
+<!--      max="5.0"-->
+<!--      step="0.1"-->
+<!--      value={settings.motion_percentage_threshold || 1.0}-->
+<!--      onChange={(e) => handleSettingChange('motion_percentage_threshold', parseFloat(e.target.value))}-->
+<!--    />-->
+<!--    <span className="current-value">{settings.motion_percentage_threshold || 1.0}%</span>-->
+<!--  </div>-->
+<!---->
+<!--  Files to Modify:-->
+<!--  - frontend/src/pages/SystemSettingsPage.jsx - Add UI control-->
+<!--  - Test with different cameras to find good default values-->
+
+  ---
+<!--  5. Bulk Export (ZIP Download)-->
+<!---->
+<!--  Status: Frontend UI exists, backend endpoints missingImpact: Users can't export multiple recordings/snapshots at once-->
+<!---->
+<!--  Current State:-->
+<!--  - ✅ Frontend has selection UI in RecordingsPage.jsx-->
+<!--  - ❌ Backend /api/recordings/export returns 404-->
+<!--  - ❌ Backend /api/motion-events/export returns 404-->
+<!---->
+<!--  Implementation:-->
+<!--  # backend/api/routes/recordings.py-->
+<!--  import zipfile-->
+<!--  from io import BytesIO-->
+<!--  from fastapi.responses import StreamingResponse-->
+<!---->
+<!--  @router.post("/export")-->
+<!--  async def export_recordings(-->
+<!--      recording_ids: List[int],-->
+<!--      db: Session = Depends(get_db)-->
+<!--  ):-->
+<!--      """Export multiple recordings as ZIP file"""-->
+<!--      zip_buffer = BytesIO()-->
+<!---->
+<!--      with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:-->
+<!--          for rec_id in recording_ids:-->
+<!--              recording = get_recording(db, rec_id)-->
+<!--              if recording and Path(recording.file_path).exists():-->
+<!--                  # Add file to ZIP with sanitized name-->
+<!--                  filename = f"{recording.camera_id}_{recording.start_time.strftime('%Y%m%d_%H%M%S')}.mp4"-->
+<!--                  zip_file.write(recording.file_path, filename)-->
+<!---->
+<!--      zip_buffer.seek(0)-->
+<!---->
+<!--      return StreamingResponse(-->
+<!--          zip_buffer,-->
+<!--          media_type="application/zip",-->
+<!--          headers={-->
+<!--              "Content-Disposition": f"attachment; filename=recordings_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"-->
+<!--          }-->
+<!--      )-->
+<!---->
+<!--  Similar implementation needed for:-->
+<!--  - /api/motion-events/export - Export snapshots-->
+
+  ---
+<!--  6. Field Name Consistency Audit-->
+<!---->
+<!--  Impact: Frontend may break with inconsistent field names-->
+<!---->
+<!--  Issues Found:-->
+<!--  - Some responses use id instead of camera_id-->
+<!--  - Some responses use active instead of is_active-->
+<!--  - Date fields inconsistent: created_at vs timestamp vs date-->
+<!---->
+<!--  Action Required:-->
+<!--  1. Audit all Pydantic schemas in backend/api/schemas/-->
+<!--  2. Create consistent naming convention:-->
+<!--  # Proposed standard-->
+<!--  - IDs: {entity}_id (e.g., camera_id, recording_id)-->
+<!--  - Booleans: is_{state} (e.g., is_active, is_enabled)-->
+<!--  - Timestamps: {event}_at (e.g., created_at, updated_at)-->
+<!--  3. Update schemas with aliases for backward compatibility:-->
+<!--  class CameraSchema(BaseModel):-->
+<!--      camera_id: int = Field(..., alias="id")  # Accept both-->
+<!--      is_active: bool = Field(..., alias="active")  # Accept both-->
+
+  ---
+  💡 Strategic Recommendations
+
+<!--  7. Implement Timeline Playback System-->
+<!---->
+<!--  Status: Code exists but not integratedBusiness Value: HIGH - Unique feature for surveillance system-->
+<!---->
+<!--  Current State:-->
+<!--  - ✅ Backend: backend/core/timeline_playback_system.py exists-->
+<!--  - ❌ No API routes registered-->
+<!--  - ❌ No frontend UI-->
+<!---->
+<!--  Why This Matters:-->
+<!--  - Differentiates OpenEye from basic IP camera viewers-->
+<!--  - Allows scrubbing through multiple cameras simultaneously-->
+<!--  - Essential for security review workflows-->
+<!---->
+<!--  Implementation Plan:-->
+<!--  # 1. Create API routes (backend/api/routes/timeline.py)-->
+<!--  @router.get("/timeline/events")-->
+<!--  def get_timeline_events(-->
+<!--      start_time: datetime,-->
+<!--      end_time: datetime,-->
+<!--      camera_ids: List[str] = Query(None)-->
+<!--  ):-->
+<!--      """Get all events in time range for timeline view"""-->
+<!--      return timeline_service.get_events(start_time, end_time, camera_ids)-->
+<!---->
+<!--  @router.get("/timeline/frame")-->
+<!--  def get_frame_at_time(-->
+<!--      camera_id: str,-->
+<!--      timestamp: datetime-->
+<!--  ):-->
+<!--      """Get specific frame from recording at exact timestamp"""-->
+<!--      return timeline_service.get_frame(camera_id, timestamp)-->
+<!---->
+<!--  // 2. Create frontend component (TimelineView.jsx)-->
+<!--  // Visual timeline with:-->
+<!--  // - Horizontal time axis-->
+<!--  // - Multiple camera lanes-->
+<!--  // - Motion event markers-->
+<!--  // - Scrubber for seeking-->
+<!--  // - Synchronized playback across cameras-->
+<!---->
+<!--  Suggested Timeline:-->
+<!--  - Sprint 1: API routes (4-6 hours)-->
+<!--  - Sprint 2: Basic UI component (8-10 hours)-->
+<!--  - Sprint 3: Scrubbing & sync (6-8 hours)-->
+<!--  - Total: ~20 hours for MVP-->
+
+  ---
+  8. Face Clustering Implementation (v3.6.0)
+
+  Status: Fully designed, not implementedDocument: docs/archived-releases/FACE_CLUSTERING_IMPLEMENTATION_v3.6.0.md
+
+  What It Does:
+  - Automatically groups similar unknown faces
+  - Reduces "unknown person" clutter
+  - Makes it easier to identify frequent visitors
+
+  Why Implement:
+  - Design is already complete
+  - Uses existing face_recognition library
+  - High user value for security review
+
+  Implementation Checklist:
+  # Already designed in FACE_CLUSTERING_IMPLEMENTATION_v3.6.0.md:
+  ✅ Database schema updates (cluster tables)
+  ✅ Clustering algorithm (DBSCAN)
+  ✅ API endpoints defined
+  ✅ Frontend UI mockups
+  ❌ Code implementation
+  ❌ Testing
+
+  Effort Estimate: 15-20 hours for full implementation
+
+  ---
+  9. Database Migration System
+
+  Status: Ad-hoc migrations, no systematic approachRisk: HIGH - Schema changes can break deployments
+
+  Current Problem:
+  # Migrations exist in backend/database/migrations/
+  # But no automated migration runner
+  # Users must manually run migration scripts
+
+  Recommendation - Use Alembic:
+  # Install
+  pip install alembic
+
+  # Initialize
+  alembic init alembic
+
+  # Create migration
+  alembic revision --autogenerate -m "Add motion_threshold column"
+
+  # Apply migrations
+  alembic upgrade head
+
+  Benefits:
+  - Automatic schema versioning
+  - Rollback capability
+  - Works with Docker deployments
+  - Industry standard
+
+  Implementation:
+  # backend/main.py - Add on startup
+  from alembic import command
+  from alembic.config import Config
+
+  @app.on_event("startup")
+  async def run_migrations():
+      alembic_cfg = Config("alembic.ini")
+      command.upgrade(alembic_cfg, "head")
+
+  ---
+  10. Testing Infrastructure
+
+  Status: Minimal test coverageRisk: MEDIUM - Regressions likely with active development
+
+  Current State:
+  tests/
+  ├── test_face_recognition.py       # Unit test
+  ├── test_user_*.py                 # Integration tests
+  └── conftest.py                    # Test fixtures
+
+  Gaps:
+  - No API endpoint tests
+  - No frontend component tests
+  - No E2E tests
+  - No performance tests
+
+  Quick Wins:
+  # 1. Add pytest-cov for coverage reports
+  pip install pytest-cov
+
+  # 2. Create API tests (tests/api/test_recordings.py)
+  def test_list_recordings(client, auth_headers):
+      response = client.get("/api/recordings/", headers=auth_headers)
+      assert response.status_code == 200
+      data = response.json()
+      assert "recordings" in data
+      assert "total" in data
+
+  # 3. Run with coverage
+  pytest --cov=backend --cov-report=html
+
+  Frontend Testing:
+  # Add Vitest for React component testing
+  npm install -D vitest @testing-library/react
+
+  # Create tests (frontend/src/components/__tests__/ErrorBoundary.test.jsx)
+  test('ErrorBoundary catches errors', () => {
+    const ThrowError = () => { throw new Error('Test error') }
+    render(<ErrorBoundary><ThrowError /></ErrorBoundary>)
+    expect(screen.getByText(/error occurred/i)).toBeInTheDocument()
+  })
+
+  ---
+  🔒 Security & Performance
+
+  11. Security Audit
+
+  Priority: HIGH before v4.0.0
+
+  Areas to Review:
+  1. Authentication:
+    - JWT token expiration (currently 30 min - is this right?)
+    - Refresh token mechanism (not implemented)
+    - Password hashing algorithm (verify bcrypt settings)
+  2. Authorization:
+    - Currently single-user system
+    - Need RBAC for multi-user (planned v4.0.0)
+    - API endpoints lack permission checks
+  3. Input Validation:
+    - Check all path inputs (camera paths, snapshot paths)
+    - SQL injection prevention (using SQLAlchemy ✅)
+    - XSS prevention in frontend
+  4. File Access:
+    - Static file serving security
+    - Path traversal prevention
+    - File upload validation (if adding cloud backup)
+
+  Recommended Tool:
+  # Run Bandit security linter
+  pip install bandit
+  bandit -r backend/ -f html -o security_report.html
+
+  ---
+  12. Performance Optimization
+
+  Current State: No performance monitoring
+
+  Quick Wins:
+
+  1. Add Database Indexes:
+  # models.py - Add indexes for common queries
+  class Recording(Base):
+      __tablename__ = "recordings"
+
+      # Add composite index for common filter
+      __table_args__ = (
+          Index('idx_camera_time', 'camera_id', 'start_time'),
+          Index('idx_created_at', 'created_at'),
+      )
+
+  2. Add Query Pagination Everywhere:
+  # Currently some endpoints return ALL records
+  # Add default limits
+  DEFAULT_PAGE_SIZE = 50
+  MAX_PAGE_SIZE = 1000
+
+  @router.get("/recordings/")
+  def list_recordings(
+      skip: int = 0,
+      limit: int = Query(DEFAULT_PAGE_SIZE, le=MAX_PAGE_SIZE)
+  ):
+      ...
+
+  3. Add Response Caching:
+  from functools import lru_cache
+
+  @lru_cache(maxsize=128)
+  def get_camera_list():
+      # Cache camera list for 60 seconds
+      return camera_manager.get_all_cameras()
+
+  4. Frontend Bundle Optimization:
+  // vite.config.js - Add code splitting
+  export default defineConfig({
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor': ['react', 'react-dom'],
+            'charts': ['recharts'],
+          }
+        }
+      }
     }
-    return this.props.children;
-  }
-}
-```
+  })
 
-### 5. 📝 Add API Response Validation
+  ---
+  📊 Prioritized Roadmap
 
-**Priority:** LOW
-**Effort:** MEDIUM
-**Breaking:** NO
+  Sprint 1 (1 week) - Critical Fixes
 
-**Current State:**
-Frontend assumes API responses match expected structure. No runtime validation.
+  1. Fix WebSocket authentication ⚠️
+  2. Remove duplicate endpoints
+  3. Add motion threshold UI control
 
-**Recommendation:**
-Add runtime type checking with Zod or similar:
+  Outcome: All core features working, no broken functionality
 
-```javascript
-import { z } from 'zod';
+  ---
+  Sprint 2 (1 week) - API Consistency
 
-const CameraSchema = z.object({
-  camera_id: z.string(),
-  camera_type: z.string(),
-  source: z.string(),
-  is_active: z.boolean(),
-});
+  1. Wrap API responses with metadata
+  2. Field name consistency audit
+  3. Add comprehensive API tests
 
-const response = await apiClient.get('/cameras/');
-const cameras = z.array(CameraSchema).parse(response.data.cameras);
-```
+  Outcome: Clean, consistent API ready for mobile app
 
-### 6. 📝 Implement Request Retry Logic
+  ---
+  Sprint 3 (2 weeks) - High-Value Features
 
-**Priority:** LOW
-**Effort:** LOW
-**Breaking:** NO
+  1. Implement bulk export (ZIP)
+  2. Timeline playback system (MVP)
+  3. Database migrations with Alembic
 
-**Action:**
-Add axios-retry for automatic retries on network failures:
+  Outcome: Unique features that differentiate OpenEye
 
-```javascript
-import axiosRetry from 'axios-retry';
+  ---
+  Sprint 4 (2 weeks) - Quality & Performance
 
-axiosRetry(apiClient, {
-  retries: 3,
-  retryDelay: axiosRetry.exponentialDelay,
-  retryCondition: (error) => {
-    return axiosRetry.isNetworkOrIdempotentRequestError(error)
-      || error.response?.status === 429;
-  },
-});
-```
+  1. Security audit with Bandit
+  2. Add database indexes
+  3. Frontend bundle optimization
+  4. Test coverage to 60%+
 
-### 7. 📝 Add Request/Response Logging (Development Only)
+  Outcome: Production-ready, performant system
 
-**Priority:** LOW
-**Effort:** LOW
-**Breaking:** NO
+  ---
+  v3.6.0 Release (After Sprint 4)
 
-**Action:**
-```javascript
-if (process.env.NODE_ENV === 'development') {
-  apiClient.interceptors.request.use(req => {
-    console.log('→', req.method.toUpperCase(), req.url, req.data);
-    return req;
-  });
+  1. Face clustering implementation
+  2. Advanced analytics dashboard
+  3. Performance monitoring
 
-  apiClient.interceptors.response.use(res => {
-    console.log('←', res.status, res.config.url);
-    return res;
-  });
-}
-```
+  ---
+  v4.0.0 (Future - 6+ months)
 
-### 8. 📝 Add WebSocket Connection Status Indicator
+  1. Multi-user support with RBAC
+  2. Mobile app (React Native or Flutter)
+  3. Cloud backup integration
+  4. Advanced AI features (object detection, behavior analysis)
 
-**Priority:** LOW
-**Effort:** LOW
-**Breaking:** NO
+  ---
+  🎯 My Top 3 Recommendations
 
-**Action:**
-Add a status indicator in the UI:
+  If I had to pick the most impactful next steps:
 
-```jsx
-// components/WebSocketStatus.jsx
-const WebSocketStatus = () => {
-  const [status, setStatus] = useState('disconnected');
+  #1: Fix WebSocket + Remove Duplicates (Critical Path)
 
-  useEffect(() => {
-    const unsubscribe = wsService.on('status_change', (data) => {
-      setStatus(data.status);
-    });
-    return unsubscribe;
-  }, []);
+  Why: Broken real-time updates hurt user experience significantlyEffort: 4-6 hoursImpact: HIGH - Restores expected functionality
 
-  return (
-    <div className={`ws-status ws-status-${status}`}>
-      {status === 'connected' && '🟢 Live'}
-      {status === 'connecting' && '🟡 Connecting...'}
-      {status === 'disconnected' && '🔴 Offline'}
-    </div>
-  );
-};
-```
+  #2: Timeline Playback System
 
----
+  Why: This is your killer feature - no other open-source system has thisEffort: 20 hours for MVPImpact: VERY HIGH - Major differentiator
 
-## Testing Checklist
+  #3: Database Migrations + Testing
 
-### Backend API Tests
+  Why: Technical debt will compound without theseEffort: 10-12 hoursImpact: MEDIUM now, HIGH over time
 
-- [ ] Test all 95 API endpoints for 200/201 responses
-- [ ] Test authentication on protected endpoints (401 without token)
-- [ ] Test route ordering (discovery before cameras)
-- [ ] Test WebSocket connections (statistics and audio)
-- [ ] Test duplicate discovery routes (both sets work)
-- [ ] Test CORS headers on all endpoints
-- [ ] Test rate limiting (1000 req/min threshold)
+  ---
+  Would you like me to start implementing any of these recommendations? I'd suggest tackling #1 first since it's blocking core functionality.
 
-### Frontend Integration Tests
+● How is Claude doing this session? (optional)
+  1: Bad    2: Fine   3: Good   0: Dismiss
 
-- [ ] Test login flow with valid/invalid credentials
-- [ ] Test token expiration and auto-redirect
-- [ ] Test WebSocket reconnection after network failure
-- [ ] Test all CRUD operations on cameras
-- [ ] Test face upload and training
-- [ ] Test recording playback and download
-- [ ] Test camera discovery (USB and network)
-- [ ] Test settings persistence
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+>  
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ accept edits on (shift+tab to cycle)
 
-### Manual Testing
 
-```bash
-# Test setup endpoints (current URLs)
-curl http://localhost:8000/status
-curl http://localhost:8000/initialize -X POST
 
-# Test discovery endpoints (both sets)
-curl http://localhost:8000/api/cameras/discover/usb -X POST
-# Should get same response from both
 
-# Test WebSocket
-wscat -c "ws://localhost:8000/api/ws/statistics?token=YOUR_TOKEN"
-# Should receive statistics_update messages every 2 seconds
-```
-
----
-
-## Security Audit
-
-### ✅ Authentication & Authorization
-
-- ✅ JWT tokens with 30-minute expiration
-- ✅ bcrypt password hashing
-- ✅ Token validation on WebSocket connections
-- ✅ Public endpoints properly marked (setup, login)
-- ✅ Authorization header correctly added via interceptor
-
-### ✅ Input Validation
-
-- ✅ Pydantic schemas validate all request bodies
-- ✅ Path parameters validated by FastAPI
-- ✅ SQL injection protection via SQLAlchemy ORM
-
-### ✅ Security Headers
-
-- ✅ SecurityHeadersMiddleware enabled (main.py:110)
-- ✅ CORS configured (currently allows all origins - restrict in production)
-- ✅ Rate limiting active (1000 req/min)
-
-### ⚠️ Potential Vulnerabilities
-
-1. **CORS Wildcard:** `allow_origins=["*"]` should be restricted in production
-2. **Secret Keys:** Ensure .env file is not committed (already in .gitignore ✅)
-3. **Setup Endpoints:** No prefix makes them discoverable at root level
-
----
-
-## Performance Analysis
-
-### API Response Times (Expected)
-
-| Endpoint Type | Expected Time | Notes |
-|--------------|---------------|-------|
-| Database queries | < 50ms | SQLite is fast for reads |
-| Camera operations | 100-500ms | Depends on RTSP latency |
-| Face recognition | 200-2000ms | Depends on image count |
-| File uploads | Varies | Network dependent |
-| WebSocket messages | < 10ms | Real-time broadcast |
-
-### Optimization Opportunities
-
-1. **Add caching for settings:** Settings are read on every page load
-2. **Lazy load camera streams:** Don't load all streams on dashboard open
-3. **Paginate face detection history:** Currently loads all results
-4. **Add database indexes:** Ensure foreign keys and frequent queries are indexed
-
----
-
-## Conclusion
-
-### Summary
-
-The OpenEye API architecture is **well-designed and production-ready** with minor improvements needed:
-
-**Strengths:**
-- ✅ Clean separation of concerns (routers per feature)
-- ✅ Proper route ordering (specific before generic)
-- ✅ Robust frontend error handling
-- ✅ Excellent WebSocket implementation
-- ✅ Security best practices (JWT, bcrypt, rate limiting)
-
-**Critical Fixes Needed:**
-1. Remove duplicate discovery routes from cameras.py
-2. Add `/api` prefix to setup routes
-3. Consolidate WebSocket endpoints
-
-**Nice-to-Have Improvements:**
-- Add error boundaries to React components
-- Add API response validation
-- Add request retry logic
-- Add WebSocket status indicator
-
-### Recommended Action Plan
-
-**Phase 1 (Immediate):**
-1. Remove duplicate discovery routes
-2. Test that frontend still works
-3. Deploy hotfix
-
-**Phase 2 (Next Release):**
-1. Add `/api/setup` prefix
-2. Update frontend to use new endpoints
-3. Consolidate WebSocket routes
-4. Add migration guide to CHANGELOG
-
-**Phase 3 (Future Enhancement):**
-1. Add error boundaries
-2. Add response validation
-3. Add retry logic
-4. Add WebSocket status indicator
-
----
-
-**Audit Completed By:** Claude Code
-**Date:** October 18, 2025
-**Next Audit:** After v3.6.0 release

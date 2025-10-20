@@ -24,6 +24,7 @@ import AlertSettingsPage from './pages/AlertSettingsPage';
 import SystemSettingsPage from './pages/SystemSettingsPage';
 import ThemeSelectorPage from './pages/ThemeSelectorPage';
 import AutomationsPage from './pages/AutomationsPage';
+import TimelineView from './pages/TimelineView';
 
 // Legacy Pages (for setup and login)
 import LoginPage from './pages/LoginPage';
@@ -114,6 +115,7 @@ function App() {
               {/* Section-based Navigation with Working Pages */}
               <Route index element={<ErrorBoundary><LiveDashboard /></ErrorBoundary>} />
               <Route path="events" element={<ErrorBoundary><RecordingsPage /></ErrorBoundary>} />
+              <Route path="timeline" element={<ErrorBoundary><TimelineView /></ErrorBoundary>} />
               <Route path="cameras" element={<ErrorBoundary><CameraManagementPage /></ErrorBoundary>} />
               <Route path="cameras/discovery" element={<ErrorBoundary><CameraDiscoveryPage /></ErrorBoundary>} />
               <Route path="faces" element={<ErrorBoundary><FaceManagementPage /></ErrorBoundary>} />

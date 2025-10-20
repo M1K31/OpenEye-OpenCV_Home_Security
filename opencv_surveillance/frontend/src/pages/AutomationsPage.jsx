@@ -93,7 +93,9 @@ const AutomationsPage = () => {
   const loadKnownPeople = async () => {
     try {
       const response = await apiClient.get('/faces/people');
-      setKnownPeople(response.data.map(face => face.name));
+      // Handle wrapped response format {people: [...], total: N}
+      const peopleData = response.data?.people || response.data || [];
+      setKnownPeople(peopleData.map(face => face.name));
     } catch (error) {
       console.error('Failed to load known people:', error);
     }

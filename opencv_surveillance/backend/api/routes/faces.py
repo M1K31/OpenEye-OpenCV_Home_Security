@@ -14,6 +14,7 @@ from datetime import datetime
 
 from backend.api.schemas import face as face_schema
 from backend.core.face_recognition import get_face_manager
+from backend.core.paths import paths
 from backend.core.camera_manager import manager as camera_manager
 from backend.core.auth import get_current_active_user, require_user, require_admin
 from backend.api.schemas import user as user_schema
@@ -80,7 +81,7 @@ def add_person(
             )
 
         # Return person info
-        person_path = os.path.join(face_manager.faces_folder, clean_name)
+        person_path = paths.faces_dir / clean_name
         return face_schema.Person(
             name=clean_name,
             photo_count=0,
@@ -104,7 +105,7 @@ def get_person(
     """
     try:
         face_manager = get_face_manager()
-        person_path = os.path.join(face_manager.faces_folder, person_name)
+        person_path = paths.faces_dir / person_name
 
         # Check if person exists
         if not os.path.exists(person_path):
@@ -244,7 +245,7 @@ def list_person_photos(
     """
     try:
         face_manager = get_face_manager()
-        person_path = os.path.join(face_manager.faces_folder, person_name)
+        person_path = paths.faces_dir / person_name
 
         # Check if person exists
         if not os.path.exists(person_path):
@@ -295,7 +296,7 @@ async def upload_photos(
     """
     try:
         face_manager = get_face_manager()
-        person_path = os.path.join(face_manager.faces_folder, person_name)
+        person_path = paths.faces_dir / person_name
 
         # Check if person exists
         if not os.path.exists(person_path):
@@ -356,7 +357,7 @@ def delete_person_photo(
     """
     try:
         face_manager = get_face_manager()
-        person_path = os.path.join(face_manager.faces_folder, person_name)
+        person_path = paths.faces_dir / person_name
 
         # Check if person exists
         if not os.path.exists(person_path):
@@ -451,24 +452,6 @@ def get_face_statistics(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/faces/detections")
-def get_recent_detections(
-    current_user: user_schema.User = Depends(get_current_active_user),
-):
-    """
-    Get recent face detections from all cameras
-
-    **Authentication Required**: Any authenticated user
-    """
-    try:
-        detections = camera_manager.get_all_face_detections()
-        return JSONResponse(content=detections)
-
-    except Exception as e:
-        logger.error(f"Error getting detections: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.get("/faces/settings", response_model=face_schema.FaceSettings)
 def get_face_settings(
     current_user: user_schema.User = Depends(get_current_active_user),
@@ -485,7 +468,7 @@ def get_face_settings(
             enabled=True,  # TODO: Make this configurable
             detection_method=face_manager.detection_method,
             recognition_threshold=face_manager.recognition_threshold,
-            faces_folder=face_manager.faces_folder,
+            faces_folder=str(paths.faces_dir),
         )
 
     except Exception as e:
@@ -515,7 +498,7 @@ def update_face_settings(
             enabled=settings.enabled,
             detection_method=face_manager.detection_method,
             recognition_threshold=face_manager.recognition_threshold,
-            faces_folder=face_manager.faces_folder,
+            faces_folder=str(paths.faces_dir),
         )
 
     except Exception as e:

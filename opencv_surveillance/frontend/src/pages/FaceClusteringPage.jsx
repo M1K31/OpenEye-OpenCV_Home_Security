@@ -46,23 +46,77 @@ const FaceClusteringPage = () => {
   }, []);
 
   const loadData = async () => {
+    // Ensure loading is ALWAYS set to false, even if state updates fail
+    let timeoutId;
     try {
       setLoading(true);
       setError(null);
-      
-      const [clustersData, statsData] = await Promise.all([
+
+      // Safety timeout - force loading to false after 30 seconds
+      timeoutId = setTimeout(() => {
+        console.warn('Loading timeout - forcing loading state to false');
+        setLoading(false);
+      }, 30000);
+
+      // Load clusters and statistics with individual error handling
+      const [clustersResult, statsResult] = await Promise.allSettled([
         clusteringService.getClusters(0, ITEMS_PER_PAGE),
         clusteringService.getStatistics(),
       ]);
-      
-      setClusters(clustersData.clusters || []);
-      setStatistics(statsData);
-      setHasMore((clustersData.clusters?.length || 0) >= ITEMS_PER_PAGE);
+
+      // Handle clusters result
+      if (clustersResult.status === 'fulfilled') {
+        setClusters(clustersResult.value?.clusters || []);
+        setHasMore((clustersResult.value?.clusters?.length || 0) >= ITEMS_PER_PAGE);
+      } else {
+        console.error('Failed to load clusters:', clustersResult.reason);
+        setClusters([]);
+      }
+
+      // Handle statistics result
+      if (statsResult.status === 'fulfilled' && statsResult.value) {
+        // Ensure all required fields have default values
+        setStatistics({
+          total_clusters: statsResult.value.total_clusters || 0,
+          identified_clusters: statsResult.value.identified_clusters || 0,
+          unidentified_clusters: statsResult.value.unidentified_clusters || 0,
+          total_clustered_faces: statsResult.value.clustered_faces || 0,
+          total_unknown_faces: statsResult.value.total_unknown_faces || 0,
+          clustering_rate: statsResult.value.clustering_rate || 0.0,
+          unclustered_faces: statsResult.value.unclustered_faces || 0
+        });
+      } else {
+        console.error('Failed to load statistics:', statsResult.reason);
+        // Set default statistics if API fails
+        setStatistics({
+          total_clusters: 0,
+          identified_clusters: 0,
+          unidentified_clusters: 0,
+          total_clustered_faces: 0,
+          total_unknown_faces: 0,
+          clustering_rate: 0.0,
+          unclustered_faces: 0
+        });
+      }
+
       setPage(0);
     } catch (err) {
       console.error('Error loading data:', err);
       setError('Failed to load clusters. Please try again.');
+      setClusters([]);
+      setStatistics({
+        total_clusters: 0,
+        identified_clusters: 0,
+        unidentified_clusters: 0,
+        total_clustered_faces: 0,
+        total_unknown_faces: 0,
+        clustering_rate: 0.0,
+        unclustered_faces: 0
+      });
     } finally {
+      // Clear safety timeout
+      if (timeoutId) clearTimeout(timeoutId);
+      // ALWAYS set loading to false
       setLoading(false);
     }
   };
@@ -213,27 +267,27 @@ const FaceClusteringPage = () => {
       {statistics && (
         <div className="statistics-dashboard">
           <div className="stat-card">
-            <div className="stat-value">{statistics.total_clusters}</div>
+            <div className="stat-value">{statistics.total_clusters || 0}</div>
             <div className="stat-label">Total Clusters</div>
           </div>
-          
+
           <div className="stat-card">
-            <div className="stat-value">{statistics.identified_clusters}</div>
+            <div className="stat-value">{statistics.identified_clusters || 0}</div>
             <div className="stat-label">Identified</div>
           </div>
-          
+
           <div className="stat-card">
-            <div className="stat-value">{statistics.unidentified_clusters}</div>
+            <div className="stat-value">{statistics.unidentified_clusters || 0}</div>
             <div className="stat-label">Unidentified</div>
           </div>
-          
+
           <div className="stat-card">
-            <div className="stat-value">{statistics.clustered_faces}</div>
+            <div className="stat-value">{statistics.total_clustered_faces || statistics.clustered_faces || 0}</div>
             <div className="stat-label">Clustered Faces</div>
           </div>
-          
+
           <div className="stat-card">
-            <div className="stat-value">{statistics.clustering_rate.toFixed(1)}%</div>
+            <div className="stat-value">{(statistics.clustering_rate || 0).toFixed(1)}%</div>
             <div className="stat-label">Clustering Rate</div>
           </div>
         </div>

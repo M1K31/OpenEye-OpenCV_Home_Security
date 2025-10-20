@@ -13,6 +13,7 @@ from backend.database.session import get_db
 from backend.database import crud
 from backend.api.schemas import camera as camera_schema
 
+from backend.core.paths import paths
 router = APIRouter()
 
 # ============================================================================
@@ -138,6 +139,21 @@ def patch_camera(
 
     # Get only fields that were provided
     update_data = camera_update.model_dump(exclude_unset=True)
+
+    # CRITICAL FIX: Recalculate min_contour_area when motion_sensitivity changes
+    # Motion sensitivity scale (1-10) maps inversely to min_contour_area
+    if "motion_sensitivity" in update_data:
+        # Import the SENSITIVITY_MAP from motion_detector
+        from backend.core.motion_detector import MotionDetector
+
+        sensitivity_value = update_data["motion_sensitivity"]
+        # Use the SENSITIVITY_MAP to get the correct min_contour_area
+        min_contour_area = MotionDetector.SENSITIVITY_MAP.get(sensitivity_value, 500)
+
+        # Automatically update min_contour_area when sensitivity changes
+        update_data["min_contour_area"] = min_contour_area
+
+        print(f"🎛️ Motion sensitivity changed to {sensitivity_value} -> min_contour_area set to {min_contour_area}")
 
     # Handle camera state changes in camera_manager BEFORE updating database
     # This ensures we control the camera based on the new state
@@ -457,15 +473,15 @@ def capture_snapshot(camera_id: str, db: Session = Depends(get_db)):
         )
 
     # Create snapshots directory
-    snapshots_dir = os.path.join("data", "snapshots")
-    os.makedirs(snapshots_dir, exist_ok=True)
+    snapshots_dir = paths.snapshots_dir
+    snapshots_dir.mkdir(parents=True, exist_ok=True)
 
     # Save snapshot
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{camera_id}_{timestamp}.jpg"
-    filepath = os.path.join(snapshots_dir, filename)
+    filepath = snapshots_dir / filename
 
-    cv2.imwrite(filepath, frame)
+    cv2.imwrite(str(filepath), frame)
 
     # Update last_active in database
     crud.update_camera_last_active(db, camera_id)

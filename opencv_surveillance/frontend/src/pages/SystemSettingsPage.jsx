@@ -802,6 +802,28 @@ const SystemSettingsPage = ({ embedded = false }) => {
                         <span style={styles.sliderHint}>1 = Low sensitivity (large movements only), 10 = High sensitivity (small movements)</span>
                       </div>
 
+                      {/* Motion Percentage Threshold */}
+                      <div style={styles.sliderRow}>
+                        <label style={styles.sliderLabel}>
+                          <span style={styles.sliderText}>Motion Threshold (%)</span>
+                          <span style={styles.sliderValue}>{getCameraValue(camera, 'motion_percentage_threshold', 1.0).toFixed(1)}%</span>
+                        </label>
+                        <input
+                          type="range"
+                          min="0.1"
+                          max="5.0"
+                          step="0.1"
+                          value={getCameraValue(camera, 'motion_percentage_threshold', 1.0)}
+                          onChange={(e) => handleCameraFeatureToggle(
+                            camera.camera_id,
+                            'motion_percentage_threshold',
+                            parseFloat(e.target.value)
+                          )}
+                          style={styles.slider}
+                        />
+                        <span style={styles.sliderHint}>Percentage of frame that must change to trigger motion (0.1% = very sensitive, 5.0% = less sensitive)</span>
+                      </div>
+
                       {/* FPS Control */}
                       <div style={styles.sliderRow}>
                         <label style={styles.sliderLabel}>
