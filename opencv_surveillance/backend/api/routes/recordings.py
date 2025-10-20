@@ -18,7 +18,7 @@ import tempfile
 
 from backend.database.session import SessionLocal
 from backend.database import models
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 router = APIRouter()
 
@@ -27,7 +27,7 @@ router = APIRouter()
 
 
 class RecordingResponse(BaseModel):
-    id: int
+    id: int = Field(..., serialization_alias="recording_id", description="Recording ID")
     camera_id: str
     recording_path: str
     started_at: datetime
@@ -40,6 +40,7 @@ class RecordingResponse(BaseModel):
 
     class Config:
         from_attributes = True
+        populate_by_name = True  # Allow both 'id' and 'recording_id'
 
 
 class RecordingSearchRequest(BaseModel):
@@ -55,6 +56,9 @@ class RecordingListResponse(BaseModel):
     recordings: List[RecordingResponse]
     total: int
     filtered: int
+    limit: int = 50
+    skip: int = 0
+    has_more: bool = False
 
 
 # Dependency
@@ -77,7 +81,8 @@ def list_recordings(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
     has_faces: Optional[bool] = Query(None),
-    limit: int = Query(50, le=200),
+    skip: int = Query(0, ge=0, description="Number of recordings to skip"),
+    limit: int = Query(50, le=200, description="Maximum recordings to return"),
     db: Session = Depends(get_db),
 ):
     """
@@ -108,16 +113,19 @@ def list_recordings(
 
     # Get filtered count
     filtered_count = query.count()
-    
-    # Order by most recent
+
+    # Order by most recent with pagination
     recordings = (
         query.order_by(
-            models.RecordingEvent.started_at.desc()).limit(limit).all())
+            models.RecordingEvent.started_at.desc()).offset(skip).limit(limit).all())
 
     return RecordingListResponse(
         recordings=recordings,
         total=total_count,
-        filtered=filtered_count
+        filtered=filtered_count,
+        limit=limit,
+        skip=skip,
+        has_more=(skip + limit) < filtered_count
     )
 
 

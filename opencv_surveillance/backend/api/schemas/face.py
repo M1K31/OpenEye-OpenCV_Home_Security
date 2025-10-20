@@ -72,10 +72,17 @@ class FaceDetection(BaseModel):
     confidence: float = Field(...,
                               description="Recognition confidence (0.0-1.0)")
     location: FaceLocation
-    timestamp: str = Field(..., description="ISO format timestamp")
+    detected_at: datetime = Field(
+        ...,
+        alias="timestamp",
+        description="Detection timestamp (accepts 'timestamp' for backward compatibility)"
+    )
     motion_detected: Optional[bool] = Field(
         None, description="Whether motion was detected"
     )
+
+    class Config:
+        populate_by_name = True  # Allow both 'detected_at' and 'timestamp'
 
 
 class TrainingRequest(BaseModel):
@@ -114,7 +121,7 @@ class FaceSettings(BaseModel):
     recognition_threshold: float = Field(
         0.6, description="Recognition confidence threshold"
     )
-    faces_folder: str = Field("faces", description="Directory for face images")
+    faces_folder: str = Field("faces", description="Directory for face images (managed by PathManager)")
 
 
 class UploadResponse(BaseModel):

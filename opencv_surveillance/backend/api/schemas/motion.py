@@ -5,9 +5,10 @@ Pydantic schemas for Motion Detection Events
 Separate from face detection events to track all motion activity
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
+from pathlib import Path
 
 
 class MotionEventBase(BaseModel):
@@ -35,7 +36,20 @@ class MotionEventResponse(MotionEventBase):
     frame_width: Optional[int] = None
     frame_height: Optional[int] = None
     face_detection_ids: Optional[str] = None
-    
+
+    @field_validator('snapshot_path', mode='before')
+    @classmethod
+    def normalize_snapshot_path(cls, v):
+        """Strip directory prefix from snapshot path for API response"""
+        if v is None:
+            return None
+        # Remove 'data/snapshots/' prefix if present
+        path_str = str(v)
+        if path_str.startswith('data/snapshots/'):
+            return path_str.replace('data/snapshots/', '', 1)
+        # Also handle absolute paths
+        return Path(path_str).name
+
     class Config:
         from_attributes = True
 
@@ -46,3 +60,4 @@ class MotionEventListResponse(BaseModel):
     total: int
     limit: int = 100
     offset: int = 0
+    has_more: bool = False

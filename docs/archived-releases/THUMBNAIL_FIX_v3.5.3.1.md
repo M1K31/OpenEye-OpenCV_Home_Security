@@ -340,7 +340,7 @@ Yes - Frontend changes require browser refresh or cache clear.
 ### Rollback Plan
 If issues occur:
 ```bash
-cd /Volumes/Storage/Dev/GitHubProjects/OpenEye-OpenCV_Home_Security
+cd /path/to/OpenEye-OpenCV_Home_Security
 git checkout frontend/src/pages/RecordingsPage.jsx
 cd opencv-surveillance/frontend && npm run build
 ```

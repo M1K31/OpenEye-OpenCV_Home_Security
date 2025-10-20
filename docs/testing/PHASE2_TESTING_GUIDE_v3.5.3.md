@@ -25,7 +25,7 @@ ls -lh index-*.js index-*.css
 
 ### 2. Start Server
 ```bash
-cd /Volumes/Storage/Dev/GitHubProjects/OpenEye-OpenCV_Home_Security
+cd /path/to/OpenEye-OpenCV_Home_Security
 ./start-local.sh
 ```
 

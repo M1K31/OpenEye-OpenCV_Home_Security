@@ -12,7 +12,7 @@ from backend.database.models import User
 from backend.core.auth import hash_password
 import re
 
-router = APIRouter(prefix="/api/setup", tags=["setup"])
+router = APIRouter(tags=["setup"])
 
 
 class SetupInitializeRequest(BaseModel):

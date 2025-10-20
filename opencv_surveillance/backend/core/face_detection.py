@@ -5,11 +5,13 @@ Face Detector - Integrates face recognition with camera streams
 Designed to work alongside motion detection in the OpenEye surveillance system
 """
 
-from typing import Tuple, List, Dict
+from typing import Tuple, List, Dict, Optional
 import numpy as np
 import logging
 from datetime import datetime
+from pathlib import Path
 from backend.core.face_recognition import get_face_manager
+from backend.core.paths import paths
 import asyncio
 from backend.core.alert_manager import get_alert_manager
 
@@ -23,17 +25,17 @@ class FaceDetector:
     Works alongside motion detection to identify people in video
     """
 
-    def __init__(self, enabled: bool = True, faces_dir: str = "faces"):
+    def __init__(self, enabled: bool = True, faces_dir: Optional[Path] = None):
         """
         Initialize face detector
 
         Args:
             enabled: Whether face detection is enabled
-            faces_dir: Directory where face images are stored
+            faces_dir: Directory where face images are stored (uses PathManager if None)
         """
         self.enabled = enabled
-        self.faces_dir = faces_dir
-        self.face_manager = get_face_manager(faces_folder=faces_dir)
+        self.faces_dir = faces_dir or paths.faces_dir
+        self.face_manager = get_face_manager(faces_folder=self.faces_dir)
         self.last_detection_time = None
         self.detection_cooldown = 2.0  # Seconds between detections to reduce CPU load
         self.detections_buffer = []  # Store recent detections

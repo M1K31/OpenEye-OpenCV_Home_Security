@@ -14,7 +14,7 @@ from jose import JWTError, jwt
 
 from backend.core.websocket_manager import ws_manager
 from backend.core.auth import get_current_active_user, SECRET_KEY, ALGORITHM
-from backend.database.session import get_db
+from backend.database.session import get_db, SessionLocal
 from backend.database.models import User
 
 logger = logging.getLogger(__name__)
@@ -49,7 +49,6 @@ def verify_token(token: str, db: Session) -> Optional[User]:
 async def authenticate_websocket(
     websocket: WebSocket,
     token: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
 ) -> Optional[User]:
     """
     Authenticate WebSocket connection using JWT token.
@@ -57,7 +56,6 @@ async def authenticate_websocket(
     Args:
         websocket: FastAPI WebSocket instance
         token: JWT token from query parameter
-        db: Database session
 
     Returns:
         User object if authenticated, None otherwise
@@ -70,11 +68,16 @@ async def authenticate_websocket(
         return None
 
     try:
-        # Verify token and get user
-        user = verify_token(token, db)
-        if not user:
-            raise Exception("Invalid token")
-        return user
+        # Create database session manually for WebSocket
+        db = SessionLocal()
+        try:
+            # Verify token and get user
+            user = verify_token(token, db)
+            if not user:
+                raise Exception("Invalid token")
+            return user
+        finally:
+            db.close()
     except Exception as e:
         logger.error(f"WebSocket authentication failed: {e}")
         await websocket.close(
@@ -87,7 +90,6 @@ async def authenticate_websocket(
 async def websocket_statistics_endpoint(
     websocket: WebSocket,
     token: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
 ):
     """
     WebSocket endpoint for real-time statistics streaming.
@@ -118,7 +120,7 @@ async def websocket_statistics_endpoint(
         };
     """
     # Authenticate the connection
-    user = await authenticate_websocket(websocket, token, db)
+    user = await authenticate_websocket(websocket, token)
     if not user:
         return
 

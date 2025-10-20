@@ -58,6 +58,9 @@ class FaceDetectionListResponse(BaseModel):
     detections: List[FaceDetectionEventResponse]
     total: int
     filtered: int
+    limit: int = 50
+    skip: int = 0
+    has_more: bool = False
 
 
 def get_db():
@@ -81,6 +84,10 @@ def get_detection_history(
         hours: int = Query(
             24,
             description="Number of hours to look back"),
+        skip: int = Query(
+            0,
+            ge=0,
+            description="Number of detections to skip"),
         limit: int = Query(
             50,
             description="Maximum number of results",
@@ -131,10 +138,15 @@ def get_detection_history(
                 )
             )
 
+        filtered_count = len(results)
+
         return FaceDetectionListResponse(
             detections=results,
             total=total_count,
-            filtered=len(results)
+            filtered=filtered_count,
+            limit=limit,
+            skip=skip,
+            has_more=(skip + limit) < filtered_count
         )
 
     except Exception as e:

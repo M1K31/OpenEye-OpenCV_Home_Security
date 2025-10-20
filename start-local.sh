@@ -41,7 +41,6 @@ echo "🚀 Starting OpenEye (Native Installation)"
 echo "========================================"
 echo ""
 
-# Navigate to opencv-surveillance
 # Navigate to opencv_surveillance
 cd "$(dirname "$0")/opencv_surveillance"
 
@@ -56,16 +55,19 @@ fi
 echo "🔌 Activating virtual environment..."
 source venv/bin/activate
 
+# Use the venv's python explicitly
+PYTHON_CMD="./venv/bin/python3"
+
 # Check Python version
-PYTHON_VERSION=$(python --version)
+PYTHON_VERSION=$($PYTHON_CMD --version)
 echo "✅ $PYTHON_VERSION"
 echo ""
 
 # Generate secret keys if .env doesn't exist
 if [ ! -f ".env" ]; then
     echo "🔐 Generating secret keys..."
-    SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
-    JWT_SECRET=$(python -c "import secrets; print(secrets.token_hex(32))")
+    SECRET_KEY=$($PYTHON_CMD -c "import secrets; print(secrets.token_hex(32))")
+    JWT_SECRET=$($PYTHON_CMD -c "import secrets; print(secrets.token_hex(32))")
     
     cat > .env << EOF
 SECRET_KEY=$SECRET_KEY
@@ -83,7 +85,8 @@ echo "   Press Ctrl+C to stop"
 echo ""
 
 # Start uvicorn in background and capture PID
-uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload &
+# Use venv's python to run uvicorn module
+$PYTHON_CMD -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload &
 UVICORN_PID=$!
 
 echo "   ✓ Server started with PID: $UVICORN_PID"

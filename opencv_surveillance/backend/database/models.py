@@ -201,6 +201,7 @@ class RecordingEvent(Base):
     # File metadata
     file_size_bytes = Column(Integer, nullable=True)
     frame_count = Column(Integer, nullable=True)
+    thumbnail_path = Column(String, nullable=True)  # Optional thumbnail for preview
 
     # Relationships
     face_detections = relationship("FaceDetectionEvent", back_populates="recording")

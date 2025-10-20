@@ -35,6 +35,13 @@ const Sidebar = ({ isCollapsed }) => {
       priority: 'high'
     },
     {
+      id: 'timeline',
+      icon: '📊',
+      label: 'Timeline Playback',
+      path: '/timeline',
+      priority: 'high'
+    },
+    {
       id: 'cameras',
       icon: '📹',
       label: 'Camera Manager',

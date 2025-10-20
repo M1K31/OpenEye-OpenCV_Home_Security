@@ -431,3 +431,232 @@ html.aquasecurity-theme .timeline-item.clickable:hover {
     width: 100%;
   }
 }
+
+/* ===================
+   SNAPSHOT MODAL
+   =================== */
+.snapshot-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.snapshot-modal-content {
+  background: var(--bg-panel);
+  border-radius: 16px;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border-panel);
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+html.aquasecurity-theme .snapshot-modal-content {
+  background: rgba(26, 26, 29, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 174, 239, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 174, 239, 0.3);
+}
+
+.snapshot-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-panel);
+}
+
+.snapshot-modal-header h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+html.aquasecurity-theme .snapshot-modal-header h3 {
+  color: #00AEEF;
+  text-shadow: 0 0 10px rgba(0, 174, 239, 0.3);
+}
+
+.snapshot-modal-close {
+  background: transparent;
+  border: none;
+  font-size: 32px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.snapshot-modal-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+html.aquasecurity-theme .snapshot-modal-close:hover {
+  background: rgba(0, 174, 239, 0.2);
+  color: #00AEEF;
+}
+
+.snapshot-modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  max-height: calc(90vh - 180px);
+}
+
+.snapshot-modal-image {
+  width: 100%;
+  max-width: 800px;
+  height: auto;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.snapshot-modal-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: var(--bg-input);
+  border-radius: 8px;
+  border: 1px solid var(--border-input);
+}
+
+html.aquasecurity-theme .snapshot-modal-info {
+  background: rgba(0, 174, 239, 0.05);
+  border: 1px solid rgba(0, 174, 239, 0.2);
+}
+
+.snapshot-modal-info p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.snapshot-modal-info strong {
+  color: var(--text-link);
+  margin-right: 8px;
+}
+
+html.aquasecurity-theme .snapshot-modal-info strong {
+  color: #00AEEF;
+}
+
+.snapshot-modal-footer {
+  display: flex;
+  gap: 12px;
+  padding: 20px 24px;
+  border-top: 1px solid var(--border-panel);
+  justify-content: flex-end;
+}
+
+.snapshot-modal-button {
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.snapshot-modal-button:hover {
+  background: var(--bg-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.snapshot-modal-download {
+  background: var(--text-link);
+  color: white;
+}
+
+.snapshot-modal-download:hover {
+  opacity: 0.9;
+}
+
+html.aquasecurity-theme .snapshot-modal-button {
+  background: rgba(0, 174, 239, 0.1);
+  border: 1px solid rgba(0, 174, 239, 0.3);
+  color: #00AEEF;
+}
+
+html.aquasecurity-theme .snapshot-modal-button:hover {
+  background: rgba(0, 174, 239, 0.2);
+  border-color: #00AEEF;
+  box-shadow: 0 2px 12px rgba(0, 174, 239, 0.3);
+}
+
+html.aquasecurity-theme .snapshot-modal-download {
+  background: linear-gradient(135deg, #00AEEF 0%, #005A7F 100%);
+  border: 1px solid #00AEEF;
+  color: white;
+}
+
+html.aquasecurity-theme .snapshot-modal-download:hover {
+  box-shadow: 0 4px 20px rgba(0, 174, 239, 0.4);
+  opacity: 1;
+}
+
+@media (max-width: 768px) {
+  .snapshot-modal-content {
+    max-width: 95vw;
+    max-height: 95vh;
+  }
+
+  .snapshot-modal-image {
+    max-width: 100%;
+  }
+
+  .snapshot-modal-footer {
+    flex-direction: column;
+  }
+
+  .snapshot-modal-button {
+    width: 100%;
+  }
+}

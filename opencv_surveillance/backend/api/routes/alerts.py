@@ -85,10 +85,13 @@ class NotificationLogResponse(BaseModel):
 
 class NotificationLogListResponse(BaseModel):
     """Schema for notification log list response"""
-    
+
     logs: List[NotificationLogResponse]
     total: int
     filtered: int
+    limit: int = 50
+    skip: int = 0
+    has_more: bool = False
 
 
 class TestAlertRequest(BaseModel):
@@ -229,6 +232,10 @@ def get_notification_logs(
         channel: Optional[str] = Query(
             None,
             description="Filter by channel"),
+        skip: int = Query(
+            0,
+            ge=0,
+            description="Number of logs to skip"),
         limit: int = Query(
             50,
             description="Maximum number of results",
@@ -258,9 +265,10 @@ def get_notification_logs(
 
     # Get filtered count
     filtered_count = query.count()
-    
+
     logs = (
         query.order_by(alert_models.NotificationLog.created_at.desc())
+        .offset(skip)
         .limit(limit)
         .all()
     )
@@ -268,7 +276,10 @@ def get_notification_logs(
     return NotificationLogListResponse(
         logs=logs,
         total=total_count,
-        filtered=filtered_count
+        filtered=filtered_count,
+        limit=limit,
+        skip=skip,
+        has_more=(skip + limit) < filtered_count
     )
 
 
