@@ -1,6 +1,6 @@
 # OpenEye API Reference Guide
-**Version**: 3.5.2  
-**Last Updated**: 2025-10-12
+**Version**: 3.5.3  
+**Last Updated**: 2025-10-18
 
 ## Table of Contents
 1. [Authentication](#authentication)

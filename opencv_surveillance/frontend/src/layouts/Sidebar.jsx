@@ -1,7 +1,7 @@
 // Copyright (c) 2025 Mikel Smart
 // This file is part of OpenEye-OpenCV_Home_Security
 
-import React from 'react';
+import React, { startTransition } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import WebSocketStatus from '../components/WebSocketStatus';
 import './Sidebar.css';
@@ -70,6 +70,13 @@ const Sidebar = ({ isCollapsed }) => {
       priority: 'high'
     },
     {
+      id: '2fa',
+      icon: '🔐',
+      label: 'Two-Factor Auth',
+      path: '/system/2fa',
+      priority: 'medium'
+    },
+    {
       id: 'system',
       icon: '⚙️',
       label: 'System & Alerts',
@@ -86,7 +93,12 @@ const Sidebar = ({ isCollapsed }) => {
   ];
 
   const handleNavigate = (section) => {
-    navigate(section.path);
+    // Use startTransition to mark navigation as non-urgent
+    // This allows React to keep the UI responsive and update the sidebar immediately
+    // while deferring the expensive page load
+    startTransition(() => {
+      navigate(section.path);
+    });
   };
 
   const isActive = (section) => {
@@ -118,12 +130,10 @@ const Sidebar = ({ isCollapsed }) => {
 
       {/* Sidebar Footer */}
       <div className="sidebar-footer">
-        <div className="connection-status">
-          <WebSocketStatus />
-        </div>
+        <WebSocketStatus />
         <div className="version-info">
           <span className="version-label">OpenEye</span>
-          <span className="version-number">v3.5.3</span>
+          <span className="version-number">v3.7.0</span>
         </div>
       </div>
     </aside>

@@ -391,7 +391,7 @@ class FaceRecognitionManager:
 
             people.append({"name": person_name,
                            "photo_count": photo_count,
-                           "path": person_path})
+                           "path": str(person_path)})
 
         return sorted(people, key=lambda x: x["name"])
 

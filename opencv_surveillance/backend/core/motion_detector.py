@@ -3,6 +3,13 @@
 """
 Enhanced Motion Detector with Advanced Lighting Compensation
 Supports sensitivity, threshold, noise reduction, shadow detection, and lighting change mitigation
+
+v3.5.7 Enhancements:
+- Grayscale-first processing for improved performance
+- HSV-based shadow detection option
+- Separate erosion/dilation iteration controls
+- Motion persistence/cooldown to prevent rapid flickering
+- Enhanced shadow removal with dual methods (binary + HSV)
 """
 import cv2
 import numpy as np
@@ -16,13 +23,16 @@ class MotionDetector:
     """
     Enhanced motion detector with advanced lighting change mitigation.
 
-    Features in v3.5.6:
+    Features in v3.5.7:
     - MOG2 background subtraction with improved parameters
+    - Grayscale-first processing for better performance
     - Lighting change detection and suppression
     - Temporal filtering to reduce flicker false positives
     - Adaptive learning rate for faster light adaptation
-    - Shadow detection and filtering
+    - Dual shadow detection (binary threshold + HSV-based)
     - Detection zone masking
+    - Motion persistence/cooldown
+    - Separate erosion/dilation controls
     """
 
     # Sensitivity mapping: higher sensitivity = lower min_contour_area
@@ -39,12 +49,15 @@ class MotionDetector:
         10: 100,  # Maximum sensitivity
     }
 
-    # Noise reduction mapping: (kernel_size, morph_iterations)
+    # Noise reduction mapping: (kernel_size, erode_iterations, dilate_iterations)
     NOISE_REDUCTION_MAP = {
-        "low": ((3, 3), 1),
-        "medium": ((5, 5), 2),
-        "high": ((7, 7), 3),
+        "low": ((3, 3), 1, 1),
+        "medium": ((5, 5), 2, 2),
+        "high": ((7, 7), 3, 3),
     }
+
+    # Shadow detection methods
+    SHADOW_DETECTION_METHODS = ["binary", "hsv", "dual"]
 
     def __init__(
         self,
@@ -55,6 +68,11 @@ class MotionDetector:
         detect_shadows: bool = True,
         detection_zones: Optional[str] = None,
         lighting_compensation: bool = True,
+        shadow_detection_method: str = "dual",
+        erosion_iterations: Optional[int] = None,
+        dilation_iterations: Optional[int] = None,
+        motion_persistence_frames: int = 2,
+        use_grayscale: bool = True,
     ):
         """
         Initializes the enhanced motion detector with lighting compensation.
@@ -67,6 +85,11 @@ class MotionDetector:
             detect_shadows: Whether to detect and mark shadows
             detection_zones: JSON string defining detection zone grid (optional)
             lighting_compensation: Enable lighting change detection and suppression
+            shadow_detection_method: Shadow removal method ('binary', 'hsv', 'dual')
+            erosion_iterations: Custom erosion iterations (overrides noise_reduction default)
+            dilation_iterations: Custom dilation iterations (overrides noise_reduction default)
+            motion_persistence_frames: Frames to maintain motion state (prevents rapid flickering)
+            use_grayscale: Convert to grayscale before processing (recommended)
         """
         # Use sensitivity to determine min_contour_area
         self.sensitivity = max(1, min(10, sensitivity))
@@ -76,9 +99,23 @@ class MotionDetector:
 
         # Get noise reduction parameters
         noise_reduction = noise_reduction.lower() if noise_reduction else "medium"
-        self.blur_kernel, self.morph_iterations = self.NOISE_REDUCTION_MAP.get(
+        self.blur_kernel, default_erode, default_dilate = self.NOISE_REDUCTION_MAP.get(
             noise_reduction, self.NOISE_REDUCTION_MAP["medium"]
         )
+
+        # Allow custom erosion/dilation iterations
+        self.erosion_iterations = erosion_iterations if erosion_iterations is not None else default_erode
+        self.dilation_iterations = dilation_iterations if dilation_iterations is not None else default_dilate
+
+        # Shadow detection settings
+        self.shadow_detection_method = shadow_detection_method if shadow_detection_method in self.SHADOW_DETECTION_METHODS else "dual"
+
+        # Performance optimization
+        self.use_grayscale = use_grayscale
+
+        # Motion persistence settings (prevent rapid on/off flickering)
+        self.motion_persistence_frames = max(0, motion_persistence_frames)
+        self.motion_cooldown_counter = 0
 
         # Lighting compensation settings
         self.lighting_compensation = lighting_compensation
@@ -211,6 +248,67 @@ class MotionDetector:
         motion_count = sum(self.motion_history)
         return motion_count >= 2
 
+    def _remove_shadows_hsv(self, frame: np.ndarray, fg_mask: np.ndarray) -> np.ndarray:
+        """
+        Remove shadows using HSV color space analysis.
+
+        Shadows typically have:
+        - Similar hue to the background
+        - Lower saturation
+        - Lower value (brightness)
+
+        This method is more sophisticated than simple binary thresholding.
+
+        Args:
+            frame: Original frame in BGR format
+            fg_mask: Foreground mask from background subtraction
+
+        Returns:
+            Shadow-filtered foreground mask
+        """
+        # Convert frame to HSV
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+
+        # Create a mask for potential shadow regions
+        # Shadows have low saturation (grayscale-ish) and medium-low value
+        # Adjust these thresholds based on your environment
+        lower_shadow = np.array([0, 0, 50])    # H, S, V lower bounds
+        upper_shadow = np.array([180, 50, 200])  # H, S, V upper bounds
+
+        shadow_mask = cv2.inRange(hsv, lower_shadow, upper_shadow)
+
+        # Remove detected shadows from foreground mask
+        # Only remove if both conditions are met:
+        # 1. Pixel is marked as foreground (fg_mask)
+        # 2. Pixel matches shadow characteristics (shadow_mask)
+        shadow_regions = cv2.bitwise_and(fg_mask, shadow_mask)
+
+        # Remove shadows from the foreground mask
+        result = cv2.subtract(fg_mask, shadow_regions)
+
+        return result
+
+    def _remove_shadows_dual(self, frame: np.ndarray, fg_mask: np.ndarray) -> np.ndarray:
+        """
+        Remove shadows using both binary thresholding and HSV analysis.
+
+        This combines the speed of binary thresholding with the accuracy of HSV analysis.
+
+        Args:
+            frame: Original frame in BGR format
+            fg_mask: Foreground mask from background subtraction
+
+        Returns:
+            Shadow-filtered foreground mask
+        """
+        # First pass: Binary threshold to remove MOG2's gray shadow markers
+        _, binary_filtered = cv2.threshold(fg_mask, 200, 255, cv2.THRESH_BINARY)
+
+        # Second pass: HSV-based shadow removal for remaining shadows
+        hsv_filtered = self._remove_shadows_hsv(frame, binary_filtered)
+
+        return hsv_filtered
+
     def update_settings(
         self,
         sensitivity: Optional[int] = None,
@@ -220,6 +318,11 @@ class MotionDetector:
         detection_zones: Optional[str] = None,
         lighting_compensation: Optional[bool] = None,
         brightness_change_threshold: Optional[int] = None,
+        shadow_detection_method: Optional[str] = None,
+        erosion_iterations: Optional[int] = None,
+        dilation_iterations: Optional[int] = None,
+        motion_persistence_frames: Optional[int] = None,
+        use_grayscale: Optional[bool] = None,
     ):
         """
         Updates motion detection settings dynamically.
@@ -232,6 +335,11 @@ class MotionDetector:
             detection_zones: New detection zones JSON
             lighting_compensation: Enable/disable lighting compensation
             brightness_change_threshold: Threshold for detecting lighting changes (1-50)
+            shadow_detection_method: Shadow removal method ('binary', 'hsv', 'dual')
+            erosion_iterations: Custom erosion iterations
+            dilation_iterations: Custom dilation iterations
+            motion_persistence_frames: Frames to maintain motion state
+            use_grayscale: Convert to grayscale before processing
         """
         if sensitivity is not None:
             self.sensitivity = max(1, min(10, sensitivity))
@@ -240,8 +348,29 @@ class MotionDetector:
 
         if noise_reduction is not None:
             noise_reduction = noise_reduction.lower()
-            self.blur_kernel, self.morph_iterations = self.NOISE_REDUCTION_MAP.get(
+            self.blur_kernel, default_erode, default_dilate = self.NOISE_REDUCTION_MAP.get(
                 noise_reduction, self.NOISE_REDUCTION_MAP["medium"])
+            # Only update iterations if not explicitly set
+            if erosion_iterations is None:
+                self.erosion_iterations = default_erode
+            if dilation_iterations is None:
+                self.dilation_iterations = default_dilate
+
+        if erosion_iterations is not None:
+            self.erosion_iterations = max(0, erosion_iterations)
+
+        if dilation_iterations is not None:
+            self.dilation_iterations = max(0, dilation_iterations)
+
+        if shadow_detection_method is not None:
+            if shadow_detection_method in self.SHADOW_DETECTION_METHODS:
+                self.shadow_detection_method = shadow_detection_method
+
+        if motion_persistence_frames is not None:
+            self.motion_persistence_frames = max(0, motion_persistence_frames)
+
+        if use_grayscale is not None:
+            self.use_grayscale = use_grayscale
 
         # Note: var_threshold and detect_shadows require recreating the
         # background subtractor
@@ -268,6 +397,12 @@ class MotionDetector:
         """
         Detects motion in a given frame with lighting change compensation.
 
+        v3.5.7 Enhancements:
+        - Grayscale-first processing for better performance
+        - Dual shadow removal (binary + HSV)
+        - Separate erosion/dilation controls
+        - Motion persistence/cooldown
+
         Args:
             frame: The video frame to process (numpy array)
 
@@ -277,19 +412,29 @@ class MotionDetector:
             - A boolean indicating if motion was detected
             - A list of motion areas with bounding boxes and areas
         """
-        # Check for sudden lighting change
-        lighting_change_detected = self._detect_lighting_change(frame)
+        # Store original frame for drawing (we'll process a grayscale version)
+        original_frame = frame.copy()
 
-        # Adjust learning rate based on lighting conditions
+        # STEP 1: PRE-PROCESSING - Convert to grayscale first for better performance
+        if self.use_grayscale:
+            # Convert to grayscale before any processing
+            gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            # Apply blur to grayscale
+            blurred_frame = cv2.GaussianBlur(gray_frame, self.blur_kernel, 0)
+        else:
+            # Original color-based processing
+            blurred_frame = cv2.GaussianBlur(frame, self.blur_kernel, 0)
+
+        # Check for sudden lighting change
+        lighting_change_detected = self._detect_lighting_change(original_frame)
+
+        # STEP 2: BACKGROUND SUBTRACTION - Adjust learning rate based on lighting conditions
         if lighting_change_detected:
             # Fast adaptation during lighting changes
             learning_rate = self.fast_learning_rate
         else:
             # Normal learning rate
             learning_rate = self.base_learning_rate
-
-        # Apply blur based on noise reduction setting
-        blurred_frame = cv2.GaussianBlur(frame, self.blur_kernel, 0)
 
         # Apply background subtraction with adaptive learning rate
         fg_mask = self.back_sub.apply(blurred_frame, learningRate=learning_rate)
@@ -303,15 +448,24 @@ class MotionDetector:
             )
             fg_mask = cv2.bitwise_and(fg_mask, fg_mask, mask=resized_mask)
 
-        # Remove shadows (they appear as gray in MOG2 with detectShadows=True)
-        # Shadow pixels typically have value 127, we want to treat them as background
-        _, fg_mask = cv2.threshold(fg_mask, 200, 255, cv2.THRESH_BINARY)
+        # STEP 3: SHADOW REMOVAL - Use configured method
+        if self.shadow_detection_method == "binary":
+            # Original binary threshold method (fastest)
+            _, fg_mask = cv2.threshold(fg_mask, 200, 255, cv2.THRESH_BINARY)
+        elif self.shadow_detection_method == "hsv":
+            # HSV-based shadow removal (more accurate)
+            fg_mask = self._remove_shadows_hsv(original_frame, fg_mask)
+        elif self.shadow_detection_method == "dual":
+            # Dual method (best of both worlds)
+            fg_mask = self._remove_shadows_dual(original_frame, fg_mask)
 
-        # Clean up the mask with configurable iterations
-        fg_mask = cv2.erode(fg_mask, None, iterations=self.morph_iterations)
-        fg_mask = cv2.dilate(fg_mask, None, iterations=self.morph_iterations)
+        # STEP 4: MORPHOLOGICAL OPERATIONS - Clean up the mask with separate erosion/dilation
+        if self.erosion_iterations > 0:
+            fg_mask = cv2.erode(fg_mask, None, iterations=self.erosion_iterations)
+        if self.dilation_iterations > 0:
+            fg_mask = cv2.dilate(fg_mask, None, iterations=self.dilation_iterations)
 
-        # Find contours of moving objects
+        # STEP 5: CONTOUR DETECTION - Find contours of moving objects
         contours, _ = cv2.findContours(
             fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
         )
@@ -335,12 +489,12 @@ class MotionDetector:
             motion_areas.append({"x": int(x), "y": int(
                 y), "w": int(w), "h": int(h), "area": int(area)})
 
-            # Draw bounding box on frame
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            # Draw bounding box on original frame
+            cv2.rectangle(original_frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
             # Optionally draw area text
             cv2.putText(
-                frame,
+                original_frame,
                 f"{area}px",
                 (x, y - 5),
                 cv2.FONT_HERSHEY_SIMPLEX,
@@ -349,7 +503,7 @@ class MotionDetector:
                 1,
             )
 
-        # Apply temporal filtering to reduce flicker false positives
+        # STEP 6: TEMPORAL FILTERING - Apply temporal filter to reduce flicker
         # BUT: Skip temporal filter during lighting changes to allow fast reset
         if not lighting_change_detected:
             motion_detected = self._apply_temporal_filter(motion_detected)
@@ -360,7 +514,16 @@ class MotionDetector:
             motion_detected = False
             motion_areas = []
 
-        return frame, motion_detected, motion_areas
+        # STEP 7: MOTION PERSISTENCE - Implement cooldown to prevent rapid on/off flickering
+        if motion_detected:
+            # Reset cooldown when motion is detected
+            self.motion_cooldown_counter = self.motion_persistence_frames
+        elif self.motion_cooldown_counter > 0:
+            # Maintain motion state during cooldown period
+            self.motion_cooldown_counter -= 1
+            motion_detected = True  # Keep motion active during cooldown
+
+        return original_frame, motion_detected, motion_areas
 
     def get_settings(self) -> Dict:
         """
@@ -373,9 +536,13 @@ class MotionDetector:
             "sensitivity": self.sensitivity,
             "min_contour_area": self.min_contour_area,
             "blur_kernel": self.blur_kernel,
-            "morph_iterations": self.morph_iterations,
+            "erosion_iterations": self.erosion_iterations,
+            "dilation_iterations": self.dilation_iterations,
             "has_detection_zones": self.detection_mask is not None,
             "lighting_compensation": self.lighting_compensation,
             "brightness_change_threshold": self.brightness_change_threshold,
             "temporal_filter_enabled": self.temporal_filter_enabled,
+            "shadow_detection_method": self.shadow_detection_method,
+            "motion_persistence_frames": self.motion_persistence_frames,
+            "use_grayscale": self.use_grayscale,
         }

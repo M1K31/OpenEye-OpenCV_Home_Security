@@ -432,13 +432,20 @@ def get_face_statistics(
     current_user: user_schema.User = Depends(get_current_active_user),
 ):
     """
-    Get face recognition statistics
+    Get face recognition statistics (cached for 2 minutes)
 
     **Authentication Required**: Any authenticated user
+    **Performance**: Results are cached for 2 minutes
     """
     try:
-        face_manager = get_face_manager()
-        stats = face_manager.get_statistics()
+        from backend.core.performance import timed_lru_cache
+
+        @timed_lru_cache(seconds=120, maxsize=4)
+        def _get_cached_stats():
+            face_manager = get_face_manager()
+            return face_manager.get_statistics()
+
+        stats = _get_cached_stats()
 
         return face_schema.FaceStatistics(
             total_people=stats.get("total_people", 0),

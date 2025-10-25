@@ -70,9 +70,9 @@ const ClusterDetailModal = ({ clusterId, onClose, onAssignName }) => {
 
   const getImageUrl = (snapshotPath) => {
     if (!snapshotPath) return '/placeholder-face.png';
-    return snapshotPath.startsWith('http')
-      ? snapshotPath
-      : `/api${snapshotPath}`;
+    if (snapshotPath.startsWith('http')) return snapshotPath;
+    if (snapshotPath.startsWith('/')) return snapshotPath;
+    return `/data/snapshots/${snapshotPath}`;
   };
 
   return (

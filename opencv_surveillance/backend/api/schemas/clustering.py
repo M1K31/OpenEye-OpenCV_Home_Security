@@ -102,6 +102,8 @@ class AssignNameResponse(BaseModel):
     success: bool
     message: str
     faces_updated: int
+    images_copied: Optional[int] = Field(None, description="Number of face images copied to person folder")
+    person_created: Optional[bool] = Field(None, description="Whether person was created in AI & Faces")
 
 
 class MergeClustersRequest(BaseModel):
@@ -121,6 +123,7 @@ class MergeClustersResponse(BaseModel):
 class DeleteClusterRequest(BaseModel):
     """Schema for deleting cluster"""
     reassign_unknown: bool = Field(True, description="Reassign faces to Unknown")
+    delete_faces: bool = Field(False, description="Permanently delete face detection events (for test data)")
 
 
 class DeleteClusterResponse(BaseModel):
@@ -128,6 +131,7 @@ class DeleteClusterResponse(BaseModel):
     success: bool
     message: str
     faces_affected: int
+    faces_deleted: bool = Field(False, description="Whether face events were permanently deleted")
 
 
 class ClusterStatistics(BaseModel):

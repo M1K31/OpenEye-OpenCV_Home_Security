@@ -1,0 +1,63 @@
+# Media files (critical - prevents bloat)
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.webp
+*.bmp
+recordings/
+snapshots/
+data/
+
+# Development files
+venv/
+.venv/
+node_modules/
+.git/
+.github/
+__pycache__/
+*.pyc
+.pytest_cache/
+.vite/
+
+# Documentation (not needed in image)
+docs/development/
+docs/archived-releases/
+archives/
+*.md
+!README.md
+
+# IDE and system
+.vscode/
+.idea/
+.DS_Store
+
+# Logs and temp
+logs/
+*.log
+*.tmp
+
+# Test files
+test_*.py
+*_test.py
+tests/
+test-data/
+
+# Environment files (should be passed at runtime)
+.env
+.env.local
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Database files (should use volumes)
+*.db
+*.db-journal
+*.sqlite
+surveillance.db

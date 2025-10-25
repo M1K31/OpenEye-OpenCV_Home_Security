@@ -130,6 +130,10 @@ html.aquasecurity-theme .nav-item.active {
   padding: 16px;
   border-top: 1px solid var(--border-panel);
   background: rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
 }
 
 html.aquasecurity-theme .sidebar-footer {
@@ -142,6 +146,7 @@ html.aquasecurity-theme .sidebar-footer {
   flex-direction: column;
   align-items: center;
   gap: var(--spacing-xs, 4px); /* 8pt grid aligned */
+  width: 100%;
 }
 
 .version-label {

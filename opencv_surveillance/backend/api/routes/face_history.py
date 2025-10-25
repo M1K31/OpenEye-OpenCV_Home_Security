@@ -9,10 +9,11 @@ Provides endpoints for querying historical face detection data
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from backend.database.session import SessionLocal
-from backend.database import crud
+from backend.database import crud, models
+from backend.core.performance import paginate, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -75,47 +76,51 @@ def get_db():
 @router.get("/history/detections",
             response_model=FaceDetectionListResponse)
 def get_detection_history(
-        camera_id: Optional[str] = Query(
-            None,
-            description="Filter by camera ID"),
-    person_name: Optional[str] = Query(
-            None,
-            description="Filter by person name"),
-        hours: int = Query(
-            24,
-            description="Number of hours to look back"),
-        skip: int = Query(
-            0,
-            ge=0,
-            description="Number of detections to skip"),
-        limit: int = Query(
-            50,
-            description="Maximum number of results",
-            le=500),
-        db: Session = Depends(get_db),
+    camera_id: Optional[str] = Query(None, description="Filter by camera ID"),
+    person_name: Optional[str] = Query(None, description="Filter by person name"),
+    hours: int = Query(24, description="Number of hours to look back"),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description="Items per page"),
+    db: Session = Depends(get_db),
 ):
     """
-    Get recent face detection events with optional filters
+    Get recent face detection events with optional filters and pagination
+
+    Performance optimizations:
+    - Uses indexed queries on camera_id/person_name and detected_at
+    - Paginated results (default 50, max 1000)
+    - Efficient sorting by detection time
 
     - **camera_id**: Optional camera ID to filter by
     - **person_name**: Optional person name to filter by
     - **hours**: Number of hours to look back (default: 24)
-    - **limit**: Maximum number of results (default: 50, max: 500)
+    - **page**: Page number (default: 1)
+    - **page_size**: Items per page (default: 50, max: 1000)
     """
     try:
-        # Import models for count query
-        from backend.database import models
-        
         # Get total count before filtering
         total_count = db.query(models.FaceDetectionEvent).count()
-        
-        events = crud.get_recent_face_detections(
-            db=db,
-            camera_id=camera_id,
-            person_name=person_name,
-            limit=limit,
-            hours=hours,
-        )
+
+        # Build query with filters
+        query = db.query(models.FaceDetectionEvent)
+
+        # Time filter
+        cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+        query = query.filter(models.FaceDetectionEvent.detected_at >= cutoff_time)
+
+        # Camera filter (uses idx_face_camera_time index)
+        if camera_id:
+            query = query.filter(models.FaceDetectionEvent.camera_id == camera_id)
+
+        # Person filter (uses idx_face_person_time index)
+        if person_name:
+            query = query.filter(models.FaceDetectionEvent.person_name == person_name)
+
+        # Order by most recent
+        query = query.order_by(models.FaceDetectionEvent.detected_at.desc())
+
+        # Apply pagination
+        events, filtered_count, total_pages = paginate(query, page=page, page_size=page_size)
 
         # Format response
         results = []
@@ -138,15 +143,16 @@ def get_detection_history(
                 )
             )
 
-        filtered_count = len(results)
+        # Calculate skip for backward compatibility
+        skip = (page - 1) * page_size
 
         return FaceDetectionListResponse(
             detections=results,
             total=total_count,
             filtered=filtered_count,
-            limit=limit,
+            limit=page_size,
             skip=skip,
-            has_more=(skip + limit) < filtered_count
+            has_more=page < total_pages
         )
 
     except Exception as e:

@@ -1,6 +1,6 @@
-# OpenEye - Advanced Home Security with OpenCV & AI Face Recognition
+# OpenEye - AI-Powered Home Security with OpenCV & Face Recognition
 
-![Version](https://img.shields.io/badge/version-3.5.6-blue.svg)
+![Version](https://img.shields.io/badge/version-3.6.1-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![OpenCV](https://img.shields.io/badge/OpenCV-4.8+-red.svg)
 ![License](https://img.shields.io/badge/license-MIT-yellow.svg)
@@ -19,134 +19,98 @@ A **100% free and open-source** AI-powered surveillance system using **OpenCV** 
 - ✅ **No sign-ups required** - All cloud services are optional
 - ✅ **Open source** - Inspect and modify all code
 - ✅ **Self-hosted** - Your data stays on your hardware
-- ✅ **No AI API costs** - Uses free local face recognition
+- ✅ **No AI API costs** - Uses free local face recognition (dlib)
 
 ---
 
 ## 🎯 Why OpenEye?
 
 **OpenEye leverages OpenCV's full power** for advanced computer vision:
-- ✨ **True OpenCV Implementation** - Direct use of OpenCV algorithms, not Motion
-- 🧠 **AI Face Recognition** - dlib-based detection and recognition
+- ✨ **True OpenCV Implementation** - Direct use of OpenCV algorithms
+- 🧠 **AI Face Recognition** - dlib-based detection and recognition with clustering
 - 🎥 **Real-time Processing** - Efficient video stream analysis
 - 🏠 **Self-Hosted** - Complete control over your data
-- 🚀 **Modern Stack** - FastAPI + React
+- 🚀 **Modern Stack** - FastAPI + React with WebSockets
 - 📊 **Rich Analytics** - Historical tracking and statistics
-- 🎨 **Beautiful UI** - 8 customizable superhero themes
+- 🎨 **Beautiful UI** - 9 customizable themes with 8pt grid design
 
 ---
 
-## 🆕 Recent Updates (v3.5.3 - Oct 2025)
+## ✨ Key Features
 
-### Stability Improvements
-- ✅ **Process Cleanup** - Fixed orphaned processes after shutdown
-  - Complete 7-step graceful shutdown sequence
-  - Proper thread cleanup in facial recognition and cloud storage
-  - Signal handlers for SIGINT/SIGTERM
-  - All processes now exit cleanly without force quit
-
-- ✅ **Database Initialization** - Fixed crash on first run with fresh database
-  - Proper initialization sequence: Create DB → Load settings → Mount directories
-  - No more `OperationalError: no such table` on fresh installs
-  - Static files mounted with correct user-configured paths
-
-- ✅ **Session Management** - Enhanced login and session handling
-  - Fixed OAuth2 authentication format (proper urlencoded)
-  - Session expired modal now matches app theme
-  - Improved error handling and user feedback
-
----
-
-## ✨ Features
-
-### Core Surveillance (v3.0+)
-- 🎥 **Multi-Camera Support** - RTSP, USB, network cameras
+### Core Surveillance
+- 🎥 **Multi-Camera Support** - RTSP, USB, network cameras with auto-discovery
 - 👁️ **Motion Detection** - OpenCV MOG2 background subtraction
-- 📹 **Auto Recording** - Motion-triggered video capture with metadata
+- 📹 **Auto Recording** - Motion-triggered H.264 video with metadata
 - 🎬 **Live Streaming** - MJPEG streams with real-time overlays
-- 👤 **Face Recognition** - AI-powered identification
-- 📊 **Detection History** - Track all events with timestamps
-- 💾 **Database** - SQLite or PostgreSQL storage
+- 👤 **Face Recognition** - AI-powered identification with confidence scores
+- 🧠 **Face Clustering** - DBSCAN-based grouping of unknown faces
+- 📊 **Timeline View** - Interactive playback with event markers
+- 💾 **Dual Database** - SQLite (development) or PostgreSQL (production)
 
-### Camera Discovery (v3.1.0+)
-- 🔍 **USB Auto-Detection** - Scans and tests USB webcams
-- 🌐 **Network Scanning** - Discovers RTSP/IP cameras on local network
-- ⚡ **One-Click Setup** - Quick-add discovered cameras
-- ✅ **Pre-Add Testing** - Validate before adding to system
-- 🎛️ **Smart Configuration** - Auto-detect resolution/FPS
-
-### User Interface (v3.1.0+)
-- 🎨 **8 Superhero Themes** - Superman, Batman, Wonder Woman, Flash, Aquaman, Cyborg, Green Lantern, Default
+### User Interface
+- 🎨 **9 Themes** - Superman, Batman, Wonder Woman, Flash, Aquaman, Cyborg, Green Lantern, Aqua Security, Default
 - ❓ **Integrated Help System** - 36+ context-sensitive help entries
 - 🎯 **First-Run Wizard** - Easy setup for new installations
 - 📱 **Responsive Design** - Works on desktop, tablet, mobile
-- 🔐 **Multi-User Support** - Admin, User, Viewer roles
+- 🔐 **Multi-User Support** - Admin, User, Viewer roles with JWT authentication
+- ⚡ **Optimized Performance** - React code splitting, lazy loading, 77% smaller bundle size
 
-### System Configuration (v3.5.1+)
-- ⚙️ **System Settings Page** - Comprehensive configuration interface
-- 📁 **Custom Storage Paths** - Configure recording and face image directories
-- ✅ **Path Validation** - Verify paths with auto-creation support
-- 🖼️ **Display Modes** - Grid, Vertical, Horizontal, or Auto-Cycle layouts
-- 🎛️ **Granular Camera Controls** - Per-camera motion/recording/face detection toggles
-- ⏱️ **Recording Settings** - Configurable duration and cycle intervals
-- 💾 **Persistent Settings** - All settings saved to database
+### Security
+- 🔐 **Two-Factor Authentication** - TOTP-based 2FA with QR code setup
+- 🛡️ **Rate Limiting** - Per-endpoint rate limits with category-based controls
+- 🔒 **CSRF Protection** - Double-submit cookie pattern (optional)
+- 📝 **Audit Logging** - Comprehensive security event tracking (42 event types)
+- 🔐 **Encrypted Credentials** - Fernet encryption for notification provider secrets
+- 🚫 **SQL Injection Protection** - Request validation middleware
 
-### Notifications (Phase 3)
+### Notifications & Alerts
 - 📧 **Email Alerts** - SMTP notifications (FREE with Gmail)
-- 📱 **SMS Alerts** - Twilio or Telegram Bot (Telegram is FREE!)
-- 🔔 **Push Notifications** - Firebase or ntfy.sh (ntfy.sh is FREE!)
-- 🪝 **Webhooks** - Custom integrations
+- 📱 **SMS Alerts** - Twilio integration
+- 💬 **Telegram Bot** - FREE push notifications
+- 🌐 **Discord/Webhooks** - Custom integrations
+- 🔔 **FCM Push** - Firebase Cloud Messaging
 - ⏱️ **Smart Throttling** - Prevent notification spam
 
-### Smart Home Integration (Phase 4)
+### Smart Home Integration
 - 🏠 **Home Assistant** - MQTT integration (FREE!)
 - 🍎 **HomeKit** - Apple HomeKit bridge (FREE!)
-- 🏡 **Google Nest** - Nest integration
-- ⚙️ **Automation** - Trigger smart home devices on events
+- ⚙️ **Automation Engine** - Person-based triggers and rules
+- 🪝 **Webhook System** - RESTful integrations
 
-### Cloud & Storage (Phase 5)
-- ☁️ **Cloud Storage** - AWS S3, Google Cloud, Azure, or MinIO (FREE!)
+### Cloud & Storage
+- ☁️ **Cloud Storage** - AWS S3, Google Cloud, Azure, MinIO (FREE!)
 - 🗄️ **Automatic Cleanup** - Configurable retention policies
 - 📈 **Storage Analytics** - Monitor disk usage
 - 🔄 **Backup Options** - Multiple storage backends
-
-### Advanced Features (Phase 6)
-- 🎬 **Recording Management** - Search, download, stream recordings
-- 📊 **Advanced Analytics** - Hourly/daily activity reports
-- 👥 **Multi-User System** - Role-based access control
-- 🛡️ **Security Hardening** - Rate limiting, SQL injection protection
-- 🗃️ **PostgreSQL Support** - Production-ready database
-- 🐳 **Docker Ready** - Easy containerized deployment
 
 ---
 
 ## 🚀 Quick Start
 
-### Option 1: Docker (Recommended)
+### Option 1: Docker (Recommended for Production)
 
-#### 1. Generate Security Keys
-
-**REQUIRED**: Generate secure random keys before running:
+**One-command deployment** with Docker Compose:
 
 ```bash
-# Mac/Linux
-openssl rand -hex 32  # Copy this as SECRET_KEY
-openssl rand -hex 32  # Copy this as JWT_SECRET_KEY
-
-# Windows PowerShell
-[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Minimum 0 -Maximum 256 }))
-
-# Python (all platforms)
-python -c "import secrets; print(secrets.token_hex(32))"
+# Pull and run
+docker run -d \
+  -p 8000:8000 \
+  -v ./data:/app/data \
+  -v ./recordings:/app/recordings \
+  -v ./faces:/app/faces \
+  -e SECRET_KEY=$(openssl rand -hex 32) \
+  -e JWT_SECRET_KEY=$(openssl rand -hex 32) \
+  -e NOTIFICATION_ENCRYPTION_KEY=$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())") \
+  --restart unless-stopped \
+  --name openeye \
+  im1k31s/openeye-opencv_home_security:latest
 ```
 
-#### 2. Create Docker Compose File
-
-Create `docker-compose.yml`:
+**Or use Docker Compose** (see [DOCKER.md](DOCKER.md) for full guide):
 
 ```yaml
 version: '3.8'
-
 services:
   openeye:
     image: im1k31s/openeye-opencv_home_security:latest
@@ -158,103 +122,67 @@ services:
       - ./recordings:/app/recordings
       - ./faces:/app/faces
     environment:
-      - SECRET_KEY=your_generated_secret_key_here
-      - JWT_SECRET_KEY=your_generated_jwt_secret_here
-      - ALGORITHM=HS256
-      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+      - SECRET_KEY=${SECRET_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - NOTIFICATION_ENCRYPTION_KEY=${NOTIFICATION_ENCRYPTION_KEY}
     restart: unless-stopped
 ```
 
-#### 3. Start OpenEye
+Then run: `docker-compose up -d`
 
-```bash
-docker-compose up -d
-```
-
-#### 4. Access the Application
-
-Open your browser to: **http://localhost:8000**
-
-Follow the first-run setup wizard to create your admin account.
+**Access**: http://localhost:8000
 
 ---
 
-### Option 2: Local Installation (Automated)
+### Option 2: Local Installation (Automated Setup)
 
-**🚀 NEW**: Use our automated installation script for a one-command setup!
+**NEW**: One-command automated installation with `setup-production.sh`
 
 #### Prerequisites
-
-- Python 3.8+ (Python 3.12+ recommended)
-- Node.js 16+ and npm (for frontend)
+- Python 3.9+ (3.11+ recommended)
+- Node.js 16+ and npm
 - Git
-- macOS or Linux
 
-#### Automated Installation
+#### Installation
 
 ```bash
 # Clone repository
 git clone https://github.com/M1K31/OpenEye-OpenCV_Home_Security.git
-cd OpenEye-OpenCV_Home_Security/opencv_surveillance
+cd OpenEye-OpenCV_Home_Security
 
-# Run the installation script
-./scripts/install-local.sh
+# Run automated setup (creates venv, installs deps, generates keys, builds frontend)
+./setup-production.sh
+
+# Start the server
+./start-local.sh
 ```
 
-The script will:
-- ✅ Check Python version and system dependencies
-- ✅ Install required system packages (OpenCV, CMake, etc.)
-- ✅ Create Python virtual environment
-- ✅ Install all Python dependencies
-- ✅ Generate secure secret keys automatically
-- ✅ Create configuration files (.env)
-- ✅ Build frontend (if Node.js installed)
-- ✅ Create launch scripts (start.sh, stop.sh)
-- ✅ Optionally create systemd service (Linux)
+**The setup script automatically**:
+- ✅ Creates virtual environment
+- ✅ Installs all dependencies
+- ✅ **Generates all secret keys automatically** (no manual steps!)
+- ✅ Runs database migrations
+- ✅ Builds frontend production bundle
+- ✅ Creates required directories
+- ✅ Verifies installation
 
-#### Starting OpenEye
+**Access**: http://localhost:8000
+
+#### Management Commands
 
 ```bash
-# After installation, simply run:
-./start.sh
-
-# Or manually:
-source venv/bin/activate
-python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
-
-# Stop the server:
-./stop.sh
-# Or press Ctrl+C in the terminal
+./start-local.sh          # Start server (graceful shutdown on Ctrl+C)
+./stop-server.sh          # Gracefully stop server
+./kill-server.sh          # Force kill server (emergency)
+./uninstall.sh            # Complete removal with backup options
 ```
-
-Access at: **http://localhost:8000**
 
 ---
 
-### Developer & Maintenance Tools
-
-- **Audit Tool (Phase Verification)**: A lightweight auditor is included at `opencv_surveillance/scripts/audit-system.py`. Run it from the `opencv_surveillance` folder to verify backend classes, methods, and Phase 2/3 compliance. It helps identify naming mismatches and missing APIs.
-
-```bash
-cd opencv_surveillance
-python3 scripts/audit-system.py
-```
-
-- **Token Refresh UX**: The frontend includes an automatic token refresh flow. When a request fails with 401 due to an expired JWT the UI will show an inline "Session Expired" modal asking the user to re-authenticate. After a successful login the original request is retried automatically so the user keeps their current state.
-
-> Quick recovery: If the session modal fails, see the "Troubleshooting: Session & Token Refresh" section in the API docs (`opencv_surveillance/docs/API_DOCUMENTATION.md`) or the User Guide (`opencv_surveillance/docs/USER_GUIDE.md`).
-
-
 ### Option 3: Manual Installation (Advanced)
 
-If you prefer manual control or the script doesn't work for your system:
-
-#### Prerequisites
-
-- Python 3.8+
-- Node.js 16+ and npm
-- CMake (for dlib)
-- Git
+<details>
+<summary>Click to expand manual installation steps</summary>
 
 #### System Dependencies
 
@@ -270,508 +198,240 @@ sudo apt-get update && sudo apt-get install -y \
 
 **macOS:**
 ```bash
-# Install Homebrew if not installed
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# Install dependencies
-brew install opencv pkg-config cmake python@3.12
+brew install opencv pkg-config cmake python@3.11
 ```
 
 #### Installation Steps
 
 ```bash
-# Clone repository
+# Clone and navigate
 git clone https://github.com/M1K31/OpenEye-OpenCV_Home_Security.git
 cd OpenEye-OpenCV_Home_Security/opencv_surveillance
 
 # Create virtual environment
 python3 -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+source venv/bin/activate
 
-# Upgrade pip and install Python dependencies
+# Install dependencies
 pip install --upgrade pip setuptools wheel
 pip install -r requirements.txt
 
-# Create required directories
-mkdir -p data/faces data/thumbnails models/face_detection_model
+# Generate secret keys
+python3 -c "import secrets; print('SECRET_KEY=' + secrets.token_hex(32))" > .env
+python3 -c "import secrets; print('JWT_SECRET_KEY=' + secrets.token_hex(32))" >> .env
+python3 -c "from cryptography.fernet import Fernet; print('NOTIFICATION_ENCRYPTION_KEY=' + Fernet.generate_key().decode())" >> .env
 
-# Generate secret keys and create .env file
-JWT_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
-ADMIN_TOKEN=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
-
-# Create .env file
-cat > .env << EOF
-# Security Keys - KEEP THESE SECRET!
-JWT_SECRET_KEY=$JWT_SECRET
-ADMIN_TOKEN=$ADMIN_TOKEN
-
-# Database
+# Add default config to .env
+cat >> .env << EOF
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
 DATABASE_URL=sqlite:///./surveillance.db
-
-# Server Configuration
-HOST=0.0.0.0
-PORT=8000
-
-# CORS Settings
-CORS_ORIGINS=http://localhost:8000,http://localhost:3000
-
-# Feature Flags
-ENABLE_MOTION_DETECTION=true
-ENABLE_FACE_RECOGNITION=true
-ENABLE_RECORDING=true
-
-# Logging
+CORS_ORIGINS=http://localhost:8000
 LOG_LEVEL=INFO
 EOF
 
-# Install frontend dependencies and build (optional but recommended)
+# Build frontend
 cd frontend
 npm install
 npm run build
 cd ..
 
-# Start the application
-python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+# Start server
+uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Access at: **http://localhost:8000**
-
-#### Important Notes
-
-1. **Always activate venv**: Run `source venv/bin/activate` before starting the server
-2. **Keep .env secure**: Never commit this file to version control
-3. **Change admin password**: On first login, change the default admin credentials
-4. **Regular backups**: Backup your `surveillance.db` file regularly
-
-**🚀 Production Setup (Linux):** For running OpenEye as a system service with auto-start and auto-restart, see [Linux Systemd Service Guide](opencv-surveillance/docs/LINUX_SYSTEMD_SERVICE.md)
+</details>
 
 ---
 
-## 📚 Documentation
+## 📖 Documentation
 
-### Quick Links
-- 📖 [Installation Guide](#quick-start)
-- 🐧 [Linux Systemd Service](opencv-surveillance/docs/LINUX_SYSTEMD_SERVICE.md) - Run as system service
-- 🔄 [Docker vs Linux Comparison](DOCKER_VS_LINUX_INSTALLATION_ANALYSIS.md) - Feature parity analysis
-- 🎨 [Theme System](#themes)
-- 🎥 [Camera Setup](#camera-setup)
-- 👤 [Face Management](#face-management)
-- 🔔 [Notification Setup](#notifications)
-- 🏠 [Smart Home Integration](#smart-home)
-- 🐛 [Troubleshooting](#troubleshooting)
-- 🗑️ [Uninstall Guide](opencv-surveillance/docs/UNINSTALL_GUIDE.md)
-- 📚 [Full User Guide](opencv-surveillance/docs/USER_GUIDE.md)
-- 🔧 [API Reference (Old)](opencv-surveillance/docs/api_reference.md)
-- **🚀 [API Documentation (NEW)](opencv-surveillance/docs/API_DOCUMENTATION.md)** ⭐
-- 📊 [Statistics Polling Alternatives](STATISTICS_POLLING_ALTERNATIVES.md) - WebSockets guide
-- 📝 [Release Notes v3.3.8](RELEASE_NOTES_v3.3.8.md)
-- 📝 [Changelog](CHANGELOG.md)
+### User Documentation
+- 📘 **[User Guide](opencv_surveillance/docs/USER_GUIDE.md)** - Complete usage instructions
+- 🔧 **[Setup Guide](opencv_surveillance/docs/setup_guide.md)** - Smart home integrations
+- 🗑️ **[Uninstall Guide](opencv_surveillance/docs/UNINSTALL_GUIDE.md)** - Safe removal instructions
 
----
+### Technical Documentation
+- 🔌 **[API Reference](opencv_surveillance/docs/API_DOCUMENTATION.md)** - Complete API documentation
+- ⚡ **[WebSocket Implementation](opencv_surveillance/docs/WEBSOCKET_IMPLEMENTATION.md)** - Real-time updates
+- 🐧 **[Systemd Service](opencv_surveillance/docs/LINUX_SYSTEMD_SERVICE.md)** - Production deployment
+- 🔧 **[Quick Reference](docs/QUICK_REFERENCE.md)** - Common tasks
 
-## 🎥 Camera Setup
-
-### Supported Camera Types
-
-| Type | Example | macOS Docker | Linux/Native |
-|------|---------|--------------|--------------|
-| **RTSP/IP Cameras** | `rtsp://192.168.1.100:554/stream` | ✅ | ✅ |
-| **USB Webcams** | `/dev/video0` or index `0` | ⚠️ Limited | ✅ |
-| **ONVIF Cameras** | Auto-discovered | ✅ | ✅ |
-| **Mock (Testing)** | Built-in test camera | ✅ | ✅ |
-
-⚠️ **macOS Docker Limitation**: USB cameras have limited support in Docker on macOS. Use network/IP cameras or run natively.
-
-### Adding Cameras
-
-#### Method 1: Auto-Discovery (Recommended)
-
-1. Navigate to **Camera Management**
-2. Click **Discovery** tab
-3. Select **USB** or **Network** scan
-4. Click **Quick Add** on discovered cameras
-
-#### Method 2: Manual Configuration
-
-1. Navigate to **Camera Management**
-2. Click **Manual** tab
-3. Fill in camera details:
-   - **Camera ID**: Unique identifier (e.g., `front_door`)
-   - **Name**: Friendly name
-   - **Type**: RTSP or Mock
-   - **Source**: RTSP URL or device path
-4. Click **Add Camera**
-
-### Common RTSP URLs
-
-```
-# Hikvision
-rtsp://admin:password@192.168.1.100:554/Streaming/Channels/101
-
-# Dahua
-rtsp://admin:password@192.168.1.100:554/cam/realmonitor?channel=1&subtype=0
-
-# Amcrest
-rtsp://admin:password@192.168.1.100:554/cam/realmonitor?channel=1&subtype=1
-
-# Reolink
-rtsp://admin:password@192.168.1.100:554/h264Preview_01_main
-
-# Generic
-rtsp://username:password@ip_address:port/stream_path
-```
+### Project Documentation
+- 🐞 **[FIXES.md](FIXES.md)** - Complete fix history
+- ✅ **[TODO.md](TODO.md)** - Project roadmap and planned features
+- 📝 **[CHANGELOG.md](CHANGELOG.md)** - Version history
+- 👨‍💻 **[CLAUDE.md](CLAUDE.md)** - Developer guide for Claude Code
 
 ---
 
-## 👤 Face Management
+## 🎬 First-Run Setup
 
-### Adding Known Faces
+1. **Access the application**: http://localhost:8000
+2. **Create admin account**: Follow the first-run wizard
+3. **Add cameras**:
+   - Click **"Camera Discovery"** to auto-find cameras
+   - Or manually add RTSP/USB cameras
+4. **Train face recognition** (optional):
+   - Go to **"AI & Faces"** → **"Upload Faces"**
+   - Create folders for each person with 3-10 clear photos
+5. **Configure notifications** (optional):
+   - Go to **"System & Alerts"** → **"Configure Notification Providers"**
+   - Add email, SMS, Telegram, or webhook providers
 
-1. Navigate to **Face Management**
-2. Click **Upload Face**
-3. Enter person's name
-4. Upload 3-5 clear photos:
-   - Front-facing
-   - Well-lit
-   - Different expressions
-   - Various angles
-5. Click **Train Model**
-
-### Best Practices
-
-- ✅ Use high-quality, well-lit photos
-- ✅ Include multiple angles and expressions
-- ✅ Ensure face is clearly visible
-- ❌ Avoid sunglasses or masks
-- ❌ Don't use blurry or low-resolution images
+**You're ready!** View live cameras on the dashboard.
 
 ---
 
-## 🔔 Notifications
+## 🛠️ System Requirements
 
-### Email Setup (FREE with Gmail)
+### Minimum
+- **CPU**: Dual-core 2.0GHz
+- **RAM**: 2GB
+- **Storage**: 10GB + recording space
+- **OS**: Linux, macOS, Windows (WSL2)
 
-1. Navigate to **Alert Settings**
-2. Enable **Email Notifications**
-3. Configure SMTP:
-
-```
-SMTP Host: smtp.gmail.com
-SMTP Port: 587
-Username: your-email@gmail.com
-Password: your-app-password (not your regular password!)
-```
-
-**Gmail App Password**: [Generate here](https://myaccount.google.com/apppasswords)
-
-### Telegram Bot (100% FREE!)
-
-1. Create bot with [@BotFather](https://t.me/botfather)
-2. Get your Chat ID from [@userinfobot](https://t.me/userinfobot)
-3. Configure in OpenEye:
-
-```
-Bot Token: 123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
-Chat ID: 123456789
-```
-
-### Push Notifications (FREE with ntfy.sh)
-
-1. Choose a unique topic name: `openeye-alerts-yourname`
-2. Configure in OpenEye:
-
-```
-ntfy Server: https://ntfy.sh
-Topic: openeye-alerts-yourname
-```
-
-3. Subscribe on your phone: [ntfy.sh app](https://ntfy.sh/)
+### Recommended
+- **CPU**: Quad-core 2.5GHz+
+- **RAM**: 4GB+
+- **Storage**: 50GB+ SSD
+- **OS**: Ubuntu 20.04+ or macOS 11+
+- **GPU**: Optional (CUDA support for faster processing)
 
 ---
 
-## 🏠 Smart Home Integration
+## 🔐 Security (v3.6.0 Enhanced)
 
-### Home Assistant (MQTT)
+OpenEye implements multiple security layers:
+- 🔒 **JWT Authentication** - Secure token-based auth with automatic refresh
+- 🔢 **Two-Factor Authentication (2FA)** - TOTP-based 2FA with QR code setup
+- 🔑 **Password Hashing** - bcrypt with salt
+- 🛡️ **Per-Endpoint Rate Limiting** - Granular limits per API category (auth: 10/min, write: 30/min, read: 100/min)
+- 🛡️ **CSRF Protection** - Double-submit cookie pattern for state-changing requests
+- 🚫 **SQL Injection Protection** - Parameterized queries + middleware
+- 🔐 **Encrypted Credentials** - Fernet encryption for notification provider secrets
+- 📝 **Enhanced Audit Logging** - Comprehensive security event tracking (42 event types, JSONL format)
+- 🌐 **CORS Protection** - Configurable origin whitelist
 
-```yaml
-# configuration.yaml
-sensor:
-  - platform: mqtt
-    name: "Front Door Motion"
-    state_topic: "openeye/front_door/motion"
-    
-  - platform: mqtt
-    name: "Front Door Face"
-    state_topic: "openeye/front_door/face"
-
-automation:
-  - alias: "Alert on Unknown Face"
-    trigger:
-      - platform: state
-        entity_id: sensor.front_door_face
-        to: "unknown"
-    action:
-      - service: notify.mobile_app
-        data:
-          message: "Unknown person detected at front door"
-```
-
-### Apple HomeKit
-
-OpenEye exposes motion sensors and occupancy sensors to HomeKit automatically. Add in Home app:
-
-1. Open **Home** app
-2. Tap **+** → **Add Accessory**
-3. Scan QR code (displayed in OpenEye settings)
-4. Add cameras as sensors
-
----
-
-## 🎨 Themes
-
-OpenEye includes 9 unique themes:
-
-1. **Default** - Professional dark theme
-2. **Superman** - Classic red and blue
-3. **Batman** - Dark knight aesthetic
-4. **Wonder Woman** - Warrior princess
-5. **Flash** - Speed force energy
-6. **Aquaman** - Ocean depths
-7. **Cyborg** - Tech enhanced
-8. **Green Lantern** - Willpower green
-9. **Aqua Security** - Modern liquid glass with frosted transparency
-
-**To change theme**: Click **Themes** button → Select theme → Apply
-
-Themes persist across sessions and include custom animations!
-
----
-
-## 🐛 Troubleshooting
-
-### Cannot access web interface
-
-**Check if service is running:**
-```bash
-docker ps  # Should show openeye container
-curl http://localhost:8000/api/health  # Should return OK
-```
-
-**Solution**: Restart container
-```bash
-docker-compose restart
-```
-
-### Camera not connecting
-
-**Test RTSP URL:**
-```bash
-ffmpeg -i "rtsp://admin:pass@192.168.1.100:554/stream" -frames:v 1 test.jpg
-```
-
-**Common issues:**
-- Wrong credentials
-- Incorrect RTSP URL
-- Camera not on same network
-- Firewall blocking ports
-
-### Face recognition not working
-
-**Check model files:**
-```bash
-ls opencv-surveillance/models/face_detection_model/
-# Should contain: shape_predictor_68_face_landmarks.dat
-```
-
-**Solution**: Download models
-```bash
-cd opencv-surveillance/models
-./download_models.sh
-```
-
-### High CPU usage
-
-**Optimization tips:**
-- Lower camera resolution
-- Reduce FPS
-- Disable face recognition on less important cameras
-- Use motion detection zones
-
-### Database locked errors
-
-**Solution**: Switch to PostgreSQL for production
-```yaml
-environment:
-  - DATABASE_URL=postgresql://user:pass@postgres:5432/openeye
-```
-
-### Docker build fails
-
-**Common causes:**
-- Insufficient disk space
-- Network issues during dependency download
-- Out of memory
-
-**Solution**: Increase Docker resources (Settings → Resources → 4GB RAM minimum)
-
----
-
-## 🗑️ Uninstallation
-
-### Docker Cleanup
-
-```bash
-# Stop and remove containers
-docker-compose down
-
-# Remove images
-docker rmi im1k31s/openeye-opencv_home_security:latest
-
-# Remove volumes (WARNING: Deletes all data!)
-docker volume prune
-
-# Remove data directories
-rm -rf data recordings faces
-```
-
-### Manual Cleanup
-
-```bash
-# Remove application directory
-rm -rf OpenEye-OpenCV_Home_Security
-
-# Remove virtual environment
-rm -rf venv
-
-# Remove any created databases
-rm surveillance.db
-```
-
-Full uninstall guide: [opencv-surveillance/docs/UNINSTALL_GUIDE.md](opencv-surveillance/docs/UNINSTALL_GUIDE.md)
-
----
-
-## 🏗️ Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                    OpenEye System                        │
-├─────────────────────────────────────────────────────────┤
-│                                                          │
-│  Frontend (React)              Backend (FastAPI)         │
-│  ├── Dashboard                 ├── Camera Manager        │
-│  ├── Camera Mgmt               ├── Motion Detector       │
-│  ├── Face Mgmt                 ├── Face Recognition      │
-│  ├── Settings                  ├── Recorder              │
-│  └── Themes                    ├── Alert Manager         │
-│                                ├── API Routes            │
-│                                └── Database (SQLite/PG)  │
-│                                                          │
-├─────────────────────────────────────────────────────────┤
-│  External Integrations (Optional)                        │
-│  ├── Email (SMTP)                                        │
-│  ├── Telegram Bot                                        │
-│  ├── ntfy.sh Push                                        │
-│  ├── Home Assistant (MQTT)                               │
-│  ├── HomeKit Bridge                                      │
-│  └── Cloud Storage (S3/MinIO)                            │
-└─────────────────────────────────────────────────────────┘
-```
-
-**Technology Stack:**
-- **Backend**: Python 3.11, FastAPI, OpenCV, face_recognition, dlib
-- **Frontend**: React 18, Vite, React Router
-- **Database**: SQLite (default) or PostgreSQL (production)
-- **Deployment**: Docker, Docker Compose
+**Production Checklist**:
+- ✅ Change default admin password immediately
+- ✅ Use strong, unique secret keys (auto-generated by setup script)
+- ✅ Enable HTTPS with valid SSL certificate (nginx/Caddy reverse proxy)
+- ✅ Restrict CORS_ORIGINS to your domain
+- ✅ Configure firewall rules (only port 8000 or HTTPS 443)
+- ✅ Never commit .env file to version control
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Here's how you can help:
+Contributions welcome! Please:
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit changes (`git commit -m 'Add AmazingFeature'`)
+4. Push to branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/AmazingFeature`)
-3. **Commit** your changes (`git commit -m 'Add AmazingFeature'`)
-4. **Push** to the branch (`git push origin feature/AmazingFeature`)
-5. **Open** a Pull Request
+**Development Workflow**:
+```bash
+# Setup development environment
+./setup-production.sh
 
-### Development Guidelines
+# Start with hot reload
+./start-local.sh
 
-- Follow PEP 8 for Python
-- Use ESLint for JavaScript/React
-- Write tests for new features
-- Update documentation
-- Keep commits atomic and descriptive
-
-### Areas for Contribution
-
-- 🧪 Additional test coverage
-- 📝 Documentation improvements
-- 🌐 Translations/i18n
-- 🎨 New theme designs
-- 🔌 Smart home integrations
-- 📱 Mobile app development
-- 🐛 Bug fixes and performance
+# Run tests
+cd opencv_surveillance
+pytest
+```
 
 ---
 
-## 📄 License
+## 📊 Project Status
 
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+**Current Version**: 3.6.0 (Security Hardening Release)
 
-You are free to:
-- ✅ Use commercially
-- ✅ Modify
-- ✅ Distribute
-- ✅ Private use
+### Recent Updates (v3.6.0)
+- ✅ Per-endpoint rate limiting with granular API category limits
+- ✅ CSRF protection using double-submit cookie pattern
+- ✅ Two-factor authentication (2FA) infrastructure with TOTP support
+- ✅ Enhanced audit logging system (42 event types, JSONL format)
+- ✅ Comprehensive security documentation (SECURITY_GUIDE.md)
+
+### Roadmap
+See [TODO.md](TODO.md) for complete feature roadmap.
+
+**Next Up** (v3.6.0):
+- Enhanced motion detection with zones
+- Multi-camera synchronized timeline
+- Advanced analytics dashboard
+- Security hardening (per-endpoint rate limiting, CSRF protection)
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+**Port 8000 already in use**:
+```bash
+./kill-server.sh  # Force kill any hanging processes
+# Or manually: lsof -ti:8000 | xargs kill -9
+```
+
+**Database locked error**:
+```bash
+# Stop server, remove locks
+./stop-server.sh
+rm opencv_surveillance/surveillance.db-shm opencv_surveillance/surveillance.db-wal
+```
+
+**Face recognition not working**:
+- Ensure camera has good lighting
+- Upload 5-10 clear photos per person
+- Check logs: `tail -f opencv_surveillance/logs/app.log`
+
+**Frontend not loading**:
+```bash
+cd opencv_surveillance/frontend
+npm run build
+```
+
+**Complete reset** (removes all data):
+```bash
+./uninstall.sh  # Choose "No backup" option
+./setup-production.sh
+```
+
+For more help, see [User Guide](opencv_surveillance/docs/USER_GUIDE.md) or open an issue.
+
+---
+
+## 📜 License
+
+MIT License - See [LICENSE](LICENSE) for details.
+
+Copyright (c) 2025 Mikel Smart
 
 ---
 
 ## 🙏 Acknowledgments
 
-- **OpenCV** - Computer vision library powering detection and processing
-- **face_recognition** - Simple face recognition built on dlib
-- **dlib** - Machine learning toolkit for face detection
-- **FastAPI** - Modern, fast Python web framework
-- **React** - UI library for building the interface
-- **Apple Human Interface Guidelines** - Design principles inspiring the UI's 8pt grid system, 44px touch targets, and accessibility features
+Built with:
+- [OpenCV](https://opencv.org/) - Computer vision library
+- [dlib](http://dlib.net/) - Face recognition
+- [FastAPI](https://fastapi.tiangolo.com/) - Modern Python web framework
+- [React](https://reactjs.org/) - UI library
+- [SQLAlchemy](https://www.sqlalchemy.org/) - Database ORM
 
 ---
 
-## 📧 Support & Community
+## 📞 Support
 
-- 📖 **Documentation**: This README + [User Guide](opencv-surveillance/docs/USER_GUIDE.md)
-- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/discussions)
+- 📧 **Issues**: [GitHub Issues](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/issues)
+- 📖 **Documentation**: [docs/](docs/)
 - 🐳 **Docker Hub**: [im1k31s/openeye-opencv_home_security](https://hub.docker.com/r/im1k31s/openeye-opencv_home_security)
 
 ---
 
-## 🎯 Roadmap
-
-- [x] Phase 1-2: Core surveillance and face recognition
-- [x] Phase 3: Notifications and alerts
-- [x] Phase 4: Smart home integration  
-- [x] Phase 5: Cloud storage and mobile prep
-- [x] Phase 6: Advanced features and security
-- [x] v3.1.0: Camera discovery and theme system
-- [x] v3.2.0: UI/UX improvements
-- [x] v3.3.0: Critical bug fixes and stability
-- [ ] v3.4.0: Timeline playback system
-- [ ] v3.5.0: Two-way audio support
-- [ ] v4.0.0: License plate recognition (ALPR)
-- [ ] v4.1.0: Object detection (YOLO)
-- [ ] v5.0.0: Complete mobile app
-
-See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
-
----
-
-**Made with ❤️ using OpenCV and AI**
-
-*OpenEye - See clearly, secure completely. 100% Free Forever.*
-
----
-
-**⭐ If you find OpenEye useful, please star this repository!**
+**Made with ❤️ by Mikel Smart** | **100% Free Forever** | **No Subscriptions**

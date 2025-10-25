@@ -92,19 +92,31 @@ const AutomationsPage = () => {
 
   const loadKnownPeople = async () => {
     try {
+      console.log('[AutomationsPage] Loading known people...');
       const response = await apiClient.get('/faces/people');
+      console.log('[AutomationsPage] API response:', response.data);
+
       // Handle wrapped response format {people: [...], total: N}
       const peopleData = response.data?.people || response.data || [];
-      setKnownPeople(peopleData.map(face => face.name));
+      console.log('[AutomationsPage] People data:', peopleData);
+
+      // Extract names from Person objects (each has name, photo_count, path)
+      const names = Array.isArray(peopleData)
+        ? peopleData.map(person => typeof person === 'string' ? person : person.name)
+        : [];
+
+      console.log('[AutomationsPage] Extracted names:', names);
+      setKnownPeople(names);
     } catch (error) {
-      console.error('Failed to load known people:', error);
+      console.error('[AutomationsPage] Failed to load known people:', error);
+      setKnownPeople([]); // Ensure empty array on error
     }
   };
 
   const loadCameras = async () => {
     try {
       const response = await apiClient.get('/cameras/');
-      setCameras(response.data || []);
+      setCameras(response.data?.cameras || []);
     } catch (error) {
       console.error('Failed to load cameras:', error);
     }

@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.6.1] - 2025-10-25
+
+### Fixed
+- **2FA Login Flow** - Corrected login flow to use /auth/login-2fa endpoint after initial authentication
+  - Problem: Frontend was attempting to call non-existent /api/auth/login endpoint for 2FA
+  - Solution: Updated login flow to properly use /api/auth/login-2fa for two-factor authentication
+  - Benefits: 2FA now works correctly end-to-end
+  - Files Modified: `frontend/src/pages/LoginPage.jsx`
+
+- **Recording Download Rate Limiting** - Fixed rate limit errors when downloading recordings
+  - Problem: Recording downloads were categorized as "read" endpoints (100 req/min), causing issues with large downloads
+  - Solution: Moved /api/recordings/{id}/download to "stream" category (500 req/min)
+  - Benefits: Users can now download recordings without hitting rate limits
+  - Files Modified: `backend/middleware/endpoint_rate_limiter.py`
+
+- **Face Statistics Rate Limiting** - Fixed intermittent 429 errors on face statistics endpoint
+  - Problem: /api/faces/statistics endpoint occasionally hit rate limits during polling
+  - Solution: Moved statistics endpoint to "read" category with higher limit
+  - Benefits: More reliable face statistics updates in the UI
+  - Files Modified: `backend/middleware/endpoint_rate_limiter.py`
+
+### Performance Improvements
+- **React Code Splitting** - Implemented lazy loading for all major pages
+  - Reduced main bundle size from 223KB to 51KB (77% reduction)
+  - Pages now load on-demand, improving initial load time
+  - Implemented for: Dashboard, Cameras, Faces, Recordings, Timeline, Settings, and all other pages
+  - Files Modified: `frontend/src/App.jsx`
+
+- **React 18 Transitions** - Added startTransition for instant navigation feedback
+  - Sidebar navigation now shows immediate visual feedback
+  - Navigation feels instant even while page chunks load
+  - Non-blocking UI updates prevent janky animations
+  - Files Modified: `frontend/src/layouts/Sidebar.jsx`
+
+- **WebSocket Optimization** - Optimized message handler using requestIdleCallback
+  - Eliminated 175ms blocking time during WebSocket message processing
+  - Camera statistics updates now processed during browser idle time
+  - Smoother UI performance, especially during heavy data updates
+  - Files Modified: `frontend/src/services/WebSocketService.js`
+
+### Changed
+- **Documentation Consolidation** - Reorganized documentation for production readiness
+  - Root level: README.md, CHANGELOG.md, CLAUDE.md, DOCKER.md (essentials only)
+  - Created docs/development/ for development documentation
+  - Created docs/security/ for security-related documentation
+  - Created docs/features/ for feature implementation documentation
+  - Removed redundant root-level documentation files
+
+- **Ignore Files** - Enhanced .gitignore and created .dockerignore
+  - Updated .gitignore with comprehensive exclusions (media, logs, cache, etc.)
+  - Created .dockerignore to prevent bloat in Docker images
+  - Ensures production deployments are clean and efficient
+
+- **Cleanup** - Removed temporary test files and obsolete scripts
+  - Removed test_*.py files from opencv_surveillance root (kept in tests/ folder)
+  - Removed obsolete scripts: fix-shebangs.sh, recreate-venv.sh, cleanup-docs.sh, etc.
+  - Cleaner repository structure for production deployment
+
 ## [3.5.3] - 2025-10-18
 
 ### Fixed

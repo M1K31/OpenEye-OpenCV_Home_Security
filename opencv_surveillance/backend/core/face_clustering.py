@@ -314,43 +314,112 @@ class FaceClusteringService:
     def assign_name_to_cluster(self, db: Session, cluster_id: int, person_name: str) -> Dict:
         """
         Assign a name to a cluster and update all faces in the cluster
-        
+
+        This method:
+        1. Creates a person folder in faces/ directory
+        2. Copies face snapshots to the person folder
+        3. Updates cluster and face records in database
+        4. Triggers face recognition retraining
+
         Args:
             db: Database session
             cluster_id: Cluster ID
             person_name: Name to assign
-            
+
         Returns:
             Dictionary with operation result
         """
+        import os
+        import shutil
+        from pathlib import Path
+        from backend.core.paths import paths
+        from backend.core.face_recognition import get_face_manager
+
         cluster = self.get_cluster_by_id(db, cluster_id)
-        
+
         if not cluster:
             return {
                 "success": False,
                 "message": f"Cluster {cluster_id} not found"
             }
-        
-        # Update cluster
-        cluster.label = person_name
+
+        # Sanitize person name
+        clean_name = "".join(
+            c for c in person_name if c.isalnum() or c in (" ", "_", "-")
+        ).strip()
+
+        if not clean_name:
+            return {
+                "success": False,
+                "message": "Invalid person name"
+            }
+
+        # Create person directory in faces folder
+        person_path = paths.faces_dir / clean_name
+        person_path.mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"Created/verified person directory: {person_path}")
+
+        # Get all face detections in this cluster
+        faces = db.query(FaceDetectionEvent).filter(
+            FaceDetectionEvent.cluster_id == cluster_id
+        ).all()
+
+        # Copy face snapshots to person folder
+        images_copied = 0
+        for idx, face in enumerate(faces):
+            if face.snapshot_path and os.path.exists(face.snapshot_path):
+                try:
+                    # Create unique filename: timestamp_camera_idx.jpg
+                    timestamp = face.detected_at.strftime("%Y%m%d_%H%M%S")
+                    camera_id = face.camera_id.replace("/", "_")
+                    dest_filename = f"{timestamp}_{camera_id}_{idx}.jpg"
+                    dest_path = person_path / dest_filename
+
+                    # Copy the snapshot
+                    shutil.copy2(face.snapshot_path, dest_path)
+                    images_copied += 1
+
+                    logger.debug(f"Copied snapshot: {face.snapshot_path} -> {dest_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to copy snapshot {face.snapshot_path}: {e}")
+
+        logger.info(f"Copied {images_copied} face images to {person_path}")
+
+        # Update cluster in database
+        cluster.label = clean_name
         cluster.is_identified = True
         cluster.updated_at = datetime.utcnow()
-        
-        # Update all faces in cluster
+
+        # Update all faces in cluster with the new name
         updated_count = db.query(FaceDetectionEvent).filter(
             FaceDetectionEvent.cluster_id == cluster_id
         ).update({
-            "person_name": person_name
+            "person_name": clean_name
         }, synchronize_session=False)
-        
+
         db.commit()
-        
-        logger.info(f"Assigned name '{person_name}' to cluster {cluster_id} ({updated_count} faces)")
-        
+
+        # Trigger face recognition retraining
+        try:
+            face_manager = get_face_manager()
+            training_result = face_manager.train_face_recognition()
+            logger.info(f"Face recognition retrained: {training_result}")
+        except Exception as e:
+            logger.error(f"Failed to retrain face recognition: {e}")
+            # Don't fail the whole operation if retraining fails
+
+        logger.info(
+            f"Assigned name '{clean_name}' to cluster {cluster_id} "
+            f"({updated_count} faces updated, {images_copied} images copied)"
+        )
+
         return {
             "success": True,
-            "message": f"Assigned name '{person_name}' to cluster {cluster_id}",
-            "faces_updated": updated_count
+            "message": f"Assigned name '{clean_name}' to cluster {cluster_id}",
+            "faces_updated": updated_count,
+            "images_copied": images_copied,
+            "person_created": True
         }
 
     def merge_clusters(self, db: Session, cluster_ids: List[int], new_name: Optional[str] = None) -> Dict:
@@ -432,29 +501,36 @@ class FaceClusteringService:
             "faces_moved": total_moved
         }
 
-    def delete_cluster(self, db: Session, cluster_id: int, reassign_unknown: bool = True) -> Dict:
+    def delete_cluster(self, db: Session, cluster_id: int, reassign_unknown: bool = True, delete_faces: bool = False) -> Dict:
         """
         Delete a cluster
-        
+
         Args:
             db: Database session
             cluster_id: Cluster ID to delete
-            reassign_unknown: If True, reassign faces to "Unknown"
-            
+            reassign_unknown: If True, reassign faces to "Unknown" (ignored if delete_faces=True)
+            delete_faces: If True, permanently delete the face detection events
+
         Returns:
             Dictionary with operation result
         """
         cluster = self.get_cluster_by_id(db, cluster_id)
-        
+
         if not cluster:
             return {
                 "success": False,
                 "message": f"Cluster {cluster_id} not found"
             }
-        
+
         face_count = cluster.face_count
-        
-        if reassign_unknown:
+
+        if delete_faces:
+            # Permanently delete face detection events
+            db.query(FaceDetectionEvent).filter(
+                FaceDetectionEvent.cluster_id == cluster_id
+            ).delete(synchronize_session=False)
+            logger.info(f"Permanently deleted {face_count} face detection events from cluster {cluster_id}")
+        elif reassign_unknown:
             # Reset faces to unknown
             db.query(FaceDetectionEvent).filter(
                 FaceDetectionEvent.cluster_id == cluster_id
@@ -462,17 +538,18 @@ class FaceClusteringService:
                 "cluster_id": None,
                 "person_name": "Unknown"
             }, synchronize_session=False)
-        
+
         # Delete cluster
         db.delete(cluster)
         db.commit()
-        
+
         logger.info(f"Deleted cluster {cluster_id} ({face_count} faces)")
-        
+
         return {
             "success": True,
             "message": f"Deleted cluster {cluster_id}",
-            "faces_affected": face_count
+            "faces_affected": face_count,
+            "faces_deleted": delete_faces
         }
 
     def get_statistics(self, db: Session) -> Dict:

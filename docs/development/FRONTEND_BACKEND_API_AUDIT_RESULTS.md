@@ -268,196 +268,196 @@ resolve paths used by application
 <!--  - Total: ~20 hours for MVP-->
 
   ---
-  8. Face Clustering Implementation (v3.6.0)
-
-  Status: Fully designed, not implementedDocument: docs/archived-releases/FACE_CLUSTERING_IMPLEMENTATION_v3.6.0.md
-
-  What It Does:
-  - Automatically groups similar unknown faces
-  - Reduces "unknown person" clutter
-  - Makes it easier to identify frequent visitors
-
-  Why Implement:
-  - Design is already complete
-  - Uses existing face_recognition library
-  - High user value for security review
-
-  Implementation Checklist:
-  # Already designed in FACE_CLUSTERING_IMPLEMENTATION_v3.6.0.md:
-  ✅ Database schema updates (cluster tables)
-  ✅ Clustering algorithm (DBSCAN)
-  ✅ API endpoints defined
-  ✅ Frontend UI mockups
-  ❌ Code implementation
-  ❌ Testing
-
-  Effort Estimate: 15-20 hours for full implementation
-
-  ---
-  9. Database Migration System
-
-  Status: Ad-hoc migrations, no systematic approachRisk: HIGH - Schema changes can break deployments
-
-  Current Problem:
-  # Migrations exist in backend/database/migrations/
-  # But no automated migration runner
-  # Users must manually run migration scripts
-
-  Recommendation - Use Alembic:
-  # Install
-  pip install alembic
-
-  # Initialize
-  alembic init alembic
-
-  # Create migration
-  alembic revision --autogenerate -m "Add motion_threshold column"
-
-  # Apply migrations
-  alembic upgrade head
-
-  Benefits:
-  - Automatic schema versioning
-  - Rollback capability
-  - Works with Docker deployments
-  - Industry standard
-
-  Implementation:
-  # backend/main.py - Add on startup
-  from alembic import command
-  from alembic.config import Config
-
-  @app.on_event("startup")
-  async def run_migrations():
-      alembic_cfg = Config("alembic.ini")
-      command.upgrade(alembic_cfg, "head")
+<!--  8. Face Clustering Implementation (v3.6.0)-->
+<!---->
+<!--  Status: Fully designed, not implementedDocument: docs/archived-releases/FACE_CLUSTERING_IMPLEMENTATION_v3.6.0.md-->
+<!---->
+<!--  What It Does:-->
+<!--  - Automatically groups similar unknown faces-->
+<!--  - Reduces "unknown person" clutter-->
+<!--  - Makes it easier to identify frequent visitors-->
+<!---->
+<!--  Why Implement:-->
+<!--  - Design is already complete-->
+<!--  - Uses existing face_recognition library-->
+<!--  - High user value for security review-->
+<!---->
+<!--  Implementation Checklist:-->
+<!--  # Already designed in FACE_CLUSTERING_IMPLEMENTATION_v3.6.0.md:-->
+<!--  ✅ Database schema updates (cluster tables)-->
+<!--  ✅ Clustering algorithm (DBSCAN)-->
+<!--  ✅ API endpoints defined-->
+<!--  ✅ Frontend UI mockups-->
+<!--  ❌ Code implementation-->
+<!--  ❌ Testing-->
+<!---->
+<!--  Effort Estimate: 15-20 hours for full implementation-->
 
   ---
-  10. Testing Infrastructure
+<!--  9. Database Migration System-->
+<!---->
+<!--  Status: Ad-hoc migrations, no systematic approachRisk: HIGH - Schema changes can break deployments-->
+<!---->
+<!--  Current Problem:-->
+<!--  # Migrations exist in backend/database/migrations/-->
+<!--  # But no automated migration runner-->
+<!--  # Users must manually run migration scripts-->
+<!---->
+<!--  Recommendation - Use Alembic:-->
+<!--  # Install-->
+<!--  pip install alembic-->
+<!---->
+<!--  # Initialize-->
+<!--  alembic init alembic-->
+<!---->
+<!--  # Create migration-->
+<!--  alembic revision --autogenerate -m "Add motion_threshold column"-->
+<!---->
+<!--  # Apply migrations-->
+<!--  alembic upgrade head-->
+<!---->
+<!--  Benefits:-->
+<!--  - Automatic schema versioning-->
+<!--  - Rollback capability-->
+<!--  - Works with Docker deployments-->
+<!--  - Industry standard-->
+<!---->
+<!--  Implementation:-->
+<!--  # backend/main.py - Add on startup-->
+<!--  from alembic import command-->
+<!--  from alembic.config import Config-->
+<!---->
+<!--  @app.on_event("startup")-->
+<!--  async def run_migrations():-->
+<!--      alembic_cfg = Config("alembic.ini")-->
+<!--      command.upgrade(alembic_cfg, "head")-->
 
-  Status: Minimal test coverageRisk: MEDIUM - Regressions likely with active development
-
-  Current State:
-  tests/
-  ├── test_face_recognition.py       # Unit test
-  ├── test_user_*.py                 # Integration tests
-  └── conftest.py                    # Test fixtures
-
-  Gaps:
-  - No API endpoint tests
-  - No frontend component tests
-  - No E2E tests
-  - No performance tests
-
-  Quick Wins:
-  # 1. Add pytest-cov for coverage reports
-  pip install pytest-cov
-
-  # 2. Create API tests (tests/api/test_recordings.py)
-  def test_list_recordings(client, auth_headers):
-      response = client.get("/api/recordings/", headers=auth_headers)
-      assert response.status_code == 200
-      data = response.json()
-      assert "recordings" in data
-      assert "total" in data
-
-  # 3. Run with coverage
-  pytest --cov=backend --cov-report=html
-
-  Frontend Testing:
-  # Add Vitest for React component testing
-  npm install -D vitest @testing-library/react
-
-  # Create tests (frontend/src/components/__tests__/ErrorBoundary.test.jsx)
-  test('ErrorBoundary catches errors', () => {
-    const ThrowError = () => { throw new Error('Test error') }
-    render(<ErrorBoundary><ThrowError /></ErrorBoundary>)
-    expect(screen.getByText(/error occurred/i)).toBeInTheDocument()
+  ---
+<!--  10. Testing Infrastructure-->
+<!---->
+<!--  Status: Minimal test coverageRisk: MEDIUM - Regressions likely with active development-->
+<!---->
+<!--  Current State:-->
+<!--  tests/-->
+<!--  ├── test_face_recognition.py       # Unit test-->
+<!--  ├── test_user_*.py                 # Integration tests-->
+<!--  └── conftest.py                    # Test fixtures-->
+<!---->
+<!--  Gaps:-->
+<!--  - No API endpoint tests-->
+<!--  - No frontend component tests-->
+<!--  - No E2E tests-->
+<!--  - No performance tests-->
+<!---->
+<!--  Quick Wins:-->
+<!--  # 1. Add pytest-cov for coverage reports-->
+<!--  pip install pytest-cov-->
+<!---->
+<!--  # 2. Create API tests (tests/api/test_recordings.py)-->
+<!--  def test_list_recordings(client, auth_headers):-->
+<!--      response = client.get("/api/recordings/", headers=auth_headers)-->
+<!--      assert response.status_code == 200-->
+<!--      data = response.json()-->
+<!--      assert "recordings" in data-->
+<!--      assert "total" in data-->
+<!---->
+<!--  # 3. Run with coverage-->
+<!--  pytest --cov=backend --cov-report=html-->
+<!---->
+<!--  Frontend Testing:-->
+<!--  # Add Vitest for React component testing-->
+<!--  npm install -D vitest @testing-library/react-->
+<!---->
+<!--  # Create tests (frontend/src/components/__tests__/ErrorBoundary.test.jsx)-->
+<!--  test('ErrorBoundary catches errors', () => {-->
+<!--    const ThrowError = () => { throw new Error('Test error') }-->
+<!--    render(<ErrorBoundary><ThrowError /></ErrorBoundary>)-->
+<!--    expect(screen.getByText(/error occurred/i)).toBeInTheDocument()-->
   })
 
   ---
   🔒 Security & Performance
 
-  11. Security Audit
-
-  Priority: HIGH before v4.0.0
-
-  Areas to Review:
-  1. Authentication:
-    - JWT token expiration (currently 30 min - is this right?)
-    - Refresh token mechanism (not implemented)
-    - Password hashing algorithm (verify bcrypt settings)
-  2. Authorization:
-    - Currently single-user system
-    - Need RBAC for multi-user (planned v4.0.0)
-    - API endpoints lack permission checks
-  3. Input Validation:
-    - Check all path inputs (camera paths, snapshot paths)
-    - SQL injection prevention (using SQLAlchemy ✅)
-    - XSS prevention in frontend
-  4. File Access:
-    - Static file serving security
-    - Path traversal prevention
-    - File upload validation (if adding cloud backup)
-
-  Recommended Tool:
-  # Run Bandit security linter
-  pip install bandit
-  bandit -r backend/ -f html -o security_report.html
+<!--  11. Security Audit-->
+<!---->
+<!--  Priority: HIGH before v4.0.0-->
+<!---->
+<!--  Areas to Review:-->
+<!--  1. Authentication:-->
+<!--    - JWT token expiration (currently 30 min - is this right?)-->
+<!--    - Refresh token mechanism (not implemented)-->
+<!--    - Password hashing algorithm (verify bcrypt settings)-->
+<!--  2. Authorization:-->
+<!--    - Currently single-user system-->
+<!--    - Need RBAC for multi-user (planned v4.0.0)-->
+<!--    - API endpoints lack permission checks-->
+<!--  3. Input Validation:-->
+<!--    - Check all path inputs (camera paths, snapshot paths)-->
+<!--    - SQL injection prevention (using SQLAlchemy ✅)-->
+<!--    - XSS prevention in frontend-->
+<!--  4. File Access:-->
+<!--    - Static file serving security-->
+<!--    - Path traversal prevention-->
+<!--    - File upload validation (if adding cloud backup)-->
+<!---->
+<!--  Recommended Tool:-->
+<!--  # Run Bandit security linter-->
+<!--  pip install bandit-->
+<!--  bandit -r backend/ -f html -o security_report.html-->
 
   ---
-  12. Performance Optimization
-
-  Current State: No performance monitoring
-
-  Quick Wins:
-
-  1. Add Database Indexes:
-  # models.py - Add indexes for common queries
-  class Recording(Base):
-      __tablename__ = "recordings"
-
-      # Add composite index for common filter
-      __table_args__ = (
-          Index('idx_camera_time', 'camera_id', 'start_time'),
-          Index('idx_created_at', 'created_at'),
-      )
-
-  2. Add Query Pagination Everywhere:
-  # Currently some endpoints return ALL records
-  # Add default limits
-  DEFAULT_PAGE_SIZE = 50
-  MAX_PAGE_SIZE = 1000
-
-  @router.get("/recordings/")
-  def list_recordings(
-      skip: int = 0,
-      limit: int = Query(DEFAULT_PAGE_SIZE, le=MAX_PAGE_SIZE)
-  ):
-      ...
-
-  3. Add Response Caching:
-  from functools import lru_cache
-
-  @lru_cache(maxsize=128)
-  def get_camera_list():
-      # Cache camera list for 60 seconds
-      return camera_manager.get_all_cameras()
-
-  4. Frontend Bundle Optimization:
-  // vite.config.js - Add code splitting
-  export default defineConfig({
-    build: {
-      rollupOptions: {
-        output: {
-          manualChunks: {
-            'vendor': ['react', 'react-dom'],
-            'charts': ['recharts'],
-          }
-        }
-      }
-    }
-  })
+<!--  12. Performance Optimization-->
+<!---->
+<!--  Current State: No performance monitoring-->
+<!---->
+<!--  Quick Wins:-->
+<!---->
+<!--  1. Add Database Indexes:-->
+<!--  # models.py - Add indexes for common queries-->
+<!--  class Recording(Base):-->
+<!--      __tablename__ = "recordings"-->
+<!---->
+<!--      # Add composite index for common filter-->
+<!--      __table_args__ = (-->
+<!--          Index('idx_camera_time', 'camera_id', 'start_time'),-->
+<!--          Index('idx_created_at', 'created_at'),-->
+<!--      )-->
+<!---->
+<!--  2. Add Query Pagination Everywhere:-->
+<!--  # Currently some endpoints return ALL records-->
+<!--  # Add default limits-->
+<!--  DEFAULT_PAGE_SIZE = 50-->
+<!--  MAX_PAGE_SIZE = 1000-->
+<!---->
+<!--  @router.get("/recordings/")-->
+<!--  def list_recordings(-->
+<!--      skip: int = 0,-->
+<!--      limit: int = Query(DEFAULT_PAGE_SIZE, le=MAX_PAGE_SIZE)-->
+<!--  ):-->
+<!--      ...-->
+<!---->
+<!--  3. Add Response Caching:-->
+<!--  from functools import lru_cache-->
+<!---->
+<!--  @lru_cache(maxsize=128)-->
+<!--  def get_camera_list():-->
+<!--      # Cache camera list for 60 seconds-->
+<!--      return camera_manager.get_all_cameras()-->
+<!---->
+<!--  4. Frontend Bundle Optimization:-->
+<!--  // vite.config.js - Add code splitting-->
+<!--  export default defineConfig({-->
+<!--    build: {-->
+<!--      rollupOptions: {-->
+<!--        output: {-->
+<!--          manualChunks: {-->
+<!--            'vendor': ['react', 'react-dom'],-->
+<!--            'charts': ['recharts'],-->
+<!--          }-->
+<!--        }-->
+<!--      }-->
+<!--    }-->
+<!--  })-->
 
   ---
   📊 Prioritized Roadmap

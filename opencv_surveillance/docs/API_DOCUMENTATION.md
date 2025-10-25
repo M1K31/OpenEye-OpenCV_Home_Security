@@ -1,6 +1,6 @@
 # OpenEye API Documentation
 
-**Version:** 3.3.7  
+**Version:** 3.5.3  
 **Last Updated:** October 2025
 
 ## Table of Contents

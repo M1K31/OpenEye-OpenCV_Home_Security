@@ -43,29 +43,45 @@ class QuickAddRequest(BaseModel):
 
 
 @router.post("/cameras/discover/usb", status_code=200)
-async def discover_usb_cameras():
+async def discover_usb_cameras(db: Session = Depends(get_db)):
     """
     Discover USB and built-in cameras connected to the system.
 
     Returns:
         List of discovered USB cameras with auto-configuration details
+        (excludes already-added cameras)
     """
     try:
         cameras = await discovery_service.discover_usb_cameras()
 
+        # Filter out cameras that are already added
+        # Get all existing camera sources from database
+        existing_cameras = crud.get_all_cameras(db)
+        existing_sources = {cam.source for cam in existing_cameras}
+
+        # Filter USB cameras - check if source (index as string) already exists
+        filtered_cameras = [
+            cam for cam in cameras
+            if str(cam.get('index', '')) not in existing_sources
+        ]
+
+        filtered_count = len(cameras) - len(filtered_cameras)
+        message = f"Found {len(filtered_cameras)} USB camera(s)"
+        if filtered_count > 0:
+            message += f" ({filtered_count} already added)"
+
         return {
             "success": True,
-            "count": len(cameras),
-            "cameras": cameras,
-            "message": f"Found {len(cameras)} USB camera(s)",
+            "count": len(filtered_cameras),
+            "cameras": filtered_cameras,
+            "message": message,
         }
 
     except Exception as e:
         logger.error(f"Error discovering USB cameras: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Discovery failed: {
-                str(e)}")
+            detail=f"Discovery failed: {str(e)}")
 
 
 @router.post("/cameras/discover/network", status_code=200)
@@ -111,21 +127,33 @@ async def _run_network_discovery(subnet: Optional[str]):
 
 
 @router.get("/cameras/discover/status", status_code=200)
-async def get_discovery_status():
+async def get_discovery_status(db: Session = Depends(get_db)):
     """
     Get the status of ongoing camera discovery.
 
     Returns:
-        Discovery status and any cameras found
+        Discovery status and any cameras found (excludes already-added cameras)
     """
     status = discovery_service.get_discovery_status()
 
+    # Get existing cameras to filter out
+    existing_cameras = crud.get_all_cameras(db)
+    existing_sources = {cam.source for cam in existing_cameras}
+
+    # Filter discovered network cameras
+    # Network cameras use RTSP URLs as source, check if any of the URLs match
+    filtered_cameras = []
+    if not status["scanning"]:
+        for cam in discovery_service.discovered_cameras:
+            # Check if any of the camera URLs are already in use
+            urls = cam.get('urls', [])
+            if not any(url in existing_sources for url in urls):
+                filtered_cameras.append(cam)
+
     return {
         "scanning": status["scanning"],
-        "cameras_found": len(discovery_service.discovered_cameras),
-        "cameras": (
-            discovery_service.discovered_cameras if not status["scanning"] else []
-        ),
+        "cameras_found": len(filtered_cameras),
+        "cameras": filtered_cameras,
     }
 
 
