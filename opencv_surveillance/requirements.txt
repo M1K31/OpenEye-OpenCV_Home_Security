@@ -5,6 +5,7 @@ python-multipart>=0.0.6
 
 # Database
 sqlalchemy>=2.0.0
+alembic>=1.13.0  # Database migrations
 
 # Authentication & Security
 passlib[bcrypt]>=1.7.4
@@ -65,3 +66,5 @@ hiredis>=2.2.3  # C parser for faster Redis operations
 # Additional Security (Phase 6) - FREE & OPEN SOURCE
 cryptography>=41.0.7  # Cryptographic operations
 pyjwt>=2.8.0  # JSON Web Token handling
+pyotp>=2.9.0  # TOTP-based 2FA
+qrcode[pil]>=7.4.2  # QR code generation for 2FA setup

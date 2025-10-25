@@ -325,23 +325,22 @@ def process_face_detection(
     detected_at = detected_at or datetime.utcnow()
     
     logger.debug(f"Processing automation rules for {person_name} on {camera_id}")
-    
-    # Create database session
-    db = SessionLocal()
-    
-    try:
+
+    # FIXED: Use context manager to prevent session leak (v3.6.0.1)
+    from backend.database.utils import get_db_context
+    with get_db_context() as db:
         # Find all enabled rules for this person
         rules = db.query(models.AutomationRule).filter(
             models.AutomationRule.person_name == person_name,
             models.AutomationRule.enabled == True
         ).all()
-        
+
         if not rules:
             logger.debug(f"No automation rules found for {person_name}")
             return
-        
+
         logger.info(f"Found {len(rules)} automation rule(s) for {person_name}")
-        
+
         for rule in rules:
             try:
                 # Check cooldown
@@ -353,12 +352,12 @@ def process_face_detection(
                             f"Rule '{rule.name}' in cooldown ({remaining:.0f}s remaining)"
                         )
                         continue
-                
+
                 # Parse conditions
                 conditions = None
                 if rule.conditions:
                     conditions = json.loads(rule.conditions)
-                
+
                 # Evaluate conditions
                 if not evaluate_rule_conditions(
                     conditions,
@@ -368,36 +367,33 @@ def process_face_detection(
                 ):
                     logger.debug(f"Rule '{rule.name}' conditions not met")
                     continue
-                
+
                 logger.info(f"✓ Rule '{rule.name}' triggered for {person_name}")
-                
+
                 # Parse and execute actions
                 actions = json.loads(rule.actions)
                 results = []
-                
+
                 for action in actions:
                     result = execute_action(action, person_name, camera_id, db)
                     results.append(result)
-                
+
                 # Update rule statistics
                 rule.last_triggered_at = datetime.utcnow()
                 rule.trigger_count += 1
                 rule.updated_at = datetime.utcnow()
                 db.commit()
-                
+
                 # Log results
                 success_count = sum(1 for r in results if r.get('success'))
                 logger.info(
                     f"Rule '{rule.name}' executed {success_count}/{len(results)} actions successfully"
                 )
-            
+
             except Exception as e:
                 logger.error(f"Error processing rule '{rule.name}': {e}", exc_info=True)
                 db.rollback()
                 continue
-    
-    finally:
-        db.close()
 
 
 # ============================================================

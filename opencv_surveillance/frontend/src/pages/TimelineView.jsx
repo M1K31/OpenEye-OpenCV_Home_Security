@@ -551,63 +551,6 @@ const TimelineView = () => {
         </div>
       )}
 
-      {/* Playback Controls - Below Timeline */}
-      <div className="playback-control-bar">
-        <div className="playback-buttons">
-          <button
-            className="btn-control"
-            onClick={handlePreviousEvent}
-            title="Previous event"
-            disabled={loading}
-          >
-            ⏮ Previous
-          </button>
-
-          <button
-            className={`btn-control btn-play ${playing ? 'active' : ''}`}
-            onClick={togglePlayback}
-            title={playing ? 'Pause' : 'Play'}
-            disabled={loading}
-          >
-            {playing ? '⏸ Pause' : '▶ Play'}
-          </button>
-
-          <button
-            className="btn-control"
-            onClick={handleNextEvent}
-            title="Next event"
-            disabled={loading}
-          >
-            Next ⏭
-          </button>
-
-          <button
-            className="btn-control btn-live"
-            onClick={jumpToNow}
-            title="Jump to now"
-            disabled={loading}
-          >
-            🔴 Live
-          </button>
-        </div>
-
-        {/* Speed Control */}
-        <div className="speed-selector">
-          <label>Speed</label>
-          <div className="button-group">
-            {[0.5, 1, 2, 4, 8].map(speed => (
-              <button
-                key={speed}
-                className={`btn-option ${playbackSpeed === speed ? 'active' : ''}`}
-                onClick={() => handleSpeedChange(speed)}
-              >
-                {speed}x
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
       {/* Media Viewer - Always visible */}
       <div className="media-viewer-container">
         {playbackMedia || selectedEvent ? (
@@ -705,6 +648,63 @@ const TimelineView = () => {
             </div>
           </div>
         )}
+
+        {/* Playback Controls - Bottom of Media Container */}
+        <div className="playback-control-bar">
+          <div className="playback-buttons">
+            <button
+              className="btn-control"
+              onClick={handlePreviousEvent}
+              title="Previous event"
+              disabled={loading}
+            >
+              ⏮ Previous
+            </button>
+
+            <button
+              className={`btn-control btn-play ${playing ? 'active' : ''}`}
+              onClick={togglePlayback}
+              title={playing ? 'Pause' : 'Play'}
+              disabled={loading}
+            >
+              {playing ? '⏸ Pause' : '▶ Play'}
+            </button>
+
+            <button
+              className="btn-control"
+              onClick={handleNextEvent}
+              title="Next event"
+              disabled={loading}
+            >
+              Next ⏭
+            </button>
+
+            <button
+              className="btn-control btn-live"
+              onClick={jumpToNow}
+              title="Jump to now"
+              disabled={loading}
+            >
+              🔴 Live
+            </button>
+          </div>
+
+          {/* Speed Control */}
+          <div className="speed-selector">
+            <label>Speed</label>
+            <div className="button-group">
+              {[0.5, 1, 2, 4, 8].map(speed => (
+                <button
+                  key={speed}
+                  className={`btn-option ${playbackSpeed === speed ? 'active' : ''}`}
+                  onClick={() => handleSpeedChange(speed)}
+                >
+                  {speed}x
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Camera Lanes - Now below media viewer */}

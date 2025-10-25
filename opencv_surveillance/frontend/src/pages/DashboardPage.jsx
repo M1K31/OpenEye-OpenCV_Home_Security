@@ -66,7 +66,7 @@ const DashboardPage = ({ onLogout }) => {
   useEffect(() => {
     const loadDetections = async () => {
       try {
-        const response = await apiClient.get('/history/detections');
+        const response = await apiClient.get('/faces/history/detections');
         // Handle wrapped response format {detections: [...], total: N}
         setRecentDetections(response.data?.detections || response.data || []);
       } catch (error) {

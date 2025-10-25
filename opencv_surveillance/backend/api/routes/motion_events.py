@@ -18,6 +18,7 @@ import os
 
 from backend.database.session import get_db
 from backend.database import models
+from backend.core.performance import paginate, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from backend.api.schemas.motion import (
     MotionEventResponse,
     MotionEventListResponse,
@@ -29,8 +30,8 @@ router = APIRouter()
 
 @router.get("/motion-events/", response_model=MotionEventListResponse)
 def list_motion_events(
-    skip: int = Query(0, ge=0, description="Number of events to skip"),
-    limit: int = Query(100, ge=1, le=500, description="Maximum events to return"),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description="Items per page"),
     camera_id: Optional[str] = Query(None, description="Filter by camera ID"),
     start_date: Optional[datetime] = Query(None, description="Filter events after this date"),
     end_date: Optional[datetime] = Query(None, description="Filter events before this date"),
@@ -39,45 +40,51 @@ def list_motion_events(
 ):
     """
     Get list of motion detection events with filtering and pagination
-    
+
+    Performance optimizations:
+    - Uses indexed queries on camera_id and detected_at
+    - Paginated results (default 50, max 1000)
+    - Efficient sorting by detection time
+
     This endpoint returns ALL motion events, including:
     - Motion events WITH face detection
     - Motion events WITHOUT face detection (motion-only)
-    
+
     Use this for timeline views that need to show all activity.
     """
     query = db.query(models.MotionDetectionEvent)
-    
-    # Apply filters
+
+    # Apply filters (uses idx_motion_camera_time index)
     if camera_id:
         query = query.filter(models.MotionDetectionEvent.camera_id == camera_id)
-    
+
     if start_date:
         query = query.filter(models.MotionDetectionEvent.detected_at >= start_date)
-    
+
     if end_date:
         query = query.filter(models.MotionDetectionEvent.detected_at <= end_date)
-    
+
     if has_faces is not None:
         if has_faces:
             query = query.filter(models.MotionDetectionEvent.faces_detected > 0)
         else:
             query = query.filter(models.MotionDetectionEvent.faces_detected == 0)
-    
-    # Get total count before pagination
-    total = query.count()
-    
-    # Apply pagination and ordering (newest first)
-    events = query.order_by(
-        models.MotionDetectionEvent.detected_at.desc()
-    ).offset(skip).limit(limit).all()
-    
+
+    # Order by most recent (uses idx_motion_detected_at index)
+    query = query.order_by(models.MotionDetectionEvent.detected_at.desc())
+
+    # Apply pagination
+    events, total, total_pages = paginate(query, page=page, page_size=page_size)
+
+    # Calculate offset for backward compatibility
+    offset = (page - 1) * page_size
+
     return MotionEventListResponse(
         events=events,
         total=total,
-        limit=limit,
-        offset=skip,
-        has_more=(skip + limit) < total
+        limit=page_size,
+        offset=offset,
+        has_more=page < total_pages
     )
 
 
@@ -207,8 +214,8 @@ def get_motion_statistics(
     db: Session = Depends(get_db)
 ):
     """
-    Get motion detection statistics and analytics
-    
+    Get motion detection statistics and analytics (optimized with database aggregation)
+
     Returns:
     - Total motion events
     - Events with face detection
@@ -216,22 +223,37 @@ def get_motion_statistics(
     - Per-camera breakdown
     - Daily activity pattern
     """
+    from sqlalchemy import func, case
+
     cutoff_date = datetime.utcnow() - timedelta(days=days)
-    
+
     # Build query
     query = db.query(models.MotionDetectionEvent).filter(
         models.MotionDetectionEvent.detected_at >= cutoff_date
     )
-    
+
     if camera_id:
         query = query.filter(models.MotionDetectionEvent.camera_id == camera_id)
-    
-    events = query.all()
-    
-    # Calculate statistics
-    total_events = len(events)
-    events_with_faces = len([e for e in events if e.faces_detected > 0])
+
+    # Use database aggregation for overall statistics
+    stats = db.query(
+        func.count(models.MotionDetectionEvent.id).label('total_events'),
+        func.sum(case((models.MotionDetectionEvent.faces_detected > 0, 1), else_=0)).label('events_with_faces'),
+    ).filter(
+        models.MotionDetectionEvent.detected_at >= cutoff_date
+    )
+
+    if camera_id:
+        stats = stats.filter(models.MotionDetectionEvent.camera_id == camera_id)
+
+    result = stats.first()
+    total_events = result.total_events or 0
+    events_with_faces = result.events_with_faces or 0
     events_without_faces = total_events - events_with_faces
+
+    # For camera breakdown and daily activity, we still need to load events
+    # but only once
+    events = query.all()
     
     # Per-camera breakdown
     camera_breakdown = {}

@@ -6,8 +6,17 @@ from sqlalchemy.orm import sessionmaker
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./surveillance.db"
 
+# CRITICAL FIX (2025-10-25): Use NullPool for SQLite to prevent connection issues
+# Root cause: 25+ SessionLocal() calls in background threads don't properly close sessions
+# NullPool creates fresh connection per request - perfect for SQLite with concurrent requests
+# FIXED: 16 session leaks eliminated with context managers (see database/utils.py)
+from sqlalchemy.pool import NullPool
+
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=NullPool,  # Creates new connection per request (prevents thread safety issues)
+    echo=False  # Set to True for SQL debugging
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

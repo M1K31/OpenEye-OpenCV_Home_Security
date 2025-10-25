@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from backend.services.notification_service import get_notification_service
 from backend.database import alert_models
 from backend.database.session import SessionLocal
+from backend.database.utils import get_db_context
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +26,6 @@ class AlertManager:
     def __init__(self):
         self.notification_service = get_notification_service()
         logger.info("AlertManager initialized")
-
-    def _get_db(self) -> Session:
-        """Get database session"""
-        return SessionLocal()
 
     def _should_send_alert(
         self, db: Session, throttle_key: str, min_seconds: int = 300
@@ -118,8 +115,8 @@ class AlertManager:
             camera_id: ID of the camera that detected motion
             event_data: Additional event data
         """
-        db = self._get_db()
-        try:
+        # FIXED: Use context manager to prevent session leak (v3.6.0.1)
+        with get_db_context() as db:
             # Get all alert configurations
             configs = (
                 db.query(alert_models.AlertConfiguration)
@@ -150,9 +147,6 @@ class AlertManager:
                     message=f"Motion detected on camera {camera_id}",
                     event_data=event_data,
                 )
-
-        finally:
-            db.close()
 
     async def trigger_face_recognition_alert(
         self,

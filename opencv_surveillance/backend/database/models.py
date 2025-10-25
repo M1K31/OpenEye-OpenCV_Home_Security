@@ -26,6 +26,12 @@ class User(Base):
     # Phase 6: User roles for access control
     role = Column(String, default="viewer")  # admin, user, viewer
 
+    # v3.6.0: Two-Factor Authentication
+    totp_secret = Column(String, nullable=True)  # Encrypted TOTP secret
+    two_factor_enabled = Column(Boolean, default=False)  # 2FA enabled flag
+    backup_codes = Column(String, nullable=True)  # JSON array of hashed backup codes
+    two_factor_enrolled_at = Column(DateTime, nullable=True)  # When 2FA was enabled
+
 
 class FaceDetectionEvent(Base):
     """
@@ -144,6 +150,15 @@ class Camera(Base):
     detect_shadows = Column(Boolean, default=True)
     # JSON string for zone grid
     detection_zones = Column(String, nullable=True)
+
+    # v3.5.7: Enhanced motion detection parameters (recommended defaults for shadow mitigation)
+    shadow_detection_method = Column(String, default="dual")  # binary, hsv, dual (dual recommended)
+    erosion_iterations = Column(Integer, default=2)  # Custom erosion (2 recommended)
+    dilation_iterations = Column(Integer, default=3)  # Custom dilation (3 recommended)
+    motion_persistence_frames = Column(Integer, default=2)  # Frames to maintain motion state
+    use_grayscale = Column(Boolean, default=True)  # Convert to grayscale before processing
+    lighting_compensation_enabled = Column(Boolean, default=True)  # Enable lighting change detection
+    brightness_change_threshold = Column(Integer, default=15)  # Threshold for lighting changes (1-50)
 
     # Recording settings
     # CHANGED: Default to False

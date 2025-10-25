@@ -68,16 +68,14 @@ async def authenticate_websocket(
         return None
 
     try:
-        # Create database session manually for WebSocket
-        db = SessionLocal()
-        try:
+        # FIXED: Use context manager to prevent session leak (v3.6.0.1)
+        from backend.database.utils import get_db_context
+        with get_db_context() as db:
             # Verify token and get user
             user = verify_token(token, db)
             if not user:
                 raise Exception("Invalid token")
             return user
-        finally:
-            db.close()
     except Exception as e:
         logger.error(f"WebSocket authentication failed: {e}")
         await websocket.close(

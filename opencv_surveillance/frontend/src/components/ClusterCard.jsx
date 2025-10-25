@@ -42,9 +42,15 @@ const ClusterCard = ({ cluster, selected, onSelect, onView, onAssignName, onDele
       return '/placeholder-face.png'; // Fallback placeholder
     }
     // Construct URL based on path
-    return representative_snapshot_path.startsWith('http')
-      ? representative_snapshot_path
-      : `/api${representative_snapshot_path}`;
+    if (representative_snapshot_path.startsWith('http')) {
+      return representative_snapshot_path;
+    }
+    // If path already starts with /, use as-is
+    if (representative_snapshot_path.startsWith('/')) {
+      return representative_snapshot_path;
+    }
+    // Otherwise, prepend /data/snapshots/
+    return `/data/snapshots/${representative_snapshot_path}`;
   };
 
   return (

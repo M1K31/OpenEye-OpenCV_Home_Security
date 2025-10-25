@@ -2,6 +2,8 @@
 # This file is part of OpenEye-OpenCV_Home_Security
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+import sys
+import logging
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -16,10 +18,28 @@ from backend.database.session import SessionLocal
 from backend.core.security import verify_password
 import os
 
-# Use a default secret key if not set in environment for development
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key")
+logger = logging.getLogger(__name__)
+
+# Security Configuration
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# Require SECRET_KEY and JWT_SECRET_KEY in production
+SECRET_KEY = os.getenv("SECRET_KEY")
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")  # Separate key for JWTs
+
+# Validate secret keys
+if not SECRET_KEY or SECRET_KEY in ["your-secret-key", "dev-secret-key"]:
+    if os.getenv("ENVIRONMENT", "development") == "production":
+        logger.error("CRITICAL: SECRET_KEY must be set in production!")
+        logger.error("Generate with: openssl rand -hex 64")
+        sys.exit(1)
+    logger.warning("Using weak SECRET_KEY - DEVELOPMENT ONLY")
+    SECRET_KEY = "dev-secret-key-change-in-production"
+
+if not JWT_SECRET_KEY:
+    JWT_SECRET_KEY = SECRET_KEY  # Fallback to SECRET_KEY if not set
+    logger.warning("JWT_SECRET_KEY not set, using SECRET_KEY (set separate key in production)")
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 

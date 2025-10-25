@@ -10,17 +10,83 @@ from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from datetime import datetime, timedelta
+from pathlib import Path
 import os
 import json
 import zipfile
 import io
 import tempfile
+import logging
 
 from backend.database.session import SessionLocal
 from backend.database import models
+from backend.core.performance import paginate, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
+from backend.core.paths import paths
 from pydantic import BaseModel, Field
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+# Security: Path Traversal Protection Helper
+def safe_file_response(
+    file_path: str,
+    allowed_dir: Path,
+    media_type: str = "application/octet-stream",
+    filename: Optional[str] = None
+) -> FileResponse:
+    """
+    Safely serve a file with path traversal protection
+
+    Args:
+        file_path: Path to file (from database or user input)
+        allowed_dir: Directory that file must be within
+        media_type: MIME type for response
+        filename: Optional filename for download
+
+    Returns:
+        FileResponse if file is safe to serve
+
+    Raises:
+        HTTPException: If file is outside allowed directory or doesn't exist
+    """
+    try:
+        # Resolve paths to absolute, following symlinks
+        full_path = Path(file_path).resolve()
+        allowed_dir = allowed_dir.resolve()
+
+        # Security check: Ensure file is within allowed directory
+        if not str(full_path).startswith(str(allowed_dir)):
+            logger.warning(
+                f"Path traversal attempt blocked: {file_path} not in {allowed_dir}"
+            )
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied: File path not in allowed directory"
+            )
+
+        # Check file exists and is a file (not directory)
+        if not full_path.exists():
+            raise HTTPException(status_code=404, detail="File not found")
+
+        if not full_path.is_file():
+            raise HTTPException(status_code=400, detail="Path is not a file")
+
+        # Serve file safely
+        if not filename:
+            filename = full_path.name
+
+        return FileResponse(
+            path=str(full_path),
+            media_type=media_type,
+            filename=filename
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error serving file {file_path}: {e}")
+        raise HTTPException(status_code=500, detail="Error serving file")
 
 
 # Pydantic Models
@@ -81,19 +147,24 @@ def list_recordings(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
     has_faces: Optional[bool] = Query(None),
-    skip: int = Query(0, ge=0, description="Number of recordings to skip"),
-    limit: int = Query(50, le=200, description="Maximum recordings to return"),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description="Items per page"),
     db: Session = Depends(get_db),
 ):
     """
-    List recordings with optional filters
+    List recordings with optional filters and pagination
+
+    Performance optimizations:
+    - Uses indexed queries on camera_id and started_at
+    - Paginated results (default 50, max 1000)
+    - Efficient sorting
     """
     # Get total count before filtering
     total_count = db.query(models.RecordingEvent).count()
-    
+
     query = db.query(models.RecordingEvent)
 
-    # Apply filters
+    # Apply filters (uses idx_recording_camera_time index)
     if camera_id:
         query = query.filter(models.RecordingEvent.camera_id == camera_id)
 
@@ -111,21 +182,22 @@ def list_recordings(
         else:
             query = query.filter(models.RecordingEvent.faces_detected == 0)
 
-    # Get filtered count
-    filtered_count = query.count()
+    # Order by most recent (uses idx_recording_started_at index)
+    query = query.order_by(models.RecordingEvent.started_at.desc())
 
-    # Order by most recent with pagination
-    recordings = (
-        query.order_by(
-            models.RecordingEvent.started_at.desc()).offset(skip).limit(limit).all())
+    # Apply pagination
+    recordings, filtered_count, total_pages = paginate(query, page=page, page_size=page_size)
+
+    # Calculate skip for backward compatibility
+    skip = (page - 1) * page_size
 
     return RecordingListResponse(
         recordings=recordings,
         total=total_count,
         filtered=filtered_count,
-        limit=limit,
+        limit=page_size,
         skip=skip,
-        has_more=(skip + limit) < filtered_count
+        has_more=page < total_pages
     )
 
 
@@ -157,7 +229,7 @@ def get_recording_details(recording_id: int, db: Session = Depends(get_db)):
 @router.get("/recordings/{recording_id}/download")
 def download_recording(recording_id: int, db: Session = Depends(get_db)):
     """
-    Download a recording file
+    Download a recording file (with path traversal protection)
     """
     recording = (
         db.query(models.RecordingEvent)
@@ -168,19 +240,19 @@ def download_recording(recording_id: int, db: Session = Depends(get_db)):
     if not recording:
         raise HTTPException(status_code=404, detail="Recording not found")
 
-    if not os.path.exists(recording.recording_path):
-        raise HTTPException(status_code=404, detail="Recording file not found")
-
-    filename = os.path.basename(recording.recording_path)
-    return FileResponse(
-        recording.recording_path, media_type="video/mp4", filename=filename
+    # Use safe file serving with path validation
+    return safe_file_response(
+        file_path=recording.recording_path,
+        allowed_dir=paths.recordings_dir,
+        media_type="video/mp4",
+        filename=Path(recording.recording_path).name
     )
 
 
 @router.get("/recordings/{recording_id}/stream")
 def stream_recording(recording_id: int, db: Session = Depends(get_db)):
     """
-    Stream a recording file
+    Stream a recording file (with path traversal protection)
     """
     recording = (
         db.query(models.RecordingEvent)
@@ -191,14 +263,34 @@ def stream_recording(recording_id: int, db: Session = Depends(get_db)):
     if not recording:
         raise HTTPException(status_code=404, detail="Recording not found")
 
-    if not os.path.exists(recording.recording_path):
-        raise HTTPException(status_code=404, detail="Recording file not found")
+    # Security: Validate file path before streaming
+    try:
+        full_path = Path(recording.recording_path).resolve()
+        allowed_dir = paths.recordings_dir.resolve()
 
-    def iterfile():
-        with open(recording.recording_path, mode="rb") as file_like:
-            yield from file_like
+        if not str(full_path).startswith(str(allowed_dir)):
+            logger.warning(
+                f"Path traversal attempt blocked in stream: {recording.recording_path}"
+            )
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied: File path not in allowed directory"
+            )
 
-    return StreamingResponse(iterfile(), media_type="video/mp4")
+        if not full_path.exists() or not full_path.is_file():
+            raise HTTPException(status_code=404, detail="Recording file not found")
+
+        def iterfile():
+            with open(str(full_path), mode="rb") as file_like:
+                yield from file_like
+
+        return StreamingResponse(iterfile(), media_type="video/mp4")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error streaming recording {recording_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error streaming file")
 
 
 @router.delete("/recordings/{recording_id}")
@@ -277,13 +369,20 @@ def cleanup_old_recordings(
 @router.get("/recordings/storage/stats")
 def get_storage_statistics(db: Session = Depends(get_db)):
     """
-    Get storage usage statistics
+    Get storage usage statistics (optimized with database aggregation)
     """
-    recordings = db.query(models.RecordingEvent).all()
+    from sqlalchemy import func
 
-    total_size = sum(r.file_size_bytes or 0 for r in recordings)
-    total_count = len(recordings)
-    total_duration = sum(r.duration_seconds or 0 for r in recordings)
+    # Use database aggregation instead of loading all records
+    result = db.query(
+        func.count(models.RecordingEvent.id).label('total_count'),
+        func.sum(models.RecordingEvent.file_size_bytes).label('total_size'),
+        func.sum(models.RecordingEvent.duration_seconds).label('total_duration')
+    ).first()
+
+    total_count = result.total_count or 0
+    total_size = result.total_size or 0
+    total_duration = result.total_duration or 0
 
     # Get disk usage
     recordings_dir = "recordings"

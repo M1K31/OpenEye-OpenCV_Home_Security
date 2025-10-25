@@ -272,12 +272,12 @@ class Recorder:
 
             # NEW: Save to database
             try:
-                from backend.database.session import SessionLocal
+                from backend.database.utils import get_db_context
                 from backend.database import crud
                 from backend.core.paths import paths
 
-                db = SessionLocal()
-                try:
+                # FIXED: Use context manager to prevent session leak (v3.6.0.1)
+                with get_db_context() as db:
                     # Get relative path for database storage
                     relative_path = paths.get_relative_path(self.filename)
 
@@ -299,8 +299,6 @@ class Recorder:
                     db_event = crud.create_recording_event(db, recording_data)
                     print(f"✅ Recording event created in database: ID={db_event.id}")
 
-                finally:
-                    db.close()
             except Exception as db_error:
                 print(f"⚠️ Failed to save recording to database: {db_error}")
                 # Don't fail the entire operation if database save fails

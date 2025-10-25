@@ -5,9 +5,12 @@
 Database models for the notification and alert system
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, JSON, Float
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, JSON, Float, Text
 from datetime import datetime
 from backend.database.session import Base
+from cryptography.fernet import Fernet
+import os
+import base64
 
 # SAFETY CHECK: Verify Base consistency
 from backend.database.models import Base as ModelsBase
@@ -127,3 +130,126 @@ class AlertThrottle(Base):
         return f"<AlertThrottle(key={
             self.throttle_key}, last={
             self.last_alert_time})>"
+
+
+class NotificationProvider(Base):
+    """
+    Stores notification provider credentials and settings
+
+    Supports multiple notification channels:
+    - Email (SMTP)
+    - SMS (Twilio)
+    - Push (Firebase FCM)
+    - Telegram Bot
+    - Discord Webhook
+    - Custom Webhooks
+
+    Credentials are encrypted at rest using Fernet (symmetric encryption)
+    """
+
+    __tablename__ = "notification_providers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)  # Links to User model
+
+    # Provider identification
+    provider_type = Column(String, index=True)  # "email", "sms", "push", "telegram", "discord", "webhook"
+    provider_name = Column(String)  # User-friendly name (e.g., "Gmail", "Personal Twilio")
+    enabled = Column(Boolean, default=True)
+
+    # Encrypted credentials (JSON stored as encrypted text)
+    # Structure varies by provider type:
+    # - email: {smtp_host, smtp_port, username, password, from_email, use_tls}
+    # - sms: {account_sid, auth_token, from_number}
+    # - push: {fcm_server_key}
+    # - telegram: {bot_token}
+    # - discord: {webhook_url}
+    # - webhook: {url, headers, method, timeout}
+    encrypted_config = Column(Text, nullable=False)
+
+    # Test status
+    last_tested_at = Column(DateTime, nullable=True)
+    test_status = Column(String, nullable=True)  # "success", "failed", "not_tested"
+    test_error = Column(String, nullable=True)
+
+    # Usage tracking
+    total_sent = Column(Integer, default=0)
+    total_failed = Column(Integer, default=0)
+    last_used_at = Column(DateTime, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<NotificationProvider(id={self.id}, type={self.provider_type}, name={self.provider_name})>"
+
+    @staticmethod
+    def get_encryption_key():
+        """
+        Get or create encryption key for credentials
+
+        Key is stored in environment variable NOTIFICATION_ENCRYPTION_KEY.
+        If not set, generates a new key (should be set in production).
+        """
+        key_str = os.getenv("NOTIFICATION_ENCRYPTION_KEY")
+
+        if not key_str:
+            # Generate new key for development
+            key = Fernet.generate_key()
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                "NOTIFICATION_ENCRYPTION_KEY not set! Generated temporary key. "
+                "Set this in production: NOTIFICATION_ENCRYPTION_KEY=" + key.decode()
+            )
+            return key
+
+        return key_str.encode()
+
+    def encrypt_config(self, config_dict: dict) -> str:
+        """
+        Encrypt configuration dictionary
+
+        Args:
+            config_dict: Configuration to encrypt
+
+        Returns:
+            Base64-encoded encrypted string
+        """
+        import json
+        fernet = Fernet(self.get_encryption_key())
+        config_json = json.dumps(config_dict)
+        encrypted = fernet.encrypt(config_json.encode())
+        return base64.b64encode(encrypted).decode()
+
+    def decrypt_config(self) -> dict:
+        """
+        Decrypt configuration
+
+        Returns:
+            Configuration dictionary
+        """
+        import json
+        fernet = Fernet(self.get_encryption_key())
+        encrypted = base64.b64decode(self.encrypted_config.encode())
+        decrypted = fernet.decrypt(encrypted)
+        return json.loads(decrypted.decode())
+
+    def set_config(self, config_dict: dict):
+        """
+        Set configuration (encrypts automatically)
+
+        Args:
+            config_dict: Configuration dictionary
+        """
+        self.encrypted_config = self.encrypt_config(config_dict)
+
+    def get_config(self) -> dict:
+        """
+        Get decrypted configuration
+
+        Returns:
+            Configuration dictionary
+        """
+        return self.decrypt_config()

@@ -2,12 +2,17 @@
 // This file is part of OpenEye-OpenCV_Home_Security
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import twoFactorService from '../services/twoFactorService';
 
 const LoginPage = ({ setToken }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [requires2FA, setRequires2FA] = useState(false);
+  const [totpToken, setTotpToken] = useState('');
+  const [backupCode, setBackupCode] = useState('');
+  const [useBackupCode, setUseBackupCode] = useState(false);
 
   // Clear any expired or invalid tokens when login page loads
   useEffect(() => {
@@ -38,17 +43,19 @@ const LoginPage = ({ setToken }) => {
     setError('');
 
     try {
-      const response = await axios.post('/api/token', new URLSearchParams({
+      // Use 2FA service for login
+      const response = await twoFactorService.login(
         username,
         password,
-      }), {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-      });
+        useBackupCode ? null : totpToken,
+        useBackupCode ? backupCode : null
+      );
 
-      if (response.data.access_token) {
-        setToken(response.data.access_token);
+      if (response.access_token) {
+        setToken(response.access_token);
+      } else if (response.requires_2fa) {
+        // 2FA is required - show 2FA input
+        setRequires2FA(true);
       } else {
         setError('Login failed: No token received.');
       }
@@ -61,60 +68,141 @@ const LoginPage = ({ setToken }) => {
     }
   };
 
+  const handleBack = () => {
+    setRequires2FA(false);
+    setTotpToken('');
+    setBackupCode('');
+    setUseBackupCode(false);
+    setError('');
+  };
+
   return (
     <div style={styles.container}>
       <div style={styles.card}>
         <h1 style={styles.title}>OpenEye Login</h1>
         <form onSubmit={handleLogin} style={styles.form}>
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Username</label>
-            <input
-              type="text"
-              placeholder="Enter username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              style={styles.input}
-            />
-          </div>
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Password</label>
-            <div style={{ position: 'relative' }}>
-              <input
-                type={showPassword ? "text" : "password"}
-                placeholder="Enter password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                style={{...styles.input, paddingRight: 'var(--spacing-2xl, 48px)'}}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                style={{
-                  position: 'absolute',
-                  right: 'var(--spacing-sm, 8px)',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '18px',
-                  color: 'var(--text-secondary)',
-                  minWidth: 'var(--touch-target-min, 44px)',
-                  minHeight: 'var(--touch-target-min, 44px)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-                title={showPassword ? "Hide password" : "Show password"}
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? '🙈' : '👁️'}
-              </button>
-            </div>
-          </div>
-          <button type="submit" style={styles.button}>Login</button>
+          {!requires2FA ? (
+            // Step 1: Username and Password
+            <>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Username</label>
+                <input
+                  type="text"
+                  placeholder="Enter username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  required
+                  style={styles.input}
+                />
+              </div>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Password</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Enter password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    style={{...styles.input, paddingRight: 'var(--spacing-2xl, 48px)'}}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    style={{
+                      position: 'absolute',
+                      right: '4px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '18px',
+                      color: 'var(--text-secondary)',
+                      width: '40px',
+                      height: '40px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: 'var(--radius-sm, 8px)',
+                      transition: 'background-color 0.2s ease',
+                    }}
+                    title={showPassword ? "Hide password" : "Show password"}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--hover-bg, rgba(0,0,0,0.05))'}
+                    onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                  >
+                    {showPassword ? '🙈' : '👁️'}
+                  </button>
+                </div>
+              </div>
+              <button type="submit" style={styles.button}>Login</button>
+            </>
+          ) : (
+            // Step 2: Two-Factor Authentication
+            <>
+              <div style={styles.info}>
+                <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.5' }}>
+                  Two-factor authentication is enabled for this account. Please enter your authentication code.
+                </p>
+              </div>
+
+              {!useBackupCode ? (
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Authenticator Code</label>
+                  <input
+                    type="text"
+                    placeholder="000000"
+                    value={totpToken}
+                    onChange={(e) => setTotpToken(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    required
+                    style={{...styles.input, textAlign: 'center', letterSpacing: '0.3em', fontSize: '24px'}}
+                    maxLength={6}
+                    pattern="\d{6}"
+                    autoComplete="off"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setUseBackupCode(true)}
+                    style={styles.linkButton}
+                  >
+                    Use backup code instead
+                  </button>
+                </div>
+              ) : (
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Backup Code</label>
+                  <input
+                    type="text"
+                    placeholder="XXXX-XXXX-XXXX"
+                    value={backupCode}
+                    onChange={(e) => setBackupCode(e.target.value.toUpperCase())}
+                    required
+                    style={styles.input}
+                    autoComplete="off"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setUseBackupCode(false)}
+                    style={styles.linkButton}
+                  >
+                    Use authenticator code instead
+                  </button>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 'var(--spacing-md, 16px)' }}>
+                <button type="button" onClick={handleBack} style={{...styles.button, ...styles.secondaryButton}}>
+                  Back
+                </button>
+                <button type="submit" style={styles.button}>
+                  Verify
+                </button>
+              </div>
+            </>
+          )}
         </form>
         {error && <div style={styles.error}>{error}</div>}
       </div>
@@ -193,6 +281,28 @@ const styles = {
     borderRadius: 'var(--radius-sm, 8px)',
     borderLeft: '4px solid var(--color-error)',
     fontSize: '14px',
+  },
+  info: {
+    color: 'var(--text-secondary)',
+    padding: 'var(--spacing-md, 16px)',
+    backgroundColor: 'var(--bg-secondary, rgba(0, 123, 255, 0.1))',
+    borderRadius: 'var(--radius-sm, 8px)',
+    borderLeft: '4px solid var(--theme-primary)',
+    fontSize: '14px',
+  },
+  linkButton: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--theme-primary)',
+    cursor: 'pointer',
+    fontSize: '14px',
+    padding: 'var(--spacing-sm, 8px) 0',
+    textDecoration: 'underline',
+    marginTop: 'var(--spacing-sm, 8px)',
+  },
+  secondaryButton: {
+    backgroundColor: 'var(--bg-secondary, #6c757d)',
+    flex: 1,
     lineHeight: '1.5',
   },
 };

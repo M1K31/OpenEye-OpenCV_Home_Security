@@ -20,8 +20,10 @@ from .recorder import Recorder
 from .face_detection import FaceDetector
 import asyncio
 from backend.core.alert_manager import get_alert_manager
+from backend.core.automation_engine import process_face_detection
 from backend.database.session import SessionLocal
-from backend.database.models import Camera as CameraModel, MotionDetectionEvent
+from backend.database.models import Camera as CameraModel
+from backend.database.utils import get_db_context
 
 
 class Camera(ABC):
@@ -55,7 +57,7 @@ class Camera(ABC):
         # Load settings from database or use defaults
         settings = db_settings or {}
 
-        # Initialize Motion Detector with granular controls
+        # Initialize Motion Detector with granular controls (v3.5.7 enhanced - recommended defaults)
         self.motion_detector = MotionDetector(
             min_contour_area=settings.get("min_contour_area", 500),
             sensitivity=settings.get("motion_sensitivity", 5),
@@ -63,6 +65,12 @@ class Camera(ABC):
             noise_reduction=settings.get("noise_reduction", "medium"),
             detect_shadows=settings.get("detect_shadows", True),
             detection_zones=settings.get("detection_zones"),
+            lighting_compensation=settings.get("lighting_compensation_enabled", True),
+            shadow_detection_method=settings.get("shadow_detection_method", "dual"),
+            erosion_iterations=settings.get("erosion_iterations", 2),  # Recommended: 2
+            dilation_iterations=settings.get("dilation_iterations", 3),  # Recommended: 3
+            motion_persistence_frames=settings.get("motion_persistence_frames", 2),
+            use_grayscale=settings.get("use_grayscale", True),
         )
 
         # Initialize Image Processor with quality controls
@@ -139,14 +147,28 @@ class Camera(ABC):
         noise_reduction: Optional[str] = None,
         detect_shadows: Optional[bool] = None,
         detection_zones: Optional[str] = None,
+        shadow_detection_method: Optional[str] = None,
+        erosion_iterations: Optional[int] = None,
+        dilation_iterations: Optional[int] = None,
+        motion_persistence_frames: Optional[int] = None,
+        use_grayscale: Optional[bool] = None,
+        lighting_compensation: Optional[bool] = None,
+        brightness_change_threshold: Optional[int] = None,
     ):
-        """Update motion detection settings dynamically"""
+        """Update motion detection settings dynamically (v3.5.7 enhanced)"""
         self.motion_detector.update_settings(
             sensitivity=sensitivity,
             var_threshold=var_threshold,
             noise_reduction=noise_reduction,
             detect_shadows=detect_shadows,
             detection_zones=detection_zones,
+            shadow_detection_method=shadow_detection_method,
+            erosion_iterations=erosion_iterations,
+            dilation_iterations=dilation_iterations,
+            motion_persistence_frames=motion_persistence_frames,
+            use_grayscale=use_grayscale,
+            lighting_compensation=lighting_compensation,
+            brightness_change_threshold=brightness_change_threshold,
         )
 
     def update_image_settings(
@@ -196,51 +218,58 @@ class Camera(ABC):
             return
 
         try:
-            db = SessionLocal()
-            db_camera = (
-                db.query(CameraModel)
-                .filter(CameraModel.camera_id == self.camera_id)
-                .first()
-            )
-
-            if db_camera:
-                # Update motion settings
-                self.update_motion_settings(
-                    sensitivity=db_camera.motion_sensitivity,
-                    var_threshold=db_camera.motion_threshold,
-                    noise_reduction=db_camera.noise_reduction,
-                    detect_shadows=db_camera.detect_shadows,
-                    detection_zones=db_camera.detection_zones,
+            # FIX v3.6.0.1: Use context manager to prevent session leak
+            with get_db_context() as db:
+                db_camera = (
+                    db.query(CameraModel)
+                    .filter(CameraModel.camera_id == self.camera_id)
+                    .first()
                 )
 
-                # Update motion percentage threshold
-                self.motion_percentage_threshold = db_camera.motion_percentage_threshold
+                if db_camera:
+                    # Update motion settings (v3.5.7 enhanced - recommended defaults)
+                    self.update_motion_settings(
+                        sensitivity=db_camera.motion_sensitivity,
+                        var_threshold=db_camera.motion_threshold,
+                        noise_reduction=db_camera.noise_reduction,
+                        detect_shadows=db_camera.detect_shadows,
+                        detection_zones=db_camera.detection_zones,
+                        shadow_detection_method=getattr(db_camera, 'shadow_detection_method', 'dual'),
+                        erosion_iterations=getattr(db_camera, 'erosion_iterations', 2),
+                        dilation_iterations=getattr(db_camera, 'dilation_iterations', 3),
+                        motion_persistence_frames=getattr(db_camera, 'motion_persistence_frames', 2),
+                        use_grayscale=getattr(db_camera, 'use_grayscale', True),
+                        lighting_compensation=getattr(db_camera, 'lighting_compensation_enabled', True),
+                        brightness_change_threshold=getattr(db_camera, 'brightness_change_threshold', 15),
+                    )
 
-                # Update image settings
-                self.update_image_settings(
-                    brightness=db_camera.brightness,
-                    contrast=db_camera.contrast,
-                    saturation=db_camera.saturation,
-                    sharpness=db_camera.sharpness,
-                    noise_reduction_strength=db_camera.noise_reduction_strength,
-                )
+                    # Update motion percentage threshold
+                    self.motion_percentage_threshold = db_camera.motion_percentage_threshold
 
-                # Update video settings
-                self.update_video_settings(
-                    resolution=db_camera.resolution,
-                    fps_target=db_camera.fps_target,
-                    bitrate_kbps=db_camera.bitrate_kbps,
-                    codec=db_camera.codec,
-                )
+                    # Update image settings
+                    self.update_image_settings(
+                        brightness=db_camera.brightness,
+                        contrast=db_camera.contrast,
+                        saturation=db_camera.saturation,
+                        sharpness=db_camera.sharpness,
+                        noise_reduction_strength=db_camera.noise_reduction_strength,
+                    )
 
-                # Update other settings
-                self.post_motion_cooldown = db_camera.post_motion_cooldown
+                    # Update video settings
+                    self.update_video_settings(
+                        resolution=db_camera.resolution,
+                        fps_target=db_camera.fps_target,
+                        bitrate_kbps=db_camera.bitrate_kbps,
+                        codec=db_camera.codec,
+                    )
 
-                print(
-                    f"Settings reloaded for camera '{
-                        self.camera_id}' from database")
+                    # Update other settings
+                    self.post_motion_cooldown = db_camera.post_motion_cooldown
 
-            db.close()
+                    print(
+                        f"Settings reloaded for camera '{
+                            self.camera_id}' from database")
+                # Session automatically closed by context manager
         except Exception as e:
             print(f"Error reloading settings from database: {e}")
 
@@ -303,50 +332,48 @@ class Camera(ABC):
             return None
 
         try:
-            db = SessionLocal()
+            # FIX v3.6.0.1: Use context manager to prevent session leak
+            with get_db_context() as db:
+                # Calculate total motion area and percentage
+                frame_area = frame.shape[0] * frame.shape[1]
+                total_motion_area = sum(area.get("area", 0)
+                                        for area in motion_areas)
+                motion_percentage = (total_motion_area /
+                                     frame_area * 100) if frame_area > 0 else 0
 
-            # Calculate total motion area and percentage
-            frame_area = frame.shape[0] * frame.shape[1]
-            total_motion_area = sum(area.get("area", 0)
-                                    for area in motion_areas)
-            motion_percentage = (total_motion_area /
-                                 frame_area * 100) if frame_area > 0 else 0
+                # Get recording path if currently recording
+                recording_path = None
+                if self.recorder.is_recording and hasattr(self.recorder, "filename"):
+                    recording_path = self.recorder.filename
 
-            # Get recording path if currently recording
-            recording_path = None
-            if self.recorder.is_recording and hasattr(self.recorder, "filename"):
-                recording_path = self.recorder.filename
+                # Create motion event
+                motion_event = MotionDetectionEvent(
+                    camera_id=self.camera_id,
+                    motion_area=total_motion_area,
+                    motion_percentage=motion_percentage,
+                    contour_count=len(motion_areas),
+                    snapshot_path=snapshot_path,
+                    frame_width=frame.shape[1],
+                    frame_height=frame.shape[0],
+                    recording_path=recording_path,
+                )
 
-            # Create motion event
-            motion_event = MotionDetectionEvent(
-                camera_id=self.camera_id,
-                motion_area=total_motion_area,
-                motion_percentage=motion_percentage,
-                contour_count=len(motion_areas),
-                snapshot_path=snapshot_path,
-                frame_width=frame.shape[1],
-                frame_height=frame.shape[0],
-                recording_path=recording_path,
-            )
+                db.add(motion_event)
+                db.commit()
+                db.refresh(motion_event)
 
-            db.add(motion_event)
-            db.commit()
-            db.refresh(motion_event)
+                event_id = motion_event.id
+                # Session automatically closed by context manager
 
-            event_id = motion_event.id
-            db.close()
-
-            print(
-                f"Created motion event {event_id} for camera {
-                    self.camera_id}: {
-                    motion_percentage:.1f}% motion, {
-                    len(motion_areas)} contours")
-            return event_id
+                print(
+                    f"Created motion event {event_id} for camera {
+                        self.camera_id}: {
+                        motion_percentage:.1f}% motion, {
+                        len(motion_areas)} contours")
+                return event_id
 
         except Exception as e:
             print(f"Error creating motion event in database: {e}")
-            if 'db' in locals():
-                db.close()
             return None
 
     def _update_motion_event_faces(self, motion_event_id: int, face_count: int):
@@ -361,22 +388,146 @@ class Camera(ABC):
             return
 
         try:
-            db = SessionLocal()
-            motion_event = db.query(MotionDetectionEvent).filter(
-                MotionDetectionEvent.id == motion_event_id
-            ).first()
+            # FIX v3.6.0.1: Use context manager to prevent session leak
+            with get_db_context() as db:
+                motion_event = db.query(MotionDetectionEvent).filter(
+                    MotionDetectionEvent.id == motion_event_id
+                ).first()
 
-            if motion_event:
-                motion_event.faces_detected = face_count
-                db.commit()
-                print(
-                    f"Updated motion event {motion_event_id} with {face_count} faces detected")
-
-            db.close()
+                if motion_event:
+                    motion_event.faces_detected = face_count
+                    db.commit()
+                    print(
+                        f"Updated motion event {motion_event_id} with {face_count} faces detected")
+                # Session automatically closed by context manager
         except Exception as e:
             print(f"Error updating motion event with faces: {e}")
-            if 'db' in locals():
-                db.close()
+
+    def _save_face_snapshot(self, frame: np.ndarray, face_location: dict) -> Optional[str]:
+        """
+        Save a face detection snapshot to disk.
+
+        Args:
+            frame: The frame with the detected face
+            face_location: Dictionary with top, right, bottom, left coordinates
+
+        Returns:
+            Path to the saved snapshot or None if save failed
+        """
+        try:
+            # Create snapshots directory if it doesn't exist
+            snapshots_dir = Path(self.snapshots_path)
+            snapshots_dir.mkdir(parents=True, exist_ok=True)
+
+            # Generate filename with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+            camera_name = self.camera_id or "unknown"
+            filename = f"face_{camera_name}_{timestamp}.jpg"
+            snapshot_path = snapshots_dir / filename
+
+            # Crop face region with some padding
+            top = max(0, face_location.get("top", 0) - 20)
+            right = min(frame.shape[1], face_location.get("right", frame.shape[1]) + 20)
+            bottom = min(frame.shape[0], face_location.get("bottom", frame.shape[0]) + 20)
+            left = max(0, face_location.get("left", 0) - 20)
+
+            face_crop = frame[top:bottom, left:right]
+
+            # Save the cropped face
+            success = cv2.imwrite(str(snapshot_path), face_crop)
+
+            if success:
+                return str(snapshot_path)
+            else:
+                print(f"Failed to save face snapshot to {snapshot_path}")
+                return None
+        except Exception as e:
+            print(f"Error saving face snapshot: {e}")
+            return None
+
+    def _create_face_detection_event(
+        self,
+        frame: np.ndarray,
+        face: dict,
+        snapshot_path: Optional[str] = None,
+    ) -> Optional[int]:
+        """
+        Create a FaceDetectionEvent in the database with face encoding for clustering.
+
+        Args:
+            frame: The frame where the face was detected
+            face: Dictionary with face detection data (name, confidence, location, encoding)
+            snapshot_path: Path to the saved face snapshot (optional)
+
+        Returns:
+            The ID of the created face detection event or None if creation failed
+        """
+        if not self.camera_id:
+            return None
+
+        try:
+            # FIX v3.6.0.1: Use context manager to prevent session leak
+            with get_db_context() as db:
+                # Get recording path if currently recording
+                recording_path = None
+                recording_id = None
+                if self.recorder.is_recording and hasattr(self.recorder, "filename"):
+                    recording_path = self.recorder.filename
+                    # TODO: Get recording_id from database if needed
+
+                location = face.get("location", {})
+
+                # Create face detection event
+                face_event = FaceDetectionEvent(
+                    camera_id=self.camera_id,
+                    person_name=face.get("name", "Unknown"),
+                    confidence=face.get("confidence", 0.0),
+                    detected_at=datetime.now(),
+                    location_top=location.get("top", 0),
+                    location_right=location.get("right", 0),
+                    location_bottom=location.get("bottom", 0),
+                    location_left=location.get("left", 0),
+                    snapshot_path=snapshot_path,
+                    recording_path=recording_path,
+                    recording_id=recording_id,
+                    motion_detected=face.get("motion_detected", False),
+                    frame_width=frame.shape[1],
+                    frame_height=frame.shape[0],
+                    face_encoding=face.get("encoding"),  # Base64 encoded face encoding for clustering
+                )
+
+                db.add(face_event)
+                db.commit()
+                db.refresh(face_event)
+
+                event_id = face_event.id
+                person_name = face.get("name", "Unknown")
+                confidence = face.get("confidence", 0.0)
+                detected_at = face_event.detected_at
+                # Session automatically closed by context manager
+
+                print(
+                    f"Created face detection event {event_id} for camera {self.camera_id}: "
+                    f"{person_name} (confidence: {confidence:.2f})"
+                )
+
+                # Trigger automation rules for identified persons (not Unknown)
+                if person_name != "Unknown":
+                    try:
+                        process_face_detection(
+                            person_name=person_name,
+                            camera_id=self.camera_id,
+                            confidence=confidence,
+                            detected_at=detected_at
+                        )
+                    except Exception as e:
+                        print(f"Error processing automation rules for {person_name}: {e}")
+
+                return event_id
+
+        except Exception as e:
+            print(f"Error creating face detection event in database: {e}")
+            return None
 
 
 class MockCamera(Camera):
@@ -509,6 +660,19 @@ class MockCamera(Camera):
             processed_frame, self.last_faces_detected = (
                 self.face_detector.process_frame(
                     processed_frame, self.motion_detected))
+
+            # Save face detection events to database
+            if self.last_faces_detected:
+                for face in self.last_faces_detected:
+                    # Save face snapshot
+                    face_snapshot_path = self._save_face_snapshot(
+                        processed_frame, face.get("location", {})
+                    )
+
+                    # Create face detection event in database with encoding
+                    face_event_id = self._create_face_detection_event(
+                        processed_frame, face, face_snapshot_path
+                    )
 
             # Update motion event with face count if faces detected
             if self.last_faces_detected and self.current_motion_event_id:
@@ -671,6 +835,19 @@ class RTSPCamera(Camera):
                 self.face_detector.process_frame(
                     processed_frame, self.motion_detected))
 
+            # Save face detection events to database
+            if self.last_faces_detected:
+                for face in self.last_faces_detected:
+                    # Save face snapshot
+                    face_snapshot_path = self._save_face_snapshot(
+                        processed_frame, face.get("location", {})
+                    )
+
+                    # Create face detection event in database with encoding
+                    face_event_id = self._create_face_detection_event(
+                        processed_frame, face, face_snapshot_path
+                    )
+
             # Update motion event with face count if faces detected
             if self.last_faces_detected and self.current_motion_event_id:
                 self._update_motion_event_faces(
@@ -728,79 +905,77 @@ class CameraManager:
             self, camera_id: str) -> Optional[Dict[str, Any]]:
         """Load camera settings from database and merge with system settings"""
         try:
-            db = SessionLocal()
+            # FIXED: Use context manager to prevent session leak (v3.6.0.1)
+            with get_db_context() as db:
+                # Load system settings
+                from backend.database.crud import get_all_system_settings
 
-            # Load system settings
-            from backend.database.crud import get_all_system_settings
+                settings_list = get_all_system_settings(db)
 
-            settings_list = get_all_system_settings(db)
-
-            # Convert list to dictionary
-            system_settings = {}
-            for setting in settings_list:
-                try:
-                    if setting.setting_type == "int":
-                        system_settings[setting.setting_key] = int(
-                            setting.setting_value
-                        )
-                    elif setting.setting_type == "float":
-                        system_settings[setting.setting_key] = float(
-                            setting.setting_value
-                        )
-                    elif setting.setting_type == "boolean":
-                        system_settings[setting.setting_key] = (
-                            setting.setting_value.lower() == "true"
-                        )
-                    else:
+                # Convert list to dictionary
+                system_settings = {}
+                for setting in settings_list:
+                    try:
+                        if setting.setting_type == "int":
+                            system_settings[setting.setting_key] = int(
+                                setting.setting_value
+                            )
+                        elif setting.setting_type == "float":
+                            system_settings[setting.setting_key] = float(
+                                setting.setting_value
+                            )
+                        elif setting.setting_type == "boolean":
+                            system_settings[setting.setting_key] = (
+                                setting.setting_value.lower() == "true"
+                            )
+                        else:
+                            system_settings[setting.setting_key] = setting.setting_value
+                    except (ValueError, AttributeError):
                         system_settings[setting.setting_key] = setting.setting_value
-                except (ValueError, AttributeError):
-                    system_settings[setting.setting_key] = setting.setting_value
 
-            # Load camera-specific settings
-            db_camera = (
-                db.query(CameraModel).filter(
-                    CameraModel.camera_id == camera_id).first())
+                # Load camera-specific settings
+                db_camera = (
+                    db.query(CameraModel).filter(
+                        CameraModel.camera_id == camera_id).first())
 
-            if db_camera:
-                settings = {
-                    # Motion detection settings
-                    "min_contour_area": db_camera.min_contour_area,
-                    "motion_sensitivity": db_camera.motion_sensitivity,
-                    "motion_threshold": db_camera.motion_threshold,
-                    "noise_reduction": db_camera.noise_reduction,
-                    "detect_shadows": db_camera.detect_shadows,
-                    "detection_zones": db_camera.detection_zones,
-                    # Image quality settings
-                    "brightness": db_camera.brightness,
-                    "contrast": db_camera.contrast,
-                    "saturation": db_camera.saturation,
-                    "sharpness": db_camera.sharpness,
-                    "noise_reduction_strength": db_camera.noise_reduction_strength,
-                    # Video quality settings
-                    "resolution": db_camera.resolution,
-                    "fps_target": db_camera.fps_target,
-                    "bitrate_kbps": db_camera.bitrate_kbps,
-                    "codec": db_camera.codec,
-                    # Recording settings
-                    "post_motion_cooldown": db_camera.post_motion_cooldown,
-                    # System settings (paths, max duration, display mode)
-                    "recordings_path": system_settings.get(
-                        "recordings_path", "recordings"
-                    ),
-                    "faces_path": system_settings.get("faces_path", "faces"),
-                    "snapshots_path": system_settings.get("snapshots_path", "data/snapshots"),
-                    "max_recording_duration": int(
-                        system_settings.get("max_recording_duration", 300)
-                    ),
-                    "display_mode": system_settings.get("display_mode", "grid"),
-                    "cycle_interval": int(system_settings.get("cycle_interval", 10)),
-                }
+                if db_camera:
+                    settings = {
+                        # Motion detection settings
+                        "min_contour_area": db_camera.min_contour_area,
+                        "motion_sensitivity": db_camera.motion_sensitivity,
+                        "motion_threshold": db_camera.motion_threshold,
+                        "noise_reduction": db_camera.noise_reduction,
+                        "detect_shadows": db_camera.detect_shadows,
+                        "detection_zones": db_camera.detection_zones,
+                        # Image quality settings
+                        "brightness": db_camera.brightness,
+                        "contrast": db_camera.contrast,
+                        "saturation": db_camera.saturation,
+                        "sharpness": db_camera.sharpness,
+                        "noise_reduction_strength": db_camera.noise_reduction_strength,
+                        # Video quality settings
+                        "resolution": db_camera.resolution,
+                        "fps_target": db_camera.fps_target,
+                        "bitrate_kbps": db_camera.bitrate_kbps,
+                        "codec": db_camera.codec,
+                        # Recording settings
+                        "post_motion_cooldown": db_camera.post_motion_cooldown,
+                        # System settings (paths, max duration, display mode)
+                        "recordings_path": system_settings.get(
+                            "recordings_path", "recordings"
+                        ),
+                        "faces_path": system_settings.get("faces_path", "faces"),
+                        "snapshots_path": system_settings.get("snapshots_path", "data/snapshots"),
+                        "max_recording_duration": int(
+                            system_settings.get("max_recording_duration", 300)
+                        ),
+                        "display_mode": system_settings.get("display_mode", "grid"),
+                        "cycle_interval": int(system_settings.get("cycle_interval", 10)),
+                    }
 
-                db.close()
-                return settings
+                    return settings
 
-            db.close()
-            return None
+                return None
 
         except Exception as e:
             print(f"Error loading camera settings from database: {e}")

@@ -1,0 +1,757 @@
+{
+  "errors": [
+    {
+      "filename": "backend/api/routes/alerts.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/api/routes/analytics.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/api/routes/automations.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/api/routes/cameras.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/api/routes/clusters.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/api/routes/discovery.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/api/routes/face_history.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/api/routes/faces.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/api/routes/integrations.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/api/routes/motion_events.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/api/routes/recordings.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/api/routes/settings.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/api/routes/setup.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/api/routes/timeline.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/api/routes/two_way_audio.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/api/routes/users.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/api/routes/websockets.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/api/schemas/automation.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/api/schemas/camera.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/api/schemas/clustering.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/api/schemas/face.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/api/schemas/motion.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/api/schemas/user.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/core/alert_manager.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/core/alert_notification_system.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/core/auth.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/core/automation_engine.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/core/camera_discovery.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/core/camera_manager.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/core/cloud_storage_system.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/core/clustering_scheduler.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/core/face_clustering.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/core/face_detection.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/core/face_recognition.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/core/image_processor.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/core/motion_detector.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/core/paths.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/core/pkg_resources_patch.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/core/recorder.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/core/security.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/core/statistics_broadcaster.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/core/timeline_playback_system.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/core/two_way_audio_system.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/core/video_processor.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/core/websocket_manager.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/database/alert_models.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/database/crud.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/database/migrations/add_automation_rules.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/database/migrations/add_motion_detection_events.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/database/models.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/database/session.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/integrations/homeassistant_integration.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/integrations/homekit_integration.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/integrations/mqtt_integration.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/integrations/nest_integrations.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/integrations/webhook_system.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/main.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/middleware/rate_limiter.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/middleware/security.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/services/notification_service.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/services/storage_service.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/utils/cleanup_orphaned_records.py",
+      "reason": "exception while scanning file"
+    },
+    {
+      "filename": "backend/utils/migrate_media.py",
+      "reason": "exception while scanning file"
+    }
+  ],
+  "generated_at": "2025-10-23T03:43:17Z",
+  "metrics": {
+    "_totals": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 15945,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/__init__.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 0,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/middleware/__init__.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 0,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/routes/__init__.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 0,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/routes/alerts.py": {
+      "loc": 334,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/routes/analytics.py": {
+      "loc": 93,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/routes/automations.py": {
+      "loc": 264,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/routes/cameras.py": {
+      "loc": 363,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/routes/clusters.py": {
+      "loc": 374,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/routes/discovery.py": {
+      "loc": 232,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/routes/face_history.py": {
+      "loc": 264,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/routes/faces.py": {
+      "loc": 413,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/routes/integrations.py": {
+      "loc": 72,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/routes/motion_events.py": {
+      "loc": 269,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/routes/recordings.py": {
+      "loc": 272,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/routes/settings.py": {
+      "loc": 338,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/routes/setup.py": {
+      "loc": 115,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/routes/timeline.py": {
+      "loc": 440,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/routes/two_way_audio.py": {
+      "loc": 81,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/routes/users.py": {
+      "loc": 44,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/routes/websockets.py": {
+      "loc": 195,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/schemas/__init__.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 0,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/schemas/automation.py": {
+      "loc": 131,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/schemas/camera.py": {
+      "loc": 159,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/schemas/clustering.py": {
+      "loc": 104,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/schemas/face.py": {
+      "loc": 92,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/schemas/motion.py": {
+      "loc": 48,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/api/schemas/user.py": {
+      "loc": 15,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/core/__init__.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 0,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/core/alert_manager.py": {
+      "loc": 335,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/core/alert_notification_system.py": {
+      "loc": 667,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/core/audio_processor.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 0,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/core/auth.py": {
+      "loc": 127,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/core/automation_engine.py": {
+      "loc": 295,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/core/camera_discovery.py": {
+      "loc": 264,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/core/camera_manager.py": {
+      "loc": 831,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/core/cloud_storage_system.py": {
+      "loc": 530,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/core/clustering_scheduler.py": {
+      "loc": 188,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/core/face_clustering.py": {
+      "loc": 387,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/core/face_detection.py": {
+      "loc": 138,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/core/face_recognition.py": {
+      "loc": 317,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/core/image_processor.py": {
+      "loc": 199,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/core/motion_detector.py": {
+      "loc": 379,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/core/paths.py": {
+      "loc": 195,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/core/pkg_resources_patch.py": {
+      "loc": 78,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/core/recorder.py": {
+      "loc": 257,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/core/security.py": {
+      "loc": 21,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/core/statistics_broadcaster.py": {
+      "loc": 111,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/core/timeline_playback_system.py": {
+      "loc": 547,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/core/two_way_audio_system.py": {
+      "loc": 501,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/core/video_processor.py": {
+      "loc": 328,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/core/websocket_manager.py": {
+      "loc": 279,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/database/__init__.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 0,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/database/alert_models.py": {
+      "loc": 76,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/database/crud.py": {
+      "loc": 362,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/database/migrations/__init__.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 0,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/database/migrations/add_automation_rules.py": {
+      "loc": 124,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/database/migrations/add_motion_detection_events.py": {
+      "loc": 135,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/database/models.py": {
+      "loc": 220,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/database/session.py": {
+      "loc": 19,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/integrations/__init__.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 0,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/integrations/homeassistant_integration.py": {
+      "loc": 326,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/integrations/homekit_integration.py": {
+      "loc": 299,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/integrations/mqtt_integration.py": {
+      "loc": 389,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/integrations/nest_integrations.py": {
+      "loc": 353,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/integrations/webhook_system.py": {
+      "loc": 451,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/main.py": {
+      "loc": 467,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/middleware/__init__.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 0,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/middleware/rate_limiter.py": {
+      "loc": 61,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/middleware/security.py": {
+      "loc": 96,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/services/__init__.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 0,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/services/notification_service.py": {
+      "loc": 172,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/services/storage_service.py": {
+      "loc": 265,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/services/stream_service.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 0,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/utils/__init__.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 0,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/utils/cleanup_orphaned_records.py": {
+      "loc": 216,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "backend/utils/migrate_media.py": {
+      "loc": 228,
+      "nosec": 0,
+      "skipped_tests": 0
+    }
+  },
+  "results": []
+}

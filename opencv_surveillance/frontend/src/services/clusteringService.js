@@ -94,11 +94,15 @@ const clusteringService = {
    * Delete a cluster
    * @param {number} clusterId - Cluster ID
    * @param {boolean} reassignUnknown - Set faces back to "Unknown" (default: true)
+   * @param {boolean} deleteFaces - Permanently delete face detection events (default: false)
    * @returns {Promise<Object>} Deletion result
    */
-  async deleteCluster(clusterId, reassignUnknown = true) {
+  async deleteCluster(clusterId, reassignUnknown = true, deleteFaces = false) {
     const response = await apiClient.delete(`/clusters/${clusterId}`, {
-      data: { reassign_unknown: reassignUnknown },
+      data: {
+        reassign_unknown: reassignUnknown,
+        delete_faces: deleteFaces
+      },
     });
     return response.data;
   },
@@ -109,6 +113,39 @@ const clusteringService = {
    */
   async getStatistics() {
     const response = await apiClient.get('/clusters/statistics/summary');
+    return response.data;
+  },
+
+  /**
+   * Get clustering scheduler status
+   * @returns {Promise<Object>} Scheduler status and statistics
+   */
+  async getSchedulerStatus() {
+    const response = await apiClient.get('/clusters/scheduler/status');
+    return response.data;
+  },
+
+  /**
+   * Manually trigger clustering (bypasses interval check)
+   * @returns {Promise<Object>} Clustering results
+   */
+  async triggerManualClustering() {
+    const response = await apiClient.post('/clusters/scheduler/trigger');
+    return response.data;
+  },
+
+  /**
+   * Update clustering scheduler settings
+   * @param {Object} settings - Scheduler settings
+   * @param {boolean} settings.auto_enabled - Enable/disable auto-clustering
+   * @param {number} settings.interval_minutes - Minutes between clustering runs
+   * @param {number} settings.min_faces_threshold - Minimum faces to trigger clustering
+   * @returns {Promise<Object>} Updated settings
+   */
+  async updateSchedulerSettings(settings) {
+    const response = await apiClient.post('/clusters/scheduler/settings', null, {
+      params: settings,
+    });
     return response.data;
   },
 };

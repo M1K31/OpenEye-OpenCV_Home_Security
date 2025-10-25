@@ -6,6 +6,7 @@ import react from '@vitejs/plugin-react'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+
   server: {
     proxy: {
       '/api': {
@@ -13,5 +14,43 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+    // Enable HMR (Hot Module Replacement)
+    hmr: true,
+  },
+
+  // Performance optimizations for production builds
+  build: {
+    // Code splitting for better caching
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Vendor chunk - React and core dependencies
+          'vendor': [
+            'react',
+            'react-dom',
+            'react-router-dom'
+          ],
+          // Icons chunk - Lucide icons
+          'icons': ['lucide-react'],
+          // Utils chunk - Axios and other utilities
+          'utils': ['axios'],
+        },
+      },
+    },
+    // Increase chunk size warning limit (default is 500kb)
+    chunkSizeWarningLimit: 1000,
+    // Minification options
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true, // Remove console.log in production
+        drop_debugger: true,
+      },
+    },
+  },
+
+  // Dependency optimization
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'react-router-dom', 'axios', 'lucide-react'],
   },
 })

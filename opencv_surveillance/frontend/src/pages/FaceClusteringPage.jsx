@@ -7,6 +7,7 @@ import ClusterCard from '../components/ClusterCard';
 import ClusterDetailModal from '../components/ClusterDetailModal';
 import AssignNameModal from '../components/AssignNameModal';
 import MergeClustersModal from '../components/MergeClustersModal';
+import DeleteClusterModal from '../components/DeleteClusterModal';
 import './FaceClusteringPage.css';
 
 /**
@@ -26,7 +27,9 @@ const FaceClusteringPage = () => {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [assignNameModalOpen, setAssignNameModalOpen] = useState(false);
   const [mergeModalOpen, setMergeModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [selectedClusterId, setSelectedClusterId] = useState(null);
+  const [clusterToDelete, setClusterToDelete] = useState(null);
   
   // Pagination
   const [page, setPage] = useState(0);
@@ -66,11 +69,14 @@ const FaceClusteringPage = () => {
 
       // Handle clusters result
       if (clustersResult.status === 'fulfilled') {
-        setClusters(clustersResult.value?.clusters || []);
-        setHasMore((clustersResult.value?.clusters?.length || 0) >= ITEMS_PER_PAGE);
+        const clusterData = clustersResult.value?.clusters || [];
+        console.log('[FaceClusteringPage] Loaded clusters:', clusterData.length);
+        setClusters(clusterData);
+        setHasMore(clusterData.length >= ITEMS_PER_PAGE);
       } else {
         console.error('Failed to load clusters:', clustersResult.reason);
         setClusters([]);
+        setHasMore(false);
       }
 
       // Handle statistics result
@@ -210,18 +216,65 @@ const FaceClusteringPage = () => {
     await loadData();
   };
 
-  // Handle cluster deletion
-  const handleDelete = async (clusterId) => {
-    if (!confirm('Are you sure you want to delete this cluster? Faces will be reset to "Unknown".')) {
-      return;
-    }
-    
+  // Handle cluster deletion - open modal
+  const handleDelete = (clusterId) => {
+    const cluster = clusters.find(c => c.id === clusterId);
+    setClusterToDelete(cluster);
+    setDeleteModalOpen(true);
+  };
+
+  // Handle delete confirmation from modal
+  const handleDeleteConfirm = async (deleteFaces) => {
+    setDeleteModalOpen(false);
+
+    if (!clusterToDelete) return;
+
     try {
-      await clusteringService.deleteCluster(clusterId, true);
-      await loadData();
+      // Optimistic update - remove from UI immediately
+      const clusterId = clusterToDelete.id;
+      setClusters(prev => prev.filter(c => c.id !== clusterId));
+
+      // Update statistics optimistically
+      setStatistics(prev => ({
+        ...prev,
+        total_clusters: Math.max(0, prev.total_clusters - 1),
+        identified_clusters: clusterToDelete.is_identified
+          ? Math.max(0, prev.identified_clusters - 1)
+          : prev.identified_clusters,
+        unidentified_clusters: !clusterToDelete.is_identified
+          ? Math.max(0, prev.unidentified_clusters - 1)
+          : prev.unidentified_clusters,
+        total_clustered_faces: Math.max(0, prev.total_clustered_faces - (clusterToDelete.face_count || 0)),
+        unclustered_faces: deleteFaces
+          ? prev.unclustered_faces  // Faces permanently deleted - no change to unclustered count
+          : prev.unclustered_faces + (clusterToDelete.face_count || 0)  // Faces reset to Unknown
+      }));
+
+      // Perform actual deletion in background
+      await clusteringService.deleteCluster(clusterId, true, deleteFaces);
+
+      // Silently refresh statistics in background (no loading spinner)
+      clusteringService.getStatistics()
+        .then(stats => {
+          setStatistics({
+            total_clusters: stats.total_clusters || 0,
+            identified_clusters: stats.identified_clusters || 0,
+            unidentified_clusters: stats.unidentified_clusters || 0,
+            total_clustered_faces: stats.clustered_faces || 0,
+            total_unknown_faces: stats.total_unknown_faces || 0,
+            clustering_rate: stats.clustering_rate || 0.0,
+            unclustered_faces: stats.unclustered_faces || 0
+          });
+        })
+        .catch(err => console.error('Failed to refresh statistics:', err));
+
     } catch (err) {
       console.error('Error deleting cluster:', err);
       alert('Failed to delete cluster. Please try again.');
+      // Reload data on error to restore correct state
+      await loadData();
+    } finally {
+      setClusterToDelete(null);
     }
   };
 
@@ -362,8 +415,7 @@ const FaceClusteringPage = () => {
 
       {/* Clusters Grid */}
       {loading && clusters.length === 0 ? (
-        <div className="loading-spinner">
-          <div className="spinner"></div>
+        <div className="loading-message">
           <p>Loading clusters...</p>
         </div>
       ) : clusters.length === 0 ? (
@@ -418,7 +470,7 @@ const FaceClusteringPage = () => {
           }}
         />
       )}
-      
+
       {assignNameModalOpen && (
         <AssignNameModal
           clusterId={selectedClusterId}
@@ -426,12 +478,23 @@ const FaceClusteringPage = () => {
           onSuccess={handleNameAssigned}
         />
       )}
-      
+
       {mergeModalOpen && (
         <MergeClustersModal
           clusterIds={selectedClusters}
           onClose={() => setMergeModalOpen(false)}
           onSuccess={handleMergeSuccess}
+        />
+      )}
+
+      {deleteModalOpen && clusterToDelete && (
+        <DeleteClusterModal
+          cluster={clusterToDelete}
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => {
+            setDeleteModalOpen(false);
+            setClusterToDelete(null);
+          }}
         />
       )}
     </div>

@@ -19,6 +19,7 @@ import logging
 import asyncio
 import signal
 import sys
+import os
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,6 +28,7 @@ from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 
 from backend.database.session import engine, SessionLocal
+from backend.database.utils import get_db_context
 from backend.database import models, alert_models
 from backend.api.routes import (
     users,
@@ -46,17 +48,25 @@ from backend.api.routes import (
     automations,
     two_way_audio,
     timeline,
+    metrics,
+    notification_providers,
+    two_factor_auth,
 )
 from backend.core.camera_manager import manager as camera_manager
 from backend.core.websocket_manager import broadcast_statistics_update
 from backend.core.face_recognition import get_face_manager
 from backend.core.statistics_broadcaster import get_broadcaster
+from backend.core.clustering_scheduler import get_clustering_scheduler
 from backend.middleware.rate_limiter import RateLimiter
+from backend.middleware.endpoint_rate_limiter import EndpointRateLimiter
+from backend.middleware.csrf_protection import CSRFProtection
 from backend.middleware.security import (
     SecurityHeadersMiddleware,
     IPWhitelistMiddleware,
     SQLInjectionProtection,
 )
+from backend.middleware.performance import PerformanceMonitoringMiddleware
+from backend.core.audit_logger import get_audit_logger
 from backend.core.two_way_audio_system import audio_manager
 
 # Load environment variables from .env file
@@ -93,25 +103,50 @@ signal.signal(signal.SIGTERM, signal_handler)
 app = FastAPI(
     title="OpenEye Surveillance System",
     description="OpenCV-powered surveillance system with face recognition, motion detection, and video recording",
-    version="3.5.6",  # Timeline Playback + UI improvements
+    version="3.6.1",  # Performance Improvements + Bug Fixes
     docs_url="/api/docs",
     redoc_url="/api/redoc",
 )
 
-# Configure CORS
+# Configure CORS - Load allowed origins from environment
+CORS_ORIGINS_STR = os.getenv(
+    "CORS_ORIGINS",
+    "http://localhost:8000,http://localhost:3000,http://127.0.0.1:8000,http://127.0.0.1:3000"  # Dev defaults
+)
+CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS_STR.split(",")]
+
+logger.info(f"CORS origins configured: {CORS_ORIGINS}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify allowed origins
+    allow_origins=CORS_ORIGINS,  # Specific origins only (no wildcard)
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
 )
 
 # Phase 6: Add security middleware (all free and open source)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(SQLInjectionProtection)
-# Increased rate limit to 1000 requests/minute to handle rapid UI interactions (sliders, etc.)
-app.add_middleware(RateLimiter, requests_per_minute=1000)
+
+# v3.6.0: Enhanced security features
+# Per-endpoint rate limiting (replaces global RateLimiter)
+app.add_middleware(EndpointRateLimiter, custom_limits={
+    "auth": (10, 60),  # 10 auth requests per minute
+    "write": (30, 60),  # 30 write operations per minute
+    "read": (100, 60),  # 100 read operations per minute
+    "stream": (500, 60),  # 500 streaming requests per minute
+})
+
+# CSRF protection (disabled by default - enable in production)
+# Uncomment the line below to enable CSRF protection:
+# app.add_middleware(CSRFProtection)
+
+# Performance monitoring middleware
+app.add_middleware(
+    PerformanceMonitoringMiddleware,
+    slow_request_threshold_ms=1000.0  # Log requests taking > 1 second
+)
 
 # Optional: IP whitelist (disabled by default for ease of use)
 # To enable, uncomment and add your allowed IPs:
@@ -176,15 +211,40 @@ async def startup_event():
     """
     logger.info("Starting OpenEye Surveillance System...")
 
-    # Create database tables
-    logger.info("Creating database tables...")
+    # Run database migrations automatically
+    logger.info("Running database migrations...")
+    try:
+        from alembic.config import Config
+        from alembic import command
+
+        # Get the path to alembic.ini
+        alembic_cfg = Config(str(Path(__file__).parent.parent / "alembic.ini"))
+
+        # Run migrations to latest version
+        command.upgrade(alembic_cfg, "head")
+        logger.info("Database migrations completed successfully")
+    except Exception as e:
+        logger.warning(f"Migration warning (non-critical): {e}")
+        logger.info("Falling back to legacy table creation...")
+
+    # Create database tables (fallback for safety, but migrations should handle this)
+    logger.info("Ensuring database tables exist...")
     models.Base.metadata.create_all(bind=engine)
     alert_models.Base.metadata.create_all(bind=engine)
-    logger.info("Database tables created successfully")
+    logger.info("Database tables verified successfully")
+
+    # Enable query profiling if configured
+    import os
+    if os.getenv("ENABLE_QUERY_PROFILING", "false").lower() == "true":
+        logger.info("Enabling database query profiling...")
+        from backend.middleware.query_profiler import enable_query_profiling
+        slow_threshold = float(os.getenv("SLOW_QUERY_THRESHOLD_MS", "100"))
+        enable_query_profiling(slow_query_threshold_ms=slow_threshold)
+        logger.info(f"Query profiling enabled (threshold: {slow_threshold}ms)")
 
     # Initialize system settings with defaults
-    db = SessionLocal()
-    try:
+    # FIXED: Use context manager to prevent session leak (v3.6.0.1)
+    with get_db_context() as db:
         from backend.database import crud
 
         crud.initialize_default_settings(db)
@@ -224,8 +284,6 @@ async def startup_event():
 
         logger.info(
             f"System settings loaded - Recordings: {paths.recordings_dir}, Faces: {paths.faces_dir}")
-    finally:
-        db.close()
 
     # PathManager automatically creates all required directories
     logger.info("Required directories handled by PathManager")
@@ -240,8 +298,8 @@ async def startup_event():
 
     # Load existing cameras from database
     logger.info("Loading cameras from database...")
-    db = SessionLocal()
-    try:
+    # FIXED: Use context manager to prevent session leak (v3.6.0.1)
+    with get_db_context() as db:
         from backend.database import crud
 
         db_cameras = crud.get_active_cameras(db)
@@ -264,14 +322,36 @@ async def startup_event():
                         f"Failed to load camera '{
                             db_camera.camera_id}': {e}")
         logger.info(f"Loaded {loaded_count} camera(s) from database")
-    finally:
-        db.close()
 
     # Start statistics broadcaster
     logger.info("Starting statistics broadcaster...")
     broadcaster = get_broadcaster()
     await broadcaster.start()
     logger.info("Statistics broadcaster started successfully")
+
+    # Start face clustering scheduler
+    logger.info("Starting face clustering scheduler...")
+    clustering_scheduler = get_clustering_scheduler()
+    await clustering_scheduler.start()
+    logger.info(
+        f"Face clustering scheduler started successfully "
+        f"(interval: {clustering_scheduler.interval_minutes}min, "
+        f"threshold: {clustering_scheduler.min_faces_threshold} faces)"
+    )
+
+    # v3.6.0: Initialize audit logging
+    logger.info("Initializing audit logging...")
+    audit_logger = get_audit_logger()
+    from backend.core.audit_logger import AuditEventType
+    audit_logger.log_event(
+        AuditEventType.SYSTEM_STARTUP,
+        details={
+            "version": "3.6.1",
+            "cameras_loaded": loaded_count,
+            "known_faces": len(face_manager.known_face_names)
+        }
+    )
+    logger.info("Audit logging initialized")
 
     # Static file directories are now mounted at application startup (before routes)
     # This ensures they take precedence over the catch-all SPA route
@@ -284,7 +364,8 @@ async def startup_event():
 
     logger.info("OpenEye Surveillance System started successfully!")
     logger.info(
-        "Features enabled: Motion Detection, Face Recognition, Video Recording, Real-time WebSocket Updates"
+        "Features enabled: Motion Detection, Face Recognition, Video Recording, "
+        "Real-time WebSocket Updates, Automated Face Clustering, Enhanced Security (v3.6.0)"
     )
 
 
@@ -301,11 +382,25 @@ async def shutdown_event():
     logger.info("Shutting down OpenEye Surveillance System...")
     logger.info("=" * 60)
 
-    # Step 1: Stop statistics broadcaster (WebSocket updates)
+    # Step 1: Stop face clustering scheduler
     try:
-        logger.info("[1/7] Stopping statistics broadcaster...")
+        logger.info("[1/8] Stopping face clustering scheduler...")
+        clustering_scheduler = get_clustering_scheduler()
+
+        # Set timeout for scheduler stop
+        stop_task = asyncio.create_task(clustering_scheduler.stop())
+        await asyncio.wait_for(stop_task, timeout=5.0)
+        logger.info("✓ Face clustering scheduler stopped successfully")
+    except asyncio.TimeoutError:
+        logger.error("✗ Face clustering scheduler stop timed out after 5s")
+    except Exception as e:
+        logger.error(f"✗ Error stopping face clustering scheduler: {e}")
+
+    # Step 2: Stop statistics broadcaster (WebSocket updates)
+    try:
+        logger.info("[2/8] Stopping statistics broadcaster...")
         broadcaster = get_broadcaster()
-        
+
         # Set timeout for broadcaster stop
         stop_task = asyncio.create_task(broadcaster.stop())
         await asyncio.wait_for(stop_task, timeout=5.0)
@@ -315,11 +410,11 @@ async def shutdown_event():
     except Exception as e:
         logger.error(f"✗ Error stopping statistics broadcaster: {e}")
 
-    # Step 2: Close all WebSocket connections
+    # Step 3: Close all WebSocket connections
     try:
-        logger.info("[2/7] Closing WebSocket connections...")
+        logger.info("[3/8] Closing WebSocket connections...")
         from backend.core.websocket_manager import ws_manager
-        
+
         # Close all connections gracefully
         if hasattr(ws_manager, 'disconnect_all'):
             await ws_manager.disconnect_all()
@@ -329,30 +424,30 @@ async def shutdown_event():
     except Exception as e:
         logger.error(f"✗ Error closing WebSocket connections: {e}")
 
-    # Step 3: Stop all cameras and release resources
+    # Step 4: Stop all cameras and release resources
     try:
-        logger.info("[3/7] Stopping all cameras...")
+        logger.info("[4/8] Stopping all cameras...")
         camera_count = len(camera_manager.cameras)
-        
+
         for camera_id in list(camera_manager.cameras.keys()):
             try:
                 camera_manager.remove_camera(camera_id)
                 logger.debug(f"  Stopped camera: {camera_id}")
             except Exception as e:
                 logger.error(f"  Error stopping camera {camera_id}: {e}")
-        
+
         logger.info(f"✓ Stopped {camera_count} camera(s)")
     except Exception as e:
         logger.error(f"✗ Error stopping cameras: {e}")
 
-    # Step 4: Face recognition uses stateless get_face_manager() - no cleanup needed
-    logger.info("[4/7] Face recognition uses stateless manager - skipping")
+    # Step 5: Face recognition uses stateless get_face_manager() - no cleanup needed
+    logger.info("[5/8] Face recognition uses stateless manager - skipping")
 
-    # Step 5: Stop cloud storage upload threads
+    # Step 6: Stop cloud storage upload threads
     try:
-        logger.info("[5/7] Stopping cloud storage threads...")
+        logger.info("[6/8] Stopping cloud storage threads...")
         from backend.core.cloud_storage_system import cloud_storage
-        
+
         if hasattr(cloud_storage, 'stop_upload_worker'):
             cloud_storage.stop_upload_worker()
             logger.info("✓ Cloud storage threads stopped")
@@ -361,27 +456,27 @@ async def shutdown_event():
     except Exception as e:
         logger.error(f"✗ Error stopping cloud storage: {e}")
 
-    # Step 6: Close database connections
+    # Step 7: Close database connections
     try:
-        logger.info("[6/7] Closing database connections...")
+        logger.info("[7/8] Closing database connections...")
         from backend.database import engine
-        
+
         if engine:
             engine.dispose()
             logger.info("✓ Database connections closed")
     except Exception as e:
         logger.error(f"✗ Error closing database: {e}")
 
-    # Step 7: Cancel all remaining async tasks
+    # Step 8: Cancel all remaining async tasks
     try:
-        logger.info("[7/7] Canceling remaining async tasks...")
+        logger.info("[8/8] Canceling remaining async tasks...")
         tasks = [task for task in asyncio.all_tasks() if not task.done()]
-        
+
         if tasks:
             logger.info(f"  Found {len(tasks)} pending task(s)")
             for task in tasks:
                 task.cancel()
-            
+
             # Wait for task cancellations with timeout
             await asyncio.wait(tasks, timeout=3.0)
             logger.info("✓ Async tasks canceled")
@@ -390,6 +485,16 @@ async def shutdown_event():
     except Exception as e:
         logger.error(f"✗ Error canceling async tasks: {e}")
 
+    # v3.6.0: Log shutdown event to audit log
+    try:
+        logger.info("Logging shutdown event to audit log...")
+        audit_logger = get_audit_logger()
+        from backend.core.audit_logger import AuditEventType
+        audit_logger.log_event(AuditEventType.SYSTEM_SHUTDOWN)
+        logger.info("✓ Shutdown event logged")
+    except Exception as e:
+        logger.error(f"✗ Error logging shutdown event: {e}")
+
     logger.info("=" * 60)
     logger.info("OpenEye Surveillance System shutdown complete")
     logger.info("=" * 60)
@@ -397,6 +502,9 @@ async def shutdown_event():
 
 # Include all API routers (ONCE)
 app.include_router(users.router, prefix="/api", tags=["Authentication"])
+
+# v3.6.0: Two-Factor Authentication
+app.include_router(two_factor_auth.router, prefix="/api/auth/2fa", tags=["Two-Factor Authentication"])
 
 # Camera Discovery - MUST be before /api/cameras to avoid route conflicts
 app.include_router(discovery.router, prefix="/api", tags=["Camera Discovery"])
@@ -450,11 +558,17 @@ app.include_router(websockets.router, prefix="/api", tags=["WebSockets"])
 # System Settings
 app.include_router(settings.router, prefix="/api", tags=["System Settings"])
 
+# Notification Provider Configuration
+app.include_router(notification_providers.router, prefix="/api", tags=["Notification Providers"])
+
 # Automation Rules - Person-Based Automations
 app.include_router(automations.router, prefix="/api", tags=["Automations"])
 
 # Timeline Playback & Video Navigation
 app.include_router(timeline.router, prefix="/api", tags=["Timeline & Playback"])
+
+# Performance Metrics & Monitoring
+app.include_router(metrics.router, prefix="/api", tags=["Performance Metrics"])
 
 # First-Run Setup (with /api/setup prefix for consistency)
 app.include_router(setup.router, prefix="/api/setup", tags=["First-Run Setup"])
@@ -474,7 +588,7 @@ async def read_root():
         # Fallback to API info if frontend not built
         return {
             "name": "OpenEye Surveillance System",
-            "version": "3.5.6",
+            "version": "3.6.1",
             "description": "OpenCV-powered surveillance with face recognition",
             "features": [
                 "Motion Detection",
@@ -501,7 +615,7 @@ async def api_root():
     """
     return {
         "name": "OpenEye Surveillance System API",
-        "version": "3.5.1.4",
+        "version": "3.6.0",
         "description": "OpenCV-powered surveillance with face recognition",
         "features": [
             "Motion Detection",

@@ -114,7 +114,18 @@ html.default-theme body {
   --theme-error: var(--color-error);
   --theme-warning: var(--color-warning);
   --theme-code-bg: #1e1e1e;
-  
+
+  /* AutomationsPage compatibility variables */
+  --color-surface: var(--bg-panel);
+  --color-border: var(--border-panel);
+  --color-background: var(--bg-main);
+  --color-text: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-primary: #007bff;
+  --color-primary-hover: #0056b3;
+  --color-accent: #007bff;
+  --color-danger: var(--color-error);
+
   /* Shadow */
   --shadow: rgba(0, 0, 0, 0.5);
   
@@ -156,7 +167,18 @@ html.sman-theme body {
   --theme-error: var(--color-error);
   --theme-warning: var(--color-warning);
   --theme-code-bg: #0a3d91;
-  
+
+  /* AutomationsPage compatibility variables */
+  --color-surface: var(--bg-panel);
+  --color-border: var(--border-panel);
+  --color-background: var(--bg-main);
+  --color-text: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-primary: #d32f2f;
+  --color-primary-hover: #b71c1c;
+  --color-accent: var(--text-link);
+  --color-danger: var(--color-error);
+
   --shadow: rgba(0, 0, 0, 0.6);
   
   background: linear-gradient(180deg, #0d47a1 0%, #1565c0 100%);
@@ -203,7 +225,18 @@ html.bman-theme body {
   --theme-error: var(--color-error);
   --theme-warning: var(--color-warning);
   --theme-code-bg: #000000;
-  
+
+  /* AutomationsPage compatibility variables */
+  --color-surface: var(--bg-panel);
+  --color-border: var(--border-panel);
+  --color-background: var(--bg-main);
+  --color-text: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-primary: #edc233;
+  --color-primary-hover: #d4ad20;
+  --color-accent: var(--text-link);
+  --color-danger: var(--color-error);
+
   --shadow: rgba(0, 0, 0, 0.9);
   
   background-color: var(--bg-main);
@@ -245,7 +278,18 @@ html.wwoman-theme body {
   --theme-error: var(--color-error);
   --theme-warning: var(--color-warning);
   --theme-code-bg: #0a2d4d;
-  
+
+  /* AutomationsPage compatibility variables */
+  --color-surface: var(--bg-panel);
+  --color-border: var(--border-panel);
+  --color-background: var(--bg-main);
+  --color-text: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-primary: #c41e3a;
+  --color-primary-hover: #a01829;
+  --color-accent: var(--text-link);
+  --color-danger: var(--color-error);
+
   --shadow: rgba(0, 0, 0, 0.6);
   
   background: linear-gradient(180deg, #0d3b66 0%, #1a5490 100%);
@@ -283,7 +327,18 @@ html.fman-theme body {
   --color-success: #4CAF50;
   --color-error: #FF5252;
   --color-warning: #FFD700;
-  
+
+  /* AutomationsPage compatibility variables */
+  --color-surface: var(--bg-panel);
+  --color-border: var(--border-panel);
+  --color-background: var(--bg-main);
+  --color-text: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-primary: #FFD700;
+  --color-primary-hover: #E6C200;
+  --color-accent: var(--text-link);
+  --color-danger: var(--color-error);
+
   background: linear-gradient(135deg, #DC0000 0%, #8B0000 100%);
   color: #FFD700;
 }
@@ -328,7 +383,18 @@ html.fman-theme body {
   --color-success: #00C49A;
   --color-error: #EF5350;
   --color-warning: #FFA726;
-  
+
+  /* AutomationsPage compatibility variables */
+  --color-surface: var(--bg-panel);
+  --color-border: var(--border-panel);
+  --color-background: var(--bg-main);
+  --color-text: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-primary: #FF6B35;
+  --color-primary-hover: #E65A2E;
+  --color-accent: var(--text-link);
+  --color-danger: var(--color-error);
+
   background: linear-gradient(180deg, #006994 0%, #004D6D 100%);
   color: #FFFFFF;
 }
@@ -372,7 +438,18 @@ html.fman-theme body {
   --color-success: #00A550;
   --color-error: #EF5350;
   --color-warning: #FFA726;
-  
+
+  /* AutomationsPage compatibility variables */
+  --color-surface: var(--bg-panel);
+  --color-border: var(--border-panel);
+  --color-background: var(--bg-main);
+  --color-text: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-primary: #00A550;
+  --color-primary-hover: #008442;
+  --color-accent: var(--text-link);
+  --color-danger: var(--color-error);
+
   background: radial-gradient(circle at center, #001A0F 0%, #000000 100%);
   color: #FFFFFF;
 }
@@ -442,7 +519,16 @@ html.aquasecurity-theme body {
   --theme-error: #EF4444;
   --theme-warning: #F59E0B;
   --theme-code-bg: rgba(0, 0, 0, 0.3);
-  
+
+  /* AutomationsPage compatibility variables */
+  --color-surface: var(--bg-panel);
+  --color-border: var(--border-panel);
+  --color-background: var(--bg-main);
+  --color-text: var(--text-primary);
+  --color-primary: #00AEEF;
+  --color-primary-hover: #0088CC;
+  --color-danger: var(--color-error);
+
   /* Shadow */
   --shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   

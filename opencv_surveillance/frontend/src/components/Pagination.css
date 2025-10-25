@@ -1,0 +1,187 @@
+/* Copyright (c) 2025 Mikel Smart */
+/* This file is part of OpenEye-OpenCV_Home_Security */
+
+/* Pagination Component Styles */
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  background: var(--card-bg, #ffffff);
+  border-top: 1px solid var(--border-color, #e0e0e0);
+  flex-wrap: wrap;
+}
+
+.pagination-info {
+  font-size: 14px;
+  color: var(--text-secondary, #666666);
+  white-space: nowrap;
+}
+
+.pagination-page-size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-secondary, #666666);
+}
+
+.page-size-select {
+  padding: 4px 8px;
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 4px;
+  background: var(--input-bg, #ffffff);
+  color: var(--text-primary, #000000);
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.page-size-select:hover {
+  border-color: var(--primary-color, #3b82f6);
+}
+
+.page-size-select:focus {
+  outline: none;
+  border-color: var(--primary-color, #3b82f6);
+  box-shadow: 0 0 0 2px var(--primary-color-alpha, rgba(59, 130, 246, 0.2));
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pagination-pages {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pagination-btn {
+  min-width: 36px;
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 4px;
+  background: var(--button-bg, #ffffff);
+  color: var(--text-primary, #000000);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: var(--button-hover-bg, #f5f5f5);
+  border-color: var(--primary-color, #3b82f6);
+}
+
+.pagination-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.pagination-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pagination-btn.active {
+  background: var(--primary-color, #3b82f6);
+  color: #ffffff;
+  border-color: var(--primary-color, #3b82f6);
+}
+
+.pagination-btn.active:hover {
+  background: var(--primary-color-dark, #2563eb);
+}
+
+.pagination-ellipsis {
+  padding: 8px 4px;
+  color: var(--text-secondary, #666666);
+  user-select: none;
+}
+
+.pagination-page-info {
+  font-size: 14px;
+  color: var(--text-secondary, #666666);
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .pagination {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .pagination-info,
+  .pagination-page-size,
+  .pagination-page-info {
+    justify-content: center;
+  }
+
+  .pagination-controls {
+    justify-content: center;
+  }
+
+  .pagination-pages {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .pagination {
+    background: var(--card-bg-dark, #1a1a1a);
+    border-top-color: var(--border-color-dark, #333333);
+  }
+
+  .pagination-info,
+  .pagination-page-size,
+  .pagination-page-info {
+    color: var(--text-secondary-dark, #999999);
+  }
+
+  .page-size-select {
+    background: var(--input-bg-dark, #2a2a2a);
+    color: var(--text-primary-dark, #ffffff);
+    border-color: var(--border-color-dark, #333333);
+  }
+
+  .pagination-btn {
+    background: var(--button-bg-dark, #2a2a2a);
+    color: var(--text-primary-dark, #ffffff);
+    border-color: var(--border-color-dark, #333333);
+  }
+
+  .pagination-btn:hover:not(:disabled) {
+    background: var(--button-hover-bg-dark, #3a3a3a);
+  }
+
+  .pagination-ellipsis {
+    color: var(--text-secondary-dark, #999999);
+  }
+}
+
+/* Accessibility */
+.pagination-btn:focus-visible {
+  outline: 2px solid var(--primary-color, #3b82f6);
+  outline-offset: 2px;
+}
+
+/* Print styles */
+@media print {
+  .pagination {
+    display: none;
+  }
+}

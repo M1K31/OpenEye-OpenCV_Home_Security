@@ -9,24 +9,63 @@ const CameraDiscoveryPage = ({ onBack }) => {
   const [scanning, setScanning] = useState({ usb: false, network: false });
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [scanStartTime, setScanStartTime] = useState(null);
 
-  // Check network discovery status periodically
+  // Check network discovery status periodically with timeout
   useEffect(() => {
     let interval;
+    let timeout;
+
     if (scanning.network) {
+      // Set timeout for 75 seconds (5 seconds longer than backend timeout)
+      timeout = setTimeout(() => {
+        console.warn('Network scan timed out on frontend');
+        setScanning(prev => ({ ...prev, network: false }));
+        setError('Network scan timed out. Check console for details.');
+
+        // Still fetch final results in case backend finished
+        apiClient.get('/cameras/discover/status')
+          .then(response => {
+            if (response.data.cameras && response.data.cameras.length > 0) {
+              setNetworkCameras(response.data.cameras);
+              setSuccess(`Found ${response.data.cameras.length} network camera(s) (scan timed out)`);
+              setError(null);
+            }
+          })
+          .catch(err => console.error('Error fetching final status:', err));
+      }, 75000); // 75 seconds timeout
+
       interval = setInterval(async () => {
         try {
           const response = await apiClient.get('/cameras/discover/status');
           if (!response.data.scanning) {
             setNetworkCameras(response.data.cameras || []);
             setScanning(prev => ({ ...prev, network: false }));
+
+            // Update success message with results
+            const count = response.data.cameras?.length || 0;
+            if (count > 0) {
+              setSuccess(`✅ Found ${count} network camera(s)`);
+            } else {
+              setSuccess('Network scan complete. No new cameras found.');
+            }
+
+            // Clear timeout since scan completed
+            clearTimeout(timeout);
           }
         } catch (err) {
           console.error('Error checking discovery status:', err);
+          setError(`Error checking scan status: ${err.message}`);
+          setScanning(prev => ({ ...prev, network: false }));
+          clearTimeout(timeout);
         }
       }, 2000); // Check every 2 seconds
     }
-    return () => clearInterval(interval);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
   }, [scanning.network]);
 
   const discoverUSB = async () => {
@@ -50,11 +89,15 @@ const CameraDiscoveryPage = ({ onBack }) => {
     setError(null);
     setSuccess(null);
     setNetworkCameras([]); // Clear previous results
+    setScanStartTime(Date.now());
 
     try {
+      console.log('[CameraDiscovery] Starting network scan...');
       await apiClient.post('/cameras/discover/network', { subnet: null });
       setSuccess('Network scan started. This may take 30-60 seconds...');
+      console.log('[CameraDiscovery] Network scan initiated successfully');
     } catch (err) {
+      console.error('[CameraDiscovery] Network scan failed to start:', err);
       setError(`Network discovery failed: ${err.response?.data?.detail || err.message}`);
       setScanning({ ...scanning, network: false });
     }

@@ -5,11 +5,12 @@ API routes for face clustering
 """
 
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from typing import List
 
 from backend.database.session import get_db
+from backend.core.performance import paginate, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from backend.api.schemas.clustering import (
     ClusterResponse,
     ClusterListResponse,
@@ -26,7 +27,7 @@ from backend.api.schemas.clustering import (
 )
 from backend.core.face_clustering import FaceClusteringService
 from backend.core.auth import get_current_active_user
-from backend.database.models import User
+from backend.database.models import User, FaceCluster
 
 router = APIRouter(prefix="/clusters", tags=["face-clustering"])
 logger = logging.getLogger(__name__)
@@ -80,38 +81,48 @@ def cluster_unknown_faces(
 
 @router.get("/", response_model=ClusterListResponse)
 def get_all_clusters(
-    skip: int = 0,
-    limit: int = 100,
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description="Items per page"),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_active_user)
 ):
     """
-    Get all face clusters
-    
+    Get all face clusters with pagination
+
+    Performance optimizations:
+    - Uses indexed queries on updated_at for sorting
+    - Paginated results (default 50, max 1000)
+    - Efficient ordering by last updated
+
     Returns a paginated list of all face clusters, ordered by
     last seen time (most recent first).
-    
+
     **Query Parameters:**
-    - **skip:** Number of records to skip (for pagination)
-    - **limit:** Maximum number of records to return
-    
+    - **page:** Page number (default: 1)
+    - **page_size:** Items per page (default: 50, max: 1000)
+
     **Returns:**
     - List of clusters with metadata
     - Total count
     - Pagination info
     """
     try:
-        service = FaceClusteringService()
-        clusters = service.get_all_clusters(db, skip=skip, limit=limit)
-        total = db.query(FaceCluster).count()
-        
+        # Build query ordered by most recently updated (uses idx_cluster_updated index)
+        query = db.query(FaceCluster).order_by(FaceCluster.updated_at.desc())
+
+        # Apply pagination
+        clusters, total, total_pages = paginate(query, page=page, page_size=page_size)
+
+        # Calculate skip for backward compatibility
+        skip = (page - 1) * page_size
+
         return ClusterListResponse(
             clusters=clusters,
             total=total,
             skip=skip,
-            limit=limit
+            limit=page_size
         )
-        
+
     except Exception as e:
         logger.error(f"Error fetching clusters: {e}")
         raise HTTPException(
@@ -329,14 +340,19 @@ def delete_cluster(
     """
     try:
         service = FaceClusteringService()
-        result = service.delete_cluster(db, cluster_id, request.reassign_unknown)
-        
+        result = service.delete_cluster(
+            db,
+            cluster_id,
+            request.reassign_unknown,
+            delete_faces=request.delete_faces
+        )
+
         if not result["success"]:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=result["message"]
             )
-        
+
         return DeleteClusterResponse(**result)
         
     except HTTPException:
@@ -355,26 +371,38 @@ def get_clustering_statistics(
     current_user = Depends(get_current_active_user)
 ):
     """
-    Get clustering statistics
-    
+    Get clustering statistics (cached for 3 minutes)
+
     Returns comprehensive statistics about face clustering.
-    
+
     **Returns:**
     - Total clusters
     - Identified vs unidentified clusters
     - Total unknown faces
     - Clustered vs unclustered faces
     - Clustering rate (percentage)
-    
+
+    **Performance**: Results are cached for 3 minutes
+
     **Use Case:**
     Monitor the effectiveness of face clustering and track
     how many unknown faces have been organized into clusters.
     """
     try:
-        service = FaceClusteringService()
-        stats = service.get_statistics(db)
+        from backend.core.performance import timed_lru_cache
+
+        @timed_lru_cache(seconds=180, maxsize=4)
+        def _get_cached_cluster_stats():
+            """Cached helper to reduce database load"""
+            service = FaceClusteringService()
+            # FIXED: Use context manager to prevent session leak (v3.6.0.1)
+            from backend.database.utils import get_db_context
+            with get_db_context() as db_local:
+                return service.get_statistics(db_local)
+
+        stats = _get_cached_cluster_stats()
         return ClusterStatistics(**stats)
-        
+
     except Exception as e:
         logger.error(f"Error fetching statistics: {e}")
         raise HTTPException(
@@ -385,3 +413,74 @@ def get_clustering_statistics(
 
 # Import FaceCluster model for count query
 from backend.database.models import FaceCluster
+from backend.core.clustering_scheduler import get_clustering_scheduler
+
+
+@router.get("/scheduler/status")
+def get_scheduler_status(current_user = Depends(get_current_active_user)):
+    """
+    Get clustering scheduler status and statistics
+
+    Returns information about the automated clustering scheduler,
+    including whether it's running, last run time, and statistics.
+    """
+    try:
+        scheduler = get_clustering_scheduler()
+        return scheduler.get_statistics()
+    except Exception as e:
+        logger.error(f"Error fetching scheduler status: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch scheduler status: {str(e)}"
+        )
+
+
+@router.post("/scheduler/trigger")
+async def trigger_manual_clustering(current_user = Depends(get_current_active_user)):
+    """
+    Manually trigger clustering (bypasses interval check)
+
+    Immediately runs the clustering algorithm on all unclustered
+    unknown faces, regardless of the scheduler's interval setting.
+    """
+    try:
+        scheduler = get_clustering_scheduler()
+        result = await scheduler.trigger_manual_clustering()
+        return result
+    except Exception as e:
+        logger.error(f"Error triggering manual clustering: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to trigger clustering: {str(e)}"
+        )
+
+
+@router.post("/scheduler/settings")
+def update_scheduler_settings(
+    auto_enabled: bool = None,
+    interval_minutes: int = None,
+    min_faces_threshold: int = None,
+    current_user = Depends(get_current_active_user)
+):
+    """
+    Update clustering scheduler settings
+
+    Allows configuration of automatic clustering behavior including:
+    - Enable/disable auto-clustering
+    - Set interval between runs
+    - Set minimum faces threshold
+    """
+    try:
+        scheduler = get_clustering_scheduler()
+        scheduler.update_settings(
+            auto_cluster_enabled=auto_enabled,
+            interval_minutes=interval_minutes,
+            min_faces_threshold=min_faces_threshold,
+        )
+        return {"success": True, "settings": scheduler.get_statistics()}
+    except Exception as e:
+        logger.error(f"Error updating scheduler settings: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update settings: {str(e)}"
+        )

@@ -85,31 +85,50 @@ class WebSocketService {
 
   /**
    * Handle incoming WebSocket messages
+   * Performance optimized: Defers non-critical updates using requestIdleCallback
    */
   handleMessage(event) {
     try {
       const message = JSON.parse(event.data);
       const messageType = message.type;
-      
-      // Emit to specific listeners
-      if (this.listeners[messageType]) {
-        this.listeners[messageType].forEach(callback => {
-          try {
-            callback(message);
-          } catch (error) {
-            console.error(`Error in ${messageType} listener:`, error);
-          }
-        });
-      }
-      
-      // Log certain message types
-      if (messageType === 'connection_status') {
-        console.log('Connection status:', message);
-      } else if (messageType === 'statistics_update') {
-        // Statistics updates are frequent, only log in debug mode
-        // console.debug('Statistics update received');
+
+      // Determine if message is critical (needs immediate processing)
+      const isCritical = ['alert', 'error', 'camera_event'].includes(messageType);
+
+      // Process message callbacks
+      const processCallbacks = () => {
+        if (this.listeners[messageType]) {
+          this.listeners[messageType].forEach(callback => {
+            try {
+              callback(message);
+            } catch (error) {
+              console.error(`Error in ${messageType} listener:`, error);
+            }
+          });
+        }
+
+        // Log certain message types
+        if (messageType === 'connection_status') {
+          console.log('Connection status:', message);
+        } else if (messageType === 'statistics_update') {
+          // Statistics updates are frequent, only log in debug mode
+          // console.debug('Statistics update received');
+        } else if (messageType !== 'ping' && messageType !== 'pong') {
+          console.log('WebSocket message:', messageType, message);
+        }
+      };
+
+      // Critical messages: process immediately
+      // Non-critical messages (like statistics_update): defer using requestIdleCallback
+      if (isCritical) {
+        processCallbacks();
       } else {
-        console.log('WebSocket message:', messageType, message);
+        // Use requestIdleCallback if available, otherwise setTimeout
+        if (typeof requestIdleCallback !== 'undefined') {
+          requestIdleCallback(processCallbacks, { timeout: 100 });
+        } else {
+          setTimeout(processCallbacks, 0);
+        }
       }
     } catch (error) {
       console.error('Failed to parse WebSocket message:', error);

@@ -46,6 +46,29 @@ class CameraBase(BaseModel):
         None, description="JSON string defining detection zone grid"
     )
 
+    # v3.5.7: Enhanced motion detection parameters (recommended defaults)
+    shadow_detection_method: Optional[str] = Field(
+        "dual", pattern="^(binary|hsv|dual)$", description="Shadow removal method (dual recommended)"
+    )
+    erosion_iterations: Optional[int] = Field(
+        2, ge=0, le=10, description="Custom erosion iterations (2 recommended for shadow mitigation)"
+    )
+    dilation_iterations: Optional[int] = Field(
+        3, ge=0, le=10, description="Custom dilation iterations (3 recommended for shadow mitigation)"
+    )
+    motion_persistence_frames: Optional[int] = Field(
+        2, ge=0, le=10, description="Frames to maintain motion state (2-3 prevents flickering)"
+    )
+    use_grayscale: Optional[bool] = Field(
+        True, description="Convert to grayscale before processing (faster, recommended)"
+    )
+    lighting_compensation_enabled: Optional[bool] = Field(
+        True, description="Enable lighting change detection and suppression (recommended)"
+    )
+    brightness_change_threshold: Optional[int] = Field(
+        15, ge=1, le=50, description="Threshold for detecting lighting changes (15 is optimal)"
+    )
+
     # Recording settings
     recording_enabled: Optional[bool] = True
     post_motion_cooldown: Optional[int] = Field(5, ge=1, le=300)
@@ -92,6 +115,15 @@ class CameraUpdate(BaseModel):
     noise_reduction: Optional[str] = Field(None, pattern="^(low|medium|high)$")
     detect_shadows: Optional[bool] = None
     detection_zones: Optional[str] = None
+
+    # v3.5.7: Enhanced motion detection parameters
+    shadow_detection_method: Optional[str] = Field(None, pattern="^(binary|hsv|dual)$")
+    erosion_iterations: Optional[int] = Field(None, ge=0, le=10)
+    dilation_iterations: Optional[int] = Field(None, ge=0, le=10)
+    motion_persistence_frames: Optional[int] = Field(None, ge=0, le=10)
+    use_grayscale: Optional[bool] = None
+    lighting_compensation_enabled: Optional[bool] = None
+    brightness_change_threshold: Optional[int] = Field(None, ge=1, le=50)
 
     # Recording settings
     recording_enabled: Optional[bool] = None

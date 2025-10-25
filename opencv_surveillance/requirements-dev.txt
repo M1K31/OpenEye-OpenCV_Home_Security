@@ -1,5 +1,7 @@
 # Development/test dependencies pinned for reproducible CI
 pytest==7.4.0
+pytest-cov==4.1.0  # Coverage reporting
+pytest-asyncio==0.21.1  # Async test support
 sqlalchemy==2.1.0
 pydantic==2.11.0
 passlib[bcrypt]==1.8.2
@@ -8,3 +10,7 @@ python-jose==3.3.0
 fastapi==0.100.0
 httpx==0.24.0
 starlette==0.27.0
+
+# Security auditing tools
+bandit==1.7.5  # Security linter for Python
+safety==2.3.5  # Check for known security vulnerabilities

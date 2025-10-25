@@ -173,7 +173,29 @@ const AlertSettingsPage = ({ embedded = false }) => {
   return (
     <div className="alert-settings-container">
       <header className="page-header">
-        <h1>Alert & Notification Settings</h1>
+        <div>
+          <h1>Alert & Notification Settings</h1>
+          <button
+            className="notification-providers-btn"
+            onClick={() => navigate('/system/notifications')}
+            style={{
+              marginTop: '8px',
+              padding: '12px 24px',
+              background: 'var(--primary-color)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            🔔 Configure Notification Providers
+          </button>
+        </div>
       </header>
 
       {message && (
@@ -285,15 +307,35 @@ const AlertSettingsPage = ({ embedded = false }) => {
               />
             </div>
             <div className="help-text mt-15">
-              <p><strong>📧 SMTP Server Configuration (Environment Variables)</strong></p>
-              <code className="smtp-config-code">
-                SMTP_HOST=smtp.gmail.com<br/>
-                SMTP_PORT=587<br/>
-                SMTP_USERNAME=your-email@gmail.com<br/>
-                SMTP_PASSWORD=your-app-password<br/>
-                SMTP_FROM=openeye@yourdomain.com
-              </code>
-              <small>💡 For Gmail: Use an <a href="https://support.google.com/accounts/answer/185833" target="_blank" rel="noopener noreferrer">App Password</a>, not your regular password!</small>
+              <p><strong>📧 SMTP Server Configuration</strong></p>
+              <div style={{
+                padding: '16px',
+                background: 'var(--card-bg)',
+                border: '2px solid var(--primary-color)',
+                borderRadius: '8px',
+                marginTop: '8px'
+              }}>
+                <p style={{ margin: '0 0 8px 0', fontWeight: '600' }}>✨ Configure via UI (No coding required!)</p>
+                <p style={{ margin: '0 0 12px 0', fontSize: '14px' }}>Click the button below to set up email notifications through our user-friendly interface.</p>
+                <button
+                  onClick={() => navigate('/system/notifications')}
+                  style={{
+                    padding: '10px 20px',
+                    background: 'var(--primary-color)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                  }}
+                >
+                  📧 Configure Email Provider
+                </button>
+                <small style={{ display: 'block', marginTop: '12px', opacity: '0.8' }}>
+                  💡 For Gmail: You'll need an <a href="https://support.google.com/accounts/answer/185833" target="_blank" rel="noopener noreferrer">App Password</a>
+                </small>
+              </div>
             </div>
             {config.id && config.email_address && (
               <button
@@ -310,9 +352,9 @@ const AlertSettingsPage = ({ embedded = false }) => {
       <section className="settings-section">
         <h2>
           📱 SMS Notifications
-          <HelpButton 
+          <HelpButton
             title="SMS & Telegram Notifications"
-            description="Send SMS alerts via Twilio (paid) or Telegram Bot (FREE!). Telegram requires creating a bot via @BotFather and getting your chat ID from @userinfobot. Set environment variables for credentials."
+            description="Send SMS alerts via Twilio (paid) or Telegram Bot (FREE!). Configure providers through the notification settings UI - no coding required!"
           />
         </h2>
         <div className="notification-method-header">
@@ -332,25 +374,54 @@ const AlertSettingsPage = ({ embedded = false }) => {
         </div>
         {config.sms_enabled && (
           <>
-            <div className="method-tabs">
-              <p><strong>Option 1: Telegram Bot (FREE!)</strong></p>
-              <div className="help-text">
-                <p>1. Message <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer">@BotFather</a> on Telegram</p>
-                <p>2. Create a new bot and get your token</p>
-                <p>3. Message your bot and get your chat ID from <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer">@userinfobot</a></p>
-                <p>4. Set environment variables: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID</p>
+            <div style={{
+              padding: '16px',
+              background: 'var(--card-bg)',
+              border: '2px solid var(--primary-color)',
+              borderRadius: '8px',
+              marginTop: '16px'
+            }}>
+              <p style={{ margin: '0 0 8px 0', fontWeight: '600' }}>✨ Configure via UI (No coding required!)</p>
+              <p style={{ margin: '0 0 12px 0', fontSize: '14px' }}>Set up SMS (Twilio) or Telegram notifications through our user-friendly interface.</p>
+
+              <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
+                <button
+                  onClick={() => navigate('/system/notifications')}
+                  style={{
+                    padding: '10px 20px',
+                    background: 'var(--primary-color)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                  }}
+                >
+                  📱 Configure SMS Provider
+                </button>
+                <button
+                  onClick={() => navigate('/system/notifications')}
+                  style={{
+                    padding: '10px 20px',
+                    background: 'var(--primary-color)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ✈️ Configure Telegram Bot
+                </button>
               </div>
-              
-              <p className="mt-20"><strong>Option 2: Twilio (Paid)</strong></p>
-              <div className="form-group">
-                <label>Phone Number (E.164 format):</label>
-                <input
-                  type="tel"
-                  value={config.phone_number || ''}
-                  onChange={(e) => updateConfig('phone_number', e.target.value)}
-                  placeholder="+1234567890"
-                />
-                <small>Include country code (e.g., +1 for USA). Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER in environment.</small>
+
+              <div className="help-text" style={{ fontSize: '13px', marginTop: '12px' }}>
+                <p><strong>Telegram Setup:</strong></p>
+                <p>1. Message <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer">@BotFather</a> to create a bot</p>
+                <p>2. Get your chat ID from <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer">@userinfobot</a></p>
+                <p>3. Enter credentials in the UI above (FREE! 🎉)</p>
               </div>
             </div>
             {config.id && config.phone_number && (
@@ -370,9 +441,9 @@ const AlertSettingsPage = ({ embedded = false }) => {
       <section className="settings-section">
         <h2>
           🔔 Push Notifications
-          <HelpButton 
+          <HelpButton
             title="Push Notifications"
-            description="Choose between ntfy.sh (FREE & open source) or Firebase. ntfy.sh requires topic name and app download. Firebase requires project setup and credentials JSON. Both send instant push notifications to mobile devices."
+            description="Send push notifications to mobile devices via Firebase Cloud Messaging. Configure through the notification settings UI - no coding required!"
           />
         </h2>
         <div className="notification-method-header">
@@ -392,27 +463,38 @@ const AlertSettingsPage = ({ embedded = false }) => {
         </div>
         {config.push_enabled && (
           <>
-            <div className="method-tabs">
-              <p><strong>Option 1: ntfy.sh (FREE & Open Source!) 🎉</strong></p>
-              <div className="help-text">
-                <p>1. Choose a unique topic name (e.g., openeye-alerts-yourname)</p>
-                <p>2. Subscribe to topic in ntfy app: <a href="https://ntfy.sh/" target="_blank" rel="noopener noreferrer">ntfy.sh</a></p>
-                <p>3. Set environment variables:</p>
-                <code className="code-block">
-                  NTFY_TOPIC=your-unique-topic<br/>
-                  NTFY_SERVER=https://ntfy.sh
-                </code>
-                <p>4. Download the ntfy app on iOS/Android and subscribe to your topic!</p>
-              </div>
-              
-              <p className="mt-20"><strong>Option 2: Firebase Cloud Messaging (FCM)</strong></p>
-              <div className="help-text">
-                <p>1. Create a Firebase project at <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer">Firebase Console</a></p>
-                <p>2. Download service account credentials JSON</p>
-                <p>3. Set environment variable:</p>
-                <code className="code-block">
-                  FIREBASE_CREDENTIALS_PATH=/app/config/firebase-credentials.json
-                </code>
+            <div style={{
+              padding: '16px',
+              background: 'var(--card-bg)',
+              border: '2px solid var(--primary-color)',
+              borderRadius: '8px',
+              marginTop: '16px'
+            }}>
+              <p style={{ margin: '0 0 8px 0', fontWeight: '600' }}>✨ Configure via UI (No coding required!)</p>
+              <p style={{ margin: '0 0 12px 0', fontSize: '14px' }}>Set up push notifications through Firebase Cloud Messaging.</p>
+
+              <button
+                onClick={() => navigate('/system/notifications')}
+                style={{
+                  padding: '10px 20px',
+                  background: 'var(--primary-color)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  marginBottom: '12px'
+                }}
+              >
+                🔔 Configure Push Provider
+              </button>
+
+              <div className="help-text" style={{ fontSize: '13px', marginTop: '12px' }}>
+                <p><strong>Firebase Setup:</strong></p>
+                <p>1. Create project at <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer">Firebase Console</a></p>
+                <p>2. Get your FCM Server Key from project settings</p>
+                <p>3. Enter credentials in the UI above</p>
               </div>
               
               <div className="form-group mt-20">
