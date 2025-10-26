@@ -1,6 +1,6 @@
 # OpenEye - AI-Powered Home Security with OpenCV & Face Recognition
 
-![Version](https://img.shields.io/badge/version-3.6.1-blue.svg)
+![Version](https://img.shields.io/badge/version-3.6.2-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![OpenCV](https://img.shields.io/badge/OpenCV-4.8+-red.svg)
 ![License](https://img.shields.io/badge/license-MIT-yellow.svg)
@@ -258,10 +258,10 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 - 🔧 **[Quick Reference](docs/QUICK_REFERENCE.md)** - Common tasks
 
 ### Project Documentation
-- 🐞 **[FIXES.md](FIXES.md)** - Complete fix history
-- ✅ **[TODO.md](TODO.md)** - Project roadmap and planned features
-- 📝 **[CHANGELOG.md](CHANGELOG.md)** - Version history
+- 📝 **[CHANGELOG.md](CHANGELOG.md)** - Version history and release notes
 - 👨‍💻 **[CLAUDE.md](CLAUDE.md)** - Developer guide for Claude Code
+- 🐞 **[Fix History](docs/development/FIXES_HISTORY.md)** - Complete fix history
+- 📋 **[Project Roadmap](docs/PROJECT_AUDIT_AND_TODO_v3.5.3.md)** - Planned features and audit
 
 ---
 
