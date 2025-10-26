@@ -13,6 +13,7 @@ const SystemSettingsPage = ({ embedded = false }) => {
     display_mode: 'grid',
     cycle_interval: 5,
     max_recording_duration: 300,
+    motion_percentage_threshold: 1.0, // Default 1% motion threshold
     theme: 'dark',
     // UI Accessibility Settings
     reduce_motion: false,
@@ -515,6 +516,31 @@ const SystemSettingsPage = ({ embedded = false }) => {
             />
             <div style={styles.hint}>
               Current: {Math.floor((settings.max_recording_duration || 300) / 60)} minutes {(settings.max_recording_duration || 300) % 60} seconds
+            </div>
+          </div>
+
+          <div style={styles.formGroup}>
+            <label style={styles.label}>
+              <span style={styles.labelText}>Motion Detection Threshold (%)</span>
+              <span style={styles.labelHint}>Percentage of pixels that must change to trigger motion detection (0.1-5.0%)</span>
+            </label>
+            <input
+              type="number"
+              min="0.1"
+              max="5.0"
+              step="0.1"
+              value={settings.motion_percentage_threshold || 1.0}
+              onChange={(e) => {
+                const val = parseFloat(e.target.value);
+                if (!isNaN(val) && val >= 0.1 && val <= 5.0) {
+                  handleInputChange('motion_percentage_threshold', val);
+                }
+              }}
+              style={styles.input}
+            />
+            <div style={styles.hint}>
+              Lower values = more sensitive (detects smaller movements). Higher values = less sensitive (only larger movements).
+              Recommended: 0.5-2.0% for most scenarios.
             </div>
           </div>
         </div>

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.6.2] - 2025-10-25
+
+### Added
+- **Motion Detection Threshold UI** - Added user-configurable motion sensitivity control
+  - Problem: Backend supported motion_percentage_threshold but no UI existed to configure it
+  - Solution: Added slider control in System Settings with range validation (0.1-5.0%)
+  - Benefits: Users can now tune motion detection sensitivity from the UI without backend changes
+  - Files Modified: `frontend/src/pages/SystemSettingsPage.jsx`
+
+### Fixed
+- **Documentation Links** - Updated README.md references to point to new consolidated documentation locations
+  - Problem: README referenced deleted files after documentation consolidation
+  - Solution: Updated all documentation links to new locations in docs/development/ and docs/security/
+  - Benefits: All documentation links now work correctly
+  - Files Modified: `README.md`
+
+---
+
 ## [3.6.1] - 2025-10-25
 
 ### Fixed
