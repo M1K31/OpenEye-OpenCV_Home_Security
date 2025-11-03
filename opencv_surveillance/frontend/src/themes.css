@@ -126,9 +126,34 @@ html.default-theme body {
   --color-accent: #007bff;
   --color-danger: var(--color-error);
 
+  /* Universal Component Variables (HIG-compliant) */
+  --accent-color: #007AFF;
+  --accent-color-alpha: rgba(0, 122, 255, 0.1);
+  --text-tertiary: #8E8E93;
+  --background-primary: #262626;
+  --background-secondary: #333333;
+  --card-background: #333333;
+  --input-background: #2a2a2a;
+  --search-background: rgba(142, 142, 147, 0.12);
+  --border-color: #666666;
+  --border-hover: #777777;
+  --button-primary-bg: #007AFF;
+  --button-primary-text: #FFFFFF;
+  --button-primary-hover-bg: #0051D5;
+  --button-secondary-bg: transparent;
+  --button-secondary-text: #007AFF;
+  --button-secondary-border: #007AFF;
+  --button-tertiary-bg: transparent;
+  --button-tertiary-text: #007AFF;
+  --button-destructive-bg: #dc3545;
+  --button-destructive-text: #FFFFFF;
+  --switch-track-off: rgba(120, 120, 128, 0.32);
+  --switch-track-on: #007AFF;
+  --switch-thumb: #FFFFFF;
+
   /* Shadow */
   --shadow: rgba(0, 0, 0, 0.5);
-  
+
   background-color: var(--bg-main);
   color: var(--text-primary);
 }
@@ -179,8 +204,32 @@ html.sman-theme body {
   --color-accent: var(--text-link);
   --color-danger: var(--color-error);
 
+  /* Universal Component Variables (HIG-compliant) */
+  --accent-color: #d32f2f;
+  --accent-color-alpha: rgba(211, 47, 47, 0.1);
+  --text-tertiary: #a5d6ff;
+  --background-primary: #0d47a1;
+  --background-secondary: #1565c0;
+  --card-background: #1565c0;
+  --input-background: #0a3d91;
+  --border-color: #ffd700;
+  --border-hover: #ffe44d;
+  --button-primary-bg: #d32f2f;
+  --button-primary-text: #ffd700;
+  --button-primary-hover-bg: #b71c1c;
+  --button-secondary-bg: transparent;
+  --button-secondary-text: #d32f2f;
+  --button-secondary-border: #d32f2f;
+  --button-tertiary-bg: transparent;
+  --button-tertiary-text: #ff1744;
+  --button-destructive-bg: #d32f2f;
+  --button-destructive-text: #ffd700;
+  --switch-track-off: rgba(255, 215, 0, 0.32);
+  --switch-track-on: #d32f2f;
+  --switch-thumb: #ffd700;
+
   --shadow: rgba(0, 0, 0, 0.6);
-  
+
   background: linear-gradient(180deg, #0d47a1 0%, #1565c0 100%);
   color: var(--text-primary);
   font-family: 'Arial Black', sans-serif;
@@ -237,8 +286,32 @@ html.bman-theme body {
   --color-accent: var(--text-link);
   --color-danger: var(--color-error);
 
+  /* Universal Component Variables (HIG-compliant) */
+  --accent-color: #edc233;
+  --accent-color-alpha: rgba(237, 194, 51, 0.1);
+  --text-tertiary: #999999;
+  --background-primary: #111111;
+  --background-secondary: #1a1a1a;
+  --card-background: #1a1a1a;
+  --input-background: #0a0a0a;
+  --border-color: #edc233;
+  --border-hover: #ffe44d;
+  --button-primary-bg: #edc233;
+  --button-primary-text: #111111;
+  --button-primary-hover-bg: #d4ad20;
+  --button-secondary-bg: transparent;
+  --button-secondary-text: #edc233;
+  --button-secondary-border: #edc233;
+  --button-tertiary-bg: transparent;
+  --button-tertiary-text: #edc233;
+  --button-destructive-bg: #ef5350;
+  --button-destructive-text: #111111;
+  --switch-track-off: rgba(237, 194, 51, 0.32);
+  --switch-track-on: #edc233;
+  --switch-thumb: #111111;
+
   --shadow: rgba(0, 0, 0, 0.9);
-  
+
   background-color: var(--bg-main);
   color: var(--text-primary);
   font-family: 'Roboto', sans-serif;
@@ -290,8 +363,32 @@ html.wwoman-theme body {
   --color-accent: var(--text-link);
   --color-danger: var(--color-error);
 
+  /* Universal Component Variables (HIG-compliant) */
+  --accent-color: #c41e3a;
+  --accent-color-alpha: rgba(196, 30, 58, 0.1);
+  --text-tertiary: #a5d6ff;
+  --background-primary: #0d3b66;
+  --background-secondary: #1a5490;
+  --card-background: #1a5490;
+  --input-background: #0a2d4d;
+  --border-color: #ffd700;
+  --border-hover: #ffe44d;
+  --button-primary-bg: #c41e3a;
+  --button-primary-text: #ffd700;
+  --button-primary-hover-bg: #a01829;
+  --button-secondary-bg: transparent;
+  --button-secondary-text: #c41e3a;
+  --button-secondary-border: #c41e3a;
+  --button-tertiary-bg: transparent;
+  --button-tertiary-text: #c41e3a;
+  --button-destructive-bg: #c41e3a;
+  --button-destructive-text: #ffd700;
+  --switch-track-off: rgba(255, 215, 0, 0.32);
+  --switch-track-on: #c41e3a;
+  --switch-thumb: #ffd700;
+
   --shadow: rgba(0, 0, 0, 0.6);
-  
+
   background: linear-gradient(180deg, #0d3b66 0%, #1a5490 100%);
   color: var(--text-primary);
   font-family: 'Georgia', serif;
@@ -339,6 +436,30 @@ html.fman-theme body {
   --color-accent: var(--text-link);
   --color-danger: var(--color-error);
 
+  /* Universal Component Variables (HIG-compliant) */
+  --accent-color: #FFD700;
+  --accent-color-alpha: rgba(255, 215, 0, 0.1);
+  --text-tertiary: #FFAAAA;
+  --background-primary: #DC0000;
+  --background-secondary: rgba(139, 0, 0, 0.9);
+  --card-background: rgba(139, 0, 0, 0.9);
+  --input-background: rgba(0, 0, 0, 0.3);
+  --border-color: #FFD700;
+  --border-hover: #FFE44D;
+  --button-primary-bg: #FFD700;
+  --button-primary-text: #8B0000;
+  --button-primary-hover-bg: #E6C200;
+  --button-secondary-bg: transparent;
+  --button-secondary-text: #FFD700;
+  --button-secondary-border: #FFD700;
+  --button-tertiary-bg: transparent;
+  --button-tertiary-text: #FFD700;
+  --button-destructive-bg: #FF5252;
+  --button-destructive-text: #FFFFFF;
+  --switch-track-off: rgba(255, 215, 0, 0.32);
+  --switch-track-on: #FFD700;
+  --switch-thumb: #DC0000;
+
   background: linear-gradient(135deg, #DC0000 0%, #8B0000 100%);
   color: #FFD700;
 }
@@ -356,8 +477,11 @@ html.fman-theme body {
   box-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
 }
 
-/* Aquaman Theme */
-.aman-theme {
+/* ===================
+   AQUAMAN THEME
+   =================== */
+html.aman-theme,
+html.aman-theme body {
   --theme-primary: #FF6B35;
   --theme-secondary: #00C49A;
   --theme-background: #006994;
@@ -369,7 +493,7 @@ html.fman-theme body {
   --theme-success: #00C49A;
   --theme-error: #EF5350;
   --theme-warning: #FFA726;
-  
+
   --bg-main: #006994;
   --bg-panel: rgba(0, 105, 148, 0.9);
   --bg-input: rgba(0, 0, 0, 0.2);
@@ -395,6 +519,13 @@ html.fman-theme body {
   --color-accent: var(--text-link);
   --color-danger: var(--color-error);
 
+  /* Universal Component Variables */
+  --accent-color: #FF6B35;
+  --button-primary-bg: #FF6B35;
+  --button-primary-text: #FFFFFF;
+  --switch-track-on: #00C49A;
+  --card-background: rgba(0, 105, 148, 0.9);
+
   background: linear-gradient(180deg, #006994 0%, #004D6D 100%);
   color: #FFFFFF;
 }
@@ -411,8 +542,11 @@ html.fman-theme body {
   box-shadow: 0 0 15px rgba(0, 196, 154, 0.5);
 }
 
-/* Green Lantern Theme */
-.glantern-theme {
+/* ===================
+   GREEN LANTERN THEME
+   =================== */
+html.glantern-theme,
+html.glantern-theme body {
   --theme-primary: #00A550;
   --theme-secondary: #B2FF9E;
   --theme-background: #001A0F;
@@ -424,7 +558,7 @@ html.fman-theme body {
   --theme-success: #00A550;
   --theme-error: #EF5350;
   --theme-warning: #FFA726;
-  
+
   --bg-main: #001A0F;
   --bg-panel: rgba(0, 80, 40, 0.9);
   --bg-input: rgba(0, 0, 0, 0.3);
@@ -450,6 +584,13 @@ html.fman-theme body {
   --color-accent: var(--text-link);
   --color-danger: var(--color-error);
 
+  /* Universal Component Variables */
+  --accent-color: #00A550;
+  --button-primary-bg: #00A550;
+  --button-primary-text: #FFFFFF;
+  --switch-track-on: #00A550;
+  --card-background: rgba(0, 80, 40, 0.9);
+
   background: radial-gradient(circle at center, #001A0F 0%, #000000 100%);
   color: #FFFFFF;
 }
@@ -465,6 +606,78 @@ html.fman-theme body {
 .glantern-theme button:hover {
   box-shadow: 0 0 25px rgba(0, 165, 80, 0.8);
   transform: scale(1.05);
+}
+
+/* ===================
+   CYBORG THEME
+   =================== */
+html.cyborg-theme,
+html.cyborg-theme body {
+  --theme-primary: #FF00FF;
+  --theme-secondary: #00FFFF;
+  --theme-background: #1A1A1A;
+  --theme-text: #FFFFFF;
+  --theme-text-secondary: #CCCCCC;
+  --theme-card-bg: rgba(40, 40, 40, 0.95);
+  --theme-border: #555555;
+  --theme-accent: #FF00FF;
+  --theme-success: #00FF00;
+  --theme-error: #FF0000;
+  --theme-warning: #FFFF00;
+
+  --bg-main: #1A1A1A;
+  --bg-panel: rgba(40, 40, 40, 0.95);
+  --bg-input: rgba(0, 0, 0, 0.5);
+  --bg-hover: #2A2A2A;
+  --text-primary: #FFFFFF;
+  --text-secondary: #CCCCCC;
+  --text-link: #FF00FF;
+  --border-panel: #555555;
+  --border-input: #777777;
+  --state-active: #3A3A3A;
+  --color-success: #00FF00;
+  --color-error: #FF0000;
+  --color-warning: #FFFF00;
+
+  /* AutomationsPage compatibility variables */
+  --color-surface: var(--bg-panel);
+  --color-border: var(--border-panel);
+  --color-background: var(--bg-main);
+  --color-text: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-primary: #FF00FF;
+  --color-primary-hover: #CC00CC;
+  --color-accent: var(--text-link);
+  --color-danger: var(--color-error);
+
+  /* Universal Component Variables */
+  --accent-color: #FF00FF;
+  --button-primary-bg: #FF00FF;
+  --button-primary-text: #FFFFFF;
+  --button-secondary-border: #00FFFF;
+  --button-secondary-text: #00FFFF;
+  --switch-track-on: #FF00FF;
+  --card-background: rgba(40, 40, 40, 0.95);
+  --card-border: rgba(255, 0, 255, 0.2);
+
+  background: linear-gradient(135deg, #1A1A1A 0%, #000000 100%);
+  color: #FFFFFF;
+  font-family: 'Courier New', monospace;
+}
+
+.cyborg-theme button {
+  background: linear-gradient(135deg, #FF00FF 0%, #CC00CC 100%);
+  color: #FFFFFF;
+  border: 1px solid #00FFFF;
+  font-family: 'Courier New', monospace;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.cyborg-theme button:hover {
+  box-shadow: 0 0 20px rgba(255, 0, 255, 0.6);
+  border-color: #FF00FF;
+  transform: translateY(-2px);
 }
 
 /* ===================
@@ -529,9 +742,33 @@ html.aquasecurity-theme body {
   --color-primary-hover: #0088CC;
   --color-danger: var(--color-error);
 
+  /* Universal Component Variables (HIG-compliant) */
+  --accent-color: #00AEEF;
+  --accent-color-alpha: rgba(0, 174, 239, 0.1);
+  --text-tertiary: rgba(255, 255, 255, 0.5);
+  --background-primary: #1A1A1D;
+  --background-secondary: rgba(255, 255, 255, 0.15);
+  --card-background: rgba(255, 255, 255, 0.15);
+  --input-background: rgba(255, 255, 255, 0.1);
+  --border-color: rgba(255, 255, 255, 0.15);
+  --border-hover: rgba(255, 255, 255, 0.25);
+  --button-primary-bg: #00AEEF;
+  --button-primary-text: #FFFFFF;
+  --button-primary-hover-bg: #0088CC;
+  --button-secondary-bg: transparent;
+  --button-secondary-text: #00AEEF;
+  --button-secondary-border: #00AEEF;
+  --button-tertiary-bg: transparent;
+  --button-tertiary-text: #00AEEF;
+  --button-destructive-bg: #EF4444;
+  --button-destructive-text: #FFFFFF;
+  --switch-track-off: rgba(120, 120, 128, 0.32);
+  --switch-track-on: #00AEEF;
+  --switch-thumb: #FFFFFF;
+
   /* Shadow */
   --shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  
+
   background-color: var(--color-primary-bg);
   color: var(--color-text-primary);
   font-family: var(--font-family);

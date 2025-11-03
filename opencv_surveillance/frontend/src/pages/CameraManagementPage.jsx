@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CameraDiscoveryPage from './CameraDiscoveryPage';
+import CameraSettingsModal from '../components/CameraSettingsModal';
+import PTZControl from '../components/PTZControl';
 import HelpButton from '../components/HelpButton';
 import { HELP_CONTENT } from '../utils/helpContent';
 import apiClient from '../api/apiClient';
@@ -27,15 +29,11 @@ const CameraManagementPage = ({ embedded = false }) => {
     resolution: '1920x1080'
   });
 
-  // Edit camera modal state
-  const [editingCamera, setEditingCamera] = useState(null);
-  const [editForm, setEditForm] = useState({
-    motion_percentage_threshold: 1.0,
-    motion_threshold: 25,
-    face_detection_enabled: false,
-    motion_detection_enabled: true,
-    recording_enabled: true
-  });
+  // Comprehensive camera settings modal state
+  const [settingsCamera, setSettingsCamera] = useState(null);
+
+  // PTZ control state
+  const [ptzCamera, setPtzCamera] = useState(null);
 
   // Load cameras
   const loadCameras = async () => {
@@ -115,31 +113,6 @@ const CameraManagementPage = ({ embedded = false }) => {
     }
   };
 
-  // Handle opening edit modal
-  const handleEditCamera = (camera) => {
-    setEditingCamera(camera);
-    setEditForm({
-      motion_percentage_threshold: camera.motion_percentage_threshold || 1.0,
-      motion_threshold: camera.motion_threshold || 25,
-      face_detection_enabled: camera.face_detection_enabled || false,
-      motion_detection_enabled: camera.motion_detection_enabled !== false, // default true
-      recording_enabled: camera.recording_enabled !== false // default true
-    });
-  };
-
-  // Handle saving edited camera settings
-  const handleSaveEdit = async () => {
-    if (!editingCamera) return;
-    
-    try {
-      await apiClient.patch(`/cameras/${editingCamera.camera_id}`, editForm);
-      setSuccess(`✅ Camera settings updated successfully!`);
-      setEditingCamera(null);
-      loadCameras();
-    } catch (err) {
-      setError(`❌ Failed to update camera: ${err.response?.data?.detail || err.message}`);
-    }
-  };
 
   if (activeTab === 'discover') {
     return <CameraDiscoveryPage onBack={() => setActiveTab('list')} />;
@@ -194,15 +167,17 @@ const CameraManagementPage = ({ embedded = false }) => {
 
       {/* Alert Messages */}
       {error && (
-        <div style={styles.alert.error}>
-          {error}
-          <button onClick={() => setError(null)} style={styles.closeAlert}>×</button>
+        <div className="alert alert-error">
+          <span className="alert-icon">⚠️</span>
+          <div className="alert-content">{error}</div>
+          <button onClick={() => setError(null)} className="modal-close" style={{position: 'relative', marginLeft: 'auto'}}>×</button>
         </div>
       )}
       {success && (
-        <div style={styles.alert.success}>
-          {success}
-          <button onClick={() => setSuccess(null)} style={styles.closeAlert}>×</button>
+        <div className="alert alert-success">
+          <span className="alert-icon">✓</span>
+          <div className="alert-content">{success}</div>
+          <button onClick={() => setSuccess(null)} className="modal-close" style={{position: 'relative', marginLeft: 'auto'}}>×</button>
         </div>
       )}
 
@@ -213,7 +188,7 @@ const CameraManagementPage = ({ embedded = false }) => {
           <div>
             <div style={styles.sectionHeader}>
               <h2 style={styles.sectionTitle}>Your Cameras</h2>
-              <button onClick={loadCameras} style={styles.refreshButton} disabled={loading}>
+              <button onClick={loadCameras} className="btn btn-secondary" disabled={loading}>
                 {loading ? '🔄 Loading...' : '🔄 Refresh'}
               </button>
             </div>
@@ -224,10 +199,10 @@ const CameraManagementPage = ({ embedded = false }) => {
                 <h3>No Cameras Configured</h3>
                 <p>Get started by discovering cameras automatically or adding one manually</p>
                 <div style={styles.emptyActions}>
-                  <button onClick={() => setActiveTab('discover')} style={styles.primaryButton}>
+                  <button onClick={() => setActiveTab('discover')} className="btn btn-primary">
                     🔍 Discover Cameras
                   </button>
-                  <button onClick={() => setActiveTab('manual')} style={styles.secondaryButton}>
+                  <button onClick={() => setActiveTab('manual')} className="btn btn-secondary">
                     ➕ Add Manually
                   </button>
                 </div>
@@ -276,25 +251,33 @@ const CameraManagementPage = ({ embedded = false }) => {
                     <div style={styles.cardFooter}>
                       <button
                         onClick={() => window.open(`/api/cameras/${camera.camera_id}/stream`, '_blank')}
-                        style={styles.viewButton}
+                        className="btn btn-primary btn-sm"
                       >
                         👁️ View Stream
                       </button>
                       <button
-                        onClick={() => handleEditCamera(camera)}
-                        style={styles.editButton}
+                        onClick={() => setSettingsCamera(camera)}
+                        className="btn btn-secondary btn-sm"
+                        title="Configure camera settings, zones, and recording"
                       >
                         ⚙️ Settings
                       </button>
                       <button
+                        onClick={() => setPtzCamera(camera)}
+                        className="btn btn-info btn-sm"
+                        title="PTZ Camera Controls"
+                      >
+                        🎮 PTZ Control
+                      </button>
+                      <button
                         onClick={() => handleToggleCamera(camera.camera_id, camera.is_active)}
-                        style={camera.is_active ? styles.disableButton : styles.enableButton}
+                        className={`btn btn-sm ${camera.is_active ? 'btn-warning' : 'btn-success'}`}
                       >
                         {camera.is_active ? '⏸️ Disable' : '▶️ Enable'}
                       </button>
                       <button
                         onClick={() => handleDeleteCamera(camera.camera_id)}
-                        style={styles.deleteButton}
+                        className="btn btn-danger btn-sm"
                       >
                         🗑️ Delete
                       </button>
@@ -325,7 +308,7 @@ const CameraManagementPage = ({ embedded = false }) => {
                     onChange={(e) => setManualForm({...manualForm, camera_id: e.target.value})}
                     placeholder="e.g., front_door_cam"
                     required
-                    style={styles.input}
+                    className="form-input"
                   />
                   <small style={styles.hint}>Unique identifier (no spaces, use underscores)</small>
                 </div>
@@ -338,7 +321,7 @@ const CameraManagementPage = ({ embedded = false }) => {
                     onChange={(e) => setManualForm({...manualForm, name: e.target.value})}
                     placeholder="e.g., Front Door"
                     required
-                    style={styles.input}
+                    className="form-input"
                   />
                   <small style={styles.hint}>Friendly display name</small>
                 </div>
@@ -350,7 +333,7 @@ const CameraManagementPage = ({ embedded = false }) => {
                   <select
                     value={manualForm.camera_type}
                     onChange={(e) => setManualForm({...manualForm, camera_type: e.target.value})}
-                    style={styles.select}
+                    className="form-input"
                   >
                     <option value="rtsp">RTSP (Network Camera)</option>
                     <option value="usb">USB Camera</option>
@@ -372,7 +355,7 @@ const CameraManagementPage = ({ embedded = false }) => {
                       'mock_stream'
                     }
                     required
-                    style={styles.input}
+                    className="form-input"
                   />
                   <small style={styles.hint}>
                     {manualForm.camera_type === 'rtsp' && 'RTSP URL with credentials if needed'}
@@ -391,7 +374,7 @@ const CameraManagementPage = ({ embedded = false }) => {
                     value={manualForm.resolution}
                     onChange={(e) => setManualForm({...manualForm, resolution: e.target.value})}
                     placeholder="1920x1080"
-                    style={styles.input}
+                    className="form-input"
                   />
                   <small style={styles.hint}>e.g., 1920x1080, 1280x720 (leave blank for auto)</small>
                 </div>
@@ -404,7 +387,7 @@ const CameraManagementPage = ({ embedded = false }) => {
                     onChange={(e) => setManualForm({...manualForm, fps: parseInt(e.target.value)})}
                     min="1"
                     max="60"
-                    style={styles.input}
+                    className="form-input"
                   />
                   <small style={styles.hint}>Recommended: 15-30 FPS</small>
                 </div>
@@ -437,7 +420,7 @@ const CameraManagementPage = ({ embedded = false }) => {
               </div>
 
               <div style={styles.formActions}>
-                <button type="submit" style={styles.submitButton}>
+                <button type="submit" className="btn btn-success">
                   ✅ Add Camera
                 </button>
                 <button
@@ -452,7 +435,7 @@ const CameraManagementPage = ({ embedded = false }) => {
                     fps: 30,
                     resolution: '1920x1080'
                   })}
-                  style={styles.resetButton}
+                  className="btn btn-secondary"
                 >
                   🔄 Reset Form
                 </button>
@@ -485,128 +468,63 @@ const CameraManagementPage = ({ embedded = false }) => {
         )}
       </div>
 
-      {/* Edit Camera Modal */}
-      {editingCamera && (
-        <div style={styles.modal.overlay} onClick={() => setEditingCamera(null)}>
-          <div style={styles.modal.content} onClick={(e) => e.stopPropagation()}>
-            <div style={styles.modal.header}>
-              <h2 style={styles.modal.title}>⚙️ Camera Settings</h2>
-              <button onClick={() => setEditingCamera(null)} style={styles.modal.closeButton}>×</button>
-            </div>
-            
-            <div style={styles.modal.body}>
-              <h3 style={styles.modalCameraName}>{editingCamera.camera_id}</h3>
-              
-              {/* Motion Detection Settings */}
-              <div style={styles.modal.section}>
-                <h4 style={styles.modal.sectionTitle}>Motion Detection</h4>
-                
-                {/* Motion Percentage Threshold Slider */}
-                <div style={styles.modal.formGroup}>
-                  <label style={styles.modal.label}>
-                    Motion Coverage Threshold: {editForm.motion_percentage_threshold.toFixed(1)}%
-                    <HelpButton 
-                      title="Motion Coverage Threshold"
-                      description="Minimum percentage of the frame that must contain motion to trigger an event. For example, 1.0% means at least 1% of the frame must show movement. This prevents tiny movements (like insects, leaves, or curtains) from triggering false alarms."
-                    />
-                  </label>
-                  <input
-                    type="range"
-                    min="0.1"
-                    max="100"
-                    step="0.1"
-                    value={editForm.motion_percentage_threshold}
-                    onChange={(e) => setEditForm({...editForm, motion_percentage_threshold: parseFloat(e.target.value)})}
-                    style={styles.modal.slider}
-                  />
-                  <div style={styles.modal.sliderLabels}>
-                    <span>0.1% (Very Sensitive)</span>
-                    <span>100% (Entire Frame)</span>
-                  </div>
-                  <small style={styles.modal.hint}>
-                    Recommended: 0.5% - 5% for most scenarios. Higher values reduce false positives from small movements.
-                  </small>
-                </div>
+      {/* Comprehensive Camera Settings Modal */}
+      {settingsCamera && (
+        <CameraSettingsModal
+          camera={settingsCamera}
+          onClose={() => setSettingsCamera(null)}
+          onSave={loadCameras}
+        />
+      )}
 
-                {/* Motion Pixel Sensitivity */}
-                <div style={styles.modal.formGroup}>
-                  <label style={styles.modal.label}>
-                    Pixel Sensitivity (varThreshold): {editForm.motion_threshold}
-                    <HelpButton 
-                      title="Pixel Sensitivity"
-                      description="Controls how much a pixel must change to be considered motion. Lower values (16-25) are more sensitive and detect subtle changes. Higher values (40-100) require more dramatic changes. This is different from coverage threshold - it controls individual pixel sensitivity, not the amount of the frame affected."
-                    />
-                  </label>
-                  <input
-                    type="range"
-                    min="16"
-                    max="100"
-                    step="1"
-                    value={editForm.motion_threshold}
-                    onChange={(e) => setEditForm({...editForm, motion_threshold: parseInt(e.target.value)})}
-                    style={styles.modal.slider}
-                  />
-                  <div style={styles.modal.sliderLabels}>
-                    <span>16 (Very Sensitive)</span>
-                    <span>100 (Less Sensitive)</span>
-                  </div>
-                  <small style={styles.modal.hint}>
-                    Recommended: 20-30 for most scenarios. Adjust based on lighting conditions.
-                  </small>
-                </div>
-
-                {/* Feature Toggles */}
-                <div style={styles.modal.formGroup}>
-                  <label style={styles.modal.checkboxLabel}>
-                    <input
-                      type="checkbox"
-                      checked={editForm.motion_detection_enabled}
-                      onChange={(e) => setEditForm({...editForm, motion_detection_enabled: e.target.checked})}
-                      style={styles.modal.checkbox}
-                    />
-                    Enable Motion Detection
-                  </label>
-                </div>
-
-                <div style={styles.modal.formGroup}>
-                  <label style={styles.modal.checkboxLabel}>
-                    <input
-                      type="checkbox"
-                      checked={editForm.recording_enabled}
-                      onChange={(e) => setEditForm({...editForm, recording_enabled: e.target.checked})}
-                      style={styles.modal.checkbox}
-                    />
-                    Enable Recording on Motion
-                  </label>
-                </div>
-              </div>
-
-              {/* Face Detection Settings */}
-              <div style={styles.modal.section}>
-                <h4 style={styles.modal.sectionTitle}>Face Detection</h4>
-                
-                <div style={styles.modal.formGroup}>
-                  <label style={styles.modal.checkboxLabel}>
-                    <input
-                      type="checkbox"
-                      checked={editForm.face_detection_enabled}
-                      onChange={(e) => setEditForm({...editForm, face_detection_enabled: e.target.checked})}
-                      style={styles.modal.checkbox}
-                    />
-                    Enable Face Detection
-                  </label>
-                </div>
-              </div>
-            </div>
-            
-            <div style={styles.modal.footer}>
-              <button onClick={() => setEditingCamera(null)} style={styles.modal.cancelButton}>
-                Cancel
-              </button>
-              <button onClick={handleSaveEdit} style={styles.modal.saveButton}>
-                ✅ Save Changes
-              </button>
-            </div>
+      {/* PTZ Camera Control Panel */}
+      {ptzCamera && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px',
+          overflow: 'auto'
+        }}>
+          <div style={{
+            backgroundColor: 'var(--card-background, #fff)',
+            borderRadius: '8px',
+            maxWidth: '900px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflow: 'auto',
+            position: 'relative'
+          }}>
+            <button
+              onClick={() => setPtzCamera(null)}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                background: 'var(--danger-color, #ef4444)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                padding: '8px 16px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '600',
+                zIndex: 10
+              }}
+            >
+              ✕ Close
+            </button>
+            <PTZControl
+              cameraId={ptzCamera.camera_id}
+              cameraName={ptzCamera.name}
+            />
           </div>
         </div>
       )}
@@ -872,7 +790,7 @@ const styles = {
     cursor: 'pointer',
     fontSize: '14px',
   },
-  editButton: {
+  settingsButton: {
     flex: 1,
     background: 'var(--bg-panel)',
     color: 'var(--text-primary)',

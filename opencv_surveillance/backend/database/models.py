@@ -179,6 +179,14 @@ class Camera(Base):
     sharpness = Column(String, default="none")  # none, low, medium, high
     noise_reduction_strength = Column(Integer, default=0)  # 0-100
 
+    # Overlay settings (timestamp and custom text)
+    overlay_enabled = Column(Boolean, default=True)  # Master enable/disable
+    overlay_timestamp_enabled = Column(Boolean, default=True)  # Show timestamp
+    overlay_custom_text = Column(String, nullable=True)  # Custom message text
+    overlay_position = Column(String, default="top-left")  # top-left, top-right, bottom-left, bottom-right, center-top, center-bottom
+    overlay_font_size = Column(Integer, default=1)  # Font scale 1-3
+    overlay_font_color = Column(String, default="white")  # white, yellow, cyan, green, red
+
     # Metadata
     created_at = Column(DateTime, default=datetime.utcnow)
     last_active_at = Column(
@@ -348,3 +356,183 @@ class AutomationRule(Base):
     
     def __repr__(self):
         return f"<AutomationRule(name={self.name}, person={self.person_name}, enabled={self.enabled})>"
+
+
+class MotionZone(Base):
+    """
+    Motion detection zone model
+    Allows users to define specific areas for motion detection with custom sensitivity
+    Supports polygon and rectangle zones
+    """
+
+    __tablename__ = "motion_zones"
+
+    id = Column(Integer, primary_key=True, index=True)
+    camera_id = Column(String, ForeignKey('cameras.camera_id'), nullable=False, index=True)
+
+    # Zone identification
+    name = Column(String, nullable=False)  # User-friendly name (e.g., "Front Door", "Driveway")
+    zone_type = Column(String, default="polygon")  # "polygon" or "rectangle"
+
+    # Zone coordinates (JSON array)
+    # Polygon: [{"x": 0.1, "y": 0.2}, {"x": 0.3, "y": 0.4}, ...]
+    # Rectangle: [{"x": 0.1, "y": 0.1}, {"x": 0.9, "y": 0.9}] (top-left, bottom-right)
+    # Coordinates are normalized (0.0 to 1.0) relative to frame dimensions
+    coordinates = Column(String, nullable=False)  # JSON string
+
+    # Zone settings
+    is_active = Column(Boolean, default=True, index=True)
+    is_exclusion_zone = Column(Boolean, default=False)  # If True, ignore motion in this zone
+
+    # Sensitivity multiplier (0.0 to 10.0, default 1.0)
+    # < 1.0 = less sensitive (fewer alerts)
+    # > 1.0 = more sensitive (more alerts)
+    sensitivity_multiplier = Column(Float, default=1.0)
+
+    # Display settings (for UI)
+    color = Column(String, default="#00FF00")  # Hex color for zone outline
+    opacity = Column(Float, default=0.3)  # Zone fill opacity (0.0 to 1.0)
+
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Statistics (optional)
+    motion_events_count = Column(Integer, default=0)  # Track motions detected in this zone
+    last_motion_at = Column(DateTime, nullable=True)  # Last motion detection in zone
+
+    def __repr__(self):
+        return f"<MotionZone(id={self.id}, camera={self.camera_id}, name={self.name}, active={self.is_active})>"
+
+
+class PTZPreset(Base):
+    """
+    PTZ Preset Position Model
+    Stores saved camera positions for quick recall
+    """
+
+    __tablename__ = "ptz_presets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    camera_id = Column(String, ForeignKey('cameras.camera_id'), nullable=False, index=True)
+
+    # Preset identification
+    name = Column(String, nullable=False)  # User-friendly name (e.g., "Front Gate", "Parking Lot")
+    preset_number = Column(Integer, nullable=False)  # Preset slot (1-255 for ONVIF)
+
+    # PTZ coordinates
+    pan = Column(Float, nullable=False)  # Pan position (-1.0 to 1.0 or degrees depending on camera)
+    tilt = Column(Float, nullable=False)  # Tilt position (-1.0 to 1.0 or degrees)
+    zoom = Column(Float, nullable=False)  # Zoom level (0.0 to 1.0 or actual zoom factor)
+
+    # Optional thumbnail for visual reference
+    thumbnail_path = Column(String, nullable=True)
+
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_used_at = Column(DateTime, nullable=True)
+    usage_count = Column(Integer, default=0)  # Track how often this preset is used
+
+    def __repr__(self):
+        return f"<PTZPreset(id={self.id}, camera={self.camera_id}, name={self.name})>"
+
+
+class PTZPatrolPattern(Base):
+    """
+    PTZ Patrol Pattern Model
+    Defines automated camera movement patterns (e.g., left → right → center)
+    """
+
+    __tablename__ = "ptz_patrol_patterns"
+
+    id = Column(Integer, primary_key=True, index=True)
+    camera_id = Column(String, ForeignKey('cameras.camera_id'), nullable=False, index=True)
+
+    # Pattern identification
+    name = Column(String, nullable=False)  # User-friendly name (e.g., "Standard Patrol", "Perimeter Scan")
+    description = Column(String, nullable=True)  # Optional description
+
+    # Pattern configuration
+    # JSON array of preset IDs or positions in sequence
+    # Example: [{"preset_id": 1, "dwell_time": 5}, {"preset_id": 2, "dwell_time": 3}]
+    # Or: [{"pan": 0.5, "tilt": 0.0, "zoom": 0.5, "dwell_time": 5}]
+    pattern_steps = Column(String, nullable=False)  # JSON string
+
+    # Execution settings
+    is_active = Column(Boolean, default=False, index=True)  # Currently running
+    loop_enabled = Column(Boolean, default=True)  # Repeat pattern continuously
+    interval_seconds = Column(Integer, default=10)  # Time at each position before moving to next
+
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_run_at = Column(DateTime, nullable=True)
+    run_count = Column(Integer, default=0)  # Track how many times pattern has run
+
+    def __repr__(self):
+        return f"<PTZPatrolPattern(id={self.id}, camera={self.camera_id}, name={self.name}, active={self.is_active})>"
+
+
+class FeatureState(Base):
+    """
+    Tracks the enabled/disabled state of system features
+    Hardware-aware feature management system
+    """
+
+    __tablename__ = "feature_states"
+
+    id = Column(Integer, primary_key=True, index=True)
+    feature_id = Column(String, unique=True, index=True, nullable=False)  # From feature_config.py
+    enabled = Column(Boolean, default=False, index=True)  # Currently enabled
+    auto_configured = Column(Boolean, default=True)  # Was this auto-configured based on hardware?
+    user_override = Column(Boolean, default=False)  # Did user manually enable/disable?
+
+    # Hardware compatibility at last check
+    hardware_compatible = Column(Boolean, default=True)  # Can current hardware run this?
+    compatibility_reason = Column(String, nullable=True)  # Why is it incompatible?
+
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_checked_at = Column(DateTime, default=datetime.utcnow)  # Last hardware compatibility check
+
+    def __repr__(self):
+        return f"<FeatureState(feature={self.feature_id}, enabled={self.enabled}, compatible={self.hardware_compatible})>"
+
+
+class HardwareScanHistory(Base):
+    """
+    Tracks hardware scans and changes over time
+    Allows users to see hardware changes and scan history
+    """
+
+    __tablename__ = "hardware_scan_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    scan_type = Column(String, default="manual")  # manual, startup, scheduled, triggered
+
+    # Hardware snapshot (JSON)
+    cpu_cores = Column(Integer)
+    ram_total_gb = Column(Float)
+    gpu_available = Column(Boolean)
+    gpu_name = Column(String, nullable=True)
+    gpu_memory_mb = Column(Integer, nullable=True)
+
+    # Classification
+    hardware_tier = Column(String)  # minimal, low, medium, high_end
+
+    # Changes detected
+    changes_detected = Column(Boolean, default=False)
+    changes_summary = Column(String, nullable=True)  # JSON: what changed since last scan
+
+    # Actions taken
+    features_enabled = Column(Integer, default=0)  # How many features were auto-enabled
+    features_disabled = Column(Integer, default=0)  # How many features were auto-disabled
+
+    # Metadata
+    scanned_at = Column(DateTime, default=datetime.utcnow, index=True)
+    scanned_by = Column(String, nullable=True)  # username or "system"
+
+    def __repr__(self):
+        return f"<HardwareScanHistory(id={self.id}, tier={self.hardware_tier}, scanned_at={self.scanned_at})>"

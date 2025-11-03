@@ -143,6 +143,14 @@ class CameraUpdate(BaseModel):
     sharpness: Optional[str] = Field(None, pattern="^(none|low|medium|high)$")
     noise_reduction_strength: Optional[int] = Field(None, ge=0, le=100)
 
+    # Overlay settings (timestamp and custom text)
+    overlay_enabled: Optional[bool] = None
+    overlay_timestamp_enabled: Optional[bool] = None
+    overlay_custom_text: Optional[str] = Field(None, max_length=200)
+    overlay_position: Optional[str] = Field(None, pattern="^(top-left|top-right|bottom-left|bottom-right|center-top|center-bottom)$")
+    overlay_font_size: Optional[int] = Field(None, ge=1, le=3)
+    overlay_font_color: Optional[str] = Field(None, pattern="^(white|yellow|cyan|green|red)$")
+
     is_active: Optional[bool] = None
 
 

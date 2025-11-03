@@ -117,50 +117,39 @@ const Modal = ({
   if (!isOpen) return null;
 
   return (
-    <div 
-      className="modal-backdrop"
+    <div
+      className="modal-overlay"
       onClick={handleBackdropClick}
       aria-modal="true"
       role="presentation"
     >
-      <div 
+      <div
         ref={modalRef}
-        className={`modal-content modal-${size}`}
+        className={`modal modal-${size}`}
         onClick={(e) => e.stopPropagation()}
         tabIndex={-1}
         role="dialog"
         aria-labelledby="modal-title"
         aria-describedby="modal-description"
       >
-        {/* Close button */}
-        {showCloseButton && (
-          <button 
-            className="modal-close"
-            onClick={onClose}
-            aria-label="Close modal"
-            type="button"
-          >
-            <svg 
-              width="20" 
-              height="20" 
-              viewBox="0 0 20 20" 
-              fill="none" 
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
+        {/* Header with title and close button */}
+        <div className="modal-header">
+          {title && (
+            <h2 id="modal-title" className="modal-title">
+              {title}
+            </h2>
+          )}
+          {showCloseButton && (
+            <button
+              className="modal-close"
+              onClick={onClose}
+              aria-label="Close modal"
+              type="button"
             >
-              <line x1="4" y1="4" x2="16" y2="16" />
-              <line x1="16" y1="4" x2="4" y2="16" />
-            </svg>
-          </button>
-        )}
-
-        {/* Title */}
-        {title && (
-          <h2 id="modal-title" className="modal-title">
-            {title}
-          </h2>
-        )}
+              ×
+            </button>
+          )}
+        </div>
 
         {/* Content */}
         <div id="modal-description" className="modal-body">
@@ -198,17 +187,17 @@ export const ConfirmModal = ({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm">
-      <p style={{ marginBottom: 'var(--spacing-xl, 32px)' }}>{message}</p>
-      <div className="modal-actions">
-        <button 
-          className="button button-secondary"
+      <p style={{ marginBottom: '24px' }}>{message}</p>
+      <div className="modal-footer">
+        <button
+          className="btn btn-secondary"
           onClick={onClose}
           type="button"
         >
           {cancelText}
         </button>
-        <button 
-          className={`button button-${variant}`}
+        <button
+          className={`btn btn-${variant}`}
           onClick={handleConfirm}
           type="button"
         >

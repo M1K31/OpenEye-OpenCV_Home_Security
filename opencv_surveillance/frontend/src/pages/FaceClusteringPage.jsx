@@ -366,6 +366,7 @@ const FaceClusteringPage = () => {
                 ...prev,
                 eps: parseFloat(e.target.value)
               }))}
+              className="form-input"
             />
           </div>
           
@@ -385,6 +386,7 @@ const FaceClusteringPage = () => {
                 ...prev,
                 min_samples: parseInt(e.target.value)
               }))}
+              className="form-input"
             />
           </div>
           

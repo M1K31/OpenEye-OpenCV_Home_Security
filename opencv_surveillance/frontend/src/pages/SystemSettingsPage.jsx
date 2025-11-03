@@ -25,19 +25,10 @@ const SystemSettingsPage = ({ embedded = false }) => {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [pathValidation, setPathValidation] = useState({});
-  const [cameras, setCameras] = useState([]);
-  const [pendingCameraUpdates, setPendingCameraUpdates] = useState({});
-  const updateTimersRef = useRef({});
 
-  // Load settings and cameras
+  // Load settings
   useEffect(() => {
     loadSettings();
-    loadCameras();
-
-    // Cleanup: clear all pending timers on unmount
-    return () => {
-      Object.values(updateTimersRef.current).forEach(timer => clearTimeout(timer));
-    };
   }, []);
 
   const loadSettings = async () => {
@@ -67,14 +58,7 @@ const SystemSettingsPage = ({ embedded = false }) => {
     }
   };
 
-  const loadCameras = async () => {
-    try {
-      const response = await apiClient.get('/cameras/');
-      setCameras(response.data.cameras || []);
-    } catch (error) {
-      console.error('Error loading cameras:', error);
-    }
-  };
+  // loadCameras function removed - cameras are now managed in CameraManagementPage
 
   const validatePath = async (path, pathType) => {
     if (!path || path.trim() === '') {
@@ -181,60 +165,8 @@ const SystemSettingsPage = ({ embedded = false }) => {
     }
   };
 
-  const handleCameraFeatureToggle = useCallback((cameraId, feature, value) => {
-    // Update local state immediately for smooth UI
-    setCameras(prevCameras => 
-      prevCameras.map(cam => 
-        cam.camera_id === cameraId ? { ...cam, [feature]: value } : cam
-      )
-    );
-
-    // Store pending update
-    setPendingCameraUpdates(prev => ({
-      ...prev,
-      [cameraId]: {
-        ...prev[cameraId],
-        [feature]: value
-      }
-    }));
-
-    // Clear existing timer for this camera
-    if (updateTimersRef.current[cameraId]) {
-      clearTimeout(updateTimersRef.current[cameraId]);
-    }
-
-    // Set new timer to send update after 500ms of no changes
-    updateTimersRef.current[cameraId] = setTimeout(async () => {
-      try {
-        const updates = pendingCameraUpdates[cameraId] || { [feature]: value };
-        await apiClient.patch(`/cameras/${cameraId}`, updates);
-        
-        // Clear pending updates for this camera
-        setPendingCameraUpdates(prev => {
-          const newPending = { ...prev };
-          delete newPending[cameraId];
-          return newPending;
-        });
-        
-        // Reload cameras to get server state
-        await loadCameras();
-      } catch (error) {
-        console.error('Error updating camera:', error);
-        setMessage({ type: 'error', text: 'Failed to update camera settings' });
-        // Reload to revert to server state
-        loadCameras();
-      }
-    }, 500); // 500ms debounce
-  }, [pendingCameraUpdates]);
-
-  // Helper function to get camera setting value with safe defaults
-  const getCameraValue = (camera, property, defaultValue) => {
-    const value = camera[property];
-    if (value === undefined || value === null || isNaN(value)) {
-      return defaultValue;
-    }
-    return value;
-  };
+  // Camera feature toggle and value getter functions removed -
+  // All per-camera settings are now managed in the CameraSettingsModal
 
   // Handle directory selection via file input
   // Note: Due to browser security, we can't get the actual filesystem path
@@ -329,11 +261,9 @@ const SystemSettingsPage = ({ embedded = false }) => {
         ) : (
           <>
             {message.text && (
-              <div style={{
-                ...styles.message,
-                ...(message.type === 'success' ? styles.messageSuccess : styles.messageError)
-              }}>
-                {message.text}
+              <div className={`alert ${message.type === 'success' ? 'alert-success' : 'alert-error'}`}>
+                <span className="alert-icon">{message.type === 'success' ? '✓' : '⚠️'}</span>
+                <div className="alert-content">{message.text}</div>
               </div>
             )}
 
@@ -355,12 +285,12 @@ const SystemSettingsPage = ({ embedded = false }) => {
                 value={settings.recordings_path}
                 onChange={(e) => handleInputChange('recordings_path', e.target.value)}
                 onBlur={(e) => validatePath(e.target.value, 'recordings_path')}
-                style={styles.pathInput}
+                className="form-input"
                 placeholder="recordings"
               />
               <button
                 onClick={() => handleDirectorySelect('recordings_path')}
-                style={styles.browseButton}
+                className="btn btn-secondary"
                 type="button"
                 title="Enter path with helpful examples"
               >
@@ -388,12 +318,12 @@ const SystemSettingsPage = ({ embedded = false }) => {
                 value={settings.faces_path}
                 onChange={(e) => handleInputChange('faces_path', e.target.value)}
                 onBlur={(e) => validatePath(e.target.value, 'faces_path')}
-                style={styles.pathInput}
+                className="form-input"
                 placeholder="faces"
               />
               <button
                 onClick={() => handleDirectorySelect('faces_path')}
-                style={styles.browseButton}
+                className="btn btn-secondary"
                 type="button"
                 title="Enter path with helpful examples"
               >
@@ -421,12 +351,12 @@ const SystemSettingsPage = ({ embedded = false }) => {
                 value={settings.snapshots_path}
                 onChange={(e) => handleInputChange('snapshots_path', e.target.value)}
                 onBlur={(e) => validatePath(e.target.value, 'snapshots_path')}
-                style={styles.pathInput}
+                className="form-input"
                 placeholder="data/snapshots"
               />
               <button
                 onClick={() => handleDirectorySelect('snapshots_path')}
-                style={styles.browseButton}
+                className="btn btn-secondary"
                 type="button"
                 title="Enter path with helpful examples"
               >
@@ -459,7 +389,7 @@ const SystemSettingsPage = ({ embedded = false }) => {
             <select
               value={settings.display_mode}
               onChange={(e) => handleInputChange('display_mode', e.target.value)}
-              style={styles.select}
+              className="form-input"
             >
               <option value="grid">Grid - Responsive grid layout</option>
               <option value="vertical">Vertical - Stacked vertically</option>
@@ -484,7 +414,7 @@ const SystemSettingsPage = ({ embedded = false }) => {
                   handleInputChange('cycle_interval', val);
                 }
               }}
-              style={styles.input}
+              className="form-input"
             />
           </div>
         </div>
@@ -512,7 +442,7 @@ const SystemSettingsPage = ({ embedded = false }) => {
                   handleInputChange('max_recording_duration', val);
                 }
               }}
-              style={styles.input}
+              className="form-input"
             />
             <div style={styles.hint}>
               Current: {Math.floor((settings.max_recording_duration || 300) / 60)} minutes {(settings.max_recording_duration || 300) % 60} seconds
@@ -536,7 +466,7 @@ const SystemSettingsPage = ({ embedded = false }) => {
                   handleInputChange('motion_percentage_threshold', val);
                 }
               }}
-              style={styles.input}
+              className="form-input"
             />
             <div style={styles.hint}>
               Lower values = more sensitive (detects smaller movements). Higher values = less sensitive (only larger movements).
@@ -664,241 +594,13 @@ const SystemSettingsPage = ({ embedded = false }) => {
           </div>
         </div>
 
-        {/* Per-Camera Feature Controls */}
+        {/* Camera Settings Note */}
         <div style={styles.section}>
-          <h2 style={styles.sectionTitle}>📹 Per-Camera Controls</h2>
+          <h2 style={styles.sectionTitle}>📹 Camera Settings</h2>
           <p style={styles.sectionDescription}>
-            Enable or disable features for individual cameras. All features are disabled by default.
+            Per-camera settings (motion detection, recording, image quality, zones, etc.) have been moved to the Camera Manager.
+            Please use the ⚙️ Settings button on each camera card in the Camera Management page to configure individual camera settings.
           </p>
-
-          {cameras.length === 0 ? (
-            <div style={styles.noCameras}>
-              No cameras configured. Add cameras to manage their settings.
-            </div>
-          ) : (
-            <div style={styles.cameraList}>
-              {cameras.map(camera => (
-                <div key={camera.camera_id} style={styles.cameraCard}>
-                  <div style={styles.cameraHeader}>
-                    <h3 style={styles.cameraName}>{camera.name || camera.camera_id}</h3>
-                    <span style={camera.is_active ? styles.statusActive : styles.statusInactive}>
-                      {camera.is_active ? '🟢 Active' : '⚫ Inactive'}
-                    </span>
-                  </div>
-                  
-                  <div style={styles.featureToggles}>
-                    <div style={styles.toggleRow}>
-                      <label style={styles.toggleLabel}>
-                        <input
-                          type="checkbox"
-                          checked={camera.motion_detection_enabled || false}
-                          onChange={(e) => handleCameraFeatureToggle(
-                            camera.camera_id,
-                            'motion_detection_enabled',
-                            e.target.checked
-                          )}
-                          style={styles.checkbox}
-                        />
-                        <span style={styles.toggleText}>Motion Detection</span>
-                      </label>
-                      <span style={styles.toggleHint}>Detect motion and trigger events</span>
-                    </div>
-
-                    <div style={styles.toggleRow}>
-                      <label style={styles.toggleLabel}>
-                        <input
-                          type="checkbox"
-                          checked={camera.recording_enabled || false}
-                          onChange={(e) => handleCameraFeatureToggle(
-                            camera.camera_id,
-                            'recording_enabled',
-                            e.target.checked
-                          )}
-                          style={styles.checkbox}
-                        />
-                        <span style={styles.toggleText}>Video Recording</span>
-                      </label>
-                      <span style={styles.toggleHint}>Record video when motion detected</span>
-                    </div>
-
-                    <div style={styles.toggleRow}>
-                      <label style={styles.toggleLabel}>
-                        <input
-                          type="checkbox"
-                          checked={camera.face_detection_enabled || false}
-                          onChange={(e) => handleCameraFeatureToggle(
-                            camera.camera_id,
-                            'face_detection_enabled',
-                            e.target.checked
-                          )}
-                          style={styles.checkbox}
-                        />
-                        <span style={styles.toggleText}>Face Detection</span>
-                      </label>
-                      <span style={styles.toggleHint}>Detect and recognize faces</span>
-                    </div>
-
-                    {/* Advanced Camera Settings */}
-                    <div style={styles.advancedSection}>
-                      <h4 style={styles.advancedTitle}>🎛️ Advanced Settings</h4>
-                      
-                      {/* Brightness Control */}
-                      <div style={styles.sliderRow}>
-                        <label style={styles.sliderLabel}>
-                          <span style={styles.sliderText}>Brightness</span>
-                          <span style={styles.sliderValue}>{getCameraValue(camera, 'brightness', 0)}</span>
-                        </label>
-                        <input
-                          type="range"
-                          min="-100"
-                          max="100"
-                          value={getCameraValue(camera, 'brightness', 0)}
-                          onChange={(e) => handleCameraFeatureToggle(
-                            camera.camera_id,
-                            'brightness',
-                            parseInt(e.target.value)
-                          )}
-                          style={styles.slider}
-                        />
-                        <span style={styles.sliderHint}>Adjust camera brightness (-100 to 100, 0=normal)</span>
-                      </div>
-
-                      {/* Contrast Control */}
-                      <div style={styles.sliderRow}>
-                        <label style={styles.sliderLabel}>
-                          <span style={styles.sliderText}>Contrast</span>
-                          <span style={styles.sliderValue}>{getCameraValue(camera, 'contrast', 1.0).toFixed(1)}</span>
-                        </label>
-                        <input
-                          type="range"
-                          min="0.5"
-                          max="3.0"
-                          step="0.1"
-                          value={getCameraValue(camera, 'contrast', 1.0)}
-                          onChange={(e) => handleCameraFeatureToggle(
-                            camera.camera_id,
-                            'contrast',
-                            parseFloat(e.target.value)
-                          )}
-                          style={styles.slider}
-                        />
-                        <span style={styles.sliderHint}>Adjust camera contrast (0.5 to 3.0, 1.0=normal)</span>
-                      </div>
-
-                      {/* Saturation Control */}
-                      <div style={styles.sliderRow}>
-                        <label style={styles.sliderLabel}>
-                          <span style={styles.sliderText}>Saturation</span>
-                          <span style={styles.sliderValue}>{getCameraValue(camera, 'saturation', 1.0).toFixed(1)}</span>
-                        </label>
-                        <input
-                          type="range"
-                          min="0.0"
-                          max="2.0"
-                          step="0.1"
-                          value={getCameraValue(camera, 'saturation', 1.0)}
-                          onChange={(e) => handleCameraFeatureToggle(
-                            camera.camera_id,
-                            'saturation',
-                            parseFloat(e.target.value)
-                          )}
-                          style={styles.slider}
-                        />
-                        <span style={styles.sliderHint}>Adjust color saturation (0.0 to 2.0, 1.0=normal)</span>
-                      </div>
-
-                      {/* Motion Sensitivity */}
-                      <div style={styles.sliderRow}>
-                        <label style={styles.sliderLabel}>
-                          <span style={styles.sliderText}>Motion Sensitivity</span>
-                          <span style={styles.sliderValue}>{getCameraValue(camera, 'motion_sensitivity', 5)}</span>
-                        </label>
-                        <input
-                          type="range"
-                          min="1"
-                          max="10"
-                          value={getCameraValue(camera, 'motion_sensitivity', 5)}
-                          onChange={(e) => handleCameraFeatureToggle(
-                            camera.camera_id,
-                            'motion_sensitivity',
-                            parseInt(e.target.value)
-                          )}
-                          style={styles.slider}
-                        />
-                        <span style={styles.sliderHint}>1 = Low sensitivity (large movements only), 10 = High sensitivity (small movements)</span>
-                      </div>
-
-                      {/* Motion Percentage Threshold */}
-                      <div style={styles.sliderRow}>
-                        <label style={styles.sliderLabel}>
-                          <span style={styles.sliderText}>Motion Threshold (%)</span>
-                          <span style={styles.sliderValue}>{getCameraValue(camera, 'motion_percentage_threshold', 1.0).toFixed(1)}%</span>
-                        </label>
-                        <input
-                          type="range"
-                          min="0.1"
-                          max="5.0"
-                          step="0.1"
-                          value={getCameraValue(camera, 'motion_percentage_threshold', 1.0)}
-                          onChange={(e) => handleCameraFeatureToggle(
-                            camera.camera_id,
-                            'motion_percentage_threshold',
-                            parseFloat(e.target.value)
-                          )}
-                          style={styles.slider}
-                        />
-                        <span style={styles.sliderHint}>Percentage of frame that must change to trigger motion (0.1% = very sensitive, 5.0% = less sensitive)</span>
-                      </div>
-
-                      {/* FPS Control */}
-                      <div style={styles.sliderRow}>
-                        <label style={styles.sliderLabel}>
-                          <span style={styles.sliderText}>Frame Rate (FPS)</span>
-                          <span style={styles.sliderValue}>{getCameraValue(camera, 'fps_target', 15)}</span>
-                        </label>
-                        <input
-                          type="range"
-                          min="1"
-                          max="30"
-                          value={getCameraValue(camera, 'fps_target', 15)}
-                          onChange={(e) => handleCameraFeatureToggle(
-                            camera.camera_id,
-                            'fps_target',
-                            parseInt(e.target.value)
-                          )}
-                          style={styles.slider}
-                        />
-                        <span style={styles.sliderHint}>Frames per second (1-30 FPS)</span>
-                      </div>
-
-                      {/* Resolution Control */}
-                      <div style={styles.sliderRow}>
-                        <label style={styles.sliderLabel}>
-                          <span style={styles.sliderText}>Resolution</span>
-                          <span style={styles.sliderValue}>{camera.resolution || '640x480'}</span>
-                        </label>
-                        <select
-                          value={camera.resolution || '640x480'}
-                          onChange={(e) => handleCameraFeatureToggle(
-                            camera.camera_id,
-                            'resolution',
-                            e.target.value
-                          )}
-                          style={styles.cameraSelect}
-                        >
-                          <option value="320x240">320x240 (Low)</option>
-                          <option value="640x480">640x480 (Standard)</option>
-                          <option value="1280x720">1280x720 (HD)</option>
-                          <option value="1920x1080">1920x1080 (Full HD)</option>
-                        </select>
-                        <span style={styles.sliderHint}>Camera resolution (higher uses more bandwidth)</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* Save Button */}
@@ -906,10 +608,7 @@ const SystemSettingsPage = ({ embedded = false }) => {
           <button
             onClick={handleSave}
             disabled={saving}
-            style={{
-              ...styles.saveButton,
-              ...(saving ? styles.saveButtonDisabled : {})
-            }}
+            className="btn btn-primary"
           >
             {saving ? '⏳ Saving...' : '💾 Save Settings'}
           </button>

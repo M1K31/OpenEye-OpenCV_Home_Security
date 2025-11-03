@@ -397,7 +397,7 @@ const TimelineView = () => {
               ].map(interval => (
                 <button
                   key={interval.value}
-                  className={`btn-option ${timeInterval === interval.value ? 'active' : ''}`}
+                  className={`btn btn-sm ${timeInterval === interval.value ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => handleIntervalChange(interval.value)}
                 >
                   {interval.label}
@@ -411,13 +411,13 @@ const TimelineView = () => {
             <label>Time</label>
             <div className="button-group">
               <button
-                className={`btn-option ${!use24Hour ? 'active' : ''}`}
+                className={`btn btn-sm ${!use24Hour ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setUse24Hour(false)}
               >
                 12h
               </button>
               <button
-                className={`btn-option ${use24Hour ? 'active' : ''}`}
+                className={`btn btn-sm ${use24Hour ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setUse24Hour(true)}
               >
                 24h
@@ -425,7 +425,7 @@ const TimelineView = () => {
             </div>
           </div>
 
-          <button className="btn-refresh" onClick={loadTimelineData} disabled={loading}>
+          <button className="btn btn-secondary btn-sm" onClick={loadTimelineData} disabled={loading}>
             {loading ? '⏳ Loading' : '🔄 Refresh'}
           </button>
         </div>
@@ -468,7 +468,7 @@ const TimelineView = () => {
       {error ? (
         <div className="timeline-error">
           <span>⚠️ {error}</span>
-          <button onClick={loadTimelineData}>Retry</button>
+          <button onClick={loadTimelineData} className="btn btn-primary">Retry</button>
         </div>
       ) : loading ? (
         <div className="timeline-loading">
@@ -653,7 +653,7 @@ const TimelineView = () => {
         <div className="playback-control-bar">
           <div className="playback-buttons">
             <button
-              className="btn-control"
+              className="btn btn-secondary btn-sm"
               onClick={handlePreviousEvent}
               title="Previous event"
               disabled={loading}
@@ -671,7 +671,7 @@ const TimelineView = () => {
             </button>
 
             <button
-              className="btn-control"
+              className="btn btn-secondary btn-sm"
               onClick={handleNextEvent}
               title="Next event"
               disabled={loading}
@@ -680,7 +680,7 @@ const TimelineView = () => {
             </button>
 
             <button
-              className="btn-control btn-live"
+              className="btn btn-success btn-sm"
               onClick={jumpToNow}
               title="Jump to now"
               disabled={loading}
@@ -696,7 +696,7 @@ const TimelineView = () => {
               {[0.5, 1, 2, 4, 8].map(speed => (
                 <button
                   key={speed}
-                  className={`btn-option ${playbackSpeed === speed ? 'active' : ''}`}
+                  className={`btn btn-sm ${playbackSpeed === speed ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => handleSpeedChange(speed)}
                 >
                   {speed}x
@@ -715,7 +715,7 @@ const TimelineView = () => {
             {lanes.length === 0 ? (
               <div className="empty-timeline">
                 <p>📭 No events in this time range</p>
-                <button onClick={() => jumpToNow()}>Jump to current time</button>
+                <button onClick={() => jumpToNow()} className="btn btn-primary btn-sm">Jump to current time</button>
               </div>
             ) : (
               lanes.map(lane => (

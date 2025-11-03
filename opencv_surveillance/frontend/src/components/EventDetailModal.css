@@ -1,0 +1,90 @@
+/* EventDetailModal Styles */
+
+.event-detail-modal {
+  max-width: 700px;
+  width: 90%;
+}
+
+.event-preview {
+  width: 100%;
+  margin-bottom: 24px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-secondary);
+}
+
+.event-snapshot {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.event-video {
+  width: 100%;
+  max-height: 480px;
+  display: block;
+  background: #000;
+  border-radius: 8px;
+}
+
+.event-no-media {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 32px;
+  background: var(--bg-secondary);
+  color: var(--text-tertiary);
+}
+
+.event-details-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.event-detail-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-panel);
+  border-radius: 8px;
+}
+
+.event-detail-label {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.event-detail-value {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.event-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.event-actions .btn {
+  flex: 1;
+  min-width: 120px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .event-detail-modal {
+    max-width: 95%;
+  }
+
+  .event-actions {
+    flex-direction: column;
+  }
+
+  .event-actions .btn {
+    width: 100%;
+  }
+}

@@ -1,0 +1,432 @@
+/**
+ * Hardware Detection Page Styles
+ */
+
+.hardware-detection-page {
+  padding: var(--spacing-lg, 24px);
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--spacing-xl, 32px);
+  gap: var(--spacing-md, 16px);
+}
+
+.page-title {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-sm, 8px);
+}
+
+.page-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.error-banner {
+  background: var(--error-bg, #fee);
+  color: var(--error-text, #c00);
+  padding: var(--spacing-md, 16px);
+  border-radius: var(--radius-md, 8px);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm, 8px);
+  margin-bottom: var(--spacing-lg, 24px);
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: var(--spacing-sm, 8px);
+  border-bottom: 2px solid var(--border-color);
+  margin-bottom: var(--spacing-lg, 24px);
+}
+
+.tab {
+  padding: var(--spacing-md, 16px) var(--spacing-lg, 24px);
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: -2px;
+}
+
+.tab:hover {
+  color: var(--text-primary);
+  background: var(--hover-bg, rgba(0, 0, 0, 0.05));
+}
+
+.tab.active {
+  color: var(--primary-color);
+  border-bottom-color: var(--primary-color);
+}
+
+/* Tab Content */
+.tab-content {
+  min-height: 400px;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md, 16px);
+}
+
+/* Hardware Overview */
+.hardware-overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xl, 32px);
+}
+
+.hardware-section {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg, 12px);
+  padding: var(--spacing-lg, 24px);
+}
+
+.section-heading {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-md, 16px);
+  padding-bottom: var(--spacing-sm, 8px);
+  border-bottom: 2px solid var(--border-color);
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: var(--spacing-md, 16px);
+}
+
+.info-card {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md, 16px);
+  padding: var(--spacing-md, 16px);
+  background: var(--surface-bg, #f8f9fa);
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--border-light, rgba(0, 0, 0, 0.06));
+}
+
+.info-icon {
+  font-size: 32px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.info-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.info-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+.info-value {
+  font-size: 16px;
+  color: var(--text-primary);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Progress Bar */
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--progress-bg, #e0e0e0);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: var(--spacing-md, 16px);
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary-color), var(--primary-dark, #0066cc));
+  transition: width 0.3s ease;
+}
+
+/* Empty States */
+.empty-state-small {
+  text-align: center;
+  padding: var(--spacing-xl, 32px);
+  color: var(--text-secondary);
+}
+
+.empty-state-small .empty-icon {
+  font-size: 48px;
+  display: block;
+  margin-bottom: var(--spacing-md, 16px);
+}
+
+.empty-state-small p {
+  margin: 4px 0;
+}
+
+.text-small {
+  font-size: 13px;
+}
+
+/* Features Tab */
+.features-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xl, 32px);
+}
+
+.features-section {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg, 12px);
+  padding: var(--spacing-lg, 24px);
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--spacing-md, 16px);
+}
+
+.feature-card {
+  padding: var(--spacing-md, 16px);
+  border-radius: var(--radius-md, 8px);
+  border: 2px solid var(--border-color);
+  background: var(--surface-bg);
+  transition: all 0.2s ease;
+}
+
+.feature-card.recommended {
+  border-color: var(--success-color, #28a745);
+  background: var(--success-bg, rgba(40, 167, 69, 0.05));
+}
+
+.feature-card.not-recommended {
+  border-color: var(--warning-color, #ffc107);
+  background: var(--warning-bg, rgba(255, 193, 7, 0.05));
+  opacity: 0.7;
+}
+
+.feature-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm, 8px);
+  margin-bottom: var(--spacing-sm, 8px);
+}
+
+.feature-header h4 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badge-gpu {
+  background: var(--primary-color);
+  color: white;
+}
+
+.badge-cpu {
+  background: var(--secondary-color);
+  color: white;
+}
+
+.feature-description {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0 0 var(--spacing-sm, 8px);
+  line-height: 1.5;
+}
+
+.feature-warning,
+.feature-warnings {
+  margin-top: var(--spacing-sm, 8px);
+}
+
+.feature-warning {
+  font-size: 13px;
+  color: var(--warning-text, #856404);
+  background: var(--warning-bg, #fff3cd);
+  padding: var(--spacing-sm, 8px);
+  border-radius: 4px;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm, 8px);
+}
+
+/* Recommendations Tab */
+.recommendations-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xl, 32px);
+}
+
+.tier-banner {
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-dark, #0066cc));
+  color: white;
+  padding: var(--spacing-xl, 32px);
+  border-radius: var(--radius-lg, 12px);
+  text-align: center;
+}
+
+.tier-banner h3 {
+  margin: 0 0 var(--spacing-md, 16px);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.tier-badge {
+  display: inline-block;
+  padding: var(--spacing-sm, 8px) var(--spacing-lg, 24px);
+  border-radius: var(--radius-pill, 999px);
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: var(--spacing-md, 16px);
+}
+
+.tier-badge.tier-high {
+  background: #28a745;
+}
+
+.tier-badge.tier-medium {
+  background: #17a2b8;
+}
+
+.tier-badge.tier-low {
+  background: #ffc107;
+  color: #333;
+}
+
+.tier-badge.tier-minimal {
+  background: #dc3545;
+}
+
+.tier-description {
+  font-size: 15px;
+  opacity: 0.9;
+  margin: 0;
+}
+
+.recommendations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: var(--spacing-md, 16px);
+}
+
+.recommendation-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg, 12px);
+  padding: var(--spacing-lg, 24px);
+  text-align: center;
+}
+
+.recommendation-card h4 {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0 0 var(--spacing-sm, 8px);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.recommendation-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--primary-color);
+  margin: var(--spacing-sm, 8px) 0;
+}
+
+.recommendation-note {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: var(--spacing-sm, 8px) 0 0;
+}
+
+.recommendations-list {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg, 12px);
+  padding: var(--spacing-lg, 24px);
+}
+
+.recommendation-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-md, 16px);
+  padding: var(--spacing-md, 16px);
+  background: var(--surface-bg);
+  border-radius: var(--radius-md, 8px);
+  margin-bottom: var(--spacing-sm, 8px);
+}
+
+.recommendation-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.recommendation-text {
+  font-size: 14px;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .hardware-detection-page {
+    padding: var(--spacing-md, 16px);
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .info-grid,
+  .feature-grid,
+  .recommendations-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tab {
+    white-space: nowrap;
+  }
+}

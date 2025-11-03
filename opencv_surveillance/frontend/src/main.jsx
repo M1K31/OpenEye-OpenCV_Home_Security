@@ -8,6 +8,9 @@ import App from './App.jsx'
 // This replaces the old global-theme.css
 import './themes.css'
 
+// Import global component styles (buttons, modals, forms, etc.)
+import './styles/global-components.css'
+
 // Then import any page-specific overrides
 import './index.css'
 

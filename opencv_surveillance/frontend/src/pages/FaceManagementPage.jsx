@@ -188,8 +188,11 @@ const FaceManagementPage = ({ embedded = false }) => {
       </header>
 
       {message && (
-        <div className={`message message-${message.type}`}>
-          {message.text}
+        <div className={`alert alert-${message.type}`}>
+          <span className="alert-icon">
+            {message.type === 'success' ? '✓' : message.type === 'error' ? '⚠️' : 'ℹ️'}
+          </span>
+          <div className="alert-content">{message.text}</div>
         </div>
       )}
 
@@ -230,6 +233,7 @@ const FaceManagementPage = ({ embedded = false }) => {
               <select
                 value={settings.detection_method}
                 onChange={(e) => setSettings({ ...settings, detection_method: e.target.value })}
+                className="form-input"
               >
                 <option value="hog">HOG (CPU, Faster)</option>
                 <option value="cnn">CNN (GPU, More Accurate)</option>
@@ -248,15 +252,10 @@ const FaceManagementPage = ({ embedded = false }) => {
               />
               <small>Lower = stricter (fewer false positives)</small>
             </div>
-            <button 
-              onClick={updateSettings} 
-              disabled={loading} 
-              className="btn-primary"
-              style={{
-                opacity: loading ? 0.6 : 1,
-                cursor: loading ? 'wait' : 'pointer',
-                transition: 'opacity 0.2s'
-              }}
+            <button
+              onClick={updateSettings}
+              disabled={loading}
+              className="btn btn-primary"
             >
               {loading ? (
                 <>
@@ -278,8 +277,9 @@ const FaceManagementPage = ({ embedded = false }) => {
             value={newPersonName}
             onChange={(e) => setNewPersonName(e.target.value)}
             disabled={loading}
+            className="form-input"
           />
-          <button type="submit" disabled={loading} className="btn-success">
+          <button type="submit" disabled={loading} className="btn btn-success">
             Add Person
           </button>
         </form>
@@ -289,7 +289,7 @@ const FaceManagementPage = ({ embedded = false }) => {
       <section className="people-section">
         <div className="section-header">
           <h2>People ({people.length})</h2>
-          <button onClick={trainModel} disabled={isTraining || people.length === 0} className="btn-warning">
+          <button onClick={trainModel} disabled={isTraining || people.length === 0} className="btn btn-warning">
             {isTraining ? (
               <>
                 <span className="spinner">◐</span> Training Model...
@@ -312,14 +312,14 @@ const FaceManagementPage = ({ embedded = false }) => {
                       console.log('[FaceManagement] Add Photos clicked for:', person.name);
                       setSelectedPerson(person.name);
                     }}
-                    className="btn-small btn-primary"
+                    className="btn btn-primary btn-sm"
                     disabled={loading}
                   >
                     Add Photos
                   </button>
                   <button
                     onClick={() => deletePerson(person.name)}
-                    className="btn-small btn-danger"
+                    className="btn btn-danger btn-sm"
                     disabled={loading}
                   >
                     Delete
@@ -412,14 +412,14 @@ const FaceManagementPage = ({ embedded = false }) => {
               <button
                 onClick={() => uploadPhotos(selectedPerson)}
                 disabled={loading || uploadFiles.length === 0}
-                className="btn-success"
+                className="btn btn-success"
               >
                 Upload
               </button>
               <button onClick={() => {
                 setSelectedPerson(null);
                 setUploadFiles([]);
-              }} className="btn-secondary">
+              }} className="btn btn-secondary">
                 Cancel
               </button>
             </div>

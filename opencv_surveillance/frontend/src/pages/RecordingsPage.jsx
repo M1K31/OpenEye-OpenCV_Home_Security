@@ -34,16 +34,26 @@ const RecordingsPage = () => {
   // Ref for intersection observer
   const observerTarget = useRef(null);
 
+  // Load cameras once on mount
+  useEffect(() => {
+    loadCameras();
+  }, []);
+
+  // Load data only for active tab when filters change
   useEffect(() => {
     // Reset page when filters change
     setCurrentPage(1);
-    setRecordings([]);
-    setSnapshots([]);
     setHasMore(true);
-    loadRecordings(true);
-    loadSnapshots(true);
-    loadCameras();
-  }, [filterCamera, startDate, endDate, searchPersonName]); // Reload when filters change
+
+    // Only load data for the currently active tab
+    if (activeTab === 'videos') {
+      setRecordings([]);
+      loadRecordings(true);
+    } else {
+      setSnapshots([]);
+      loadSnapshots(true);
+    }
+  }, [filterCamera, startDate, endDate, searchPersonName, activeTab]); // Reload when filters or tab changes
   
   // Infinite scroll observer
   useEffect(() => {
@@ -463,7 +473,7 @@ const RecordingsPage = () => {
         <select
           value={filterCamera}
           onChange={(e) => setFilterCamera(e.target.value)}
-          style={styles.filterSelect}
+          className="form-input"
         >
           <option value="all">All Cameras</option>
           {cameras.map(camera => (
@@ -485,7 +495,7 @@ const RecordingsPage = () => {
               setStartDate(e.target.value);
               setCurrentPage(1); // Reset to page 1 when filter changes
             }}
-            style={styles.dateInput}
+            className="form-input"
             placeholder="Start Date"
           />
           <span style={styles.dateSeparator}>to</span>
@@ -496,11 +506,11 @@ const RecordingsPage = () => {
               setEndDate(e.target.value);
               setCurrentPage(1);
             }}
-            style={styles.dateInput}
+            className="form-input"
             placeholder="End Date"
           />
           {(startDate || endDate || filterCamera !== 'all') && (
-            <button onClick={clearFilters} style={styles.clearButton}>
+            <button onClick={clearFilters} className="btn btn-secondary btn-sm">
               🗑️ Clear Filters
             </button>
           )}
@@ -516,12 +526,12 @@ const RecordingsPage = () => {
             value={searchPersonName}
             onChange={(e) => setSearchPersonName(e.target.value)}
             placeholder="Enter person name..."
-            style={styles.searchInput}
+            className="form-input"
           />
           {searchPersonName && (
-            <button 
-              onClick={() => setSearchPersonName('')} 
-              style={styles.clearSearchButton}
+            <button
+              onClick={() => setSearchPersonName('')}
+              className="btn btn-secondary btn-sm"
             >
               ✕
             </button>
@@ -543,10 +553,10 @@ const RecordingsPage = () => {
           </label>
           {selectedItems.length > 0 && (
             <>
-              <button onClick={batchExportZip} style={styles.batchExportButton}>
+              <button onClick={batchExportZip} className="btn btn-primary btn-sm">
                 📦 Export ZIP ({selectedItems.length})
               </button>
-              <button onClick={batchDelete} style={styles.batchDeleteButton}>
+              <button onClick={batchDelete} className="btn btn-danger btn-sm">
                 🗑️ Delete Selected ({selectedItems.length})
               </button>
             </>
@@ -615,13 +625,13 @@ const RecordingsPage = () => {
                       <a
                         href={`/api/recordings/${recordingId}/download`}
                         download
-                        style={styles.downloadButton}
+                        className="btn btn-primary btn-sm"
                       >
                         ⬇️ Download
                       </a>
                       <button
                         onClick={() => deleteRecording(recordingId)}
-                        style={styles.deleteButton}
+                        className="btn btn-danger btn-sm"
                       >
                         🗑️ Delete
                       </button>
@@ -658,6 +668,7 @@ const RecordingsPage = () => {
                       src={imageUrl}
                       alt={snapshot.camera_id}
                       style={styles.snapshotImage}
+                      loading="lazy"
                       onClick={() => setSelectedRecording(snapshot)}
                       onError={(e) => {
                         console.error('Failed to load snapshot:', snapshot.snapshot_path, '→ Converted to:', imageUrl, '→ Failed URL:', e.target.src);
@@ -677,13 +688,13 @@ const RecordingsPage = () => {
                       <a
                         href={imageUrl}
                         download
-                        style={styles.downloadButtonSmall}
+                        className="btn btn-primary btn-sm"
                       >
                         ⬇️
                       </a>
                       <button
                         onClick={() => deleteSnapshot(snapshot.id)}
-                        style={styles.deleteButtonSmall}
+                        className="btn btn-danger btn-sm"
                       >
                         🗑️
                       </button>
@@ -726,7 +737,7 @@ const RecordingsPage = () => {
           <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setSelectedRecording(null)}
-              style={styles.modalClose}
+              className="modal-close"
             >
               ✕
             </button>

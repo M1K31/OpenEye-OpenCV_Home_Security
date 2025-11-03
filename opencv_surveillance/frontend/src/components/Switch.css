@@ -1,0 +1,210 @@
+/* Universal Switch Styles - Apple HIG Compliant */
+
+/* Base Switch Container */
+.hig-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs, 8px);
+  cursor: pointer;
+  user-select: none;
+  vertical-align: middle;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hig-switch--disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Switch Input Container */
+.hig-switch__container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+
+  /* Minimum 44px touch target (HIG requirement) */
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 4px; /* Adds padding around track for larger touch area */
+}
+
+/* Hidden Checkbox Input */
+.hig-switch__input {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  cursor: inherit;
+  z-index: 1;
+}
+
+/* Track (Background Rail) - Medium Size */
+.hig-switch__track {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 52px;
+  height: 32px;
+  border-radius: 16px;
+  background-color: var(--switch-track-off, rgba(120, 120, 128, 0.32));
+  transition: background-color var(--transition-normal, 200ms) ease-in-out;
+  border: 1.5px solid transparent;
+}
+
+/* Small Size Variant */
+.hig-switch--small .hig-switch__track {
+  width: 40px;
+  height: 24px;
+  border-radius: 12px;
+}
+
+/* Checked State - Track */
+.hig-switch--checked .hig-switch__track {
+  background-color: var(--switch-track-on, var(--accent-color, #34C759));
+}
+
+/* Color Variants - Track */
+.hig-switch--success.hig-switch--checked .hig-switch__track {
+  background-color: var(--success-color, #34C759);
+}
+
+.hig-switch--destructive.hig-switch--checked .hig-switch__track {
+  background-color: var(--error-color, #FF3B30);
+}
+
+/* Disabled State - Track */
+.hig-switch--disabled .hig-switch__track {
+  background-color: var(--switch-track-disabled, rgba(120, 120, 128, 0.16));
+}
+
+/* Thumb (Sliding Circle) - Medium Size */
+.hig-switch__thumb {
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: var(--switch-thumb, #FFFFFF);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15),
+              0 3px 1px rgba(0, 0, 0, 0.06);
+  transition: transform var(--transition-normal, 200ms) ease-in-out,
+              box-shadow var(--transition-fast, 150ms) ease-in-out;
+}
+
+/* Small Size Variant - Thumb */
+.hig-switch--small .hig-switch__thumb {
+  width: 20px;
+  height: 20px;
+  left: 2px;
+}
+
+/* Checked State - Thumb Position */
+.hig-switch--checked .hig-switch__thumb {
+  transform: translateX(20px) translateY(-50%);
+}
+
+.hig-switch--small.hig-switch--checked .hig-switch__thumb {
+  transform: translateX(16px) translateY(-50%);
+}
+
+/* Disabled State - Thumb */
+.hig-switch--disabled .hig-switch__thumb {
+  background-color: var(--switch-thumb-disabled, #F2F2F7);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Hover State (Non-Touch Devices) */
+@media (hover: hover) and (pointer: fine) {
+  .hig-switch:hover:not(.hig-switch--disabled) .hig-switch__track {
+    background-color: var(--switch-track-off-hover, rgba(120, 120, 128, 0.4));
+  }
+
+  .hig-switch--checked:hover:not(.hig-switch--disabled) .hig-switch__track {
+    background-color: var(--switch-track-on-hover, #30D158);
+  }
+
+  .hig-switch:hover:not(.hig-switch--disabled) .hig-switch__thumb {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2),
+                0 2px 4px rgba(0, 0, 0, 0.08);
+  }
+}
+
+/* Focus State (Keyboard Navigation) */
+.hig-switch__input:focus-visible ~ .hig-switch__track {
+  outline: 2px solid var(--accent-color, #007AFF);
+  outline-offset: 2px;
+}
+
+/* Active State (Press Down) */
+.hig-switch:active:not(.hig-switch--disabled) .hig-switch__thumb {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2),
+              0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+/* Label Text */
+.hig-switch__label {
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--text-primary, #000000);
+  line-height: 1.4;
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  .hig-switch__track {
+    background-color: var(--switch-track-off, rgba(120, 120, 128, 0.38));
+  }
+
+  .hig-switch--checked .hig-switch__track {
+    background-color: var(--switch-track-on, #32D74B);
+  }
+
+  .hig-switch__thumb {
+    background-color: var(--switch-thumb, #1C1C1E);
+  }
+
+  .hig-switch--disabled .hig-switch__thumb {
+    background-color: var(--switch-thumb-disabled, #2C2C2E);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .hig-switch:hover:not(.hig-switch--disabled) .hig-switch__track {
+      background-color: var(--switch-track-off-hover, rgba(120, 120, 128, 0.48));
+    }
+
+    .hig-switch--checked:hover:not(.hig-switch--disabled) .hig-switch__track {
+      background-color: var(--switch-track-on-hover, #30D158);
+    }
+  }
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  .hig-switch__track,
+  .hig-switch__thumb {
+    transition: none;
+  }
+}
+
+/* High Contrast Mode */
+@media (prefers-contrast: high) {
+  .hig-switch__track {
+    border-color: var(--border-color, #8E8E93);
+  }
+
+  .hig-switch--checked .hig-switch__track {
+    border-color: var(--accent-color, #007AFF);
+  }
+
+  .hig-switch__thumb {
+    border: 2px solid var(--text-primary, #000000);
+  }
+}

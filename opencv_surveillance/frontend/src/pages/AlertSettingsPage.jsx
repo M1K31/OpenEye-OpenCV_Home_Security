@@ -176,22 +176,9 @@ const AlertSettingsPage = ({ embedded = false }) => {
         <div>
           <h1>Alert & Notification Settings</h1>
           <button
-            className="notification-providers-btn"
+            className="btn btn-primary"
             onClick={() => navigate('/system/notifications')}
-            style={{
-              marginTop: '8px',
-              padding: '12px 24px',
-              background: 'var(--primary-color)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '14px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}
+            style={{ marginTop: '8px' }}
           >
             🔔 Configure Notification Providers
           </button>
@@ -199,8 +186,9 @@ const AlertSettingsPage = ({ embedded = false }) => {
       </header>
 
       {message && (
-        <div className={`message message-${message.type}`}>
-          {message.text}
+        <div className={`alert alert-${message.type}`}>
+          <span className="alert-icon">{message.type === 'success' ? '✓' : '⚠️'}</span>
+          <div className="alert-content">{message.text}</div>
         </div>
       )}
 
@@ -341,7 +329,7 @@ const AlertSettingsPage = ({ embedded = false }) => {
               <button
                 onClick={() => testAlert('email')}
                 disabled={testing}
-                className="btn-test"
+                className="btn btn-secondary btn-sm"
               >
                 Send Test Email
               </button>
@@ -428,7 +416,7 @@ const AlertSettingsPage = ({ embedded = false }) => {
               <button
                 onClick={() => testAlert('sms')}
                 disabled={testing}
-                className="btn-test"
+                className="btn btn-secondary btn-sm"
               >
                 Send Test SMS/Telegram
               </button>
@@ -512,7 +500,7 @@ const AlertSettingsPage = ({ embedded = false }) => {
               <button
                 onClick={() => testAlert('push')}
                 disabled={testing}
-                className="btn-test"
+                className="btn btn-secondary btn-sm"
               >
                 Send Test Push Notification
               </button>
@@ -555,7 +543,7 @@ const AlertSettingsPage = ({ embedded = false }) => {
               <button
                 onClick={() => testAlert('webhook')}
                 disabled={testing}
-                className="btn-test"
+                className="btn btn-secondary btn-sm"
               >
                 Send Test Webhook
               </button>
@@ -633,7 +621,7 @@ const AlertSettingsPage = ({ embedded = false }) => {
         <button
           onClick={saveConfiguration}
           disabled={saving}
-          className="btn-primary btn-large"
+          className="btn btn-primary"
         >
           {saving ? 'Saving...' : 'Save Configuration'}
         </button>

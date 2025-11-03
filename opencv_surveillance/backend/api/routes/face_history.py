@@ -98,10 +98,7 @@ def get_detection_history(
     - **page_size**: Items per page (default: 50, max: 1000)
     """
     try:
-        # Get total count before filtering
-        total_count = db.query(models.FaceDetectionEvent).count()
-
-        # Build query with filters
+        # Build query with filters (apply filters FIRST for performance)
         query = db.query(models.FaceDetectionEvent)
 
         # Time filter
@@ -119,7 +116,7 @@ def get_detection_history(
         # Order by most recent
         query = query.order_by(models.FaceDetectionEvent.detected_at.desc())
 
-        # Apply pagination
+        # Apply pagination (this counts the filtered results, not the entire table)
         events, filtered_count, total_pages = paginate(query, page=page, page_size=page_size)
 
         # Format response
@@ -148,7 +145,7 @@ def get_detection_history(
 
         return FaceDetectionListResponse(
             detections=results,
-            total=total_count,
+            total=filtered_count,  # Use filtered count instead of total table count
             filtered=filtered_count,
             limit=page_size,
             skip=skip,

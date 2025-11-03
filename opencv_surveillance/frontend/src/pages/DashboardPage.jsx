@@ -272,13 +272,13 @@ const DashboardPage = ({ onLogout }) => {
               </span>
             )}
           </div>
-          <button onClick={() => navigate('/recordings')} style={styles.recordingsButton}>
+          <button onClick={() => navigate('/recordings')} className="btn btn-secondary">
             📼 Recordings
           </button>
-          <button onClick={() => navigate('/settings')} style={styles.settingsButton}>
+          <button onClick={() => navigate('/settings')} className="btn btn-primary">
             ⚙️ Settings
           </button>
-          <button onClick={onLogout} style={styles.logoutButton}>
+          <button onClick={onLogout} className="btn btn-danger">
             🚪 Logout
           </button>
         </div>
@@ -312,30 +312,30 @@ const DashboardPage = ({ onLogout }) => {
           <h2>Live Camera Feeds</h2>
           {cameras.length > 0 && (
             <div style={styles.displayModeSelector}>
-              <button 
-                onClick={() => setDisplayMode('grid')} 
-                style={{...styles.modeButton, ...(displayMode === 'grid' ? styles.modeButtonActive : {})}}
+              <button
+                onClick={() => setDisplayMode('grid')}
+                className={`btn btn-sm ${displayMode === 'grid' ? 'btn-primary' : 'btn-secondary'}`}
                 title="Grid View - Display all cameras in a responsive grid layout (best for 2-6 cameras)"
               >
                 ▦
               </button>
-              <button 
-                onClick={() => setDisplayMode('vertical')} 
-                style={{...styles.modeButton, ...(displayMode === 'vertical' ? styles.modeButtonActive : {})}}
+              <button
+                onClick={() => setDisplayMode('vertical')}
+                className={`btn btn-sm ${displayMode === 'vertical' ? 'btn-primary' : 'btn-secondary'}`}
                 title="Vertical Stack - Stack cameras vertically, one per row (best for 1-3 cameras)"
               >
                 ☰
               </button>
-              <button 
-                onClick={() => setDisplayMode('horizontal')} 
-                style={{...styles.modeButton, ...(displayMode === 'horizontal' ? styles.modeButtonActive : {})}}
+              <button
+                onClick={() => setDisplayMode('horizontal')}
+                className={`btn btn-sm ${displayMode === 'horizontal' ? 'btn-primary' : 'btn-secondary'}`}
                 title="Horizontal Stack - Line up cameras side-by-side with horizontal scroll (best for multiple cameras)"
               >
                 ≡
               </button>
-              <button 
-                onClick={() => setDisplayMode('cycle')} 
-                style={{...styles.modeButton, ...(displayMode === 'cycle' ? styles.modeButtonActive : {})}}
+              <button
+                onClick={() => setDisplayMode('cycle')}
+                className={`btn btn-sm ${displayMode === 'cycle' ? 'btn-primary' : 'btn-secondary'}`}
                 title="Cycle Mode - Auto-rotate through cameras one at a time (interval configured in System Settings)"
               >
                 🔄
@@ -348,9 +348,9 @@ const DashboardPage = ({ onLogout }) => {
           <div style={styles.noCameras}>
             <p>📹 No cameras configured yet.</p>
             <p style={styles.noCamerasSubtext}>Add your first camera to start monitoring</p>
-            <button 
-              onClick={() => navigate('/settings')} 
-              style={styles.addCameraButton}
+            <button
+              onClick={() => navigate('/settings')}
+              className="btn btn-primary"
             >
               ➕ Add Camera
             </button>

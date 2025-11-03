@@ -77,16 +77,16 @@ const ClusterDetailModal = ({ clusterId, onClose, onAssignName }) => {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content modal-large" onClick={(e) => e.stopPropagation()}>
+      <div className="modal modal-large" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>
+          <h2 className="modal-title">
             {cluster?.is_identified ? (
               <>✓ {cluster.label}</>
             ) : (
               <>Cluster #{clusterId}</>
             )}
           </h2>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={onClose}>×</button>
         </div>
 
         <div className="modal-body">

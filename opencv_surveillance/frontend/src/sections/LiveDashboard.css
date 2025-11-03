@@ -105,11 +105,51 @@ html.aquasecurity-theme .status-icon {
   color: var(--text-primary);
 }
 
+/* Camera Grid Header (title + size selector) */
+.camera-grid-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.camera-size-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.size-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-right: 4px;
+}
+
+/* Camera Grid - Base Styles */
 .camera-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 20px;
   padding-bottom: 20px;
+}
+
+/* Camera Grid - Size Variants */
+.camera-grid-small {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.camera-grid-medium {
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+}
+
+.camera-grid-large {
+  grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+}
+
+.camera-grid-xl {
+  grid-template-columns: repeat(auto-fill, minmax(640px, 1fr));
 }
 
 .camera-card {
@@ -389,8 +429,20 @@ html.aquasecurity-theme .timeline-item.clickable:hover {
    RESPONSIVE DESIGN
    =================== */
 @media (max-width: 1200px) {
-  .camera-grid {
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  .camera-grid-small {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
+
+  .camera-grid-medium {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  }
+
+  .camera-grid-large {
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  }
+
+  .camera-grid-xl {
+    grid-template-columns: repeat(auto-fill, minmax(520px, 1fr));
   }
 
   .event-timeline {
@@ -412,13 +464,40 @@ html.aquasecurity-theme .timeline-item.clickable:hover {
     max-height: 300px;
   }
 
-  .camera-grid {
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  .camera-grid-small {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+
+  .camera-grid-medium {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+
+  .camera-grid-large {
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  }
+
+  .camera-grid-xl {
+    grid-template-columns: repeat(auto-fill, minmax(460px, 1fr));
+  }
+
+  .camera-grid-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .camera-size-selector {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 }
 
 @media (max-width: 768px) {
-  .camera-grid {
+  /* Force single column on mobile for better readability */
+  .camera-grid-small,
+  .camera-grid-medium,
+  .camera-grid-large,
+  .camera-grid-xl {
     grid-template-columns: 1fr;
   }
 
@@ -429,6 +508,15 @@ html.aquasecurity-theme .timeline-item.clickable:hover {
 
   .timeline-toggle {
     width: 100%;
+  }
+
+  .camera-size-selector {
+    flex-direction: row;
+  }
+
+  .size-label {
+    width: 100%;
+    margin-bottom: 4px;
   }
 }
 
@@ -658,5 +746,571 @@ html.aquasecurity-theme .snapshot-modal-download:hover {
 
   .snapshot-modal-button {
     width: 100%;
+  }
+}
+
+/* ===================
+   PICTURE-IN-PICTURE WINDOW
+   =================== */
+.pip-window {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 400px;
+  max-width: calc(100vw - 48px);
+  background: var(--bg-panel);
+  border: 2px solid var(--border-panel);
+  border-radius: 12px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  z-index: 10000;
+  overflow: hidden;
+  animation: pipSlideIn 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+@keyframes pipSlideIn {
+  from {
+    transform: translateY(100%) scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+html.aquasecurity-theme .pip-window {
+  background: rgba(26, 26, 29, 0.95);
+  border: 2px solid rgba(0, 174, 239, 0.5);
+  box-shadow: 0 12px 48px rgba(0, 174, 239, 0.4), 0 0 20px rgba(0, 174, 239, 0.2);
+}
+
+.pip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--bg-input);
+  border-bottom: 1px solid var(--border-panel);
+  cursor: move;
+  user-select: none;
+}
+
+html.aquasecurity-theme .pip-header {
+  background: rgba(0, 174, 239, 0.1);
+  border-bottom: 1px solid rgba(0, 174, 239, 0.3);
+}
+
+.pip-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+html.aquasecurity-theme .pip-title {
+  color: #00AEEF;
+  text-shadow: 0 0 10px rgba(0, 174, 239, 0.3);
+}
+
+.pip-close {
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  padding: 0;
+  line-height: 1;
+}
+
+.pip-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  transform: scale(1.1);
+}
+
+html.aquasecurity-theme .pip-close:hover {
+  background: rgba(0, 174, 239, 0.2);
+  color: #00AEEF;
+}
+
+.pip-content {
+  aspect-ratio: 16/9;
+  background: var(--bg-input);
+  position: relative;
+  overflow: hidden;
+}
+
+.pip-feed {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.pip-offline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 8px;
+  color: var(--text-secondary);
+}
+
+.pip-offline span {
+  font-size: 32px;
+  opacity: 0.5;
+}
+
+.pip-offline p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.pip-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  background: var(--bg-input);
+  border-top: 1px solid var(--border-panel);
+  font-size: 12px;
+}
+
+html.aquasecurity-theme .pip-footer {
+  background: rgba(0, 174, 239, 0.05);
+  border-top: 1px solid rgba(0, 174, 239, 0.2);
+}
+
+.pip-status {
+  font-weight: 600;
+  color: var(--color-success);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pip-info {
+  color: var(--text-secondary);
+}
+
+html.aquasecurity-theme .pip-status {
+  color: #00AEEF;
+}
+
+/* Camera Actions (PiP button container) */
+.camera-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-input);
+  flex-wrap: wrap;
+}
+
+/* Screenshot Flash Effect */
+.screenshot-flash {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: white;
+  pointer-events: none;
+  animation: flashEffect 0.3s ease-out;
+  z-index: 10;
+}
+
+@keyframes flashEffect {
+  0% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Screenshot Feedback Message */
+.screenshot-feedback {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: center;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.screenshot-feedback.success {
+  background: var(--state-success);
+  color: white;
+  border: 1px solid var(--color-success);
+}
+
+.screenshot-feedback.error {
+  background: var(--state-error);
+  color: white;
+  border: 1px solid var(--color-error);
+}
+
+html.aquasecurity-theme .screenshot-feedback.success {
+  background: rgba(0, 174, 239, 0.2);
+  border: 1px solid #00AEEF;
+  color: #00AEEF;
+  box-shadow: 0 0 15px rgba(0, 174, 239, 0.3);
+}
+
+html.aquasecurity-theme .screenshot-feedback.error {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid #EF4444;
+  color: #EF4444;
+}
+
+/* Responsive PiP Window */
+@media (max-width: 768px) {
+  .pip-window {
+    bottom: 16px;
+    right: 16px;
+    width: calc(100vw - 32px);
+    max-width: 360px;
+  }
+}
+
+@media (max-width: 480px) {
+  .pip-window {
+    bottom: 8px;
+    right: 8px;
+    left: 8px;
+    width: auto;
+    max-width: none;
+  }
+}
+
+/* ===================
+   FULLSCREEN CAMERA VIEWER
+   =================== */
+.fullscreen-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.95);
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(8px);
+  animation: fullscreenFadeIn 0.3s ease;
+}
+
+@keyframes fullscreenFadeIn {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(8px);
+  }
+}
+
+html.aquasecurity-theme .fullscreen-overlay {
+  background: rgba(0, 0, 0, 0.97);
+}
+
+.fullscreen-container {
+  width: 95vw;
+  height: 95vh;
+  max-width: 1920px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 0 2px rgba(255, 255, 255, 0.1);
+  animation: fullscreenSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fullscreenSlideIn {
+  from {
+    transform: scale(0.95) translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+html.aquasecurity-theme .fullscreen-container {
+  background: rgba(26, 26, 29, 0.98);
+  border: 2px solid rgba(0, 174, 239, 0.4);
+  box-shadow: 0 20px 60px rgba(0, 174, 239, 0.5), 0 0 40px rgba(0, 174, 239, 0.3);
+}
+
+/* Fullscreen Header */
+.fullscreen-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background: var(--bg-input);
+  border-bottom: 2px solid var(--border-panel);
+  flex-shrink: 0;
+}
+
+html.aquasecurity-theme .fullscreen-header {
+  background: rgba(0, 174, 239, 0.1);
+  border-bottom: 2px solid rgba(0, 174, 239, 0.3);
+}
+
+.fullscreen-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+html.aquasecurity-theme .fullscreen-title {
+  color: #00AEEF;
+  text-shadow: 0 0 10px rgba(0, 174, 239, 0.3);
+}
+
+.fullscreen-icon {
+  font-size: 24px;
+  color: var(--theme-primary);
+}
+
+html.aquasecurity-theme .fullscreen-icon {
+  color: #00AEEF;
+  filter: drop-shadow(0 0 8px rgba(0, 174, 239, 0.5));
+}
+
+.fullscreen-close {
+  background: transparent;
+  border: none;
+  font-size: 40px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  padding: 0;
+  line-height: 1;
+}
+
+.fullscreen-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  transform: scale(1.1);
+}
+
+html.aquasecurity-theme .fullscreen-close:hover {
+  background: rgba(0, 174, 239, 0.2);
+  color: #00AEEF;
+  box-shadow: 0 0 20px rgba(0, 174, 239, 0.3);
+}
+
+/* Fullscreen Content */
+.fullscreen-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-primary);
+  position: relative;
+  overflow: hidden;
+}
+
+.fullscreen-feed {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.fullscreen-offline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: var(--text-secondary);
+}
+
+.fullscreen-offline span {
+  font-size: 80px;
+  opacity: 0.4;
+}
+
+.fullscreen-offline p {
+  font-size: 24px;
+  margin: 0;
+  font-weight: 500;
+}
+
+/* Fullscreen Footer */
+.fullscreen-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background: var(--bg-input);
+  border-top: 2px solid var(--border-panel);
+  flex-shrink: 0;
+}
+
+html.aquasecurity-theme .fullscreen-footer {
+  background: rgba(0, 174, 239, 0.05);
+  border-top: 2px solid rgba(0, 174, 239, 0.2);
+}
+
+.fullscreen-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.fullscreen-status-badge {
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fullscreen-status-badge.active {
+  background: var(--color-success);
+  color: white;
+}
+
+.fullscreen-status-badge.inactive {
+  background: var(--color-error);
+  color: white;
+}
+
+html.aquasecurity-theme .fullscreen-status-badge.active {
+  background: #00AEEF;
+  color: #1A1A1D;
+  box-shadow: 0 0 15px rgba(0, 174, 239, 0.4);
+}
+
+.fullscreen-info {
+  display: flex;
+  gap: 24px;
+}
+
+.fullscreen-info-item {
+  font-size: 14px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+html.aquasecurity-theme .fullscreen-info-item {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Responsive Fullscreen */
+@media (max-width: 768px) {
+  .fullscreen-container {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+  }
+
+  .fullscreen-header {
+    padding: 12px 16px;
+  }
+
+  .fullscreen-title {
+    font-size: 16px;
+  }
+
+  .fullscreen-icon {
+    font-size: 20px;
+  }
+
+  .fullscreen-close {
+    width: 40px;
+    height: 40px;
+    font-size: 32px;
+  }
+
+  .fullscreen-footer {
+    padding: 12px 16px;
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .fullscreen-info {
+    width: 100%;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .fullscreen-offline span {
+    font-size: 60px;
+  }
+
+  .fullscreen-offline p {
+    font-size: 18px;
+  }
+}
+
+@media (max-width: 480px) {
+  .fullscreen-title {
+    font-size: 14px;
+  }
+
+  .fullscreen-info {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .fullscreen-info-item {
+    font-size: 12px;
+  }
+
+  .fullscreen-status-badge {
+    font-size: 12px;
+    padding: 6px 12px;
   }
 }

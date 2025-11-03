@@ -509,3 +509,178 @@ def cleanup_old_events(db: Session, days_to_keep: int = 30):
         "recordings_deleted": recordings_deleted,
         "logs_deleted": logs_deleted,
     }
+
+
+# ============================================================================
+# PTZ PRESET CRUD OPERATIONS
+# ============================================================================
+
+
+def get_ptz_presets_by_camera(db: Session, camera_id: str) -> List[models.PTZPreset]:
+    """Get all PTZ presets for a camera"""
+    return (
+        db.query(models.PTZPreset)
+        .filter(models.PTZPreset.camera_id == camera_id)
+        .order_by(models.PTZPreset.preset_number)
+        .all()
+    )
+
+
+def get_ptz_preset_by_id(db: Session, preset_id: int) -> Optional[models.PTZPreset]:
+    """Get PTZ preset by ID"""
+    return db.query(models.PTZPreset).filter(models.PTZPreset.id == preset_id).first()
+
+
+def get_ptz_preset_by_number(
+    db: Session, camera_id: str, preset_number: int
+) -> Optional[models.PTZPreset]:
+    """Get PTZ preset by camera and preset number"""
+    return (
+        db.query(models.PTZPreset)
+        .filter(
+            models.PTZPreset.camera_id == camera_id,
+            models.PTZPreset.preset_number == preset_number,
+        )
+        .first()
+    )
+
+
+def create_ptz_preset(db: Session, camera_id: str, preset_data: dict) -> models.PTZPreset:
+    """Create a new PTZ preset"""
+    db_preset = models.PTZPreset(camera_id=camera_id, **preset_data)
+    db.add(db_preset)
+    db.commit()
+    db.refresh(db_preset)
+    return db_preset
+
+
+def update_ptz_preset(
+    db: Session, preset_id: int, preset_data: dict
+) -> Optional[models.PTZPreset]:
+    """Update a PTZ preset"""
+    db_preset = get_ptz_preset_by_id(db, preset_id)
+    if not db_preset:
+        return None
+
+    for key, value in preset_data.items():
+        if value is not None and hasattr(db_preset, key):
+            setattr(db_preset, key, value)
+
+    db_preset.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(db_preset)
+    return db_preset
+
+
+def delete_ptz_preset(db: Session, preset_id: int) -> bool:
+    """Delete a PTZ preset"""
+    db_preset = get_ptz_preset_by_id(db, preset_id)
+    if not db_preset:
+        return False
+
+    db.delete(db_preset)
+    db.commit()
+    return True
+
+
+def increment_preset_usage(db: Session, preset_id: int) -> bool:
+    """Increment preset usage counter and update last_used_at"""
+    db_preset = get_ptz_preset_by_id(db, preset_id)
+    if not db_preset:
+        return False
+
+    db_preset.usage_count += 1
+    db_preset.last_used_at = datetime.utcnow()
+    db.commit()
+    return True
+
+
+# ============================================================================
+# PTZ PATROL PATTERN CRUD OPERATIONS
+# ============================================================================
+
+
+def get_patrol_patterns_by_camera(
+    db: Session, camera_id: str
+) -> List[models.PTZPatrolPattern]:
+    """Get all patrol patterns for a camera"""
+    return (
+        db.query(models.PTZPatrolPattern)
+        .filter(models.PTZPatrolPattern.camera_id == camera_id)
+        .order_by(models.PTZPatrolPattern.created_at.desc())
+        .all()
+    )
+
+
+def get_patrol_pattern_by_id(
+    db: Session, pattern_id: int
+) -> Optional[models.PTZPatrolPattern]:
+    """Get patrol pattern by ID"""
+    return (
+        db.query(models.PTZPatrolPattern)
+        .filter(models.PTZPatrolPattern.id == pattern_id)
+        .first()
+    )
+
+
+def get_active_patrol_patterns(db: Session, camera_id: str) -> List[models.PTZPatrolPattern]:
+    """Get all active patrol patterns for a camera"""
+    return (
+        db.query(models.PTZPatrolPattern)
+        .filter(
+            models.PTZPatrolPattern.camera_id == camera_id,
+            models.PTZPatrolPattern.is_active == True,
+        )
+        .all()
+    )
+
+
+def create_patrol_pattern(
+    db: Session, camera_id: str, pattern_data: dict
+) -> models.PTZPatrolPattern:
+    """Create a new patrol pattern"""
+    db_pattern = models.PTZPatrolPattern(camera_id=camera_id, **pattern_data)
+    db.add(db_pattern)
+    db.commit()
+    db.refresh(db_pattern)
+    return db_pattern
+
+
+def update_patrol_pattern(
+    db: Session, pattern_id: int, pattern_data: dict
+) -> Optional[models.PTZPatrolPattern]:
+    """Update a patrol pattern"""
+    db_pattern = get_patrol_pattern_by_id(db, pattern_id)
+    if not db_pattern:
+        return None
+
+    for key, value in pattern_data.items():
+        if value is not None and hasattr(db_pattern, key):
+            setattr(db_pattern, key, value)
+
+    db_pattern.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(db_pattern)
+    return db_pattern
+
+
+def delete_patrol_pattern(db: Session, pattern_id: int) -> bool:
+    """Delete a patrol pattern"""
+    db_pattern = get_patrol_pattern_by_id(db, pattern_id)
+    if not db_pattern:
+        return False
+
+    db.delete(db_pattern)
+    db.commit()
+    return True
+
+
+def increment_patrol_run_count(db: Session, pattern_id: int) -> bool:
+    """Increment patrol pattern run counter"""
+    db_pattern = get_patrol_pattern_by_id(db, pattern_id)
+    if not db_pattern:
+        return False
+
+    db_pattern.run_count += 1
+    db.commit()
+    return True

@@ -63,10 +63,10 @@ const MergeClustersModal = ({ clusterIds, onClose, onSuccess }) => {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content modal-medium" onClick={(e) => e.stopPropagation()}>
+      <div className="modal modal-medium" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>🔗 Merge Face Clusters</h2>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <h2 className="modal-title">🔗 Merge Face Clusters</h2>
+          <button className="modal-close" onClick={onClose}>×</button>
         </div>
 
         <div className="modal-body">

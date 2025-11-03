@@ -29,6 +29,8 @@ const TwoFactorSettings = lazy(() => import('./pages/TwoFactorSettings'));
 const ThemeSelectorPage = lazy(() => import('./pages/ThemeSelectorPage'));
 const AutomationsPage = lazy(() => import('./pages/AutomationsPage'));
 const TimelineView = lazy(() => import('./pages/TimelineView'));
+const HardwareDetectionPage = lazy(() => import('./pages/HardwareDetectionPage'));
+const PerformanceDashboard = lazy(() => import('./pages/PerformanceDashboard'));
 
 // Loading fallback component
 const PageLoadingFallback = () => (
@@ -213,6 +215,20 @@ function App() {
                 <ErrorBoundary>
                   <Suspense fallback={<PageLoadingFallback />}>
                     <ThemeSelectorPage />
+                  </Suspense>
+                </ErrorBoundary>
+              } />
+              <Route path="system/hardware" element={
+                <ErrorBoundary>
+                  <Suspense fallback={<PageLoadingFallback />}>
+                    <HardwareDetectionPage />
+                  </Suspense>
+                </ErrorBoundary>
+              } />
+              <Route path="system/performance" element={
+                <ErrorBoundary>
+                  <Suspense fallback={<PageLoadingFallback />}>
+                    <PerformanceDashboard />
                   </Suspense>
                 </ErrorBoundary>
               } />

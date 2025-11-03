@@ -51,6 +51,10 @@ from backend.api.routes import (
     metrics,
     notification_providers,
     two_factor_auth,
+    motion_zones,
+    ptz,
+    hardware,
+    features,
 )
 from backend.core.camera_manager import manager as camera_manager
 from backend.core.websocket_manager import broadcast_statistics_update
@@ -103,7 +107,7 @@ signal.signal(signal.SIGTERM, signal_handler)
 app = FastAPI(
     title="OpenEye Surveillance System",
     description="OpenCV-powered surveillance system with face recognition, motion detection, and video recording",
-    version="3.6.2",  # Performance Improvements + Bug Fixes
+    version="3.7.0",  # LiveDashboard UX Improvements + Event Modal
     docs_url="/api/docs",
     redoc_url="/api/redoc",
 )
@@ -346,7 +350,7 @@ async def startup_event():
     audit_logger.log_event(
         AuditEventType.SYSTEM_STARTUP,
         details={
-            "version": "3.6.2",
+            "version": "3.7.0",
             "cameras_loaded": loaded_count,
             "known_faces": len(face_manager.known_face_names)
         }
@@ -362,10 +366,32 @@ async def startup_event():
     logger.info(f"✓ Legacy snapshots directory: {paths.snapshots_dir}")
     logger.info(f"✓ Thumbnails directory: {paths.thumbnails_dir}")
 
+    # Hardware-Aware Feature Auto-Configuration (v3.7.0)
+    logger.info("🔍 Scanning hardware and configuring features...")
+    try:
+        from backend.core.feature_manager import get_feature_manager
+        feature_manager = get_feature_manager()
+        scan_result = feature_manager.scan_and_configure_features(
+            scan_type="startup",
+            scanned_by="system",
+            notify_changes=False  # Don't notify on first startup
+        )
+        logger.info(
+            f"✓ Hardware scan complete: {scan_result['hardware_tier']} tier "
+            f"({scan_result['features_enabled']} features enabled, "
+            f"{scan_result['features_disabled']} disabled)"
+        )
+        if scan_result.get('changes_detected'):
+            logger.warning(f"Hardware changes detected: {scan_result.get('changes_summary')}")
+    except Exception as e:
+        logger.warning(f"Hardware scan failed (non-critical): {e}")
+        logger.info("Features will use default configuration. Run manual scan to configure.")
+
     logger.info("OpenEye Surveillance System started successfully!")
     logger.info(
         "Features enabled: Motion Detection, Face Recognition, Video Recording, "
-        "Real-time WebSocket Updates, Automated Face Clustering, Enhanced Security (v3.6.0)"
+        "Real-time WebSocket Updates, Automated Face Clustering, Enhanced Security, "
+        "Hardware-Aware Auto-Configuration (v3.7.0)"
     )
 
 
@@ -547,6 +573,12 @@ app.include_router(
     prefix="/api",
     tags=["Motion Detection Events"])
 
+# Motion Detection Zones - v3.7.0
+app.include_router(
+    motion_zones.router,
+    prefix="/api",
+    tags=["Motion Detection Zones"])
+
 app.include_router(
     two_way_audio.router,
     prefix="/api/audio",
@@ -570,6 +602,15 @@ app.include_router(timeline.router, prefix="/api", tags=["Timeline & Playback"])
 # Performance Metrics & Monitoring
 app.include_router(metrics.router, prefix="/api", tags=["Performance Metrics"])
 
+# PTZ Control - Pan-Tilt-Zoom Camera Control
+app.include_router(ptz.router, prefix="/api", tags=["PTZ Control"])
+
+# Hardware Detection & Feature Management
+app.include_router(hardware.router, prefix="/api", tags=["Hardware & Features"])
+
+# Feature Management (Hardware-Aware Auto-Config)
+app.include_router(features.router, prefix="/api", tags=["Feature Management"])
+
 # First-Run Setup (with /api/setup prefix for consistency)
 app.include_router(setup.router, prefix="/api/setup", tags=["First-Run Setup"])
 
@@ -588,7 +629,7 @@ async def read_root():
         # Fallback to API info if frontend not built
         return {
             "name": "OpenEye Surveillance System",
-            "version": "3.6.2",
+            "version": "3.7.0",
             "description": "OpenCV-powered surveillance with face recognition",
             "features": [
                 "Motion Detection",
@@ -615,7 +656,7 @@ async def api_root():
     """
     return {
         "name": "OpenEye Surveillance System API",
-        "version": "3.6.2",
+        "version": "3.7.0",
         "description": "OpenCV-powered surveillance with face recognition",
         "features": [
             "Motion Detection",
