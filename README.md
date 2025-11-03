@@ -1,6 +1,6 @@
 # OpenEye - AI-Powered Home Security with OpenCV & Face Recognition
 
-![Version](https://img.shields.io/badge/version-3.6.2-blue.svg)
+![Version](https://img.shields.io/badge/version-3.7.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![OpenCV](https://img.shields.io/badge/OpenCV-4.8+-red.svg)
 ![License](https://img.shields.io/badge/license-MIT-yellow.svg)
@@ -423,6 +423,9 @@ Built with:
 - [FastAPI](https://fastapi.tiangolo.com/) - Modern Python web framework
 - [React](https://reactjs.org/) - UI library
 - [SQLAlchemy](https://www.sqlalchemy.org/) - Database ORM
+
+UI Design Inspiration:
+- [Material-UI Switch Component](https://github.com/mui/material-ui/tree/v7.3.4/packages/mui-material/src/Switch) - Toggle switch design (MIT License)
 
 ---
 

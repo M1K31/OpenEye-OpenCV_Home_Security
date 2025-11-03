@@ -46,10 +46,10 @@ const AssignNameModal = ({ clusterId, onClose, onSuccess }) => {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>👤 Assign Name to Cluster</h2>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <h2 className="modal-title">👤 Assign Name to Cluster</h2>
+          <button className="modal-close" onClick={onClose}>×</button>
         </div>
 
         <form onSubmit={handleSubmit}>

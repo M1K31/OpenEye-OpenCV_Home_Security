@@ -16,18 +16,18 @@ const DeleteClusterModal = ({ cluster, onConfirm, onCancel }) => {
   };
 
   return (
-    <div className="delete-cluster-modal-overlay" onClick={onCancel}>
-      <div className="delete-cluster-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-overlay" onClick={onCancel}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className="delete-modal-header">
-          <h2>Delete Cluster?</h2>
-          <button className="close-button" onClick={onCancel} aria-label="Close">
+        <div className="modal-header">
+          <h2 className="modal-title">Delete Cluster?</h2>
+          <button className="modal-close" onClick={onCancel} aria-label="Close">
             ×
           </button>
         </div>
 
         {/* Body */}
-        <div className="delete-modal-body">
+        <div className="modal-body">
           {cluster && (
             <>
               <div className="cluster-info">
@@ -70,12 +70,12 @@ const DeleteClusterModal = ({ cluster, onConfirm, onCancel }) => {
         </div>
 
         {/* Footer */}
-        <div className="delete-modal-footer">
-          <button className="button button-secondary" onClick={onCancel}>
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={onCancel}>
             Cancel
           </button>
           <button
-            className={`button ${deleteFaces ? 'button-danger' : 'button-primary'}`}
+            className={`btn ${deleteFaces ? 'btn-danger' : 'btn-primary'}`}
             onClick={handleConfirm}
           >
             {deleteFaces ? '🗑️ Delete Permanently' : 'Delete Cluster'}

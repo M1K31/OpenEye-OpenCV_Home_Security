@@ -225,6 +225,7 @@ const NotificationSettingsPage = () => {
             value={value}
             onChange={(e) => handleFormChange(`config.${field.name}`, e.target.value)}
             required={field.required}
+            className="form-input"
           >
             {field.options.map(opt => (
               <option key={opt} value={opt}>{opt}</option>
@@ -243,6 +244,7 @@ const NotificationSettingsPage = () => {
           onChange={(e) => handleFormChange(`config.${field.name}`, e.target.value)}
           placeholder={field.placeholder}
           required={field.required}
+          className="form-input"
         />
         {field.sensitive && modalMode === 'edit' && value === '***HIDDEN***' && (
           <small className="help-text">Leave as ***HIDDEN*** to keep existing value, or enter new value to update</small>
@@ -368,6 +370,7 @@ const NotificationSettingsPage = () => {
                     onChange={(e) => handleFormChange('provider_name', e.target.value)}
                     placeholder="e.g., Gmail Account, Work Twilio"
                     required
+                    className="form-input"
                   />
                   <small className="help-text">Give this provider a friendly name to identify it</small>
                 </div>
@@ -428,6 +431,7 @@ const NotificationSettingsPage = () => {
                     type="text"
                     value={testRecipient}
                     onChange={(e) => setTestRecipient(e.target.value)}
+                    className="form-input"
                     placeholder={
                       testProvider.provider_type === 'email' ? 'your-email@example.com' :
                       testProvider.provider_type === 'sms' ? '+15551234567' :

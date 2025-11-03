@@ -18,6 +18,7 @@ from .image_processor import ImageProcessor
 from .video_processor import VideoProcessor, VideoSettings
 from .recorder import Recorder
 from .face_detection import FaceDetector
+from .overlay_renderer import render_overlay
 import asyncio
 from backend.core.alert_manager import get_alert_manager
 from backend.core.automation_engine import process_face_detection
@@ -111,6 +112,14 @@ class Camera(ABC):
         # Store motion percentage threshold (minimum % of frame with motion to trigger event)
         self.motion_percentage_threshold = settings.get("motion_percentage_threshold", 1.0)
 
+        # Overlay settings for timestamp and custom text
+        self.overlay_enabled = settings.get("overlay_enabled", True)
+        self.overlay_timestamp_enabled = settings.get("overlay_timestamp_enabled", True)
+        self.overlay_custom_text = settings.get("overlay_custom_text", None)
+        self.overlay_position = settings.get("overlay_position", "top-left")
+        self.overlay_font_size = settings.get("overlay_font_size", 1)
+        self.overlay_font_color = settings.get("overlay_font_color", "white")
+
         # Store settings for later updates
         self._db_settings = settings
 
@@ -203,6 +212,29 @@ class Camera(ABC):
             codec=codec,
         )
 
+    def update_overlay_settings(
+        self,
+        overlay_enabled: Optional[bool] = None,
+        timestamp_enabled: Optional[bool] = None,
+        custom_text: Optional[str] = None,
+        position: Optional[str] = None,
+        font_size: Optional[int] = None,
+        font_color: Optional[str] = None,
+    ):
+        """Update overlay settings dynamically"""
+        if overlay_enabled is not None:
+            self.overlay_enabled = overlay_enabled
+        if timestamp_enabled is not None:
+            self.overlay_timestamp_enabled = timestamp_enabled
+        if custom_text is not None:
+            self.overlay_custom_text = custom_text
+        if position is not None:
+            self.overlay_position = position
+        if font_size is not None:
+            self.overlay_font_size = font_size
+        if font_color is not None:
+            self.overlay_font_color = font_color
+
     def get_all_settings(self) -> Dict[str, Any]:
         """Get all current camera settings"""
         return {
@@ -210,6 +242,14 @@ class Camera(ABC):
             "image": self.image_processor.get_settings(),
             "video": self.video_processor.get_settings(),
             "post_motion_cooldown": self.post_motion_cooldown,
+            "overlay": {
+                "enabled": self.overlay_enabled,
+                "timestamp_enabled": self.overlay_timestamp_enabled,
+                "custom_text": self.overlay_custom_text,
+                "position": self.overlay_position,
+                "font_size": self.overlay_font_size,
+                "font_color": self.overlay_font_color,
+            },
         }
 
     def reload_settings_from_db(self):
@@ -549,6 +589,17 @@ class MockCamera(Camera):
         self.is_running = True
         print("Mock camera started.")
 
+        # Load polygon-based motion zones from database (v3.6.2+)
+        if self.camera_id:
+            try:
+                db = SessionLocal()
+                self.motion_detector.load_polygon_zones(self.camera_id, db)
+            except Exception as e:
+                print(f"Warning: Could not load motion zones: {e}")
+            finally:
+                if db:
+                    db.close()
+
     def stop(self):
         if self.recorder.is_recording:
             self.recorder.stop()
@@ -706,6 +757,17 @@ class MockCamera(Camera):
             ) or self.recorder.should_stop_recording():
                 self.recorder.stop()
 
+        # Apply timestamp/custom text overlay (for streaming only, not recording)
+        processed_frame = render_overlay(
+            processed_frame,
+            overlay_enabled=self.overlay_enabled,
+            timestamp_enabled=self.overlay_timestamp_enabled,
+            custom_text=self.overlay_custom_text,
+            position=self.overlay_position,
+            font_size=self.overlay_font_size,
+            font_color=self.overlay_font_color
+        )
+
         return processed_frame, self.motion_detected
 
 
@@ -740,6 +802,17 @@ class RTSPCamera(Camera):
             return
         self.is_running = True
         print("Camera started successfully.")
+
+        # Load polygon-based motion zones from database (v3.6.2+)
+        if self.camera_id:
+            try:
+                db = SessionLocal()
+                self.motion_detector.load_polygon_zones(self.camera_id, db)
+            except Exception as e:
+                print(f"Warning: Could not load motion zones: {e}")
+            finally:
+                if db:
+                    db.close()
 
     def stop(self):
         if self.recorder.is_recording:
@@ -878,6 +951,17 @@ class RTSPCamera(Camera):
                 time.time() - self.last_motion_time > self.post_motion_cooldown
             ):
                 self.recorder.stop()
+
+        # Apply timestamp/custom text overlay (for streaming only, not recording)
+        processed_frame = render_overlay(
+            processed_frame,
+            overlay_enabled=self.overlay_enabled,
+            timestamp_enabled=self.overlay_timestamp_enabled,
+            custom_text=self.overlay_custom_text,
+            position=self.overlay_position,
+            font_size=self.overlay_font_size,
+            font_color=self.overlay_font_color
+        )
 
         return processed_frame, self.motion_detected
 

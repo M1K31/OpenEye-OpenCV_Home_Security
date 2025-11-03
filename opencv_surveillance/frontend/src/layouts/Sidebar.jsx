@@ -84,6 +84,20 @@ const Sidebar = ({ isCollapsed }) => {
       priority: 'medium'
     },
     {
+      id: 'hardware',
+      icon: '💻',
+      label: 'Hardware Detection',
+      path: '/system/hardware',
+      priority: 'medium'
+    },
+    {
+      id: 'performance',
+      icon: '📊',
+      label: 'Performance Monitor',
+      path: '/system/performance',
+      priority: 'medium'
+    },
+    {
       id: 'themes',
       icon: '🎨',
       label: 'Themes',
@@ -133,7 +147,7 @@ const Sidebar = ({ isCollapsed }) => {
         <WebSocketStatus />
         <div className="version-info">
           <span className="version-label">OpenEye</span>
-          <span className="version-number">v3.6.2</span>
+          <span className="version-number">v3.7.0</span>
         </div>
       </div>
     </aside>

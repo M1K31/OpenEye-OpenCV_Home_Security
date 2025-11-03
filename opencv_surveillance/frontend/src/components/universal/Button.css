@@ -1,0 +1,211 @@
+/* Universal Button Styles - Apple HIG Compliant */
+
+.hig-button {
+  /* Reset */
+  border: none;
+  margin: 0;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+
+  /* Layout */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs, 8px);
+
+  /* Minimum touch target (Apple HIG) */
+  min-height: 44px;
+  min-width: 44px;
+
+  /* Typography */
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+
+  /* Visual */
+  border-radius: var(--radius-sm, 8px);
+  transition: all var(--transition-normal, 200ms) ease-in-out;
+
+  /* Interactive */
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hig-button:focus-visible {
+  outline: 2px solid var(--accent-color, #007AFF);
+  outline-offset: 2px;
+}
+
+/* Size Variants */
+.hig-button--small {
+  min-height: 32px;
+  padding: 6px 16px;
+  font-size: 15px;
+}
+
+.hig-button--medium {
+  min-height: 44px;
+  padding: 12px 24px;
+  font-size: 17px;
+}
+
+.hig-button--large {
+  min-height: 52px;
+  padding: 16px 32px;
+  font-size: 19px;
+}
+
+/* Primary Button (Filled, prominent) */
+.hig-button--primary {
+  background-color: var(--button-primary-bg, var(--accent-color, #007AFF));
+  color: var(--button-primary-text, #FFFFFF);
+  box-shadow: var(--shadow-sm, 0 2px 8px rgba(0,0,0,0.1));
+}
+
+.hig-button--primary:hover:not(:disabled) {
+  background-color: var(--accent-hover, #0051D5);
+  box-shadow: var(--shadow-md, 0 4px 12px rgba(0,0,0,0.15));
+  transform: translateY(-1px);
+}
+
+.hig-button--primary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm, 0 2px 8px rgba(0,0,0,0.1));
+}
+
+/* Secondary Button (Outlined, less prominent) */
+.hig-button--secondary {
+  background-color: transparent;
+  color: var(--accent-color, #007AFF);
+  border: 1.5px solid var(--button-secondary-border, var(--accent-color, #007AFF));
+  box-shadow: none;
+}
+
+.hig-button--secondary:hover:not(:disabled) {
+  background-color: var(--accent-color-alpha, rgba(0, 122, 255, 0.1));
+  border-color: var(--accent-hover, #0051D5);
+}
+
+.hig-button--secondary:active:not(:disabled) {
+  background-color: var(--accent-color-alpha, rgba(0, 122, 255, 0.2));
+}
+
+/* Tertiary Button (Text only, subtle) */
+.hig-button--tertiary {
+  background-color: transparent;
+  color: var(--accent-color, #007AFF);
+  box-shadow: none;
+  font-weight: 500;
+}
+
+.hig-button--tertiary:hover:not(:disabled) {
+  background-color: var(--accent-color-alpha, rgba(0, 122, 255, 0.1));
+}
+
+.hig-button--tertiary:active:not(:disabled) {
+  background-color: var(--accent-color-alpha, rgba(0, 122, 255, 0.2));
+}
+
+/* Destructive Button (Red, dangerous actions) */
+.hig-button--destructive {
+  background-color: var(--error-color, #FF3B30);
+  color: #FFFFFF;
+  box-shadow: var(--shadow-sm, 0 2px 8px rgba(255,59,48,0.2));
+}
+
+.hig-button--destructive:hover:not(:disabled) {
+  background-color: #D73027;
+  box-shadow: var(--shadow-md, 0 4px 12px rgba(255,59,48,0.3));
+  transform: translateY(-1px);
+}
+
+.hig-button--destructive:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm, 0 2px 8px rgba(255,59,48,0.2));
+}
+
+/* Full Width */
+.hig-button--full-width {
+  width: 100%;
+}
+
+/* Loading State */
+.hig-button--loading {
+  position: relative;
+  pointer-events: none;
+}
+
+.hig-button__loader {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.hig-button__spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  border-top-color: transparent;
+  animation: hig-button-spin 0.6s linear infinite;
+}
+
+@keyframes hig-button-spin {
+  to { transform: rotate(360deg); }
+}
+
+.hig-button--loading .hig-button__label {
+  opacity: 0.4;
+}
+
+/* Disabled State */
+.hig-button:disabled,
+.hig-button--disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Icon Support */
+.hig-button__icon,
+.hig-button__end-icon {
+  display: inline-flex;
+  align-items: center;
+  font-size: 1.2em;
+}
+
+.hig-button__label {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Dark Mode Adjustments */
+@media (prefers-color-scheme: dark) {
+  .hig-button--primary {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+
+  .hig-button--primary:hover:not(:disabled) {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  }
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  .hig-button {
+    transition: none;
+  }
+
+  .hig-button:hover:not(:disabled) {
+    transform: none;
+  }
+
+  .hig-button__spinner {
+    animation: none;
+    border-top-color: currentColor;
+  }
+}

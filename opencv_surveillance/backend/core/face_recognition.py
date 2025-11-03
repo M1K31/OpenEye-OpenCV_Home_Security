@@ -15,6 +15,7 @@ import face_recognition
 import numpy as np
 import cv2
 from backend.core.paths import paths
+from backend.core.image_preprocessing import get_preprocessor
 
 logger = logging.getLogger(__name__)
 
@@ -25,13 +26,15 @@ class FaceRecognitionManager:
     """
 
     def __init__(self, faces_folder: Optional[Path] = None,
-                 encodings_file: str = "face_encodings.pkl"):
+                 encodings_file: str = "face_encodings.pkl",
+                 enable_preprocessing: bool = True):
         """
         Initialize the face recognition manager
 
         Args:
             faces_folder: Directory containing person subdirectories with face images (uses PathManager if None)
             encodings_file: Path to save/load face encodings
+            enable_preprocessing: Enable image preprocessing for better accuracy
         """
         # Use PathManager for faces directory
         self.faces_folder = Path(faces_folder) if faces_folder else paths.faces_dir
@@ -43,6 +46,8 @@ class FaceRecognitionManager:
         self.detection_method = "hog"  # 'hog' for CPU, 'cnn' for GPU
         self.recognition_threshold = 0.6
         self.last_recognition_time = None
+        self.enable_preprocessing = enable_preprocessing
+        self.preprocessor = get_preprocessor() if enable_preprocessing else None
         self.statistics = {
             "total_people": 0,
             "total_encodings": 0,
@@ -57,7 +62,8 @@ class FaceRecognitionManager:
         self.load_encodings()
 
         logger.info(
-            f"FaceRecognitionManager initialized with {len(self.known_face_names)} known faces"
+            f"FaceRecognitionManager initialized with {len(self.known_face_names)} known faces "
+            f"(preprocessing: {'enabled' if enable_preprocessing else 'disabled'})"
         )
 
     def set_detection_method(self, method: str):
@@ -211,8 +217,13 @@ class FaceRecognitionManager:
         if len(self.known_face_encodings) == 0:
             return frame, []
 
+        # Apply preprocessing for better face recognition
+        processed_frame = frame
+        if self.enable_preprocessing and self.preprocessor:
+            processed_frame = self.preprocessor.preprocess_for_face_recognition(frame)
+
         # Convert BGR to RGB for face_recognition
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        rgb_frame = cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB)
 
         # Resize frame for faster processing (optional)
         small_frame = cv2.resize(rgb_frame, (0, 0), fx=0.25, fy=0.25)

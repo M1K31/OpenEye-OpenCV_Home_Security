@@ -7,6 +7,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.7.0] - 2025-11-02
+
+### Added
+- **EventDetailModal Component** - New modal for viewing event details without navigation
+  - Problem: Clicking events navigated away from LiveDashboard, breaking workflow
+  - Solution: Created modal with video player, snapshot display, and action buttons
+  - Benefits: View events inline, better UX, maintains dashboard context
+  - Files Created: `frontend/src/components/EventDetailModal.jsx`, `frontend/src/components/EventDetailModal.css`
+
+- **Universal Button Component Integration** - Apple HIG-compliant buttons throughout app
+  - Integrated in LiveDashboard (11 buttons) and EventDetailModal (4 buttons)
+  - Features: Icon support, loading states, size variants, accessibility improvements
+  - Benefits: 44x44px touch targets, consistent styling, better developer experience
+  - Bundle impact: +0.7 kB (+0.21 kB gzipped) - minimal overhead
+  - Files Modified: `frontend/src/sections/LiveDashboard.jsx`, `frontend/src/components/EventDetailModal.jsx`
+
+- **Video Duration Analysis Utilities** - Tools to detect and fix recording duration mismatches
+  - Problem: Wall-clock duration vs actual video playback duration mismatch
+  - Solution: Created utilities to read actual video metadata and fix database records
+  - Benefits: Accurate playback duration display, future recording optimization roadmap
+  - Files Created: `backend/utils/video_utils.py`, `fix_recording_durations.py`
+
+- **Safari Browser Detection** - Graceful degradation for PiP feature in Safari
+  - Problem: Safari doesn't support canvas.captureStream() reliably, causing silent failures
+  - Solution: Browser detection with user-friendly error message and auto-close
+  - Benefits: Clear feedback instead of broken functionality
+  - Files Modified: `frontend/src/components/PipVideoPlayer.jsx`
+
+### Fixed
+- **LiveDashboard Auto-Refresh** - Disabled excessive auto-refresh causing flickering
+  - Problem: Recent events bar refreshing every 10 seconds, causing UI flicker
+  - Solution: Removed auto-refresh interval, rely on manual refresh only
+  - Benefits: Stable UI, better performance, no visual disruption
+  - Files Modified: `frontend/src/sections/LiveDashboard.jsx`
+
+- **Camera Feed Reloading** - Prevented camera feeds from reloading on event updates
+  - Problem: Camera feeds reloading when events updated, causing stream interruptions
+  - Solution: Improved React memo and state management to prevent unnecessary re-renders
+  - Benefits: Smooth live streaming, better user experience
+  - Files Modified: `frontend/src/sections/LiveDashboard.jsx`
+
+- **Grid Size Differentiation** - Increased spacing between Small/Medium/Large/XL grid sizes
+  - Problem: Small (240px) and Medium (320px) appeared nearly identical on screen
+  - Solution: Updated CSS to use 220px/360px/480px/640px for clear visual differences
+  - Benefits: Obvious size differences, better multi-camera viewing options
+  - Files Modified: `frontend/src/sections/LiveDashboard.css`
+
+- **Camera Settings Save Feedback** - Added auto-clearing success messages
+  - Problem: No visual feedback when saving camera settings
+  - Solution: Added 4-second auto-clear timeout for success messages across all 5 save handlers
+  - Benefits: Clear confirmation, doesn't require manual dismissal
+  - Files Modified: `frontend/src/components/CameraSettingsModal.jsx`
+
+### Changed
+- **Event Click Behavior** - Events now open modal instead of navigating to history page
+  - Changed from: `navigate('/face-history')` or `navigate('/recordings')`
+  - Changed to: `setSelectedEvent(event)` with modal display
+  - Benefits: Faster event viewing, maintains dashboard context
+  - Files Modified: `frontend/src/sections/LiveDashboard.jsx`
+
+- **Event Video Player** - Replaced placeholder with native HTML5 video player
+  - Removed: Redundant "Play" button
+  - Added: Native video controls with thumbnail preview
+  - Benefits: Consistent with rest of app, better user experience
+  - Files Modified: `frontend/src/components/EventDetailModal.jsx`
+
+### Documentation
+- **VIDEO_OPTIMIZATION_GUIDE_2025-11-02.md** - Comprehensive video performance optimization guide
+  - Evaluates FFmpeg, hardware acceleration, frame buffering, and web optimization
+  - Provides implementation roadmap for future enhancements
+  - Explains impact (or lack thereof) on facial recognition functionality
+
+- **UNIVERSAL_COMPONENTS_INTEGRATION_2025-11-02.md** - Complete integration documentation
+  - Documents all 15+ button instances updated
+  - Migration patterns for future components
+  - Build performance impact analysis
+
+- **UI_IMPROVEMENTS_GUIDE.md** - Moved to docs/development/ for better organization
+
+---
+
 ## [3.6.2] - 2025-10-25
 
 ### Added

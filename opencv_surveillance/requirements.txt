@@ -40,6 +40,10 @@ aiohttp>=3.9.0
 # Utilities
 python-dateutil>=2.8.2
 netifaces>=0.11.0  # Network interface discovery for camera scanning
+psutil>=5.9.0  # Hardware detection (CPU, RAM, disk usage)
+
+# PTZ Camera Control (Phase 3.7)
+onvif-zeep>=0.2.12  # ONVIF protocol for PTZ cameras
 
 # Smart Home Integrations (Phase 4)
 paho-mqtt>=1.6.1  # For Home Assistant MQTT

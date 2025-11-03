@@ -17,6 +17,7 @@ import json
 from typing import Optional, Dict, List, Tuple
 from collections import deque
 import time
+from datetime import datetime
 
 
 class MotionDetector:
@@ -152,6 +153,11 @@ class MotionDetector:
                 print(f"Warning: Could not parse detection zones: {e}")
                 self.detection_mask = None
 
+        # Polygon-based zones (v3.6.2+)
+        self.polygon_zones = []  # List of zone dictionaries with polygon coordinates
+        self.camera_id = None  # Camera ID for loading zones from database
+        self.db_session = None  # Database session for zone updates
+
     def _create_detection_mask(
             self, detection_zones_json: str) -> Optional[np.ndarray]:
         """
@@ -189,6 +195,201 @@ class MotionDetector:
         except Exception as e:
             print(f"Error creating detection mask: {e}")
             return None
+
+    def load_polygon_zones(self, camera_id: str, db_session=None):
+        """
+        Load polygon-based motion zones from database for a camera.
+
+        Args:
+            camera_id: Camera identifier
+            db_session: SQLAlchemy database session (optional)
+        """
+        self.camera_id = camera_id
+        self.db_session = db_session
+
+        if db_session is None:
+            # No database session provided, skip loading
+            return
+
+        try:
+            from backend.database.models import MotionZone
+
+            # Query active zones for this camera
+            zones = db_session.query(MotionZone).filter(
+                MotionZone.camera_id == camera_id,
+                MotionZone.is_active == True
+            ).all()
+
+            # Convert to internal format
+            self.polygon_zones = []
+            for zone in zones:
+                try:
+                    # Parse coordinates JSON
+                    coords = json.loads(zone.coordinates)
+
+                    # Validate coordinates
+                    if not coords or len(coords) < 3:
+                        continue
+
+                    self.polygon_zones.append({
+                        'id': zone.id,
+                        'name': zone.name,
+                        'coordinates': coords,  # List of {x, y} normalized 0.0-1.0
+                        'is_exclusion_zone': zone.is_exclusion_zone,
+                        'sensitivity_multiplier': zone.sensitivity_multiplier,
+                        'color': zone.color
+                    })
+                except Exception as e:
+                    print(f"Error loading zone {zone.id}: {e}")
+                    continue
+
+            print(f"Loaded {len(self.polygon_zones)} polygon zones for camera {camera_id}")
+
+        except Exception as e:
+            print(f"Error loading polygon zones: {e}")
+            self.polygon_zones = []
+
+    def _check_contour_in_zone(
+        self,
+        contour: np.ndarray,
+        zone: Dict,
+        frame_width: int,
+        frame_height: int
+    ) -> bool:
+        """
+        Check if a motion contour intersects with a zone polygon.
+
+        Args:
+            contour: Motion contour from OpenCV
+            zone: Zone dictionary with normalized coordinates
+            frame_width: Frame width in pixels
+            frame_height: Frame height in pixels
+
+        Returns:
+            True if contour intersects zone, False otherwise
+        """
+        try:
+            # Convert normalized zone coordinates to pixel coordinates
+            zone_points = []
+            for point in zone['coordinates']:
+                x = int(point['x'] * frame_width)
+                y = int(point['y'] * frame_height)
+                zone_points.append([x, y])
+
+            zone_polygon = np.array(zone_points, dtype=np.int32)
+
+            # Get contour centroid
+            M = cv2.moments(contour)
+            if M['m00'] == 0:
+                return False
+
+            cx = int(M['m10'] / M['m00'])
+            cy = int(M['m01'] / M['m00'])
+
+            # Check if centroid is inside zone polygon
+            result = cv2.pointPolygonTest(zone_polygon, (cx, cy), False)
+
+            return result >= 0  # >= 0 means inside or on edge
+
+        except Exception as e:
+            print(f"Error checking contour in zone: {e}")
+            return False
+
+    def _filter_motion_by_zones(
+        self,
+        contours: List,
+        frame_width: int,
+        frame_height: int
+    ) -> Tuple[List, List[int]]:
+        """
+        Filter motion contours based on polygon zones.
+
+        Logic:
+        - If exclusion zones exist: remove contours in exclusion zones
+        - If inclusion zones exist: keep only contours in inclusion zones
+        - If no zones: keep all contours
+
+        Args:
+            contours: List of motion contours
+            frame_width: Frame width in pixels
+            frame_height: Frame height in pixels
+
+        Returns:
+            Tuple of (filtered_contours, triggered_zone_ids)
+        """
+        if not self.polygon_zones:
+            # No zones configured, keep all contours
+            return contours, []
+
+        # Separate inclusion and exclusion zones
+        inclusion_zones = [z for z in self.polygon_zones if not z['is_exclusion_zone']]
+        exclusion_zones = [z for z in self.polygon_zones if z['is_exclusion_zone']]
+
+        filtered_contours = []
+        triggered_zone_ids = []
+
+        for contour in contours:
+            # Check exclusion zones first
+            in_exclusion_zone = False
+            for zone in exclusion_zones:
+                if self._check_contour_in_zone(contour, zone, frame_width, frame_height):
+                    in_exclusion_zone = True
+                    break
+
+            if in_exclusion_zone:
+                continue  # Skip this contour
+
+            # Check inclusion zones
+            if inclusion_zones:
+                # Only keep contours in inclusion zones
+                in_inclusion_zone = False
+                for zone in inclusion_zones:
+                    if self._check_contour_in_zone(contour, zone, frame_width, frame_height):
+                        in_inclusion_zone = True
+                        triggered_zone_ids.append(zone['id'])
+                        break
+
+                if in_inclusion_zone:
+                    filtered_contours.append(contour)
+            else:
+                # No inclusion zones, just exclude from exclusion zones
+                filtered_contours.append(contour)
+
+        # Remove duplicate zone IDs
+        triggered_zone_ids = list(set(triggered_zone_ids))
+
+        return filtered_contours, triggered_zone_ids
+
+    def _update_zone_statistics(self, triggered_zone_ids: List[int]):
+        """
+        Update statistics for triggered zones in the database.
+
+        Args:
+            triggered_zone_ids: List of zone IDs that detected motion
+        """
+        if not self.db_session or not triggered_zone_ids:
+            return
+
+        try:
+            from backend.database.models import MotionZone
+
+            # Update each triggered zone
+            for zone_id in triggered_zone_ids:
+                zone = self.db_session.query(MotionZone).filter(
+                    MotionZone.id == zone_id
+                ).first()
+
+                if zone:
+                    zone.motion_events_count += 1
+                    zone.last_motion_at = datetime.utcnow()
+
+            # Commit changes
+            self.db_session.commit()
+
+        except Exception as e:
+            print(f"Error updating zone statistics: {e}")
+            if self.db_session:
+                self.db_session.rollback()
 
     def _detect_lighting_change(self, frame: np.ndarray) -> bool:
         """
@@ -470,6 +671,16 @@ class MotionDetector:
             fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
         )
 
+        # STEP 5.5: ZONE-BASED FILTERING (v3.6.2+)
+        # Filter contours based on polygon zones if configured
+        frame_height, frame_width = original_frame.shape[:2]
+        triggered_zone_ids = []
+
+        if self.polygon_zones:
+            contours, triggered_zone_ids = self._filter_motion_by_zones(
+                contours, frame_width, frame_height
+            )
+
         motion_detected = False
         motion_areas = []
 
@@ -522,6 +733,11 @@ class MotionDetector:
             # Maintain motion state during cooldown period
             self.motion_cooldown_counter -= 1
             motion_detected = True  # Keep motion active during cooldown
+
+        # STEP 8: ZONE STATISTICS UPDATE (v3.6.2+)
+        # Update database statistics for zones that detected motion
+        if motion_detected and triggered_zone_ids:
+            self._update_zone_statistics(triggered_zone_ids)
 
         return original_frame, motion_detected, motion_areas
 
