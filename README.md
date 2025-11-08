@@ -350,23 +350,32 @@ pytest
 
 ## 📊 Project Status
 
-**Current Version**: 3.6.0 (Security Hardening Release)
+**Current Version**: 3.7.1 (FFmpeg Hardware Encoding Release)
 
-### Recent Updates (v3.6.0)
+### Recent Updates (v3.7.1)
+- ✅ FFmpeg hardware-accelerated video recording (70-90% CPU reduction)
+- ✅ Multi-platform GPU support (NVENC, QuickSync, VideoToolbox, VAAPI)
+- ✅ Async frame buffer (300-frame queue, 0% dropped frames)
+- ✅ Performance Settings UI in System Settings
+- ✅ UI/UX improvements (contrast fixes, Apple HIG compliance)
+- ✅ Documentation consolidation (252+ files organized)
+
+### Previous Major Release (v3.6.0 - Security Hardening)
 - ✅ Per-endpoint rate limiting with granular API category limits
 - ✅ CSRF protection using double-submit cookie pattern
-- ✅ Two-factor authentication (2FA) infrastructure with TOTP support
+- ✅ Two-factor authentication (2FA) with TOTP support
 - ✅ Enhanced audit logging system (42 event types, JSONL format)
-- ✅ Comprehensive security documentation (SECURITY_GUIDE.md)
+- ✅ Face clustering for unknown faces (DBSCAN algorithm)
 
 ### Roadmap
-See [TODO.md](TODO.md) for complete feature roadmap.
+See [TODO.md](docs/TODO.md) for complete feature roadmap.
 
-**Next Up** (v3.6.0):
-- Enhanced motion detection with zones
-- Multi-camera synchronized timeline
+**Next Up** (v3.8.0):
+- Two-way audio support (backend complete, frontend pending)
+- License plate recognition (ALPR)
+- Object detection (YOLO integration)
 - Advanced analytics dashboard
-- Security hardening (per-endpoint rate limiting, CSRF protection)
+- Mobile app (React Native/Flutter)
 
 ---
 

@@ -99,3 +99,6 @@ dist/
 # Build artifacts
 build/
 *.egg-info/
+
+# Developer documentation (contains AI context)
+CLAUDE.md

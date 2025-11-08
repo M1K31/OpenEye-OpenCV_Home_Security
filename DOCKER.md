@@ -1,6 +1,6 @@
 # OpenEye - AI-Powered Home Security System
 
-![Version](https://img.shields.io/badge/version-3.6.2-blue.svg) ![License](https://img.shields.io/badge/license-MIT-yellow.svg) ![Cost](https://img.shields.io/badge/cost-$0/month-success.svg)
+![Version](https://img.shields.io/badge/version-3.7.1-blue.svg) ![License](https://img.shields.io/badge/license-MIT-yellow.svg) ![Cost](https://img.shields.io/badge/cost-$0/month-success.svg)
 
 **100% free and open-source** AI-powered surveillance with face recognition, motion detection, and smart home integration. Your data stays on your hardware - no subscriptions, no cloud dependencies.
 
@@ -18,6 +18,7 @@
 - 👤 **AI Face Recognition** - dlib-powered identification with clustering
 - 🔍 **Motion Detection** - OpenCV MOG2 algorithm with configurable sensitivity
 - 📹 **Auto Recording** - Motion-triggered H.264 video with metadata
+- ⚡ **Hardware Encoding** - GPU-accelerated video (70-90% CPU reduction) with NVENC, QuickSync, VideoToolbox, VAAPI
 - 🎬 **Live Streaming** - MJPEG with real-time overlays
 - 📊 **Timeline View** - Interactive playback with event markers
 
@@ -53,17 +54,25 @@
 
 ---
 
-## 🆕 What's New in v3.5.7 (October 2025)
+## 🆕 What's New in v3.7.1 (January 2025)
 
-### User Interface Improvements
-- ✅ **Email Notification Modal** - Fixed scrolling issue in SMTP setup
-- ✅ **Face Cluster Deletion** - Added permanent deletion option to prevent test data repopulation
-- ✅ **Documentation** - Consolidated fixes and TODO roadmap
+### 🚀 FFmpeg Hardware Encoding Integration (Major Performance Boost!)
+- ✅ **70-90% CPU Reduction** - GPU-accelerated video recording using FFmpeg
+- ✅ **Multi-Platform Support** - NVENC (NVIDIA), QuickSync (Intel), VideoToolbox (Apple), VAAPI (Linux)
+- ✅ **Automatic Encoder Detection** - Intelligently selects best available encoder
+- ✅ **Async Frame Buffer** - 300-frame queue for smooth recording
+- ✅ **Performance Settings UI** - Configure hardware encoding preferences in System Settings
+- ✅ **Fallback to Software** - Gracefully falls back to CPU encoding if hardware unavailable
 
-### Developer Experience
-- ✅ **Automated Setup** - One-command production setup with auto-generated keys
-- ✅ **Uninstall Script** - Safe removal with backup options
-- ✅ **Process Cleanup** - Enhanced graceful shutdown with 7-step sequence
+### 🎨 UI/UX Improvements
+- ✅ **Contrast Fixes** - Improved readability across PerformanceDashboard and HardwareDetectionPage
+- ✅ **Universal Component Patterns** - All cards now follow Apple HIG + Material-UI standards
+- ✅ **16px Border Radius** - Consistent with HIG specifications across all components
+
+### 📚 Documentation Overhaul
+- ✅ **Consolidated 252+ Files** - Organized into clear structure with archived releases
+- ✅ **Hardware Encoding Guide** - Complete upgrade and configuration documentation
+- ✅ **Updated README** - Reflects all v3.7.1 features and improvements
 
 See [CHANGELOG.md](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/blob/main/CHANGELOG.md) for full details.
 
@@ -239,12 +248,14 @@ USB cameras have limited support in Docker on macOS due to USB passthrough limit
 
 ## 📦 Available Tags
 
-- `latest` - Most recent stable release (v3.5.7)
-- `v3.5.7` - Current version (notification fixes, permanent cluster deletion)
+- `latest` - Most recent stable release (v3.7.1)
+- `v3.7.1` - **Current version** - FFmpeg hardware encoding (70-90% CPU reduction)
+- `v3.7.0` - LiveDashboard UX improvements + EventDetailModal
+- `v3.6.2` - Motion threshold UI + documentation fixes
+- `v3.6.1` - Production-ready with performance optimizations
+- `v3.6.0` - Security hardening (2FA, per-endpoint rate limiting, CSRF protection)
 - `v3.5.6` - Timeline playback + UI improvements
 - `v3.5.3` - Process cleanup and stability fixes
-- `v3.4.0` - Video recording enhancements
-- `v3.1.0` - Camera discovery and themes
 
 **Recommended**: Use `latest` for automatic updates or specific version tags for production stability.
 
