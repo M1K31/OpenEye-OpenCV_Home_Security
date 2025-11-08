@@ -380,7 +380,7 @@ However, the native `<video>` element is recommended for simplicity and performa
 
 ---
 
-**Implemented By**: Claude Code (Sonnet 4.5)
+**Implemented By**: Development Team
 **Date**: 2025-11-02
 **Build**: v3.7.2
 **Status**: ✅ Ready for Testing

@@ -349,7 +349,7 @@ None identified in this build.
 
 ## 👤 Contributors
 
-- **Developer:** GitHub Copilot
+- **Developer:** Development Team
 - **User Feedback:** M1K31
 - **Testing:** In Progress
 

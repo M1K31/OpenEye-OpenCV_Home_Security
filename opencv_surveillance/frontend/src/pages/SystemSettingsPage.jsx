@@ -15,6 +15,8 @@ const SystemSettingsPage = ({ embedded = false }) => {
     max_recording_duration: 300,
     motion_percentage_threshold: 1.0, // Default 1% motion threshold
     theme: 'dark',
+    // Performance Settings (v3.7.1+)
+    hardware_video_encoding: false,
     // UI Accessibility Settings
     reduce_motion: false,
     use_8pt_grid: false,
@@ -472,6 +474,35 @@ const SystemSettingsPage = ({ embedded = false }) => {
               Lower values = more sensitive (detects smaller movements). Higher values = less sensitive (only larger movements).
               Recommended: 0.5-2.0% for most scenarios.
             </div>
+          </div>
+        </div>
+
+        {/* Performance Settings Section (v3.7.1+) */}
+        <div style={styles.section}>
+          <h2 style={styles.sectionTitle}>⚡ Performance Settings</h2>
+          <p style={styles.sectionDescription}>
+            Configure performance optimizations to reduce system resource usage. Enable hardware acceleration features when supported by your system.
+          </p>
+
+          <div style={styles.formGroup}>
+            <label style={styles.checkboxLabel}>
+              <input
+                type="checkbox"
+                checked={settings.hardware_video_encoding || false}
+                onChange={(e) => {
+                  handleInputChange('hardware_video_encoding', e.target.checked);
+                }}
+                style={styles.checkbox}
+              />
+              <div style={styles.checkboxContent}>
+                <span style={styles.labelText}>Hardware Video Encoding</span>
+                <span style={styles.labelHint}>
+                  Use GPU/hardware encoder (FFmpeg) for video recording instead of CPU-only encoding.
+                  Provides 70-90% CPU reduction during recording. Requires FFmpeg with hardware encoder support (NVENC, QuickSync, VideoToolbox, or VAAPI).
+                  Falls back to software encoding if hardware not available.
+                </span>
+              </div>
+            </label>
           </div>
         </div>
 

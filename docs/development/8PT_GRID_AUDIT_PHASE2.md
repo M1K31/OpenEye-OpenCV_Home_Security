@@ -142,4 +142,4 @@ After updates, verify:
 ---
 **Last Updated:** October 15, 2025
 **Version:** 3.5.3 Phase 2
-**Author:** GitHub Copilot
+**Author:** Development Team

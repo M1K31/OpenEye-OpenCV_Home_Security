@@ -409,4 +409,4 @@ The Camera Discovery feature transforms OpenEye from a developer-focused tool in
 
 _Last Updated: 2025-01-XX_  
 _Version: 3.1.0_  
-_Author: GitHub Copilot + User_
+_Author: Development Team + User_

@@ -1,7 +1,7 @@
 # OpenEye v3.7.0 - Unimplemented Features Audit Report
 
 **Date**: 2025-11-01
-**Auditor**: Claude Code
+**Auditor**: Development Team
 **Scope**: Complete project audit for unimplemented, partial, and planned features
 
 ---

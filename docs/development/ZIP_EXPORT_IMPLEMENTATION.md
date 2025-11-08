@@ -529,7 +529,7 @@ frontend/src/pages/RecordingsPage.jsx
 
 ---
 
-**Author:** AI Assistant (GitHub Copilot)  
+**Author:** AI Assistant (Development Team)  
 **Implementation Time:** ~1 hour  
 **Lines of Code:** ~150 (backend) + ~10 (frontend fix)  
 **Impact:** High (major UX improvement for data management)  

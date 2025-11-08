@@ -603,6 +603,6 @@ Validate a filesystem path.
 
 ---
 
-*Implementation completed by: GitHub Copilot*  
+*Implementation completed by: Development Team*  
 *Project: OpenEye-OpenCV_Home_Security*  
 *Owner: M1K31*

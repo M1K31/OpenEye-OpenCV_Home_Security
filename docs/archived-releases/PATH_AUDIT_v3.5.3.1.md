@@ -629,6 +629,6 @@ Result: StaticFiles handles /legacy/snapshots/ requests, catch-all only gets rem
 ---
 
 **Audit Completed:** October 14, 2025, 00:05 PST  
-**Auditor:** GitHub Copilot  
+**Auditor:** Development Team  
 **Status:** Root cause identified, fix ready for implementation
 

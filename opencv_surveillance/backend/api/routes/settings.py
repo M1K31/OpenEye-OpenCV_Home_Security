@@ -62,7 +62,12 @@ class SystemSettingsUpdate(BaseModel):
         None, ge=30, le=1800, description="Max recording seconds"
     )
     theme: Optional[str] = Field(None, pattern="^(light|dark)$")
-    
+
+    # NEW: Hardware Video Encoding (v3.7.1+)
+    hardware_video_encoding: Optional[bool] = Field(
+        None, description="Enable FFmpeg hardware-accelerated video encoding (70-90% CPU reduction)"
+    )
+
     # NEW: Apple HIG Accessibility Settings
     reduce_motion: Optional[bool] = Field(
         None, description="Reduce animations for accessibility (Apple HIG)"

@@ -42,9 +42,15 @@ class Recorder:
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
 
-    def start(self, frame_width, frame_height, fps=20):
+    def start(self, frame_width, frame_height, fps=20, camera_id="unknown"):
         """
         Starts a new recording session.
+
+        Args:
+            frame_width: Width of video frames
+            frame_height: Height of video frames
+            fps: Frames per second (default: 20)
+            camera_id: Camera identifier for filename (default: "unknown")
         """
         if self.is_recording:
             print("Already recording.")
@@ -64,10 +70,10 @@ class Recorder:
         for codec_name, ext in codecs_to_try:
             try:
                 self.filename = os.path.join(
-                    self.output_dir, f"motion_{timestamp}{ext}"
+                    self.output_dir, f"{camera_id}_motion_{timestamp}{ext}"
                 )
                 self.metadata_filename = os.path.join(
-                    self.output_dir, f"motion_{timestamp}_metadata.json"
+                    self.output_dir, f"{camera_id}_motion_{timestamp}_metadata.json"
                 )
 
                 fourcc = cv2.VideoWriter_fourcc(*codec_name)

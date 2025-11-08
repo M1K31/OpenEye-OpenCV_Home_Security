@@ -53,22 +53,28 @@
   background: transparent;
   border: none;
   border-bottom: 3px solid transparent;
-  color: var(--text-secondary);
+  color: var(--text-primary, #1a1a1a);
+  opacity: 0.6;
   font-size: 15px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
   margin-bottom: -2px;
+  min-height: 44px; /* Apple HIG minimum touch target */
+  display: flex;
+  align-items: center;
 }
 
 .tab:hover {
-  color: var(--text-primary);
-  background: var(--hover-bg, rgba(0, 0, 0, 0.05));
+  opacity: 1;
+  background: var(--hover-bg, rgba(0, 122, 255, 0.08));
 }
 
 .tab.active {
-  color: var(--primary-color);
-  border-bottom-color: var(--primary-color);
+  color: var(--accent-color, #007AFF);
+  opacity: 1;
+  font-weight: 600;
+  border-bottom-color: var(--accent-color, #007AFF);
 }
 
 /* Tab Content */
@@ -90,19 +96,20 @@
 }
 
 .hardware-section {
-  background: var(--card-bg);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg, 12px);
+  background: var(--card-background, #FFFFFF);
+  border: 1px solid var(--card-border, rgba(0, 0, 0, 0.08));
+  border-radius: var(--radius-lg, 16px);
   padding: var(--spacing-lg, 24px);
+  box-shadow: var(--shadow-sm, 0 2px 8px rgba(0,0,0,0.08));
 }
 
 .section-heading {
   font-size: 18px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text-primary, #000000);
   margin: 0 0 var(--spacing-md, 16px);
   padding-bottom: var(--spacing-sm, 8px);
-  border-bottom: 2px solid var(--border-color);
+  border-bottom: 2px solid var(--card-border, rgba(0, 0, 0, 0.08));
 }
 
 .info-grid {
@@ -116,9 +123,11 @@
   align-items: center;
   gap: var(--spacing-md, 16px);
   padding: var(--spacing-md, 16px);
-  background: var(--surface-bg, #f8f9fa);
-  border-radius: var(--radius-md, 8px);
-  border: 1px solid var(--border-light, rgba(0, 0, 0, 0.06));
+  background: var(--card-background, #FFFFFF);
+  border-radius: var(--radius-lg, 16px);
+  border: 1px solid var(--card-border, rgba(0, 0, 0, 0.08));
+  box-shadow: var(--shadow-sm, 0 2px 8px rgba(0,0,0,0.08));
+  transition: all var(--transition-normal, 200ms) ease-in-out;
 }
 
 .info-icon {
@@ -138,16 +147,17 @@
 
 .info-label {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--text-primary, #1a1a1a);
+  opacity: 0.7;
   margin-bottom: 4px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .info-value {
   font-size: 16px;
-  color: var(--text-primary);
+  color: var(--text-primary, #1a1a1a);
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -211,23 +221,25 @@
   gap: var(--spacing-md, 16px);
 }
 
+/* Feature Cards - Based on Universal Card component patterns */
 .feature-card {
-  padding: var(--spacing-md, 16px);
-  border-radius: var(--radius-md, 8px);
-  border: 2px solid var(--border-color);
-  background: var(--surface-bg);
-  transition: all 0.2s ease;
+  position: relative;
+  padding: var(--spacing-lg, 24px);
+  border-radius: var(--radius-lg, 16px);
+  border: 1px solid var(--card-border, rgba(0, 0, 0, 0.08));
+  background-color: var(--card-background, #FFFFFF);
+  box-shadow: var(--shadow-sm, 0 2px 8px rgba(0,0,0,0.08));
+  transition: all var(--transition-normal, 200ms) ease-in-out;
 }
 
 .feature-card.recommended {
-  border-color: var(--success-color, #28a745);
-  background: var(--success-bg, rgba(40, 167, 69, 0.05));
+  border-left: 4px solid var(--success-color, #28a745);
+  box-shadow: var(--shadow-md, 0 4px 12px rgba(40, 167, 69, 0.12));
 }
 
 .feature-card.not-recommended {
-  border-color: var(--warning-color, #ffc107);
-  background: var(--warning-bg, rgba(255, 193, 7, 0.05));
-  opacity: 0.7;
+  border-left: 4px solid var(--warning-color, #ffc107);
+  opacity: 0.85;
 }
 
 .feature-header {
@@ -239,34 +251,37 @@
 }
 
 .feature-header h4 {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text-primary, #000000);
   margin: 0;
+  line-height: 1.3;
 }
 
 .badge {
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 4px 12px;
+  border-radius: var(--radius-sm, 4px);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  box-shadow: var(--shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.05));
 }
 
 .badge-gpu {
-  background: var(--primary-color);
-  color: white;
+  background: var(--accent-color, #007AFF);
+  color: #ffffff;
 }
 
 .badge-cpu {
-  background: var(--secondary-color);
-  color: white;
+  background: #6c757d;
+  color: #ffffff;
 }
 
 .feature-description {
   font-size: 14px;
-  color: var(--text-secondary);
+  color: var(--text-primary, #1a1a1a);
+  opacity: 0.8;
   margin: 0 0 var(--spacing-sm, 8px);
   line-height: 1.5;
 }

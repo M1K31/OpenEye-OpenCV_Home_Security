@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { useCachedApi } from '../hooks/useCachedApi';
 import { CacheTTL } from '../services/apiCache';
 import LoadingSkeleton from '../components/LoadingSkeleton';
+import Button from '../components/universal/Button';
 import './HardwareDetectionPage.css';
 
 /**
@@ -370,13 +371,15 @@ const HardwareDetectionPage = () => {
             View your system capabilities and get optimized feature recommendations
           </p>
         </div>
-        <button
-          className="btn btn-secondary"
+        <Button
+          variant="primary"
+          size="medium"
           onClick={() => refetchHardware()}
           disabled={isLoading}
+          icon="🔄"
         >
-          🔄 Refresh
-        </button>
+          Refresh
+        </Button>
       </div>
 
       {hardwareError && (

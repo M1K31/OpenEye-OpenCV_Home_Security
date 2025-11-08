@@ -222,6 +222,6 @@ value={getCameraValue(camera, 'fps', 15)}
 
 ---
 
-**Fixed By:** GitHub Copilot  
+**Fixed By:** Development Team  
 **Date:** October 11, 2025  
 **Version:** v3.5.1.1

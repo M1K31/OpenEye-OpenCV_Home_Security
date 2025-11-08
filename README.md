@@ -1,6 +1,6 @@
 # OpenEye - AI-Powered Home Security with OpenCV & Face Recognition
 
-![Version](https://img.shields.io/badge/version-3.7.0-blue.svg)
+![Version](https://img.shields.io/badge/version-3.7.1-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![OpenCV](https://img.shields.io/badge/OpenCV-4.8+-red.svg)
 ![License](https://img.shields.io/badge/license-MIT-yellow.svg)
@@ -42,6 +42,7 @@ A **100% free and open-source** AI-powered surveillance system using **OpenCV** 
 - 🎥 **Multi-Camera Support** - RTSP, USB, network cameras with auto-discovery
 - 👁️ **Motion Detection** - OpenCV MOG2 background subtraction
 - 📹 **Auto Recording** - Motion-triggered H.264 video with metadata
+- ⚡ **Hardware Encoding** - GPU-accelerated video (70-90% CPU reduction) with NVENC, QuickSync, VideoToolbox, VAAPI
 - 🎬 **Live Streaming** - MJPEG streams with real-time overlays
 - 👤 **Face Recognition** - AI-powered identification with confidence scores
 - 🧠 **Face Clustering** - DBSCAN-based grouping of unknown faces
@@ -259,7 +260,7 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 
 ### Project Documentation
 - 📝 **[CHANGELOG.md](CHANGELOG.md)** - Version history and release notes
-- 👨‍💻 **[CLAUDE.md](CLAUDE.md)** - Developer guide for Claude Code
+- 👨‍💻 **[CLAUDE.md](CLAUDE.md)** - Developer guide and coding standards
 - 🐞 **[Fix History](docs/development/FIXES_HISTORY.md)** - Complete fix history
 - 📋 **[Project Roadmap](docs/PROJECT_AUDIT_AND_TODO_v3.5.3.md)** - Planned features and audit
 
@@ -411,7 +412,7 @@ For more help, see [User Guide](opencv_surveillance/docs/USER_GUIDE.md) or open 
 
 MIT License - See [LICENSE](LICENSE) for details.
 
-Copyright (c) 2025 Mikel Smart
+Copyright (c) 2025 Mikel Smart (with help from Claude)
 
 ---
 

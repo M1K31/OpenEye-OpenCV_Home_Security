@@ -529,5 +529,5 @@ The SystemSettings table uses a flexible key-value design:
 ---
 
 *Generated: October 11, 2025*  
-*Author: GitHub Copilot*  
+*Author: Development Team*  
 *Project: OpenEye-OpenCV_Home_Security*

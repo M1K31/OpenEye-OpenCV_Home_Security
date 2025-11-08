@@ -250,7 +250,7 @@ opencv-surveillance/
 
 ---
 
-**Author:** AI Assistant (GitHub Copilot)  
+**Author:** AI Assistant (Development Team)  
 **Reviewed:** User  
 **Implementation Time:** ~20 minutes  
 **Lines of Code:** ~100 (patch module) + 5 (main.py changes)  

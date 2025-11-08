@@ -533,9 +533,6 @@ resolve paths used by application
   ---
   Would you like me to start implementing any of these recommendations? I'd suggest tackling #1 first since it's blocking core functionality.
 
-● How is Claude doing this session? (optional)
-  1: Bad    2: Fine   3: Good   0: Dismiss
-
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 >  
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
