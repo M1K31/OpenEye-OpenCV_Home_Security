@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.7.2] - 2025-11-08
+
+### Security
+- **Frontend Dependency Security Update** - Resolved 6 moderate severity vulnerabilities
+  - **Issue**: esbuild ≤0.24.2 vulnerability (GHSA-67mh-4wv8-2f99) allowed any website to send requests to development server and read responses
+  - **Solution**: Incremental upgrade from Vite 4 → 5 → 6 → 7 with compatible plugin versions
+  - **Impact**: Development environment only, production builds were never affected
+
+  - **Upgraded Packages**:
+    - `vite`: 4.5.14 → 7.2.2 (3 major version jump)
+    - `@vitejs/plugin-react`: 4.7.0 → 5.1.0
+    - `vitest`: 1.6.1 → 4.0.8
+    - `@vitest/ui`: 1.6.1 → 4.0.8
+    - `@vitest/coverage-v8`: 1.6.1 → 4.0.8
+    - `esbuild`: ≤0.24.2 → 0.25.12 (patched)
+
+  - **Testing**: All builds tested at each version (Vite 5, 6, 7) - no breaking changes encountered
+  - **Result**: ✅ 0 vulnerabilities, all security issues resolved
+  - **Files Modified**: `package.json`, `package-lock.json`
+
+### Changed
+- **Node.js Requirement**: Minimum version increased from 16+ to 20+ (Vite 7 requires Node.js 20.19+/22.12+)
+
+---
+
 ## [3.7.1] - 2025-11-06 (Integration Complete)
 
 ### Added

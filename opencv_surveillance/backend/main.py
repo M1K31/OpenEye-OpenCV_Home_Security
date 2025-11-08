@@ -107,7 +107,7 @@ signal.signal(signal.SIGTERM, signal_handler)
 app = FastAPI(
     title="OpenEye Surveillance System",
     description="OpenCV-powered surveillance system with face recognition, motion detection, and video recording",
-    version="3.7.0",  # LiveDashboard UX Improvements + Event Modal
+    version="3.7.2",  # Security Update - Vite 7 upgrade
     docs_url="/api/docs",
     redoc_url="/api/redoc",
 )
@@ -350,7 +350,7 @@ async def startup_event():
     audit_logger.log_event(
         AuditEventType.SYSTEM_STARTUP,
         details={
-            "version": "3.7.0",
+            "version": "3.7.2",
             "cameras_loaded": loaded_count,
             "known_faces": len(face_manager.known_face_names)
         }
@@ -629,7 +629,7 @@ async def read_root():
         # Fallback to API info if frontend not built
         return {
             "name": "OpenEye Surveillance System",
-            "version": "3.7.0",
+            "version": "3.7.2",
             "description": "OpenCV-powered surveillance with face recognition",
             "features": [
                 "Motion Detection",
@@ -656,7 +656,7 @@ async def api_root():
     """
     return {
         "name": "OpenEye Surveillance System API",
-        "version": "3.7.0",
+        "version": "3.7.2",
         "description": "OpenCV-powered surveillance with face recognition",
         "features": [
             "Motion Detection",
