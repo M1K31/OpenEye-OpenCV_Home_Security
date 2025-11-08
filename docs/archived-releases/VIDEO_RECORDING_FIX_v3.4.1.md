@@ -328,7 +328,7 @@ The video recording issue has been **completely resolved**. The system now:
 ---
 
 **Fix Applied**: October 11, 2025 at 6:40 PM  
-**Tested By**: GitHub Copilot  
+**Tested By**: Development Team  
 **Version**: v3.4.1  
 **File Modified**: `backend/core/recorder.py`  
 **Lines Changed**: 42-75 (33 lines added/modified)

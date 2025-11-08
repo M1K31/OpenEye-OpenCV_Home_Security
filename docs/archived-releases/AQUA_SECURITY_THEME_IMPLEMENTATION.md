@@ -424,7 +424,7 @@ Ref: v3.5.2-theme-ui
 
 **Status**: ✅ **READY FOR TESTING AND DEPLOYMENT**
 
-*Prepared by: GitHub Copilot*  
+*Prepared by: Development Team*  
 *Date: October 12, 2025*  
 *Project: OpenEye Surveillance System*  
 *Target Version: 3.5.2*

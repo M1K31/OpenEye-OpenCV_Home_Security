@@ -17,6 +17,7 @@ from .motion_detector import MotionDetector
 from .image_processor import ImageProcessor
 from .video_processor import VideoProcessor, VideoSettings
 from .recorder import Recorder
+from .ffmpeg_recorder import FFmpegRecorder, EncoderCapabilities
 from .face_detection import FaceDetector
 from .overlay_renderer import render_overlay
 import asyncio
@@ -99,13 +100,38 @@ class Camera(ABC):
         faces_path = settings.get("faces_path", "faces")
         snapshots_path = settings.get("snapshots_path", "data/snapshots")
 
-        self.recorder = Recorder(
-            output_dir=recordings_path,
-            max_recording_duration=max_recording_duration)
+        # Check if hardware video encoding is enabled (v3.7.1+)
+        use_hardware_encoding = settings.get("hardware_video_encoding", False)
+
+        # Create recorder based on hardware encoding setting
+        if use_hardware_encoding:
+            # Use FFmpeg recorder with hardware acceleration
+            try:
+                self.recorder = FFmpegRecorder(
+                    output_dir=recordings_path,
+                    max_recording_duration=max_recording_duration,
+                    use_hardware_encoding=True,
+                    enable_frame_buffer=True,
+                    buffer_size=300
+                )
+                print(f"✅ FFmpeg recorder initialized for camera '{camera_id}' with hardware acceleration")
+            except Exception as e:
+                print(f"⚠️ Failed to initialize FFmpeg recorder, falling back to standard recorder: {e}")
+                self.recorder = Recorder(
+                    output_dir=recordings_path,
+                    max_recording_duration=max_recording_duration
+                )
+        else:
+            # Use standard OpenCV VideoWriter recorder
+            self.recorder = Recorder(
+                output_dir=recordings_path,
+                max_recording_duration=max_recording_duration
+            )
+
         self.face_detector = FaceDetector(
             enabled=enable_face_detection, faces_dir=faces_path
         )
-        
+
         # Store snapshots path for motion detection
         self.snapshots_path = snapshots_path
 
@@ -741,7 +767,7 @@ class MockCamera(Camera):
         if self.motion_detected:
             self.last_motion_time = time.time()
             if not self.recorder.is_recording:
-                self.recorder.start(self.width, self.height)
+                self.recorder.start(self.width, self.height, fps=30, camera_id=self.camera_id or "mock")
 
         if self.recorder.is_recording:
             # Add recording indicator to the processed frame for streaming
@@ -938,7 +964,7 @@ class RTSPCamera(Camera):
             self.last_motion_time = time.time()
             if not self.recorder.is_recording:
                 height, width, _ = clean_frame.shape
-                self.recorder.start(width, height)
+                self.recorder.start(width, height, fps=30, camera_id=self.camera_id or "rtsp")
 
         if self.recorder.is_recording:
             height, width, _ = clean_frame.shape
@@ -1055,6 +1081,8 @@ class CameraManager:
                         ),
                         "display_mode": system_settings.get("display_mode", "grid"),
                         "cycle_interval": int(system_settings.get("cycle_interval", 10)),
+                        # Hardware encoding (v3.7.1+)
+                        "hardware_video_encoding": system_settings.get("hardware_video_encoding", False),
                     }
 
                     return settings

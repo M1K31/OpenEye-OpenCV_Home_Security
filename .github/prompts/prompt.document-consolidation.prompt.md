@@ -1,6 +1,5 @@
 ---
 description: An agent that checks all documents for consistency and completeness.
-model: GPT-5 mini (copilot)
 mode: agent
 tools: [ "readFile", "codebase", "fileSearch", "textSearch", "editFiles" ]
 ---

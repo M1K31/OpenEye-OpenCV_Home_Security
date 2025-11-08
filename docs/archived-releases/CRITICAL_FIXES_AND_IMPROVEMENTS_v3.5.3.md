@@ -419,7 +419,7 @@ git checkout HEAD~1 -- opencv_surveillance/frontend/src/layouts/Sidebar.jsx
 
 ## Contributors
 
-- **Audit & Implementation:** Claude Code
+- **Audit & Implementation:** Development Team
 - **Review:** Required (human review of changes)
 - **Testing:** Required (manual testing of all features)
 

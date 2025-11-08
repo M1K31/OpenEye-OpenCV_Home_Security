@@ -14,6 +14,7 @@
 
 import React, { useState, useEffect } from 'react';
 import apiClient from '../api/apiClient';
+import Button from '../components/universal/Button';
 import './PerformanceDashboard.css';
 
 function PerformanceDashboard() {
@@ -121,12 +122,22 @@ function PerformanceDashboard() {
             />
             Auto-refresh (5s)
           </label>
-          <button onClick={fetchAllData} className="btn-refresh">
+          <Button
+            variant="primary"
+            size="medium"
+            onClick={fetchAllData}
+            icon="🔄"
+          >
             Refresh Now
-          </button>
-          <button onClick={handleReset} className="btn-reset">
+          </Button>
+          <Button
+            variant="destructive"
+            size="medium"
+            onClick={handleReset}
+            icon="⚠️"
+          >
             Reset Metrics
-          </button>
+          </Button>
         </div>
       </div>
 

@@ -432,7 +432,7 @@ Tested on:
 
 ---
 
-**Author:** AI Assistant (GitHub Copilot)  
+**Author:** AI Assistant (Development Team)  
 **Implementation Time:** ~45 minutes  
 **Lines of Code:** ~200 (frontend UI + handlers)  
 **Impact:** High (major UX improvement)  

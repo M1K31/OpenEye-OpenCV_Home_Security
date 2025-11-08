@@ -521,7 +521,7 @@ const Sidebar = memo(({ currentSection, onNavigate }) => { ... });
 
 ---
 
-*Document prepared by: GitHub Copilot*  
+*Document prepared by: Development Team*  
 *Project: OpenEye Surveillance System*  
 *Target Version: 3.5.2*  
 *Status: Planning Phase - Ready for Implementation*

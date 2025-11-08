@@ -403,7 +403,7 @@ This also fixes potential performance issues in:
 
 ---
 
-**Fixed By**: Claude Code (Sonnet 4.5)
+**Fixed By**: Development Team
 **Date**: 2025-11-02
 **Build**: v3.7.0
 **Status**: ✅ Production Ready

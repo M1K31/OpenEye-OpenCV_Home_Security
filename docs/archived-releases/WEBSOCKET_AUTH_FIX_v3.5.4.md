@@ -523,7 +523,7 @@ Implement token refresh for long-lived WebSocket connections:
 
 ---
 
-**Fix Implemented By:** Claude Code
+**Fix Implemented By:** Development Team
 **Date:** October 18, 2025
 **Test Status:** ✅ Passing
 **Ready for Deployment:** Yes

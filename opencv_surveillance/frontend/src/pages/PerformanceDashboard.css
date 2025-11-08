@@ -41,6 +41,8 @@
   align-items: center;
   gap: 8px;
   font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary, #1a1a1a);
   cursor: pointer;
   user-select: none;
 }
@@ -54,20 +56,22 @@
 .btn-refresh,
 .btn-reset {
   padding: 8px 16px;
-  border: 1px solid var(--border-color, #e0e0e0);
+  border: 1px solid var(--primary-color, #3b82f6);
   border-radius: 4px;
-  background: var(--button-bg, #ffffff);
-  color: var(--text-primary, #000);
+  background: var(--primary-color, #3b82f6);
+  color: #ffffff;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
+  min-width: 120px;
 }
 
 .btn-refresh:hover {
-  background: var(--primary-color, #3b82f6);
-  color: #ffffff;
-  border-color: var(--primary-color, #3b82f6);
+  background: var(--primary-color-dark, #2563eb);
+  border-color: var(--primary-color-dark, #2563eb);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .btn-reset {
@@ -198,15 +202,28 @@
   align-items: center;
   gap: 8px;
   font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary, #1a1a1a);
 }
 
 .threshold-selector select {
-  padding: 4px 8px;
+  padding: 6px 12px;
   border: 1px solid var(--border-color, #e0e0e0);
   border-radius: 4px;
-  background: var(--input-bg, #ffffff);
-  color: var(--text-primary, #000);
+  background: #ffffff;
+  color: #1a1a1a;
+  font-weight: 500;
   cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.threshold-selector select:hover {
+  border-color: var(--primary-color, #3b82f6);
+}
+
+.threshold-selector select:focus {
+  outline: 2px solid var(--primary-color, #3b82f6);
+  outline-offset: 2px;
 }
 
 .empty-state {

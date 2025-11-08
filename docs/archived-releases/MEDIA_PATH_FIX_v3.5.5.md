@@ -462,7 +462,7 @@ Or update via the Settings page in the UI.
 
 ---
 
-**Implementation By:** Claude Code
+**Implementation By:** Development Team
 **Date:** October 18, 2025
 **Status:** 📋 Planning Complete - Ready for Implementation
 

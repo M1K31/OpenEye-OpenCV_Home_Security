@@ -452,7 +452,7 @@ This session successfully addressed all critical user-facing issues and signific
 
 **Root Directory Cleanup**:
 - **Before**: 20+ markdown files scattered in root
-- **After**: 10 organized files (CHANGELOG, CLAUDE, DOCKER_HUB_OVERVIEW, DOCUMENTATION_CONSOLIDATION_SUMMARY, FIXES, FRONTEND_BACKEND_API_AUDIT_RESULTS, NOTIFICATION_SETTINGS_FEATURE, README, SESSION_SUMMARY, TODO)
+- **After**: 10 organized files (CHANGELOG, CLAUDE.md, DOCKER_HUB_OVERVIEW, DOCUMENTATION_CONSOLIDATION_SUMMARY, FIXES, FRONTEND_BACKEND_API_AUDIT_RESULTS, NOTIFICATION_SETTINGS_FEATURE, README, SESSION_SUMMARY, TODO)
 - **Archived**: 10 versioned fix/deployment documents moved to docs/archived-releases/
 
 The OpenEye project is now production-ready with professional installation, operation, and removal workflows.

@@ -354,6 +354,6 @@ The OpenEye project has been successfully cleaned up and organized for public de
 
 ---
 
-*Document prepared by: GitHub Copilot*  
+*Document prepared by: Development Team*  
 *Date: October 12, 2025*  
 *Project: OpenEye Surveillance System v3.5.1.4*

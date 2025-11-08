@@ -668,6 +668,6 @@ Trigger a motion event and verify:
 
 ---
 
-**Created By**: Claude Code (Sonnet 4.5)
+**Created By**: Development Team
 **Date**: 2025-11-02
 **Status**: ✅ Ready for Implementation
