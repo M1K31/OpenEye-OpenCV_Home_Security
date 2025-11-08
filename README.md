@@ -1,6 +1,6 @@
 # OpenEye - AI-Powered Home Security with OpenCV & Face Recognition
 
-![Version](https://img.shields.io/badge/version-3.7.1-blue.svg)
+![Version](https://img.shields.io/badge/version-3.7.2-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![OpenCV](https://img.shields.io/badge/OpenCV-4.8+-red.svg)
 ![License](https://img.shields.io/badge/license-MIT-yellow.svg)
@@ -141,7 +141,7 @@ Then run: `docker-compose up -d`
 
 #### Prerequisites
 - Python 3.9+ (3.11+ recommended)
-- Node.js 16+ and npm
+- Node.js 20+ and npm (20.19+ or 22.12+ required for Vite 7)
 - Git
 
 #### Installation
@@ -350,7 +350,7 @@ pytest
 
 ## 📊 Project Status
 
-**Current Version**: 3.7.1 (FFmpeg Hardware Encoding Release)
+**Current Version**: 3.7.2 (Security Update)
 
 ### Recent Updates (v3.7.1)
 - ✅ FFmpeg hardware-accelerated video recording (70-90% CPU reduction)
