@@ -67,6 +67,7 @@ data/thumbnails/
 
 # Archives
 archives/
+docs/archived-releases/
 
 # Backups
 *.backup
