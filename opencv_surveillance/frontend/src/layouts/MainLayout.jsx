@@ -7,6 +7,7 @@ import Sidebar from './Sidebar';
 import KeyboardShortcuts from '../components/KeyboardShortcuts';
 import wsService from '../services/WebSocketService';
 import { getToken } from '../api/apiClient';
+import { logger } from '../utils/logger';
 import './MainLayout.css';
 
 /**

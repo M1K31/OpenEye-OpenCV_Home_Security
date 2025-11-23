@@ -2,6 +2,7 @@
 // This file is part of OpenEye-OpenCV_Home_Security
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { logger } from '../utils/logger';
 import apiClient, { isAuthenticated } from '../api/apiClient';
 import PipVideoPlayer from '../components/PipVideoPlayer';
 import CameraSettingsModal from '../components/CameraSettingsModal';

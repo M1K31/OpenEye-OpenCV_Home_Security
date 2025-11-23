@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { logger } from '../utils/logger';
 import notificationService from '../services/notificationService';
 import { Button, Switch } from '../components/universal';
 import './NotificationSettingsPage.css';
