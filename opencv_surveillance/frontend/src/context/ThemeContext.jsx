@@ -1,6 +1,7 @@
 // Copyright (c) 2025 Mikel Smart
 // This file is part of OpenEye-OpenCV_Home_Security
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { logger } from '../utils/logger';
 
 const ThemeContext = createContext();
 
