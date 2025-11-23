@@ -5,6 +5,7 @@ This file is part of OpenEye-OpenCV_Home_Security
 
 import React from 'react';
 import './ErrorBoundary.css';
+import { logger } from '../utils/logger';
 
 /**
  * Error Boundary Component
