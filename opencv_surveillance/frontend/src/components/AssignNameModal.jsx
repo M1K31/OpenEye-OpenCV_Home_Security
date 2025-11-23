@@ -2,6 +2,7 @@
 // This file is part of OpenEye-OpenCV_Home_Security
 
 import React, { useState } from 'react';
+import { logger } from '../utils/logger';
 import clusteringService from '../services/clusteringService';
 import './Modal.css';
 
