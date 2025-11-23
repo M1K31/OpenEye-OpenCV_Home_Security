@@ -8,6 +8,7 @@ import PTZControl from '../components/PTZControl';
 import HelpButton from '../components/HelpButton';
 import { HELP_CONTENT } from '../utils/helpContent';
 import apiClient from '../api/apiClient';
+import { Button, TextField, Switch } from '../components/universal';
 
 const CameraManagementPage = ({ embedded = false }) => {
   const navigate = useNavigate();
@@ -136,33 +137,30 @@ const CameraManagementPage = ({ embedded = false }) => {
 
       {/* Tab Navigation */}
       <div style={styles.tabContainer}>
-        <button
+        <Button
+          variant={activeTab === 'list' ? 'primary' : 'secondary'}
+          size="medium"
           onClick={() => setActiveTab('list')}
-          style={{
-            ...styles.tab,
-            ...(activeTab === 'list' ? styles.tabActive : {})
-          }}
+          icon="📋"
         >
-          📋 Camera List
-        </button>
-        <button
+          Camera List
+        </Button>
+        <Button
+          variant={activeTab === 'discover' ? 'primary' : 'secondary'}
+          size="medium"
           onClick={() => setActiveTab('discover')}
-          style={{
-            ...styles.tab,
-            ...(activeTab === 'discover' ? styles.tabActive : {})
-          }}
+          icon="🔍"
         >
-          🔍 Discover Cameras
-        </button>
-        <button
+          Discover Cameras
+        </Button>
+        <Button
+          variant={activeTab === 'manual' ? 'primary' : 'secondary'}
+          size="medium"
           onClick={() => setActiveTab('manual')}
-          style={{
-            ...styles.tab,
-            ...(activeTab === 'manual' ? styles.tabActive : {})
-          }}
+          icon="➕"
         >
-          ➕ Add Manually
-        </button>
+          Add Manually
+        </Button>
       </div>
 
       {/* Alert Messages */}
@@ -170,14 +168,28 @@ const CameraManagementPage = ({ embedded = false }) => {
         <div className="alert alert-error">
           <span className="alert-icon">⚠️</span>
           <div className="alert-content">{error}</div>
-          <button onClick={() => setError(null)} className="modal-close" style={{position: 'relative', marginLeft: 'auto'}}>×</button>
+          <Button
+            variant="tertiary"
+            size="small"
+            onClick={() => setError(null)}
+            style={{position: 'relative', marginLeft: 'auto'}}
+          >
+            ×
+          </Button>
         </div>
       )}
       {success && (
         <div className="alert alert-success">
           <span className="alert-icon">✓</span>
           <div className="alert-content">{success}</div>
-          <button onClick={() => setSuccess(null)} className="modal-close" style={{position: 'relative', marginLeft: 'auto'}}>×</button>
+          <Button
+            variant="tertiary"
+            size="small"
+            onClick={() => setSuccess(null)}
+            style={{position: 'relative', marginLeft: 'auto'}}
+          >
+            ×
+          </Button>
         </div>
       )}
 
@@ -188,9 +200,16 @@ const CameraManagementPage = ({ embedded = false }) => {
           <div>
             <div style={styles.sectionHeader}>
               <h2 style={styles.sectionTitle}>Your Cameras</h2>
-              <button onClick={loadCameras} className="btn btn-secondary" disabled={loading}>
-                {loading ? '🔄 Loading...' : '🔄 Refresh'}
-              </button>
+              <Button
+                variant="secondary"
+                size="medium"
+                onClick={loadCameras}
+                disabled={loading}
+                loading={loading}
+                icon="🔄"
+              >
+                Refresh
+              </Button>
             </div>
 
             {cameras.length === 0 && !loading ? (
@@ -199,12 +218,22 @@ const CameraManagementPage = ({ embedded = false }) => {
                 <h3>No Cameras Configured</h3>
                 <p>Get started by discovering cameras automatically or adding one manually</p>
                 <div style={styles.emptyActions}>
-                  <button onClick={() => setActiveTab('discover')} className="btn btn-primary">
-                    🔍 Discover Cameras
-                  </button>
-                  <button onClick={() => setActiveTab('manual')} className="btn btn-secondary">
-                    ➕ Add Manually
-                  </button>
+                  <Button
+                    variant="primary"
+                    size="medium"
+                    onClick={() => setActiveTab('discover')}
+                    icon="🔍"
+                  >
+                    Discover Cameras
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="medium"
+                    onClick={() => setActiveTab('manual')}
+                    icon="➕"
+                  >
+                    Add Manually
+                  </Button>
                 </div>
               </div>
             ) : (
@@ -249,38 +278,46 @@ const CameraManagementPage = ({ embedded = false }) => {
                     </div>
 
                     <div style={styles.cardFooter}>
-                      <button
+                      <Button
+                        variant="primary"
+                        size="small"
                         onClick={() => window.open(`/api/cameras/${camera.camera_id}/stream`, '_blank')}
-                        className="btn btn-primary btn-sm"
+                        icon="👁️"
                       >
-                        👁️ View Stream
-                      </button>
-                      <button
+                        View Stream
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="small"
                         onClick={() => setSettingsCamera(camera)}
-                        className="btn btn-secondary btn-sm"
-                        title="Configure camera settings, zones, and recording"
+                        icon="⚙️"
                       >
-                        ⚙️ Settings
-                      </button>
-                      <button
+                        Settings
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="small"
                         onClick={() => setPtzCamera(camera)}
-                        className="btn btn-info btn-sm"
-                        title="PTZ Camera Controls"
+                        icon="🎮"
                       >
-                        🎮 PTZ Control
-                      </button>
-                      <button
+                        PTZ Control
+                      </Button>
+                      <Button
+                        variant={camera.is_active ? 'secondary' : 'primary'}
+                        size="small"
                         onClick={() => handleToggleCamera(camera.camera_id, camera.is_active)}
-                        className={`btn btn-sm ${camera.is_active ? 'btn-warning' : 'btn-success'}`}
+                        icon={camera.is_active ? '⏸️' : '▶️'}
                       >
-                        {camera.is_active ? '⏸️ Disable' : '▶️ Enable'}
-                      </button>
-                      <button
+                        {camera.is_active ? 'Disable' : 'Enable'}
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="small"
                         onClick={() => handleDeleteCamera(camera.camera_id)}
-                        className="btn btn-danger btn-sm"
+                        icon="🗑️"
                       >
-                        🗑️ Delete
-                      </button>
+                        Delete
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -395,36 +432,36 @@ const CameraManagementPage = ({ embedded = false }) => {
 
               <div style={styles.formRow}>
                 <div style={styles.formGroup}>
-                  <label style={styles.checkboxLabel}>
-                    <input
-                      type="checkbox"
-                      checked={manualForm.enabled}
-                      onChange={(e) => setManualForm({...manualForm, enabled: e.target.checked})}
-                      style={styles.checkbox}
-                    />
-                    Enable camera immediately
-                  </label>
+                  <Switch
+                    checked={manualForm.enabled}
+                    onChange={(checked) => setManualForm({...manualForm, enabled: checked})}
+                    label="Enable camera immediately"
+                  />
                 </div>
 
                 <div style={styles.formGroup}>
-                  <label style={styles.checkboxLabel}>
-                    <input
-                      type="checkbox"
-                      checked={manualForm.record_motion}
-                      onChange={(e) => setManualForm({...manualForm, record_motion: e.target.checked})}
-                      style={styles.checkbox}
-                    />
-                    Record on motion detection
-                  </label>
+                  <Switch
+                    checked={manualForm.record_motion}
+                    onChange={(checked) => setManualForm({...manualForm, record_motion: checked})}
+                    label="Record on motion detection"
+                  />
                 </div>
               </div>
 
               <div style={styles.formActions}>
-                <button type="submit" className="btn btn-success">
-                  ✅ Add Camera
-                </button>
-                <button
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="large"
+                  icon="✅"
+                >
+                  Add Camera
+                </Button>
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="large"
+                  icon="🔄"
                   onClick={() => setManualForm({
                     camera_id: '',
                     name: '',
@@ -435,10 +472,9 @@ const CameraManagementPage = ({ embedded = false }) => {
                     fps: 30,
                     resolution: '1920x1080'
                   })}
-                  className="btn btn-secondary"
                 >
-                  🔄 Reset Form
-                </button>
+                  Reset Form
+                </Button>
               </div>
             </form>
 

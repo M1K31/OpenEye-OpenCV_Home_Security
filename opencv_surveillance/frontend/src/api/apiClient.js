@@ -2,36 +2,29 @@
 // This file is part of OpenEye-OpenCV_Home_Security
 
 import axios from 'axios';
+import { API_CONFIG, RETRY_CONFIG, PUBLIC_ENDPOINTS } from '../config';
 
 /**
- * Centralized API Client with Authentication Handling
+ * Centralized API Client with Authentication Handling (v3.8.0)
  *
  * Features:
  * - Automatic token injection
- * - 401 error handling
+ * - 401 error handling with refresh token support
  * - Public endpoint bypass
  * - No 401 spam on unauthenticated requests
  * - Automatic retry with exponential backoff
+ *
+ * Note: The main axios interceptors are set up in authService.js
+ * This file provides an alternative client with retry logic
+ * Configuration is centralized in config.js
  */
 
-// Create axios instance
+// Create axios instance with centralized configuration
 const apiClient = axios.create({
-  baseURL: '/api',
-  timeout: 90000, // 90 seconds (for long-running operations like camera discovery)
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  baseURL: API_CONFIG.baseURL,
+  timeout: API_CONFIG.timeout,
+  headers: API_CONFIG.defaultHeaders,
 });
-
-/**
- * Retry configuration
- */
-const RETRY_CONFIG = {
-  maxRetries: 3,
-  initialDelay: 1000, // 1 second
-  maxDelay: 10000, // 10 seconds
-  backoffMultiplier: 2, // Exponential backoff
-};
 
 /**
  * Check if error is retryable
@@ -72,13 +65,6 @@ const getRetryDelay = (retryCount) => {
  */
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Public endpoints that don't require authentication
-const PUBLIC_ENDPOINTS = [
-  '/token',
-  '/setup/status',
-  '/setup/initialize',
-];
-
 /**
  * Check if an endpoint is public (no auth required)
  */
@@ -87,10 +73,11 @@ const isPublicEndpoint = (url) => {
 };
 
 /**
- * Request Interceptor
+ * Request Interceptor (v3.8.0)
  * - Adds Authorization header if token exists
  * - Skips auth for public endpoints
  * - Prevents 401 spam by only adding token when available
+ * - Uses access_token (updated for refresh token system)
  */
 apiClient.interceptors.request.use(
   (config) => {
@@ -99,8 +86,8 @@ apiClient.interceptors.request.use(
       return config;
     }
 
-    // Only add auth header if token exists
-    const token = localStorage.getItem('token');
+    // Only add auth header if token exists (v3.8.0: using access_token)
+    const token = localStorage.getItem('access_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -113,11 +100,15 @@ apiClient.interceptors.request.use(
 );
 
 /**
- * Response Interceptor
+ * Response Interceptor (v3.8.0)
  * - Handles 401 errors gracefully
+ * - Delegates token refresh to authService.js (via global axios interceptors)
  * - Only redirects to login if token existed (i.e., it expired)
  * - Prevents redirect loops
  * - Implements automatic retry with exponential backoff
+ *
+ * Note: The main 401 handling with automatic token refresh is done
+ * in authService.js. This interceptor provides fallback behavior.
  */
 apiClient.interceptors.response.use(
   (response) => response,
@@ -126,13 +117,14 @@ apiClient.interceptors.response.use(
 
     // Handle 401 Unauthorized
     if (response?.status === 401) {
-      const hadToken = localStorage.getItem('token');
+      const hadToken = localStorage.getItem('access_token');
 
       // Only redirect if we had a token (meaning it expired)
       // Don't redirect if we never had a token (user not logged in yet)
       if (hadToken && !isPublicEndpoint(config.url)) {
-        console.warn('Token expired or invalid, redirecting to login');
-        localStorage.removeItem('token');
+        logger.warn('Token expired or invalid after refresh attempt');
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
 
         // Only redirect if not already on login page
         if (!window.location.pathname.includes('/login')) {
@@ -153,7 +145,7 @@ apiClient.interceptors.response.use(
         const delay = getRetryDelay(config.__retryCount);
         const retryMessage = `Retrying request (${config.__retryCount}/${RETRY_CONFIG.maxRetries}) after ${delay}ms...`;
 
-        console.warn(retryMessage, {
+        logger.warn(retryMessage, {
           url: config.url,
           method: config.method,
           error: error.message,
@@ -166,7 +158,7 @@ apiClient.interceptors.response.use(
         // Retry the request
         return apiClient(config);
       } else {
-        console.error('Max retries reached for request:', {
+        logger.error('Max retries reached for request:', {
           url: config.url,
           method: config.method,
           retries: config.__retryCount,
@@ -179,35 +171,38 @@ apiClient.interceptors.response.use(
 );
 
 /**
- * Helper: Check if user is authenticated
+ * Helper: Check if user is authenticated (v3.8.0)
  */
 export const isAuthenticated = () => {
-  return !!localStorage.getItem('token');
+  return !!localStorage.getItem('access_token');
 };
 
 /**
- * Helper: Get current token
+ * Helper: Get current access token (v3.8.0)
  */
 export const getToken = () => {
-  return localStorage.getItem('token');
+  return localStorage.getItem('access_token');
 };
 
 /**
- * Helper: Set authentication token
+ * Helper: Set authentication token (v3.8.0)
  */
 export const setToken = (token) => {
   if (token) {
-    localStorage.setItem('token', token);
+    localStorage.setItem('access_token', token);
   } else {
-    localStorage.removeItem('token');
+    localStorage.removeItem('access_token');
   }
 };
 
 /**
- * Helper: Clear authentication
+ * Helper: Clear authentication (v3.8.0)
+ * Clears both access and refresh tokens
  */
 export const clearAuth = () => {
-  localStorage.removeItem('token');
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('token_expires_at');
 };
 
 /**

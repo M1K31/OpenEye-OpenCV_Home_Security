@@ -26,19 +26,19 @@ const MainLayout = ({ onLogout }) => {
     const token = getToken();
 
     if (token) {
-      console.log('Initializing WebSocket connection with token...');
+      logger.log('Initializing WebSocket connection with token...');
       // Disconnect any existing connection first
       wsService.disconnect();
       // Connect with new token
       wsService.connect(token);
     } else {
-      console.warn('No token found, WebSocket not initialized');
+      logger.warn('No token found, WebSocket not initialized');
       wsService.disconnect();
     }
 
     // Cleanup: disconnect WebSocket on unmount
     return () => {
-      console.log('Disconnecting WebSocket...');
+      logger.log('Disconnecting WebSocket...');
       wsService.disconnect();
     };
   }, [getToken()]); // Re-run when token changes

@@ -63,6 +63,13 @@ const Sidebar = ({ isCollapsed }) => {
       priority: 'medium'
     },
     {
+      id: 'detections',
+      icon: '🔍',
+      label: 'All Detections',
+      path: '/detections',
+      priority: 'high'
+    },
+    {
       id: 'automations',
       icon: '⚡',
       label: 'Automations',

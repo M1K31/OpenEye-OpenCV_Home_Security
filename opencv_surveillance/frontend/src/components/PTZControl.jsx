@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { logger } from '../utils/logger';
 import './PTZControl.css';
 import apiClient from '../api/apiClient';
 
@@ -51,7 +52,7 @@ const PTZControl = ({ cameraId, cameraName }) => {
       setShowConnectionForm(false);
       alert('PTZ connected successfully!');
     } catch (error) {
-      console.error('Failed to connect PTZ:', error);
+      logger.error('Failed to connect PTZ:', error);
       alert(error.response?.data?.detail || 'Failed to connect to PTZ camera');
     }
   };
@@ -62,7 +63,7 @@ const PTZControl = ({ cameraId, cameraName }) => {
       setIsConnected(false);
       alert('PTZ disconnected successfully!');
     } catch (error) {
-      console.error('Failed to disconnect PTZ:', error);
+      logger.error('Failed to disconnect PTZ:', error);
     }
   };
 
@@ -79,7 +80,7 @@ const PTZControl = ({ cameraId, cameraName }) => {
         speed
       });
     } catch (error) {
-      console.error('PTZ move failed:', error);
+      logger.error('PTZ move failed:', error);
       alert(error.response?.data?.detail || 'PTZ move command failed');
     }
   };
@@ -94,7 +95,7 @@ const PTZControl = ({ cameraId, cameraName }) => {
         zoom_velocity: zoomVelocity
       });
     } catch (error) {
-      console.error('PTZ continuous move failed:', error);
+      logger.error('PTZ continuous move failed:', error);
     }
   };
 
@@ -104,7 +105,7 @@ const PTZControl = ({ cameraId, cameraName }) => {
     try {
       await apiClient.post(`/api/cameras/${cameraId}/ptz/stop`);
     } catch (error) {
-      console.error('PTZ stop failed:', error);
+      logger.error('PTZ stop failed:', error);
     }
   };
 
@@ -130,7 +131,7 @@ const PTZControl = ({ cameraId, cameraName }) => {
       const response = await apiClient.get(`/api/cameras/${cameraId}/ptz/presets`);
       setPresets(response.data.presets);
     } catch (error) {
-      console.error('Failed to load presets:', error);
+      logger.error('Failed to load presets:', error);
     } finally {
       setLoadingPresets(false);
     }
@@ -143,7 +144,7 @@ const PTZControl = ({ cameraId, cameraName }) => {
       });
       alert(`Moved to preset: ${presetName}`);
     } catch (error) {
-      console.error('Failed to goto preset:', error);
+      logger.error('Failed to goto preset:', error);
       alert(error.response?.data?.detail || 'Failed to move to preset');
     }
   };
@@ -156,7 +157,7 @@ const PTZControl = ({ cameraId, cameraName }) => {
       alert(`Deleted preset: ${presetName}`);
       loadPresets();
     } catch (error) {
-      console.error('Failed to delete preset:', error);
+      logger.error('Failed to delete preset:', error);
       alert(error.response?.data?.detail || 'Failed to delete preset');
     }
   };
@@ -186,7 +187,7 @@ const PTZControl = ({ cameraId, cameraName }) => {
       alert(`Created preset: ${name}`);
       loadPresets();
     } catch (error) {
-      console.error('Failed to create preset:', error);
+      logger.error('Failed to create preset:', error);
       alert(error.response?.data?.detail || 'Failed to create preset');
     }
   };
@@ -199,7 +200,7 @@ const PTZControl = ({ cameraId, cameraName }) => {
       const response = await apiClient.get(`/api/cameras/${cameraId}/ptz/patrol-patterns`);
       setPatterns(response.data.patterns);
     } catch (error) {
-      console.error('Failed to load patrol patterns:', error);
+      logger.error('Failed to load patrol patterns:', error);
     } finally {
       setLoadingPatterns(false);
     }
@@ -211,7 +212,7 @@ const PTZControl = ({ cameraId, cameraName }) => {
       alert(`Started patrol pattern: ${patternName}`);
       loadPatterns();
     } catch (error) {
-      console.error('Failed to start patrol pattern:', error);
+      logger.error('Failed to start patrol pattern:', error);
       alert(error.response?.data?.detail || 'Failed to start patrol pattern');
     }
   };
@@ -222,7 +223,7 @@ const PTZControl = ({ cameraId, cameraName }) => {
       alert(`Stopped patrol pattern: ${patternName}`);
       loadPatterns();
     } catch (error) {
-      console.error('Failed to stop patrol pattern:', error);
+      logger.error('Failed to stop patrol pattern:', error);
       alert(error.response?.data?.detail || 'Failed to stop patrol pattern');
     }
   };
@@ -235,7 +236,7 @@ const PTZControl = ({ cameraId, cameraName }) => {
       alert(`Deleted patrol pattern: ${patternName}`);
       loadPatterns();
     } catch (error) {
-      console.error('Failed to delete patrol pattern:', error);
+      logger.error('Failed to delete patrol pattern:', error);
       alert(error.response?.data?.detail || 'Failed to delete patrol pattern');
     }
   };

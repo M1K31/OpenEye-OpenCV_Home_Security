@@ -2,6 +2,7 @@
 // Universal Card Component - Apple HIG Compliant
 
 import React from 'react';
+import PropTypes from 'prop-types';
 import './Card.css';
 
 /**
@@ -123,5 +124,85 @@ export const CardFooter = ({ children, className = '', align = 'right' }) => (
     {children}
   </div>
 );
+
+// PropTypes validation - Card
+Card.propTypes = {
+  /** Card style variant */
+  variant: PropTypes.oneOf(['standard', 'interactive', 'elevated']),
+
+  /** Make card clickable */
+  clickable: PropTypes.bool,
+
+  /** Click event handler */
+  onClick: PropTypes.func,
+
+  /** Optional card header */
+  header: PropTypes.node,
+
+  /** Optional card footer */
+  footer: PropTypes.node,
+
+  /** Show loading state */
+  loading: PropTypes.bool,
+
+  /** Take full width of container */
+  fullWidth: PropTypes.bool,
+
+  /** Additional CSS classes */
+  className: PropTypes.string,
+
+  /** Card content */
+  children: PropTypes.node.isRequired,
+};
+
+Card.defaultProps = {
+  variant: 'standard',
+  clickable: false,
+  onClick: undefined,
+  header: null,
+  footer: null,
+  loading: false,
+  fullWidth: false,
+  className: '',
+};
+
+// PropTypes validation - CardHeader
+CardHeader.propTypes = {
+  /** Header title */
+  title: PropTypes.string,
+
+  /** Header subtitle */
+  subtitle: PropTypes.string,
+
+  /** Action button/element */
+  action: PropTypes.node,
+
+  /** Additional CSS classes */
+  className: PropTypes.string,
+};
+
+CardHeader.defaultProps = {
+  title: undefined,
+  subtitle: undefined,
+  action: undefined,
+  className: '',
+};
+
+// PropTypes validation - CardFooter
+CardFooter.propTypes = {
+  /** Footer content */
+  children: PropTypes.node.isRequired,
+
+  /** Additional CSS classes */
+  className: PropTypes.string,
+
+  /** Footer alignment */
+  align: PropTypes.oneOf(['left', 'center', 'right']),
+};
+
+CardFooter.defaultProps = {
+  className: '',
+  align: 'right',
+};
 
 export default Card;

@@ -2,6 +2,7 @@
 // This file is part of OpenEye-OpenCV_Home_Security
 import React, { useState, useEffect } from 'react';
 import apiClient from '../api/apiClient';
+import { Button } from '../components/universal';
 
 const CameraDiscoveryPage = ({ onBack }) => {
   const [usbCameras, setUsbCameras] = useState([]);
@@ -202,18 +203,22 @@ const CameraDiscoveryPage = ({ onBack }) => {
       </div>
 
       <div style={styles.cardFooter}>
-        <button 
+        <Button
           onClick={() => testCamera(camera)}
-          style={styles.testButton}
+          variant="secondary"
+          size="medium"
+          icon="🔍"
         >
-          🔍 Test Connection
-        </button>
-        <button 
+          Test Connection
+        </Button>
+        <Button
           onClick={() => quickAddCamera(camera)}
-          style={styles.addButton}
+          variant="primary"
+          size="medium"
+          icon="➕"
         >
-          ➕ Quick Add
-        </button>
+          Quick Add
+        </Button>
       </div>
     </div>
   );
@@ -243,16 +248,16 @@ const CameraDiscoveryPage = ({ onBack }) => {
       <section style={styles.section}>
         <div style={styles.sectionHeader}>
           <h2 style={styles.sectionTitle}>🎥 USB & Built-in Cameras</h2>
-          <button 
+          <Button
             onClick={discoverUSB}
             disabled={scanning.usb}
-            style={{
-              ...styles.scanButton,
-              ...(scanning.usb ? styles.scanButton.disabled : {})
-            }}
+            loading={scanning.usb}
+            variant="primary"
+            size="medium"
+            icon={scanning.usb ? "🔄" : "🔍"}
           >
-            {scanning.usb ? '🔄 Scanning...' : '🔍 Scan for USB Cameras'}
-          </button>
+            {scanning.usb ? 'Scanning...' : 'Scan for USB Cameras'}
+          </Button>
         </div>
 
         <p style={styles.sectionDescription}>
@@ -279,16 +284,16 @@ const CameraDiscoveryPage = ({ onBack }) => {
       <section style={styles.section}>
         <div style={styles.sectionHeader}>
           <h2 style={styles.sectionTitle}>📡 Network Cameras (RTSP/IP)</h2>
-          <button 
+          <Button
             onClick={discoverNetwork}
             disabled={scanning.network}
-            style={{
-              ...styles.scanButton,
-              ...(scanning.network ? styles.scanButton.disabled : {})
-            }}
+            loading={scanning.network}
+            variant="primary"
+            size="medium"
+            icon={scanning.network ? "🔄" : "🌐"}
           >
-            {scanning.network ? '🔄 Scanning Network...' : '🌐 Scan Network'}
-          </button>
+            {scanning.network ? 'Scanning Network...' : 'Scan Network'}
+          </Button>
         </div>
 
         <p style={styles.sectionDescription}>
@@ -426,22 +431,6 @@ const styles = {
     color: '#2c3e50',
     margin: 0,
   },
-  scanButton: {
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    color: 'white',
-    border: 'none',
-    padding: '12px 30px',
-    borderRadius: '25px',
-    cursor: 'pointer',
-    fontSize: '16px',
-    fontWeight: 'bold',
-    transition: 'transform 0.2s',
-    disabled: {
-      background: '#ccc',
-      cursor: 'not-allowed',
-      transform: 'none',
-    },
-  },
   sectionDescription: {
     color: '#7f8c8d',
     marginBottom: '20px',
@@ -542,27 +531,6 @@ const styles = {
     display: 'flex',
     gap: '10px',
     background: '#fff',
-  },
-  testButton: {
-    flex: 1,
-    background: '#17a2b8',
-    color: 'white',
-    border: 'none',
-    padding: '10px',
-    borderRadius: '5px',
-    cursor: 'pointer',
-    fontSize: '14px',
-  },
-  addButton: {
-    flex: 1,
-    background: '#28a745',
-    color: 'white',
-    border: 'none',
-    padding: '10px',
-    borderRadius: '5px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: 'bold',
   },
   emptyState: {
     textAlign: 'center',

@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import apiClient from '../api/apiClient';
 import HelpButton from '../components/HelpButton';
 import { HELP_CONTENT } from '../utils/helpContent';
+import { Button, TextField, Switch } from '../components/universal';
 import './AlertSettingsPage.css';
 
 const AlertSettingsPage = ({ embedded = false }) => {
@@ -38,6 +39,12 @@ const AlertSettingsPage = ({ embedded = false }) => {
           face_recognition_alerts_enabled: true,
           unknown_face_alerts_enabled: true,
           recording_alerts_enabled: false,
+          // v3.10.0: Object detection alerts
+          object_detection_alerts_enabled: true,
+          vehicle_alerts_enabled: true,
+          animal_alerts_enabled: true,
+          package_alerts_enabled: true,
+          identified_object_alerts_enabled: true,
           email_enabled: true,
           sms_enabled: false,
           push_enabled: false,
@@ -61,6 +68,12 @@ const AlertSettingsPage = ({ embedded = false }) => {
         face_recognition_alerts_enabled: true,
         unknown_face_alerts_enabled: true,
         recording_alerts_enabled: false,
+        // v3.10.0: Object detection alerts
+        object_detection_alerts_enabled: true,
+        vehicle_alerts_enabled: true,
+        animal_alerts_enabled: true,
+        package_alerts_enabled: true,
+        identified_object_alerts_enabled: true,
         email_enabled: true,
         sms_enabled: false,
         push_enabled: false,
@@ -90,9 +103,10 @@ const AlertSettingsPage = ({ embedded = false }) => {
 
   const loadLogs = async () => {
     try {
-      const response = await apiClient.get('/alerts/logs?limit=20');
-      // Handle wrapped response or legacy array response
-      const logsData = response.data?.logs || 
+      const response = await apiClient.get('/alerts/logs?page=1&page_size=20');
+      // Handle new paginated response format
+      const logsData = response.data?.data ||
+        response.data?.logs ||  // Legacy format
         (Array.isArray(response.data) ? response.data : []);
       setLogs(logsData);
     } catch (error) {
@@ -175,13 +189,14 @@ const AlertSettingsPage = ({ embedded = false }) => {
       <header className="page-header">
         <div>
           <h1>Alert & Notification Settings</h1>
-          <button
-            className="btn btn-primary"
+          <Button
+            variant="primary"
             onClick={() => navigate('/system/notifications')}
+            icon="🔔"
             style={{ marginTop: '8px' }}
           >
-            🔔 Configure Notification Providers
-          </button>
+            Configure Notification Providers
+          </Button>
         </div>
       </header>
 
@@ -221,41 +236,82 @@ const AlertSettingsPage = ({ embedded = false }) => {
       <section className="settings-section">
         <h2>Alert Types</h2>
         <div className="form-grid">
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={config.motion_alerts_enabled}
-              onChange={(e) => updateConfig('motion_alerts_enabled', e.target.checked)}
-            />
-            <span>Motion Detection Alerts</span>
-          </label>
-          
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={config.face_recognition_alerts_enabled}
-              onChange={(e) => updateConfig('face_recognition_alerts_enabled', e.target.checked)}
-            />
-            <span>Known Face Detection Alerts</span>
-          </label>
-          
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={config.unknown_face_alerts_enabled}
-              onChange={(e) => updateConfig('unknown_face_alerts_enabled', e.target.checked)}
-            />
-            <span>Unknown Face Detection Alerts</span>
-          </label>
-          
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={config.recording_alerts_enabled}
-              onChange={(e) => updateConfig('recording_alerts_enabled', e.target.checked)}
-            />
-            <span>Recording Start/Stop Alerts</span>
-          </label>
+          <Switch
+            checked={config.motion_alerts_enabled}
+            onChange={(checked) => updateConfig('motion_alerts_enabled', checked)}
+            label="Motion Detection Alerts"
+          />
+
+          <Switch
+            checked={config.face_recognition_alerts_enabled}
+            onChange={(checked) => updateConfig('face_recognition_alerts_enabled', checked)}
+            label="Known Face Detection Alerts"
+          />
+
+          <Switch
+            checked={config.unknown_face_alerts_enabled}
+            onChange={(checked) => updateConfig('unknown_face_alerts_enabled', checked)}
+            label="Unknown Face Detection Alerts"
+          />
+
+          <Switch
+            checked={config.recording_alerts_enabled}
+            onChange={(checked) => updateConfig('recording_alerts_enabled', checked)}
+            label="Recording Start/Stop Alerts"
+          />
+        </div>
+      </section>
+
+      {/* v3.10.0: Object Detection Alerts */}
+      <section className="settings-section">
+        <h2>🔍 Object Detection Alerts (v3.10.0)</h2>
+        <p className="section-description">
+          Configure alerts for AI-detected objects (vehicles, animals, packages).
+          Requires YOLO object detection to be enabled in system settings.
+        </p>
+        <div className="form-grid">
+          <Switch
+            checked={config.object_detection_alerts_enabled || false}
+            onChange={(checked) => updateConfig('object_detection_alerts_enabled', checked)}
+            label="Enable Object Detection Alerts (Master Toggle)"
+            color="default"
+          />
+
+          {config.object_detection_alerts_enabled && (
+            <>
+              <div className="checkbox-indent">
+                <Switch
+                  checked={config.vehicle_alerts_enabled || false}
+                  onChange={(checked) => updateConfig('vehicle_alerts_enabled', checked)}
+                  label="🚗 Vehicle Detection Alerts (cars, trucks, motorcycles, etc.)"
+                />
+              </div>
+
+              <div className="checkbox-indent">
+                <Switch
+                  checked={config.animal_alerts_enabled || false}
+                  onChange={(checked) => updateConfig('animal_alerts_enabled', checked)}
+                  label="🐾 Animal Detection Alerts (dogs, cats, birds, etc.)"
+                />
+              </div>
+
+              <div className="checkbox-indent">
+                <Switch
+                  checked={config.package_alerts_enabled || false}
+                  onChange={(checked) => updateConfig('package_alerts_enabled', checked)}
+                  label="📦 Package Detection Alerts (boxes, bags, suitcases, etc.)"
+                />
+              </div>
+
+              <div className="checkbox-indent">
+                <Switch
+                  checked={config.identified_object_alerts_enabled || false}
+                  onChange={(checked) => updateConfig('identified_object_alerts_enabled', checked)}
+                  label="🏷️ Identified Object Alerts (e.g., 'John's Tesla', 'My Dog Rex')"
+                />
+              </div>
+            </>
+          )}
         </div>
       </section>
 
@@ -274,24 +330,22 @@ const AlertSettingsPage = ({ embedded = false }) => {
           </p>
         </div>
         <div className="form-group">
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={config.email_enabled}
-              onChange={(e) => updateConfig('email_enabled', e.target.checked)}
-            />
-            <span>Enable Email Notifications</span>
-          </label>
+          <Switch
+            checked={config.email_enabled}
+            onChange={(checked) => updateConfig('email_enabled', checked)}
+            label="Enable Email Notifications"
+          />
         </div>
         {config.email_enabled && (
           <>
             <div className="form-group">
-              <label>Recipient Email Address:</label>
-              <input
+              <TextField
                 type="email"
+                label="Recipient Email Address"
                 value={config.email_address || ''}
                 onChange={(e) => updateConfig('email_address', e.target.value)}
                 placeholder="your@email.com"
+                fullWidth
               />
             </div>
             <div className="help-text mt-15">
@@ -305,34 +359,29 @@ const AlertSettingsPage = ({ embedded = false }) => {
               }}>
                 <p style={{ margin: '0 0 8px 0', fontWeight: '600' }}>✨ Configure via UI (No coding required!)</p>
                 <p style={{ margin: '0 0 12px 0', fontSize: '14px' }}>Click the button below to set up email notifications through our user-friendly interface.</p>
-                <button
+                <Button
+                  variant="primary"
+                  size="medium"
                   onClick={() => navigate('/system/notifications')}
-                  style={{
-                    padding: '10px 20px',
-                    background: 'var(--primary-color)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    cursor: 'pointer'
-                  }}
+                  icon="📧"
                 >
-                  📧 Configure Email Provider
-                </button>
+                  Configure Email Provider
+                </Button>
                 <small style={{ display: 'block', marginTop: '12px', opacity: '0.8' }}>
                   💡 For Gmail: You'll need an <a href="https://support.google.com/accounts/answer/185833" target="_blank" rel="noopener noreferrer">App Password</a>
                 </small>
               </div>
             </div>
             {config.id && config.email_address && (
-              <button
+              <Button
+                variant="secondary"
+                size="small"
                 onClick={() => testAlert('email')}
                 disabled={testing}
-                className="btn btn-secondary btn-sm"
+                loading={testing}
               >
                 Send Test Email
-              </button>
+              </Button>
             )}
           </>
         )}
@@ -351,14 +400,11 @@ const AlertSettingsPage = ({ embedded = false }) => {
           </p>
         </div>
         <div className="form-group">
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={config.sms_enabled}
-              onChange={(e) => updateConfig('sms_enabled', e.target.checked)}
-            />
-            <span>Enable SMS Notifications</span>
-          </label>
+          <Switch
+            checked={config.sms_enabled}
+            onChange={(checked) => updateConfig('sms_enabled', checked)}
+            label="Enable SMS Notifications"
+          />
         </div>
         {config.sms_enabled && (
           <>
@@ -373,36 +419,22 @@ const AlertSettingsPage = ({ embedded = false }) => {
               <p style={{ margin: '0 0 12px 0', fontSize: '14px' }}>Set up SMS (Twilio) or Telegram notifications through our user-friendly interface.</p>
 
               <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
-                <button
+                <Button
+                  variant="primary"
+                  size="medium"
                   onClick={() => navigate('/system/notifications')}
-                  style={{
-                    padding: '10px 20px',
-                    background: 'var(--primary-color)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    cursor: 'pointer'
-                  }}
+                  icon="📱"
                 >
-                  📱 Configure SMS Provider
-                </button>
-                <button
+                  Configure SMS Provider
+                </Button>
+                <Button
+                  variant="primary"
+                  size="medium"
                   onClick={() => navigate('/system/notifications')}
-                  style={{
-                    padding: '10px 20px',
-                    background: 'var(--primary-color)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    cursor: 'pointer'
-                  }}
+                  icon="✈️"
                 >
-                  ✈️ Configure Telegram Bot
-                </button>
+                  Configure Telegram Bot
+                </Button>
               </div>
 
               <div className="help-text" style={{ fontSize: '13px', marginTop: '12px' }}>
@@ -413,13 +445,15 @@ const AlertSettingsPage = ({ embedded = false }) => {
               </div>
             </div>
             {config.id && config.phone_number && (
-              <button
+              <Button
+                variant="secondary"
+                size="small"
                 onClick={() => testAlert('sms')}
                 disabled={testing}
-                className="btn btn-secondary btn-sm"
+                loading={testing}
               >
                 Send Test SMS/Telegram
-              </button>
+              </Button>
             )}
           </>
         )}
@@ -440,14 +474,11 @@ const AlertSettingsPage = ({ embedded = false }) => {
           </p>
         </div>
         <div className="form-group">
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={config.push_enabled}
-              onChange={(e) => updateConfig('push_enabled', e.target.checked)}
-            />
-            <span>Enable Push Notifications</span>
-          </label>
+          <Switch
+            checked={config.push_enabled}
+            onChange={(checked) => updateConfig('push_enabled', checked)}
+            label="Enable Push Notifications"
+          />
         </div>
         {config.push_enabled && (
           <>
@@ -461,22 +492,15 @@ const AlertSettingsPage = ({ embedded = false }) => {
               <p style={{ margin: '0 0 8px 0', fontWeight: '600' }}>✨ Configure via UI (No coding required!)</p>
               <p style={{ margin: '0 0 12px 0', fontSize: '14px' }}>Set up push notifications through Firebase Cloud Messaging.</p>
 
-              <button
+              <Button
+                variant="primary"
+                size="medium"
                 onClick={() => navigate('/system/notifications')}
-                style={{
-                  padding: '10px 20px',
-                  background: 'var(--primary-color)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  marginBottom: '12px'
-                }}
+                icon="🔔"
+                style={{ marginBottom: '12px' }}
               >
-                🔔 Configure Push Provider
-              </button>
+                Configure Push Provider
+              </Button>
 
               <div className="help-text" style={{ fontSize: '13px', marginTop: '12px' }}>
                 <p><strong>Firebase Setup:</strong></p>
@@ -486,24 +510,27 @@ const AlertSettingsPage = ({ embedded = false }) => {
               </div>
               
               <div className="form-group mt-20">
-                <label>Device Token (FCM only):</label>
-                <input
+                <TextField
                   type="text"
+                  label="Device Token (FCM only)"
                   value={config.push_token || ''}
                   onChange={(e) => updateConfig('push_token', e.target.value)}
                   placeholder="Your FCM device token"
+                  helperText="Leave empty if using ntfy.sh"
+                  fullWidth
                 />
-                <small>Leave empty if using ntfy.sh</small>
               </div>
             </div>
             {config.id && (
-              <button
+              <Button
+                variant="secondary"
+                size="small"
                 onClick={() => testAlert('push')}
                 disabled={testing}
-                className="btn btn-secondary btn-sm"
+                loading={testing}
               >
                 Send Test Push Notification
-              </button>
+              </Button>
             )}
           </>
         )}
@@ -519,34 +546,34 @@ const AlertSettingsPage = ({ embedded = false }) => {
           />
         </h2>
         <div className="form-group">
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={config.webhook_enabled}
-              onChange={(e) => updateConfig('webhook_enabled', e.target.checked)}
-            />
-            <span>Enable Webhook Notifications</span>
-          </label>
+          <Switch
+            checked={config.webhook_enabled}
+            onChange={(checked) => updateConfig('webhook_enabled', checked)}
+            label="Enable Webhook Notifications"
+          />
         </div>
         {config.webhook_enabled && (
           <>
             <div className="form-group">
-              <label>Webhook URL:</label>
-              <input
+              <TextField
                 type="url"
+                label="Webhook URL"
                 value={config.webhook_url || ''}
                 onChange={(e) => updateConfig('webhook_url', e.target.value)}
                 placeholder="https://your-webhook-url.com/endpoint"
+                fullWidth
               />
             </div>
             {config.id && config.webhook_url && (
-              <button
+              <Button
+                variant="secondary"
+                size="small"
                 onClick={() => testAlert('webhook')}
                 disabled={testing}
-                className="btn btn-secondary btn-sm"
+                loading={testing}
               >
                 Send Test Webhook
-              </button>
+              </Button>
             )}
           </>
         )}
@@ -585,14 +612,11 @@ const AlertSettingsPage = ({ embedded = false }) => {
           />
         </h2>
         <div className="form-group">
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={config.quiet_hours_enabled}
-              onChange={(e) => updateConfig('quiet_hours_enabled', e.target.checked)}
-            />
-            <span>Enable Quiet Hours (no alerts during this time)</span>
-          </label>
+          <Switch
+            checked={config.quiet_hours_enabled}
+            onChange={(checked) => updateConfig('quiet_hours_enabled', checked)}
+            label="Enable Quiet Hours (no alerts during this time)"
+          />
         </div>
         {config.quiet_hours_enabled && (
           <div className="form-grid">
@@ -618,13 +642,15 @@ const AlertSettingsPage = ({ embedded = false }) => {
 
       {/* Save Button */}
       <div className="save-section">
-        <button
+        <Button
+          variant="primary"
+          size="large"
           onClick={saveConfiguration}
           disabled={saving}
-          className="btn btn-primary"
+          loading={saving}
         >
-          {saving ? 'Saving...' : 'Save Configuration'}
-        </button>
+          Save Configuration
+        </Button>
       </div>
 
       {/* Recent Logs */}

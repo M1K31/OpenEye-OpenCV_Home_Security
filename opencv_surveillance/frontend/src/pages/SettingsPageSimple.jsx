@@ -3,6 +3,7 @@
 // SIMPLE TEST VERSION - Settings Page
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Button } from '../components/universal';
 
 const SettingsPageSimple = () => {
   const navigate = useNavigate();
@@ -26,30 +27,34 @@ const SettingsPageSimple = () => {
         </p>
         
         <div style={styles.testButtons}>
-          <button 
+          <Button
             onClick={() => navigate('/camera-management')}
-            style={styles.testButton}
+            variant="primary"
+            size="medium"
           >
             Test Camera Management Directly
-          </button>
-          <button 
+          </Button>
+          <Button
             onClick={() => navigate('/face-management')}
-            style={styles.testButton}
+            variant="primary"
+            size="medium"
           >
             Test Face Management Directly
-          </button>
-          <button 
+          </Button>
+          <Button
             onClick={() => navigate('/alerts')}
-            style={styles.testButton}
+            variant="primary"
+            size="medium"
           >
             Test Alerts Directly
-          </button>
-          <button 
+          </Button>
+          <Button
             onClick={() => navigate('/theme-selector')}
-            style={styles.testButton}
+            variant="primary"
+            size="medium"
           >
             Test Themes Directly
-          </button>
+          </Button>
         </div>
 
         <div style={styles.infoBox}>
@@ -116,17 +121,6 @@ const styles = {
     gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
     gap: '15px',
     margin: '30px 0',
-  },
-  testButton: {
-    backgroundColor: 'var(--text-link)',
-    color: 'white',
-    border: 'none',
-    padding: '15px 20px',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '600',
-    transition: 'all 0.2s',
   },
   infoBox: {
     backgroundColor: 'rgba(0, 123, 255, 0.15)',

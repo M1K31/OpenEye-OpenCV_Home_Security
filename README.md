@@ -1,6 +1,6 @@
 # OpenEye - AI-Powered Home Security with OpenCV & Face Recognition
 
-![Version](https://img.shields.io/badge/version-3.7.2-blue.svg)
+![Version](https://img.shields.io/badge/version-3.10.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![OpenCV](https://img.shields.io/badge/OpenCV-4.8+-red.svg)
 ![License](https://img.shields.io/badge/license-MIT-yellow.svg)
@@ -46,6 +46,9 @@ A **100% free and open-source** AI-powered surveillance system using **OpenCV** 
 - 🎬 **Live Streaming** - MJPEG streams with real-time overlays
 - 👤 **Face Recognition** - AI-powered identification with confidence scores
 - 🧠 **Face Clustering** - DBSCAN-based grouping of unknown faces
+- 🔍 **Object Detection** - YOLOv8-powered AI detection for vehicles, animals, packages (v3.10.0)
+- 🏷️ **Object Identification** - Track specific vehicles, pets, or items with named detection (v3.10.0)
+- 🎤 **Two-Way Audio** - WebRTC bidirectional audio communication with cameras (v3.10.0)
 - 📊 **Timeline View** - Interactive playback with event markers
 - 💾 **Dual Database** - SQLite (development) or PostgreSQL (production)
 
@@ -71,6 +74,7 @@ A **100% free and open-source** AI-powered surveillance system using **OpenCV** 
 - 💬 **Telegram Bot** - FREE push notifications
 - 🌐 **Discord/Webhooks** - Custom integrations
 - 🔔 **FCM Push** - Firebase Cloud Messaging
+- 🚗 **Object Detection Alerts** - Class-based and entity-based notifications (vehicles, animals, packages) (v3.10.0)
 - ⏱️ **Smart Throttling** - Prevent notification spam
 
 ### Smart Home Integration
@@ -350,9 +354,22 @@ pytest
 
 ## 📊 Project Status
 
-**Current Version**: 3.7.2 (Security Update)
+**Current Version**: 3.9.0 (Security Hardening & Performance)
 
-### Recent Updates (v3.7.1)
+### Recent Updates (v3.9.0)
+**Security Enhancements:**
+- 🔒 **Account Lockout System** - Auto-lock after 5 failed 2FA attempts (30-min lockout)
+- 🚦 **Enhanced Rate Limiting** - Stricter limits for password reset (5/hour) and 2FA (10/5min)
+- 📝 **Comprehensive Audit Logging** - 9 new security event types tracked in JSONL format
+- ✅ **Token Validation Fix** - Expired tokens properly cleared on page reload
+
+**Performance Optimizations:**
+- 📊 **Database Query Optimization** - 11 new indexes for frequently accessed queries (recordings, face history, clusters)
+- 🚀 **Query Result Caching** - In-memory cache with TTL support reduces database load
+- ⚡ **WebSocket Optimization** - Change detection reduces bandwidth usage (only broadcasts when data changes)
+- 📊 **Standardized API Pagination** - Consistent response format across all endpoints
+
+### Previous Updates (v3.7.1)
 - ✅ FFmpeg hardware-accelerated video recording (70-90% CPU reduction)
 - ✅ Multi-platform GPU support (NVENC, QuickSync, VideoToolbox, VAAPI)
 - ✅ Async frame buffer (300-frame queue, 0% dropped frames)

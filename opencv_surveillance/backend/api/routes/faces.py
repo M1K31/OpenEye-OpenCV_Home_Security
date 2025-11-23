@@ -13,6 +13,7 @@ import logging
 from datetime import datetime
 
 from backend.api.schemas import face as face_schema
+from backend.api.schemas.pagination import PaginatedResponse
 from backend.core.face_recognition import get_face_manager
 from backend.core.paths import paths
 from backend.core.camera_manager import manager as camera_manager
@@ -23,21 +24,33 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get("/faces/people", response_model=face_schema.PeopleListResponse)
+@router.get("/faces/people", response_model=PaginatedResponse[face_schema.Person])
 def list_people(current_user: user_schema.User = Depends(
         get_current_active_user)):
     """
     Get list of all people in the face recognition system
 
     **Authentication Required**: Any authenticated user
+
+    Returns:
+        PaginatedResponse with people data and pagination metadata
     """
     try:
         face_manager = get_face_manager()
         people = face_manager.list_people()
-        return face_schema.PeopleListResponse(
-            people=people,
-            total=len(people)
-        )
+        total = len(people)
+
+        return {
+            "data": people,
+            "pagination": {
+                "total": total,
+                "filtered": total,
+                "page": 1,
+                "page_size": total,
+                "total_pages": 1,
+                "has_more": False
+            }
+        }
     except Exception as e:
         logger.error(f"Error listing people: {e}")
         raise HTTPException(status_code=500, detail=str(e))

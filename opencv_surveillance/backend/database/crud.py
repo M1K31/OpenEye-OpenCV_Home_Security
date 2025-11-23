@@ -684,3 +684,407 @@ def increment_patrol_run_count(db: Session, pattern_id: int) -> bool:
     db_pattern.run_count += 1
     db.commit()
     return True
+
+
+# ============================================================================
+# REFRESH TOKEN CRUD OPERATIONS (v3.8.0)
+# ============================================================================
+
+
+def create_refresh_token(
+    db: Session,
+    user_id: int,
+    token: str,
+    expires_at: datetime,
+    device_info: Optional[str] = None,
+    ip_address: Optional[str] = None,
+) -> models.RefreshToken:
+    """
+    Create a new refresh token for a user.
+
+    Args:
+        db: Database session
+        user_id: User ID
+        token: Refresh token string
+        expires_at: Token expiration datetime
+        device_info: User agent string
+        ip_address: Client IP address
+
+    Returns:
+        RefreshToken model instance
+    """
+    db_token = models.RefreshToken(
+        user_id=user_id,
+        token=token,
+        expires_at=expires_at,
+        device_info=device_info,
+        ip_address=ip_address,
+    )
+    db.add(db_token)
+    db.commit()
+    db.refresh(db_token)
+    return db_token
+
+
+def get_refresh_token(db: Session, token: str) -> Optional[models.RefreshToken]:
+    """
+    Get refresh token by token string.
+
+    Args:
+        db: Database session
+        token: Refresh token string
+
+    Returns:
+        RefreshToken if found, None otherwise
+    """
+    return (
+        db.query(models.RefreshToken)
+        .filter(models.RefreshToken.token == token)
+        .first()
+    )
+
+
+def get_user_refresh_tokens(
+    db: Session, user_id: int, active_only: bool = True
+) -> List[models.RefreshToken]:
+    """
+    Get all refresh tokens for a user.
+
+    Args:
+        db: Database session
+        user_id: User ID
+        active_only: Only return non-revoked, non-expired tokens
+
+    Returns:
+        List of RefreshToken instances
+    """
+    query = db.query(models.RefreshToken).filter(
+        models.RefreshToken.user_id == user_id
+    )
+
+    if active_only:
+        query = query.filter(
+            models.RefreshToken.revoked == False,
+            models.RefreshToken.expires_at > datetime.utcnow(),
+        )
+
+    return query.all()
+
+
+def revoke_refresh_token(db: Session, token: str) -> bool:
+    """
+    Revoke a refresh token.
+
+    Args:
+        db: Database session
+        token: Refresh token string
+
+    Returns:
+        True if token was revoked, False if not found
+    """
+    db_token = get_refresh_token(db, token)
+    if not db_token:
+        return False
+
+    db_token.revoked = True
+    db.commit()
+    return True
+
+
+def revoke_all_user_tokens(db: Session, user_id: int) -> int:
+    """
+    Revoke all refresh tokens for a user.
+
+    Args:
+        db: Database session
+        user_id: User ID
+
+    Returns:
+        Number of tokens revoked
+    """
+    count = (
+        db.query(models.RefreshToken)
+        .filter(
+            models.RefreshToken.user_id == user_id,
+            models.RefreshToken.revoked == False,
+        )
+        .update({models.RefreshToken.revoked: True})
+    )
+    db.commit()
+    return count
+
+
+def delete_expired_tokens(db: Session) -> int:
+    """
+    Delete all expired refresh tokens (cleanup task).
+
+    Args:
+        db: Database session
+
+    Returns:
+        Number of tokens deleted
+    """
+    count = (
+        db.query(models.RefreshToken)
+        .filter(models.RefreshToken.expires_at < datetime.utcnow())
+        .delete()
+    )
+    db.commit()
+    return count
+
+
+def get_user(db: Session, user_id: int) -> Optional[models.User]:
+    """
+    Get user by ID.
+
+    Args:
+        db: Database session
+        user_id: User ID
+
+    Returns:
+        User if found, None otherwise
+    """
+    return db.query(models.User).filter(models.User.id == user_id).first()
+
+
+# ============================================================================
+# v3.10.0: OBJECT DETECTION EVENT CRUD OPERATIONS
+# ============================================================================
+
+
+def create_object_detection_event(
+    db: Session, event_data: dict
+) -> models.ObjectDetectionEvent:
+    """Create a new object detection event"""
+    db_event = models.ObjectDetectionEvent(**event_data)
+    db.add(db_event)
+    db.commit()
+    db.refresh(db_event)
+    return db_event
+
+
+def get_object_detection_events(
+    db: Session,
+    camera_id: Optional[str] = None,
+    object_class: Optional[str] = None,
+    identified_object_id: Optional[int] = None,
+    skip: int = 0,
+    limit: int = 100,
+) -> List[models.ObjectDetectionEvent]:
+    """
+    Get object detection events with optional filtering
+
+    Args:
+        db: Database session
+        camera_id: Filter by camera ID
+        object_class: Filter by object class (vehicle, animal, package, person)
+        identified_object_id: Filter by identified object
+        skip: Number of records to skip (pagination)
+        limit: Maximum number of records to return
+
+    Returns:
+        List of object detection events
+    """
+    query = db.query(models.ObjectDetectionEvent)
+
+    if camera_id:
+        query = query.filter(models.ObjectDetectionEvent.camera_id == camera_id)
+
+    if object_class:
+        query = query.filter(models.ObjectDetectionEvent.object_class == object_class)
+
+    if identified_object_id is not None:
+        query = query.filter(
+            models.ObjectDetectionEvent.identified_object_id == identified_object_id
+        )
+
+    return (
+        query.order_by(models.ObjectDetectionEvent.detected_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+
+def count_object_detection_events(
+    db: Session,
+    camera_id: Optional[str] = None,
+    object_class: Optional[str] = None,
+    identified_object_id: Optional[int] = None,
+) -> int:
+    """Count object detection events with optional filtering"""
+    query = db.query(models.ObjectDetectionEvent)
+
+    if camera_id:
+        query = query.filter(models.ObjectDetectionEvent.camera_id == camera_id)
+
+    if object_class:
+        query = query.filter(models.ObjectDetectionEvent.object_class == object_class)
+
+    if identified_object_id is not None:
+        query = query.filter(
+            models.ObjectDetectionEvent.identified_object_id == identified_object_id
+        )
+
+    return query.count()
+
+
+def get_object_detection_event_by_id(
+    db: Session, event_id: int
+) -> Optional[models.ObjectDetectionEvent]:
+    """Get object detection event by ID"""
+    return db.query(models.ObjectDetectionEvent).filter(
+        models.ObjectDetectionEvent.id == event_id
+    ).first()
+
+
+# ============================================================================
+# v3.10.0: IDENTIFIED OBJECT CRUD OPERATIONS
+# ============================================================================
+
+
+def create_identified_object(
+    db: Session, object_data: dict
+) -> models.IdentifiedObject:
+    """Create a new identified object"""
+    db_object = models.IdentifiedObject(**object_data)
+    db.add(db_object)
+    db.commit()
+    db.refresh(db_object)
+    return db_object
+
+
+def get_identified_object_by_id(
+    db: Session, object_id: str
+) -> Optional[models.IdentifiedObject]:
+    """Get identified object by object_id (string identifier)"""
+    return db.query(models.IdentifiedObject).filter(
+        models.IdentifiedObject.object_id == object_id
+    ).first()
+
+
+def get_identified_object_by_pk(
+    db: Session, id: int
+) -> Optional[models.IdentifiedObject]:
+    """Get identified object by primary key"""
+    return db.query(models.IdentifiedObject).filter(
+        models.IdentifiedObject.id == id
+    ).first()
+
+
+def get_identified_objects(
+    db: Session,
+    object_class: Optional[str] = None,
+    is_active: Optional[bool] = True,
+    skip: int = 0,
+    limit: int = 100,
+) -> List[models.IdentifiedObject]:
+    """
+    Get identified objects with optional filtering
+
+    Args:
+        db: Database session
+        object_class: Filter by object class (vehicle, animal, package)
+        is_active: Filter by active status
+        skip: Number of records to skip (pagination)
+        limit: Maximum number of records to return
+
+    Returns:
+        List of identified objects
+    """
+    query = db.query(models.IdentifiedObject)
+
+    if object_class:
+        query = query.filter(models.IdentifiedObject.object_class == object_class)
+
+    if is_active is not None:
+        query = query.filter(models.IdentifiedObject.is_active == is_active)
+
+    return (
+        query.order_by(models.IdentifiedObject.name)
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+
+def count_identified_objects(
+    db: Session,
+    object_class: Optional[str] = None,
+    is_active: Optional[bool] = True,
+) -> int:
+    """Count identified objects with optional filtering"""
+    query = db.query(models.IdentifiedObject)
+
+    if object_class:
+        query = query.filter(models.IdentifiedObject.object_class == object_class)
+
+    if is_active is not None:
+        query = query.filter(models.IdentifiedObject.is_active == is_active)
+
+    return query.count()
+
+
+def update_identified_object(
+    db: Session, object_id: str, object_data: dict
+) -> Optional[models.IdentifiedObject]:
+    """Update identified object"""
+    db_object = get_identified_object_by_id(db, object_id)
+    if not db_object:
+        return None
+
+    for key, value in object_data.items():
+        setattr(db_object, key, value)
+
+    db_object.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(db_object)
+    return db_object
+
+
+def delete_identified_object(db: Session, object_id: str) -> bool:
+    """Delete identified object from database"""
+    db_object = get_identified_object_by_id(db, object_id)
+    if not db_object:
+        return False
+
+    db.delete(db_object)
+    db.commit()
+    return True
+
+
+def update_identified_object_stats(
+    db: Session,
+    identified_object_id: int,
+    detection_timestamp: datetime
+) -> Optional[models.IdentifiedObject]:
+    """
+    Update identified object statistics after detection
+
+    Updates:
+    - detection_count (increment)
+    - last_seen_at (latest detection)
+    - first_seen_at (if None)
+
+    Args:
+        db: Database session
+        identified_object_id: Primary key of identified object
+        detection_timestamp: Timestamp of detection
+
+    Returns:
+        Updated identified object
+    """
+    db_object = get_identified_object_by_pk(db, identified_object_id)
+    if not db_object:
+        return None
+
+    # Update stats
+    db_object.detection_count += 1
+    db_object.last_seen_at = detection_timestamp
+
+    if db_object.first_seen_at is None:
+        db_object.first_seen_at = detection_timestamp
+
+    db.commit()
+    db.refresh(db_object)
+    return db_object

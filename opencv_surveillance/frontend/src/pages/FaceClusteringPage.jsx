@@ -8,7 +8,9 @@ import ClusterDetailModal from '../components/ClusterDetailModal';
 import AssignNameModal from '../components/AssignNameModal';
 import MergeClustersModal from '../components/MergeClustersModal';
 import DeleteClusterModal from '../components/DeleteClusterModal';
+import { Button, TextField, Switch } from '../components/universal';
 import './FaceClusteringPage.css';
+import { logger } from '../utils/logger';
 
 /**
  * Face Clustering Page
@@ -57,7 +59,7 @@ const FaceClusteringPage = () => {
 
       // Safety timeout - force loading to false after 30 seconds
       timeoutId = setTimeout(() => {
-        console.warn('Loading timeout - forcing loading state to false');
+        logger.warn('Loading timeout - forcing loading state to false');
         setLoading(false);
       }, 30000);
 
@@ -70,11 +72,11 @@ const FaceClusteringPage = () => {
       // Handle clusters result
       if (clustersResult.status === 'fulfilled') {
         const clusterData = clustersResult.value?.clusters || [];
-        console.log('[FaceClusteringPage] Loaded clusters:', clusterData.length);
+        logger.log('[FaceClusteringPage] Loaded clusters:', clusterData.length);
         setClusters(clusterData);
         setHasMore(clusterData.length >= ITEMS_PER_PAGE);
       } else {
-        console.error('Failed to load clusters:', clustersResult.reason);
+        logger.error('Failed to load clusters:', clustersResult.reason);
         setClusters([]);
         setHasMore(false);
       }
@@ -92,7 +94,7 @@ const FaceClusteringPage = () => {
           unclustered_faces: statsResult.value.unclustered_faces || 0
         });
       } else {
-        console.error('Failed to load statistics:', statsResult.reason);
+        logger.error('Failed to load statistics:', statsResult.reason);
         // Set default statistics if API fails
         setStatistics({
           total_clusters: 0,
@@ -107,7 +109,7 @@ const FaceClusteringPage = () => {
 
       setPage(0);
     } catch (err) {
-      console.error('Error loading data:', err);
+      logger.error('Error loading data:', err);
       setError('Failed to load clusters. Please try again.');
       setClusters([]);
       setStatistics({
@@ -140,7 +142,7 @@ const FaceClusteringPage = () => {
       setHasMore((data.clusters?.length || 0) >= ITEMS_PER_PAGE);
       setPage(prev => prev + 1);
     } catch (err) {
-      console.error('Error loading more clusters:', err);
+      logger.error('Error loading more clusters:', err);
     } finally {
       setLoading(false);
     }
@@ -164,7 +166,7 @@ const FaceClusteringPage = () => {
       // Reload data
       await loadData();
     } catch (err) {
-      console.error('Error clustering faces:', err);
+      logger.error('Error clustering faces:', err);
       setError('Failed to cluster faces. Please try again.');
     } finally {
       setClustering(false);
@@ -266,10 +268,10 @@ const FaceClusteringPage = () => {
             unclustered_faces: stats.unclustered_faces || 0
           });
         })
-        .catch(err => console.error('Failed to refresh statistics:', err));
+        .catch(err => logger.error('Failed to refresh statistics:', err));
 
     } catch (err) {
-      console.error('Error deleting cluster:', err);
+      logger.error('Error deleting cluster:', err);
       alert('Failed to delete cluster. Please try again.');
       // Reload data on error to restore correct state
       await loadData();
@@ -288,31 +290,38 @@ const FaceClusteringPage = () => {
         </div>
         
         <div className="header-actions">
-          <button
-            className="btn btn-primary"
+          <Button
+            variant="primary"
+            size="medium"
             onClick={handleCluster}
             disabled={clustering || loading}
+            loading={clustering}
+            icon="🤖"
           >
-            {clustering ? '🔄 Clustering...' : '🤖 Run Clustering'}
-          </button>
-          
+            {clustering ? 'Clustering...' : 'Run Clustering'}
+          </Button>
+
           {selectedClusters.length > 0 && (
-            <button
-              className="btn btn-secondary"
+            <Button
+              variant="secondary"
+              size="medium"
               onClick={handleMerge}
               disabled={selectedClusters.length < 2}
+              icon="🔗"
             >
-              🔗 Merge Selected ({selectedClusters.length})
-            </button>
+              Merge Selected ({selectedClusters.length})
+            </Button>
           )}
-          
-          <button
-            className="btn btn-outline"
+
+          <Button
+            variant="secondary"
+            size="medium"
             onClick={loadData}
             disabled={loading}
+            icon="🔄"
           >
-            🔄 Refresh
-          </button>
+            Refresh
+          </Button>
         </div>
       </div>
 
@@ -351,58 +360,42 @@ const FaceClusteringPage = () => {
         <h3>Clustering Parameters</h3>
         <div className="params-grid">
           <div className="param-input">
-            <label htmlFor="eps">
-              Distance Threshold (eps)
-              <span className="tooltip" title="Lower = stricter clustering (0.4-0.6 range)">ⓘ</span>
-            </label>
-            <input
+            <TextField
               type="number"
-              id="eps"
-              min="0.3"
-              max="0.8"
-              step="0.05"
+              label="Distance Threshold (eps) ⓘ"
+              helperText="Lower = stricter clustering (0.4-0.6 range)"
               value={clusteringParams.eps}
               onChange={(e) => setClusteringParams(prev => ({
                 ...prev,
                 eps: parseFloat(e.target.value)
               }))}
-              className="form-input"
+              fullWidth
             />
           </div>
-          
+
           <div className="param-input">
-            <label htmlFor="min_samples">
-              Min Faces per Cluster
-              <span className="tooltip" title="Minimum faces needed to form a cluster">ⓘ</span>
-            </label>
-            <input
+            <TextField
               type="number"
-              id="min_samples"
-              min="2"
-              max="10"
-              step="1"
+              label="Min Faces per Cluster ⓘ"
+              helperText="Minimum faces needed to form a cluster"
               value={clusteringParams.min_samples}
               onChange={(e) => setClusteringParams(prev => ({
                 ...prev,
                 min_samples: parseInt(e.target.value)
               }))}
-              className="form-input"
+              fullWidth
             />
           </div>
           
           <div className="param-input">
-            <label htmlFor="recalculate">
-              <input
-                type="checkbox"
-                id="recalculate"
-                checked={clusteringParams.recalculate}
-                onChange={(e) => setClusteringParams(prev => ({
-                  ...prev,
-                  recalculate: e.target.checked
-                }))}
-              />
-              Recalculate existing clusters
-            </label>
+            <Switch
+              checked={clusteringParams.recalculate}
+              onChange={(checked) => setClusteringParams(prev => ({
+                ...prev,
+                recalculate: checked
+              }))}
+              label="Recalculate existing clusters"
+            />
           </div>
         </div>
       </div>
@@ -411,7 +404,13 @@ const FaceClusteringPage = () => {
       {error && (
         <div className="error-message">
           <span>⚠️ {error}</span>
-          <button onClick={() => setError(null)}>✕</button>
+          <Button
+            variant="tertiary"
+            size="small"
+            onClick={() => setError(null)}
+          >
+            ✕
+          </Button>
         </div>
       )}
 
@@ -449,13 +448,15 @@ const FaceClusteringPage = () => {
           
           {hasMore && (
             <div className="load-more">
-              <button
-                className="btn btn-outline"
+              <Button
+                variant="secondary"
+                size="medium"
                 onClick={loadMore}
                 disabled={loading}
+                loading={loading}
               >
-                {loading ? 'Loading...' : 'Load More Clusters'}
-              </button>
+                Load More Clusters
+              </Button>
             </div>
           )}
         </>

@@ -293,7 +293,7 @@ const LiveDashboard = () => {
       setPipCamera(camera);
 
     } catch (error) {
-      console.error('Failed to toggle Picture-in-Picture:', error);
+      logger.error('Failed to toggle Picture-in-Picture:', error);
       alert('Failed to enable Picture-in-Picture. Please try again.');
     }
   };
@@ -306,7 +306,7 @@ const LiveDashboard = () => {
       setPipCamera(null);
       setPipVideoRef(null);
     } catch (error) {
-      console.error('Failed to close Picture-in-Picture:', error);
+      logger.error('Failed to close Picture-in-Picture:', error);
     }
   };
 
@@ -319,7 +319,7 @@ const LiveDashboard = () => {
       await videoElement.requestPictureInPicture();
       setPipVideoRef(videoElement);
     } catch (error) {
-      console.error('Failed to enter Picture-in-Picture:', error);
+      logger.error('Failed to enter Picture-in-Picture:', error);
       setPipCamera(null);
     }
   };
@@ -393,7 +393,7 @@ const LiveDashboard = () => {
       refetchEvents();
 
     } catch (error) {
-      console.error('Screenshot capture failed:', error);
+      logger.error('Screenshot capture failed:', error);
 
       // Show error feedback
       setScreenshotFeedback({

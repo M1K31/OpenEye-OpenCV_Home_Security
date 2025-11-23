@@ -22,6 +22,7 @@ from backend.database.session import SessionLocal
 from backend.database import models
 from backend.core.performance import paginate, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from backend.core.paths import paths
+from backend.api.schemas.pagination import PaginatedResponse
 from pydantic import BaseModel, Field
 
 router = APIRouter()
@@ -118,15 +119,6 @@ class RecordingSearchRequest(BaseModel):
     limit: int = 50
 
 
-class RecordingListResponse(BaseModel):
-    recordings: List[RecordingResponse]
-    total: int
-    filtered: int
-    limit: int = 50
-    skip: int = 0
-    has_more: bool = False
-
-
 # Dependency
 
 
@@ -141,7 +133,7 @@ def get_db():
 # Endpoints
 
 
-@router.get("/recordings/", response_model=RecordingListResponse)
+@router.get("/recordings/", response_model=PaginatedResponse[RecordingResponse])
 def list_recordings(
     camera_id: Optional[str] = Query(None),
     start_date: Optional[str] = Query(None),
@@ -158,6 +150,9 @@ def list_recordings(
     - Uses indexed queries on camera_id and started_at
     - Paginated results (default 50, max 1000)
     - Efficient sorting
+
+    Returns:
+        PaginatedResponse with recordings data and pagination metadata
     """
     # Get total count before filtering
     total_count = db.query(models.RecordingEvent).count()
@@ -188,17 +183,17 @@ def list_recordings(
     # Apply pagination
     recordings, filtered_count, total_pages = paginate(query, page=page, page_size=page_size)
 
-    # Calculate skip for backward compatibility
-    skip = (page - 1) * page_size
-
-    return RecordingListResponse(
-        recordings=recordings,
-        total=total_count,
-        filtered=filtered_count,
-        limit=page_size,
-        skip=skip,
-        has_more=page < total_pages
-    )
+    return {
+        "data": recordings,
+        "pagination": {
+            "total": total_count,
+            "filtered": filtered_count,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+            "has_more": page < total_pages
+        }
+    }
 
 
 @router.get("/recordings/{recording_id}")

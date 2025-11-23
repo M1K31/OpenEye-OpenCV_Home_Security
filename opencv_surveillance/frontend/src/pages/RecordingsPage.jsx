@@ -1,8 +1,71 @@
 // Copyright (c) 2025 Mikel Smart
 // This file is part of OpenEye-OpenCV_Home_Security
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { logger } from '../utils/logger';
 import apiClient from '../api/apiClient';
 import { useNavigate } from 'react-router-dom';
+import { Button, TextField, Switch } from '../components/universal';
+
+/**
+ * LazyVideo Component
+ * Only loads video when it becomes visible in viewport
+ * Prevents browser freeze from hundreds of concurrent video requests
+ */
+const LazyVideo = ({ src, recordingId, style }) => {
+  const videoRef = useRef(null);
+  const [isVisible, setIsVisible] = useState(false);
+  const [shouldLoad, setShouldLoad] = useState(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            setIsVisible(true);
+            // Delay loading slightly to prevent all videos loading at once
+            setTimeout(() => setShouldLoad(true), 100);
+          }
+        });
+      },
+      { rootMargin: '200px' } // Start loading when within 200px of viewport
+    );
+
+    if (videoRef.current) {
+      observer.observe(videoRef.current);
+    }
+
+    return () => {
+      if (videoRef.current) {
+        observer.unobserve(videoRef.current);
+      }
+    };
+  }, []);
+
+  return (
+    <div ref={videoRef} style={{ ...style, backgroundColor: '#000' }}>
+      {shouldLoad ? (
+        <video
+          src={src}
+          controls
+          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+          preload="metadata"
+        />
+      ) : (
+        <div style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#999',
+          fontSize: '3rem'
+        }}>
+          🎬
+        </div>
+      )}
+    </div>
+  );
+};
 
 const RecordingsPage = () => {
   const navigate = useNavigate();
@@ -94,7 +157,7 @@ const RecordingsPage = () => {
       // Handle both formats: direct array or { cameras: [] }
       setCameras(Array.isArray(response.data) ? response.data : (response.data.cameras || []));
     } catch (err) {
-      console.error('Error loading cameras:', err);
+      logger.error('Error loading cameras:', err);
       setCameras([]);
     }
   };
@@ -125,14 +188,15 @@ const RecordingsPage = () => {
       if (searchPersonName) {
         params.append('person_name', searchPersonName);
       }
-      params.append('limit', itemsPerPage.toString());
-      params.append('skip', (reset ? 0 : (currentPage - 1) * itemsPerPage).toString());
-      
+      params.append('page', (reset ? 1 : currentPage).toString());
+      params.append('page_size', itemsPerPage.toString());
+
       const queryString = params.toString();
       const response = await apiClient.get(`/recordings/${queryString ? '?' + queryString : ''}`);
-      
-      // Handle wrapped response or legacy array response
-      const recordingsData = response.data?.recordings ||
+
+      // Handle new paginated response format
+      const recordingsData = response.data?.data ||
+        response.data?.recordings ||  // Legacy format
         (Array.isArray(response.data) ? response.data : []);
 
       if (reset) {
@@ -141,12 +205,16 @@ const RecordingsPage = () => {
         setRecordings(prev => [...prev, ...recordingsData]);
       }
 
-      // Set total count for pagination
-      const total = response.data?.total || recordingsData.length;
+      // Set total count for pagination from new metadata structure
+      const pagination = response.data?.pagination;
+      const total = pagination?.total || response.data?.total || recordingsData.length;
       setTotalItems(total);
 
-      // Use has_more from API if available, otherwise calculate
-      const apiHasMore = response.data?.has_more;
+      // Use has_more from new pagination metadata
+      const apiHasMore = pagination?.has_more !== undefined
+        ? pagination.has_more
+        : response.data?.has_more;
+
       if (apiHasMore !== undefined) {
         setHasMore(apiHasMore);
       } else {
@@ -157,7 +225,7 @@ const RecordingsPage = () => {
       
       setError('');
     } catch (err) {
-      console.error('Error loading recordings:', err);
+      logger.error('Error loading recordings:', err);
       setError('Failed to load recordings');
       if (reset) {
         setRecordings([]);
@@ -229,7 +297,7 @@ const RecordingsPage = () => {
       const loadedCount = reset ? filtered.length : snapshots.length + filtered.length;
       setHasMore(loadedCount < total && filtered.length === itemsPerPage);
     } catch (err) {
-      console.error('Error loading snapshots:', err);
+      logger.error('Error loading snapshots:', err);
       if (reset) {
         setSnapshots([]);
       }
@@ -248,7 +316,7 @@ const RecordingsPage = () => {
       await apiClient.delete(`/recordings/${recordingId}`);
       loadRecordings();
     } catch (err) {
-      console.error('Error deleting recording:', err);
+      logger.error('Error deleting recording:', err);
       alert('Failed to delete recording');
     }
   };
@@ -262,7 +330,7 @@ const RecordingsPage = () => {
       await apiClient.delete(`/motion-events/${eventId}`);
       loadSnapshots();
     } catch (err) {
-      console.error('Error deleting snapshot:', err);
+      logger.error('Error deleting snapshot:', err);
       alert('Failed to delete snapshot');
     }
   };
@@ -317,7 +385,7 @@ const RecordingsPage = () => {
       setSelectAll(false);
       alert(`Successfully deleted ${selectedItems.length} items`);
     } catch (err) {
-      console.error('Error batch deleting:', err);
+      logger.error('Error batch deleting:', err);
       alert('Failed to delete some items');
     }
   };
@@ -352,7 +420,7 @@ const RecordingsPage = () => {
 
       alert(`Successfully exported ${selectedItems.length} items`);
     } catch (err) {
-      console.error('Error exporting ZIP:', err);
+      logger.error('Error exporting ZIP:', err);
       alert('Failed to export items. This feature may not be implemented on the backend yet.');
     }
   };
@@ -415,7 +483,7 @@ const RecordingsPage = () => {
     // Check if this is a snapshot (in data/snapshots directory) - with or without leading slash
     if (filePath.includes('data/snapshots') || filePath.includes('data\\snapshots')) {
       const url = `/api/snapshots/${filename}`;
-      console.log('🔄 Converting snapshot path:', filePath, '→', url);
+      logger.log('🔄 Converting snapshot path:', filePath, '→', url);
       return url;
     }
 
@@ -431,7 +499,7 @@ const RecordingsPage = () => {
 
     // Default: Assume it's a normalized snapshot path (just filename from API)
     // This handles the v3.5.6+ API response format where snapshot_path is just the filename
-    console.log('📸 Treating as normalized snapshot path:', filePath, '→ /api/snapshots/' + filename);
+    logger.log('📸 Treating as normalized snapshot path:', filePath, '→ /api/snapshots/' + filename);
     return `/api/snapshots/${filename}`;
   };
 
@@ -447,24 +515,22 @@ const RecordingsPage = () => {
 
       {/* Tab Selector */}
       <div style={styles.tabContainer}>
-        <button
+        <Button
+          variant={activeTab === 'videos' ? 'primary' : 'secondary'}
+          size="medium"
           onClick={() => setActiveTab('videos')}
-          style={{
-            ...styles.tab,
-            ...(activeTab === 'videos' ? styles.activeTab : {})
-          }}
+          icon="🎥"
         >
-          🎥 Videos ({displayedRecordings.length})
-        </button>
-        <button
+          Videos ({displayedRecordings.length})
+        </Button>
+        <Button
+          variant={activeTab === 'snapshots' ? 'primary' : 'secondary'}
+          size="medium"
           onClick={() => setActiveTab('snapshots')}
-          style={{
-            ...styles.tab,
-            ...(activeTab === 'snapshots' ? styles.activeTab : {})
-          }}
+          icon="📷"
         >
-          📷 Snapshots ({displayedSnapshots.length})
-        </button>
+          Snapshots ({displayedSnapshots.length})
+        </Button>
       </div>
 
       {/* Camera Filter */}
@@ -510,9 +576,14 @@ const RecordingsPage = () => {
             placeholder="End Date"
           />
           {(startDate || endDate || filterCamera !== 'all') && (
-            <button onClick={clearFilters} className="btn btn-secondary btn-sm">
-              🗑️ Clear Filters
-            </button>
+            <Button
+              variant="secondary"
+              size="small"
+              onClick={clearFilters}
+              icon="🗑️"
+            >
+              Clear Filters
+            </Button>
           )}
         </div>
       </div>
@@ -529,12 +600,13 @@ const RecordingsPage = () => {
             className="form-input"
           />
           {searchPersonName && (
-            <button
+            <Button
+              variant="secondary"
+              size="small"
               onClick={() => setSearchPersonName('')}
-              className="btn btn-secondary btn-sm"
             >
               ✕
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -542,23 +614,29 @@ const RecordingsPage = () => {
       {/* Batch Actions */}
       {(activeTab === 'videos' ? recordings.length : snapshots.length) > 0 && (
         <div style={styles.batchActionsContainer}>
-          <label style={styles.checkboxLabel}>
-            <input
-              type="checkbox"
-              checked={selectAll}
-              onChange={toggleSelectAll}
-              style={styles.checkbox}
-            />
-            <span style={styles.checkboxText}>Select All ({selectedItems.length} selected)</span>
-          </label>
+          <Switch
+            checked={selectAll}
+            onChange={toggleSelectAll}
+            label={`Select All (${selectedItems.length} selected)`}
+          />
           {selectedItems.length > 0 && (
             <>
-              <button onClick={batchExportZip} className="btn btn-primary btn-sm">
-                📦 Export ZIP ({selectedItems.length})
-              </button>
-              <button onClick={batchDelete} className="btn btn-danger btn-sm">
-                🗑️ Delete Selected ({selectedItems.length})
-              </button>
+              <Button
+                variant="primary"
+                size="small"
+                onClick={batchExportZip}
+                icon="📦"
+              >
+                Export ZIP ({selectedItems.length})
+              </Button>
+              <Button
+                variant="destructive"
+                size="small"
+                onClick={batchDelete}
+                icon="🗑️"
+              >
+                Delete Selected ({selectedItems.length})
+              </Button>
             </>
           )}
         </div>
@@ -595,11 +673,10 @@ const RecordingsPage = () => {
                       />
                     </div>
                     <div style={styles.recordingThumbnail}>
-                      <video
+                      <LazyVideo
                         src={`/api/recordings/${recordingId}/download`}
-                        controls
+                        recordingId={recordingId}
                         style={styles.videoPreview}
-                        preload="metadata"
                       />
                     </div>
                     <div style={styles.recordingInfo}>
@@ -629,12 +706,14 @@ const RecordingsPage = () => {
                       >
                         ⬇️ Download
                       </a>
-                      <button
+                      <Button
+                        variant="destructive"
+                        size="small"
                         onClick={() => deleteRecording(recordingId)}
-                        className="btn btn-danger btn-sm"
+                        icon="🗑️"
                       >
-                        🗑️ Delete
-                      </button>
+                        Delete
+                      </Button>
                     </div>
                   </div>
                   );
@@ -671,7 +750,7 @@ const RecordingsPage = () => {
                       loading="lazy"
                       onClick={() => setSelectedRecording(snapshot)}
                       onError={(e) => {
-                        console.error('Failed to load snapshot:', snapshot.snapshot_path, '→ Converted to:', imageUrl, '→ Failed URL:', e.target.src);
+                        logger.error('Failed to load snapshot:', snapshot.snapshot_path, '→ Converted to:', imageUrl, '→ Failed URL:', e.target.src);
                         e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999"%3E❌%3C/text%3E%3C/svg%3E';
                       }}
                     />
@@ -692,12 +771,12 @@ const RecordingsPage = () => {
                       >
                         ⬇️
                       </a>
-                      <button
+                      <Button
+                        variant="destructive"
+                        size="small"
                         onClick={() => deleteSnapshot(snapshot.id)}
-                        className="btn btn-danger btn-sm"
-                      >
-                        🗑️
-                      </button>
+                        icon="🗑️"
+                      />
                     </div>
                   </div>
                   );
@@ -735,18 +814,19 @@ const RecordingsPage = () => {
       {selectedRecording && selectedRecording.snapshot_path && (
         <div style={styles.modal} onClick={() => setSelectedRecording(null)}>
           <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <button
+            <Button
+              variant="tertiary"
+              size="small"
               onClick={() => setSelectedRecording(null)}
-              className="modal-close"
             >
               ✕
-            </button>
+            </Button>
             <img
               src={convertPathToUrl(selectedRecording.snapshot_path)}
               alt={selectedRecording.camera_id}
               style={styles.modalImage}
               onError={(e) => {
-                console.error('Failed to load modal snapshot:', selectedRecording.snapshot_path);
+                logger.error('Failed to load modal snapshot:', selectedRecording.snapshot_path);
                 e.target.alt = '❌ Image failed to load';
               }}
             />

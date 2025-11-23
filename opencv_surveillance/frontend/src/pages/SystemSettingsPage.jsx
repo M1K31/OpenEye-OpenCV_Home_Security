@@ -1,6 +1,7 @@
 // Copyright (c) 2025 Mikel Smart
 // This file is part of OpenEye-OpenCV_Home_Security
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { logger } from '../utils/logger';
 import apiClient from '../api/apiClient';
 import AlertSettingsPage from './AlertSettingsPage';
 
@@ -54,7 +55,7 @@ const SystemSettingsPage = ({ embedded = false }) => {
       
       setLoading(false);
     } catch (error) {
-      console.error('Error loading settings:', error);
+      logger.error('Error loading settings:', error);
       setMessage({ type: 'error', text: 'Failed to load settings' });
       setLoading(false);
     }
@@ -73,15 +74,15 @@ const SystemSettingsPage = ({ embedded = false }) => {
 
     try {
       // Send as JSON request body
-      console.log('Validating path:', path.trim());
+      logger.log('Validating path:', path.trim());
       const requestData = {
         path: path.trim(),
         create_if_missing: true
       };
-      console.log('Request data:', requestData);
+      logger.log('Request data:', requestData);
       
       const response = await apiClient.post('/settings/validate-path', requestData);
-      console.log('Validation response:', response.data);
+      logger.log('Validation response:', response.data);
 
       const isValid = response.data.exists && response.data.is_directory && response.data.writable;
 
@@ -101,12 +102,12 @@ const SystemSettingsPage = ({ embedded = false }) => {
 
       return isValid;
     } catch (error) {
-      console.error('Path validation error:', error);
-      console.error('Error response:', error.response?.data);
+      logger.error('Path validation error:', error);
+      logger.error('Error response:', error.response?.data);
       
       // Log the full error detail array to see what Pydantic is complaining about
       if (error.response?.data?.detail && Array.isArray(error.response.data.detail)) {
-        console.error('Pydantic validation errors:', JSON.stringify(error.response.data.detail, null, 2));
+        logger.error('Pydantic validation errors:', JSON.stringify(error.response.data.detail, null, 2));
       }
       
       // Extract error message properly, handling various formats
@@ -158,7 +159,7 @@ const SystemSettingsPage = ({ embedded = false }) => {
       setMessage({ type: 'success', text: '✓ Settings saved successfully! Restart server for changes to take effect.' });
       setSaving(false);
     } catch (error) {
-      console.error('Error saving settings:', error);
+      logger.error('Error saving settings:', error);
       setMessage({
         type: 'error',
         text: error.response?.data?.detail || 'Failed to save settings'

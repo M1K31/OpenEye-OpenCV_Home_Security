@@ -6,6 +6,7 @@ This file is part of OpenEye-OpenCV_Home_Security
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { Button, TextField } from '../components/universal';
 import './FirstRunSetup.css';
 
 const FirstRunSetup = ({ onComplete }) => {
@@ -20,8 +21,6 @@ const FirstRunSetup = ({ onComplete }) => {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [checkingSetup, setCheckingSetup] = useState(true);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Password strength requirements
   const passwordRequirements = {
@@ -201,12 +200,14 @@ const FirstRunSetup = ({ onComplete }) => {
                 </ul>
               </div>
             </div>
-            <button 
-              onClick={() => setStep(2)} 
-              className="btn-primary btn-large"
+            <Button
+              variant="primary"
+              size="large"
+              onClick={() => setStep(2)}
+              fullWidth
             >
               Get Started →
-            </button>
+            </Button>
           </div>
         )}
 
@@ -214,67 +215,42 @@ const FirstRunSetup = ({ onComplete }) => {
           <div className="setup-step">
             <form onSubmit={handleSubmit}>
               <div className="form-group">
-                <label htmlFor="username">Username</label>
-                <input
+                <TextField
                   type="text"
-                  id="username"
-                  name="username"
+                  label="Username"
                   value={formData.username}
                   disabled
-                  className="input-disabled"
+                  helperText="Default admin username (cannot be changed)"
+                  fullWidth
                 />
-                <small>Default admin username (cannot be changed)</small>
               </div>
 
               <div className="form-group">
-                <label htmlFor="email">Email Address *</label>
-                <input
+                <TextField
                   type="email"
-                  id="email"
+                  label="Email Address *"
                   name="email"
                   value={formData.email}
                   onChange={handleInputChange}
                   placeholder="admin@example.com"
-                  required
-                  className={errors.email ? 'input-error' : ''}
+                  error={!!errors.email}
+                  helperText={errors.email}
+                  fullWidth
                 />
-                {errors.email && <span className="error-text">{errors.email}</span>}
               </div>
 
               <div className="form-group">
-                <label htmlFor="password">Password *</label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    id="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleInputChange}
-                    placeholder="Enter a strong password"
-                    required
-                    className={errors.password ? 'input-error' : ''}
-                    style={{ paddingRight: '40px' }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    style={{
-                      position: 'absolute',
-                      right: '10px',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontSize: '18px',
-                      color: 'var(--text-secondary)'
-                    }}
-                    title={showPassword ? "Hide password" : "Show password"}
-                  >
-                    {showPassword ? '🙈' : '👁️'}
-                  </button>
-                </div>
-                
+                <TextField
+                  type="password"
+                  label="Password *"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  placeholder="Enter a strong password"
+                  error={!!errors.password}
+                  fullWidth
+                />
+
                 {passwordStrength && (
                   <div className="password-strength">
                     <div className="strength-label">
@@ -283,9 +259,9 @@ const FirstRunSetup = ({ onComplete }) => {
                       </span>
                     </div>
                     <div className="strength-bar">
-                      <div 
-                        className="strength-bar-fill" 
-                        style={{ 
+                      <div
+                        className="strength-bar-fill"
+                        style={{
                           width: `${passwordStrength.percent}%`,
                           backgroundColor: passwordStrength.color
                         }}
@@ -293,7 +269,7 @@ const FirstRunSetup = ({ onComplete }) => {
                     </div>
                   </div>
                 )}
-                
+
                 {errors.password && (
                   <div className="error-text">
                     {Array.isArray(errors.password) ? (
@@ -310,41 +286,17 @@ const FirstRunSetup = ({ onComplete }) => {
               </div>
 
               <div className="form-group">
-                <label htmlFor="confirmPassword">Confirm Password *</label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type={showConfirmPassword ? "text" : "password"}
-                    id="confirmPassword"
-                    name="confirmPassword"
-                    value={formData.confirmPassword}
-                    onChange={handleInputChange}
-                    placeholder="Re-enter your password"
-                    required
-                    className={errors.confirmPassword ? 'input-error' : ''}
-                    style={{ paddingRight: '40px' }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    style={{
-                      position: 'absolute',
-                      right: '10px',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontSize: '18px',
-                      color: 'var(--text-secondary)'
-                    }}
-                    title={showConfirmPassword ? "Hide password" : "Show password"}
-                  >
-                    {showConfirmPassword ? '🙈' : '👁️'}
-                  </button>
-                </div>
-                {errors.confirmPassword && (
-                  <span className="error-text">{errors.confirmPassword}</span>
-                )}
+                <TextField
+                  type="password"
+                  label="Confirm Password *"
+                  name="confirmPassword"
+                  value={formData.confirmPassword}
+                  onChange={handleInputChange}
+                  placeholder="Re-enter your password"
+                  error={!!errors.confirmPassword}
+                  helperText={errors.confirmPassword}
+                  fullWidth
+                />
               </div>
 
               {errors.submit && (
@@ -354,21 +306,24 @@ const FirstRunSetup = ({ onComplete }) => {
               )}
 
               <div className="button-group">
-                <button 
-                  type="button" 
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="medium"
                   onClick={() => setStep(1)}
-                  className="btn-secondary"
                   disabled={loading}
                 >
                   ← Back
-                </button>
-                <button 
-                  type="submit" 
-                  className="btn-primary"
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="medium"
                   disabled={loading}
+                  loading={loading}
                 >
-                  {loading ? 'Creating Account...' : 'Create Admin Account'}
-                </button>
+                  Create Admin Account
+                </Button>
               </div>
             </form>
           </div>

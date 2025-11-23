@@ -13,8 +13,9 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { logger } from '../utils/logger';
 import apiClient from '../api/apiClient';
-import Button from '../components/universal/Button';
+import { Button, Switch } from '../components/universal';
 import './PerformanceDashboard.css';
 
 function PerformanceDashboard() {
@@ -57,7 +58,7 @@ function PerformanceDashboard() {
       setRecentRequests(recentRes.data.requests || []);
 
     } catch (err) {
-      console.error('Error fetching performance data:', err);
+      logger.error('Error fetching performance data:', err);
       setError('Failed to load performance metrics');
     } finally {
       setLoading(false);
@@ -114,14 +115,11 @@ function PerformanceDashboard() {
           <p className="subtitle">Monitor API endpoint performance and system health</p>
         </div>
         <div className="header-actions">
-          <label className="auto-refresh-toggle">
-            <input
-              type="checkbox"
-              checked={autoRefresh}
-              onChange={(e) => setAutoRefresh(e.target.checked)}
-            />
-            Auto-refresh (5s)
-          </label>
+          <Switch
+            checked={autoRefresh}
+            onChange={(checked) => setAutoRefresh(checked)}
+            label="Auto-refresh (5s)"
+          />
           <Button
             variant="primary"
             size="medium"

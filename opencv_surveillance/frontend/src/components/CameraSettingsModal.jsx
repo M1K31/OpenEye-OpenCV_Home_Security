@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import apiClient from '../api/apiClient';
 import MotionZoneEditor from './MotionZoneEditor';
 import Switch from './Switch';
+import TwoWayAudio from './TwoWayAudio';
 import './CameraSettingsModal.css';
 
 const CameraSettingsModal = ({ camera, onClose, onSave }) => {
@@ -736,6 +737,12 @@ const CameraSettingsModal = ({ camera, onClose, onSave }) => {
     </div>
   );
 
+  const renderAudioTab = () => (
+    <div className="settings-tab-content audio-tab">
+      <TwoWayAudio cameraId={camera.camera_id} />
+    </div>
+  );
+
   if (!camera) return null;
 
   return (
@@ -797,6 +804,12 @@ const CameraSettingsModal = ({ camera, onClose, onSave }) => {
           >
             Detection Zones
           </button>
+          <button
+            className={`settings-tab ${activeTab === 'audio' ? 'active' : ''}`}
+            onClick={() => setActiveTab('audio')}
+          >
+            Two-Way Audio
+          </button>
         </div>
 
         <div className="camera-settings-body">
@@ -817,6 +830,8 @@ const CameraSettingsModal = ({ camera, onClose, onSave }) => {
                   return renderOverlayTab();
                 case 'zones':
                   return renderZonesTab();
+                case 'audio':
+                  return renderAudioTab();
                 default:
                   return null;
               }

@@ -13,13 +13,13 @@ from pydantic import BaseModel
 from datetime import datetime, timedelta
 import time
 import logging
+from backend.core.config import (
+    DEFAULT_PAGE_SIZE,
+    MAX_PAGE_SIZE,
+    MIN_PAGE_SIZE,
+)
 
 logger = logging.getLogger(__name__)
-
-# Pagination constants
-DEFAULT_PAGE_SIZE = 50
-MAX_PAGE_SIZE = 1000
-MIN_PAGE_SIZE = 1
 
 T = TypeVar('T')
 

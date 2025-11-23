@@ -42,8 +42,8 @@ class TestCamerasAPI:
         assert response.status_code == 200
         data = response.json()
         assert data["camera_id"] == test_camera.camera_id
-        assert data["camera_name"] == "Test Camera"
-        assert data["enabled"] is True
+        assert data["camera_type"] == "mock"
+        assert data["is_active"] is True
 
     def test_get_camera_not_found(self, client, auth_headers):
         """Test getting a non-existent camera"""
@@ -54,25 +54,24 @@ class TestCamerasAPI:
         """Test creating a new camera"""
         camera_data = {
             "camera_id": "new_camera",
-            "camera_name": "New Test Camera",
-            "source_url": "rtsp://example.com/stream",
-            "enabled": True,
+            "camera_type": "rtsp",
+            "source": "rtsp://example.com/stream",
             "motion_detection_enabled": True,
-            "face_recognition_enabled": False,
+            "face_detection_enabled": False,
             "recording_enabled": False
         }
         response = client.post("/api/cameras/", json=camera_data, headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["camera_id"] == "new_camera"
-        assert data["camera_name"] == "New Test Camera"
+        assert data["camera_type"] == "rtsp"
 
     def test_create_camera_duplicate_id(self, client, auth_headers, test_camera):
         """Test creating a camera with duplicate ID"""
         camera_data = {
             "camera_id": test_camera.camera_id,  # Duplicate ID
-            "camera_name": "Duplicate Camera",
-            "source_url": "rtsp://example.com/stream"
+            "camera_type": "rtsp",
+            "source": "rtsp://example.com/stream"
         }
         response = client.post("/api/cameras/", json=camera_data, headers=auth_headers)
         assert response.status_code == 400  # Bad request
@@ -80,7 +79,7 @@ class TestCamerasAPI:
     def test_update_camera(self, client, auth_headers, test_camera):
         """Test updating camera configuration"""
         update_data = {
-            "camera_name": "Updated Camera Name",
+            "camera_type": "rtsp",
             "motion_detection_enabled": False
         }
         response = client.put(
@@ -90,7 +89,7 @@ class TestCamerasAPI:
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["camera_name"] == "Updated Camera Name"
+        assert data["camera_type"] == "rtsp"
         assert data["motion_detection_enabled"] is False
 
     def test_delete_camera(self, client, auth_headers, test_camera):

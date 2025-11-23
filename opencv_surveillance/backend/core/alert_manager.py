@@ -275,6 +275,102 @@ class AlertManager:
         finally:
             db.close()
 
+    async def trigger_object_detection_alert(
+        self,
+        camera_id: str,
+        object_class: str,
+        object_subclass: Optional[str] = None,
+        identified_object_name: Optional[str] = None,
+        confidence: float = 0.0,
+        event_data: Optional[Dict[str, Any]] = None,
+    ):
+        """
+        Trigger an object detection alert
+
+        Args:
+            camera_id: ID of the camera
+            object_class: Object class (vehicle, animal, package, person)
+            object_subclass: Specific object type (car, dog, backpack, etc.)
+            identified_object_name: Name of identified object (e.g., "John's Tesla", "My Dog Rex")
+            confidence: Detection confidence (0.0 - 1.0)
+            event_data: Additional event data
+        """
+        # Use context manager to prevent session leak
+        with get_db_context() as db:
+            # Start with master toggle check
+            configs = (
+                db.query(alert_models.AlertConfiguration)
+                .filter(alert_models.AlertConfiguration.object_detection_alerts_enabled)
+                .all()
+            )
+
+            if not configs:
+                return
+
+            # Build subject and message based on detection type
+            if identified_object_name:
+                # Identified object alert
+                event_type = f"object_identified_{object_class}"
+                subject = f"Identified Object Detected: {identified_object_name}"
+                message = f"{identified_object_name} ({object_class}) detected on camera {camera_id}"
+                if confidence > 0:
+                    message += f" (confidence: {confidence:.1%})"
+            else:
+                # Generic class-based alert
+                event_type = f"object_{object_class}"
+                object_label = object_subclass or object_class
+                subject = f"{object_label.title()} Detected"
+                message = f"{object_label.title()} detected on camera {camera_id}"
+                if confidence > 0:
+                    message += f" (confidence: {confidence:.1%})"
+
+            for config in configs:
+                # Check class-specific toggles
+                should_alert = False
+
+                if identified_object_name and config.identified_object_alerts_enabled:
+                    # Identified object takes precedence
+                    should_alert = True
+                elif object_class == 'vehicle' and config.vehicle_alerts_enabled:
+                    should_alert = True
+                elif object_class == 'animal' and config.animal_alerts_enabled:
+                    should_alert = True
+                elif object_class == 'package' and config.package_alerts_enabled:
+                    should_alert = True
+
+                if not should_alert:
+                    continue
+
+                # Build throttle key
+                if identified_object_name:
+                    # Throttle per identified object
+                    throttle_key = f"object_identified_{identified_object_name}_{camera_id}"
+                else:
+                    # Throttle per class
+                    throttle_key = f"object_{object_class}_{camera_id}"
+
+                # Check throttling
+                if not self._should_send_alert(
+                    db, throttle_key, config.min_seconds_between_alerts
+                ):
+                    continue
+
+                # Check quiet hours
+                if self._is_quiet_hours(config):
+                    logger.info(f"Object detection alert skipped due to quiet hours")
+                    continue
+
+                # Send notifications via enabled channels
+                await self._send_notifications(
+                    db=db,
+                    config=config,
+                    event_type=event_type,
+                    camera_id=camera_id,
+                    subject=subject,
+                    message=message,
+                    event_data=event_data or {},
+                )
+
     async def _send_notifications(
         self,
         db: Session,

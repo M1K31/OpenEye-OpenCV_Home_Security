@@ -108,6 +108,13 @@ This file is part of OpenEye-OpenCV_Home_Security
   gap: 10px;
 }
 
+.section-description {
+  margin: -8px 0 16px 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -176,6 +183,12 @@ This file is part of OpenEye-OpenCV_Home_Security
   height: 20px;
   cursor: pointer;
   accent-color: var(--theme-primary, #007bff);
+}
+
+/* v3.10.0: Indented checkboxes for sub-options */
+.checkbox-indent {
+  margin-left: 32px;
+  font-size: 14px;
 }
 
 /* Buttons */

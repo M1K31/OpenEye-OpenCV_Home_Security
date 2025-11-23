@@ -34,6 +34,13 @@ class AlertConfiguration(Base):
     unknown_face_alerts_enabled = Column(Boolean, default=True)
     recording_alerts_enabled = Column(Boolean, default=False)
 
+    # v3.10.0: Object Detection Alerts
+    object_detection_alerts_enabled = Column(Boolean, default=True)  # Master toggle
+    vehicle_alerts_enabled = Column(Boolean, default=True)  # Any vehicle detection
+    animal_alerts_enabled = Column(Boolean, default=True)  # Any animal detection
+    package_alerts_enabled = Column(Boolean, default=True)  # Any package detection
+    identified_object_alerts_enabled = Column(Boolean, default=True)  # Specific identified objects
+
     # Notification Channels
     email_enabled = Column(Boolean, default=True)
     sms_enabled = Column(Boolean, default=False)

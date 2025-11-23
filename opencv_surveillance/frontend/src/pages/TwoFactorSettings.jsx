@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import twoFactorService from '../services/twoFactorService';
+import { Button, TextField } from '../components/universal';
 
 const TwoFactorSettings = () => {
   const [status, setStatus] = useState(null);
@@ -149,13 +150,13 @@ const TwoFactorSettings = () => {
 
             <div style={styles.buttonGroup}>
               {!status?.two_factor_enabled ? (
-                <button onClick={handleEnable} style={styles.primaryButton}>
+                <Button onClick={handleEnable} variant="primary" size="medium">
                   Enable Two-Factor Authentication
-                </button>
+                </Button>
               ) : (
-                <button onClick={() => setShowDisableConfirm(true)} style={styles.dangerButton}>
+                <Button onClick={() => setShowDisableConfirm(true)} variant="destructive" size="medium">
                   Disable Two-Factor Authentication
-                </button>
+                </Button>
               )}
             </div>
 
@@ -184,9 +185,9 @@ const TwoFactorSettings = () => {
                   Or enter this code manually:
                 </p>
                 <code style={styles.secretCode}>{secret}</code>
-                <button onClick={handleCopySecret} style={styles.copyButton}>
+                <Button onClick={handleCopySecret} variant="primary" size="small">
                   Copy
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -202,9 +203,9 @@ const TwoFactorSettings = () => {
                   </div>
                 ))}
               </div>
-              <button onClick={handleDownloadBackupCodes} style={styles.secondaryButton}>
+              <Button onClick={handleDownloadBackupCodes} variant="secondary" size="medium">
                 Download Backup Codes
-              </button>
+              </Button>
             </div>
 
             <div style={styles.step}>
@@ -213,31 +214,34 @@ const TwoFactorSettings = () => {
                 Enter the 6-digit code from your authenticator app to complete setup:
               </p>
               <form onSubmit={handleVerify} style={styles.verifyForm}>
-                <input
+                <TextField
                   type="text"
                   placeholder="000000"
                   value={verifyToken}
                   onChange={(e) => setVerifyToken(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   required
-                  style={styles.tokenInput}
+                  fullWidth
+                  label="Verification Code"
                   maxLength={6}
                   pattern="\d{6}"
                   autoFocus
+                  style={{ textAlign: 'center', letterSpacing: '0.3em', fontFamily: 'monospace', fontSize: '24px' }}
                 />
                 <div style={styles.buttonGroup}>
-                  <button
+                  <Button
                     type="button"
                     onClick={() => {
                       setShowEnableFlow(false);
                       setVerifyToken('');
                     }}
-                    style={styles.secondaryButton}
+                    variant="secondary"
+                    size="medium"
                   >
                     Cancel
-                  </button>
-                  <button type="submit" style={styles.primaryButton}>
+                  </Button>
+                  <Button type="submit" variant="primary" size="medium">
                     Verify & Enable
-                  </button>
+                  </Button>
                 </div>
               </form>
             </div>
@@ -254,32 +258,31 @@ const TwoFactorSettings = () => {
             </div>
 
             <form onSubmit={handleDisable} style={styles.disableForm}>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Enter your password to confirm:</label>
-                <input
-                  type="password"
-                  value={disablePassword}
-                  onChange={(e) => setDisablePassword(e.target.value)}
-                  required
-                  style={styles.input}
-                  autoFocus
-                />
-              </div>
+              <TextField
+                type="password"
+                value={disablePassword}
+                onChange={(e) => setDisablePassword(e.target.value)}
+                required
+                fullWidth
+                label="Enter your password to confirm"
+                autoFocus
+              />
 
               <div style={styles.buttonGroup}>
-                <button
+                <Button
                   type="button"
                   onClick={() => {
                     setShowDisableConfirm(false);
                     setDisablePassword('');
                   }}
-                  style={styles.secondaryButton}
+                  variant="secondary"
+                  size="medium"
                 >
                   Cancel
-                </button>
-                <button type="submit" style={styles.dangerButton}>
+                </Button>
+                <Button type="submit" variant="destructive" size="medium">
                   Disable 2FA
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -342,42 +345,6 @@ const styles = {
     display: 'flex',
     gap: 'var(--spacing-md, 16px)',
     marginTop: 'var(--spacing-lg, 24px)',
-  },
-  primaryButton: {
-    backgroundColor: 'var(--theme-primary)',
-    color: '#ffffff',
-    padding: 'var(--spacing-md, 16px) var(--spacing-lg, 24px)',
-    border: 'none',
-    borderRadius: 'var(--radius-md, 12px)',
-    cursor: 'pointer',
-    fontWeight: '600',
-    fontSize: '16px',
-    minHeight: 'var(--touch-target-min, 44px)',
-    flex: 1,
-  },
-  secondaryButton: {
-    backgroundColor: 'var(--bg-secondary, #6c757d)',
-    color: '#ffffff',
-    padding: 'var(--spacing-md, 16px) var(--spacing-lg, 24px)',
-    border: 'none',
-    borderRadius: 'var(--radius-md, 12px)',
-    cursor: 'pointer',
-    fontWeight: '600',
-    fontSize: '16px',
-    minHeight: 'var(--touch-target-min, 44px)',
-    flex: 1,
-  },
-  dangerButton: {
-    backgroundColor: 'var(--color-error, #dc3545)',
-    color: '#ffffff',
-    padding: 'var(--spacing-md, 16px) var(--spacing-lg, 24px)',
-    border: 'none',
-    borderRadius: 'var(--radius-md, 12px)',
-    cursor: 'pointer',
-    fontWeight: '600',
-    fontSize: '16px',
-    minHeight: 'var(--touch-target-min, 44px)',
-    flex: 1,
   },
   infoBox: {
     padding: 'var(--spacing-lg, 24px)',
@@ -460,16 +427,6 @@ const styles = {
     borderRadius: 'var(--radius-sm, 8px)',
     marginBottom: 'var(--spacing-sm, 8px)',
   },
-  copyButton: {
-    backgroundColor: 'var(--theme-primary)',
-    color: '#fff',
-    padding: 'var(--spacing-sm, 8px) var(--spacing-md, 16px)',
-    border: 'none',
-    borderRadius: 'var(--radius-sm, 8px)',
-    cursor: 'pointer',
-    fontSize: '14px',
-    alignSelf: 'flex-start',
-  },
   backupCodesContainer: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
@@ -492,18 +449,6 @@ const styles = {
     flexDirection: 'column',
     gap: 'var(--spacing-md, 16px)',
   },
-  tokenInput: {
-    backgroundColor: 'var(--bg-input)',
-    border: '1px solid var(--border-input)',
-    color: 'var(--text-primary)',
-    padding: 'var(--spacing-md, 16px)',
-    borderRadius: 'var(--radius-sm, 8px)',
-    fontSize: '24px',
-    textAlign: 'center',
-    letterSpacing: '0.3em',
-    fontFamily: 'monospace',
-    minHeight: 'var(--touch-target-min, 44px)',
-  },
   disableFlow: {
     display: 'flex',
     flexDirection: 'column',
@@ -512,25 +457,6 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     gap: 'var(--spacing-lg, 24px)',
-  },
-  formGroup: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 'var(--spacing-sm, 8px)',
-  },
-  label: {
-    fontSize: '14px',
-    fontWeight: '600',
-    color: 'var(--text-primary)',
-  },
-  input: {
-    backgroundColor: 'var(--bg-input)',
-    border: '1px solid var(--border-input)',
-    color: 'var(--text-primary)',
-    padding: 'var(--spacing-sm, 8px) var(--spacing-md, 16px)',
-    borderRadius: 'var(--radius-sm, 8px)',
-    fontSize: '16px',
-    minHeight: 'var(--touch-target-min, 44px)',
   },
 };
 

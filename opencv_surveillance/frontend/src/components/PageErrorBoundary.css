@@ -1,0 +1,244 @@
+/*
+Copyright (c) 2025 Mikel Smart
+This file is part of OpenEye-OpenCV_Home_Security
+*/
+
+/**
+ * Page Error Boundary Styles
+ * Compact, page-level error display that doesn't take over the entire viewport
+ * Theme-aware: Uses CSS variables from themes.css for all 9 themes
+ */
+
+.page-error-boundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  padding: var(--spacing-xl, 32px);
+  background: var(--bg-main, #f8f9fa);
+  border-radius: var(--radius-lg, 12px);
+  margin: var(--spacing-lg, 24px);
+}
+
+.page-error-container {
+  max-width: 600px;
+  text-align: center;
+  padding: var(--spacing-xl, 32px);
+  background: var(--bg-panel, #ffffff);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: var(--shadow-md, 0 4px 6px rgba(0, 0, 0, 0.1));
+  border: 1px solid var(--border-panel, #e0e0e0);
+}
+
+/* Error icon */
+.page-error-icon {
+  font-size: 48px;
+  margin-bottom: var(--spacing-lg, 24px);
+  line-height: 1;
+  opacity: 0.9;
+}
+
+/* Title */
+.page-error-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary, #1a1a1a);
+  margin: 0 0 var(--spacing-md, 16px) 0;
+}
+
+/* Message */
+.page-error-message {
+  font-size: 14px;
+  color: var(--text-secondary, #666666);
+  line-height: 1.6;
+  margin: 0 0 var(--spacing-lg, 24px) 0;
+}
+
+/* Error details (collapsible) */
+.page-error-details {
+  margin: var(--spacing-lg, 24px) 0;
+  text-align: left;
+  background: var(--bg-input, #f8f9fa);
+  border-radius: var(--radius-sm, 4px);
+  padding: var(--spacing-md, 16px);
+  border: 1px solid var(--border-input, #e0e0e0);
+}
+
+.page-error-details summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary, #666666);
+  user-select: none;
+  outline: none;
+  transition: color var(--anim-fast, 0.15s) var(--anim-ease, ease);
+}
+
+.page-error-details summary:hover {
+  color: var(--text-primary, #1a1a1a);
+}
+
+.page-error-stack {
+  margin-top: var(--spacing-md, 16px);
+  font-size: 12px;
+  color: var(--text-secondary, #666666);
+}
+
+.page-error-stack p {
+  margin: var(--spacing-sm, 8px) 0;
+}
+
+.page-error-stack pre {
+  background: var(--bg-main, #ffffff);
+  border: 1px solid var(--border-input, #e0e0e0);
+  border-radius: var(--radius-sm, 4px);
+  padding: var(--spacing-md, 16px);
+  overflow-x: auto;
+  font-size: 11px;
+  line-height: 1.4;
+  font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Courier New', monospace;
+  margin: var(--spacing-sm, 8px) 0 0 0;
+  max-height: 200px;
+  color: var(--text-primary, #1a1a1a);
+}
+
+/* Actions */
+.page-error-actions {
+  display: flex;
+  gap: var(--spacing-md, 16px);
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: var(--spacing-lg, 24px);
+}
+
+.page-error-actions button {
+  /* Universal button sizing (HIG: 44px minimum touch target) */
+  min-height: var(--touch-target-min, 44px);
+  min-width: 120px;
+  padding: 0 var(--spacing-lg, 24px);
+
+  /* Typography */
+  font-size: 14px;
+  font-weight: 500;
+
+  /* Layout */
+  border-radius: var(--radius-sm, 4px);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--anim-normal, 0.25s) var(--anim-ease, ease);
+
+  /* Disable text selection */
+  user-select: none;
+}
+
+.page-error-actions button:focus-visible {
+  outline: 2px solid var(--color-primary, #007bff);
+  outline-offset: 2px;
+}
+
+/* Primary action (Retry) */
+.btn-retry {
+  background: var(--color-primary, #007bff);
+  color: #ffffff;
+  border-color: var(--color-primary, #007bff);
+}
+
+.btn-retry:hover {
+  background: var(--color-primary-hover, #0056b3);
+  border-color: var(--color-primary-hover, #0056b3);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm, 0 2px 4px rgba(0, 123, 255, 0.2));
+}
+
+.btn-retry:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* Secondary action (Go Home) */
+.btn-home {
+  background: var(--bg-input, #f8f9fa);
+  color: var(--text-primary, #1a1a1a);
+  border-color: var(--border-input, #e0e0e0);
+}
+
+.btn-home:hover {
+  background: var(--bg-hover, #e9ecef);
+  border-color: var(--border-panel, #cccccc);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm, 0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.btn-home:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* Tertiary action (Go Back) */
+.btn-back {
+  background: transparent;
+  color: var(--text-secondary, #666666);
+  border-color: transparent;
+}
+
+.btn-back:hover {
+  background: var(--bg-input, #f8f9fa);
+  color: var(--text-primary, #1a1a1a);
+  transform: translateY(-1px);
+}
+
+.btn-back:active {
+  transform: translateY(0);
+}
+
+/* Support message */
+.page-error-support {
+  margin-top: var(--spacing-lg, 24px);
+  padding-top: var(--spacing-md, 16px);
+  border-top: 1px solid var(--border-panel, #e0e0e0);
+  font-size: 12px;
+  color: var(--text-tertiary, #999999);
+  line-height: 1.5;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .page-error-boundary {
+    padding: var(--spacing-md, 16px);
+    margin: var(--spacing-md, 16px);
+    min-height: 300px;
+  }
+
+  .page-error-container {
+    padding: var(--spacing-lg, 24px);
+  }
+
+  .page-error-icon {
+    font-size: 40px;
+    margin-bottom: var(--spacing-md, 16px);
+  }
+
+  .page-error-title {
+    font-size: 18px;
+  }
+
+  .page-error-message {
+    font-size: 13px;
+  }
+
+  .page-error-actions {
+    flex-direction: column;
+    gap: var(--spacing-md, 16px);
+  }
+
+  .page-error-actions button {
+    width: 100%;
+  }
+}
+
+/*
+ * Note: Theme-specific dark/light mode styling is automatically handled
+ * via CSS variables defined in themes.css. All 9 themes (Default, Superman,
+ * Batman, Wonder Woman, Flash, Aquaman, Green Lantern, Cyborg, Aqua Security)
+ * provide their own color schemes that this component inherits.
+ */
