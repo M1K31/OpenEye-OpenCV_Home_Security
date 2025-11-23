@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { logger } from '../utils/logger';
 import apiClient from '../api/apiClient';
 import Button from './universal/Button';
 import './Modal.css';
