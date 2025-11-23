@@ -7,6 +7,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import authService from './services/authService';
 import ErrorBoundary from './components/ErrorBoundary';
 import { PageErrorBoundaryWithRouter } from './components/PageErrorBoundary';
+import { logger } from './utils/logger';
 // REMOVED: import './themes.css'; - Now in main.jsx
 
 // New Layout Components
