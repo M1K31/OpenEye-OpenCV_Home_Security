@@ -2,7 +2,9 @@
 // This file is part of OpenEye-OpenCV_Home_Security
 
 import React, { useState, useEffect, useRef } from 'react';
+import { logger } from '../utils/logger';
 import apiClient from '../api/apiClient';
+import { Button } from '../components/universal';
 import './TimelineView.css';
 
 /**
@@ -127,7 +129,7 @@ const TimelineView = () => {
         setSelectedCameras(cameras.map(c => c.camera_id));
       }
     } catch (err) {
-      console.error('Error loading cameras:', err);
+      logger.error('Error loading cameras:', err);
     }
   };
 
@@ -149,7 +151,7 @@ const TimelineView = () => {
 
       setLanes(response.data.lanes || []);
     } catch (err) {
-      console.error('Error loading timeline:', err);
+      logger.error('Error loading timeline:', err);
       setError('Failed to load timeline data. Please try again.');
     } finally {
       setLoading(false);
@@ -346,7 +348,7 @@ const TimelineView = () => {
 
     // If event has a recording, could navigate to playback
     if (event.video_path) {
-      console.log('Play recording:', event.video_path);
+      logger.log('Play recording:', event.video_path);
     }
   };
 
@@ -356,6 +358,8 @@ const TimelineView = () => {
         return '#3b82f6'; // Blue
       case 'face':
         return '#10b981'; // Green
+      case 'object':
+        return '#f59e0b'; // Orange (v3.10.0)
       case 'recording':
         return '#ef4444'; // Red
       default:
@@ -363,12 +367,18 @@ const TimelineView = () => {
     }
   };
 
-  const getEventIcon = (eventType) => {
+  const getEventIcon = (eventType, event) => {
     switch (eventType) {
       case 'motion':
         return '🏃';
       case 'face':
         return '👤';
+      case 'object':
+        // v3.10.0: Show specific icon based on object class
+        if (event?.object_class === 'vehicle') return '🚗';
+        if (event?.object_class === 'animal') return '🐾';
+        if (event?.object_class === 'package') return '📦';
+        return '🔍';
       case 'recording':
         return '⏺️';
       default:
@@ -395,13 +405,14 @@ const TimelineView = () => {
                 { value: '30m', label: '30m' },
                 { value: '1h', label: '1h' }
               ].map(interval => (
-                <button
+                <Button
                   key={interval.value}
-                  className={`btn btn-sm ${timeInterval === interval.value ? 'btn-primary' : 'btn-secondary'}`}
+                  variant={timeInterval === interval.value ? 'primary' : 'secondary'}
+                  size="small"
                   onClick={() => handleIntervalChange(interval.value)}
                 >
                   {interval.label}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -410,24 +421,33 @@ const TimelineView = () => {
           <div className="setting-group">
             <label>Time</label>
             <div className="button-group">
-              <button
-                className={`btn btn-sm ${!use24Hour ? 'btn-primary' : 'btn-secondary'}`}
+              <Button
+                variant={!use24Hour ? 'primary' : 'secondary'}
+                size="small"
                 onClick={() => setUse24Hour(false)}
               >
                 12h
-              </button>
-              <button
-                className={`btn btn-sm ${use24Hour ? 'btn-primary' : 'btn-secondary'}`}
+              </Button>
+              <Button
+                variant={use24Hour ? 'primary' : 'secondary'}
+                size="small"
                 onClick={() => setUse24Hour(true)}
               >
                 24h
-              </button>
+              </Button>
             </div>
           </div>
 
-          <button className="btn btn-secondary btn-sm" onClick={loadTimelineData} disabled={loading}>
-            {loading ? '⏳ Loading' : '🔄 Refresh'}
-          </button>
+          <Button
+            variant="secondary"
+            size="small"
+            onClick={loadTimelineData}
+            disabled={loading}
+            loading={loading}
+            icon="🔄"
+          >
+            Refresh
+          </Button>
         </div>
       </div>
 
@@ -468,7 +488,9 @@ const TimelineView = () => {
       {error ? (
         <div className="timeline-error">
           <span>⚠️ {error}</span>
-          <button onClick={loadTimelineData} className="btn btn-primary">Retry</button>
+          <Button variant="primary" size="medium" onClick={loadTimelineData}>
+            Retry
+          </Button>
         </div>
       ) : loading ? (
         <div className="timeline-loading">
@@ -532,7 +554,7 @@ const TimelineView = () => {
                     onMouseLeave={() => setHoveredEvent(null)}
                     title={`${event.event_type}: ${formatDate(new Date(event.timestamp))}`}
                   >
-                    <span>{getEventIcon(event.event_type)}</span>
+                    <span>{getEventIcon(event.event_type, event)}</span>
                   </div>
                 );
               })}
@@ -652,41 +674,49 @@ const TimelineView = () => {
         {/* Playback Controls - Bottom of Media Container */}
         <div className="playback-control-bar">
           <div className="playback-buttons">
-            <button
-              className="btn btn-secondary btn-sm"
+            <Button
+              variant="secondary"
+              size="small"
               onClick={handlePreviousEvent}
               title="Previous event"
               disabled={loading}
+              icon="⏮"
             >
-              ⏮ Previous
-            </button>
+              Previous
+            </Button>
 
-            <button
-              className={`btn-control btn-play ${playing ? 'active' : ''}`}
+            <Button
+              variant={playing ? 'secondary' : 'primary'}
+              size="small"
               onClick={togglePlayback}
               title={playing ? 'Pause' : 'Play'}
               disabled={loading}
+              icon={playing ? '⏸' : '▶'}
             >
-              {playing ? '⏸ Pause' : '▶ Play'}
-            </button>
+              {playing ? 'Pause' : 'Play'}
+            </Button>
 
-            <button
-              className="btn btn-secondary btn-sm"
+            <Button
+              variant="secondary"
+              size="small"
               onClick={handleNextEvent}
               title="Next event"
               disabled={loading}
+              endIcon="⏭"
             >
-              Next ⏭
-            </button>
+              Next
+            </Button>
 
-            <button
-              className="btn btn-success btn-sm"
+            <Button
+              variant="primary"
+              size="small"
               onClick={jumpToNow}
               title="Jump to now"
               disabled={loading}
+              icon="🔴"
             >
-              🔴 Live
-            </button>
+              Live
+            </Button>
           </div>
 
           {/* Speed Control */}
@@ -694,13 +724,14 @@ const TimelineView = () => {
             <label>Speed</label>
             <div className="button-group">
               {[0.5, 1, 2, 4, 8].map(speed => (
-                <button
+                <Button
                   key={speed}
-                  className={`btn btn-sm ${playbackSpeed === speed ? 'btn-primary' : 'btn-secondary'}`}
+                  variant={playbackSpeed === speed ? 'primary' : 'secondary'}
+                  size="small"
                   onClick={() => handleSpeedChange(speed)}
                 >
                   {speed}x
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -715,7 +746,13 @@ const TimelineView = () => {
             {lanes.length === 0 ? (
               <div className="empty-timeline">
                 <p>📭 No events in this time range</p>
-                <button onClick={() => jumpToNow()} className="btn btn-primary btn-sm">Jump to current time</button>
+                <Button
+                  variant="primary"
+                  size="small"
+                  onClick={() => jumpToNow()}
+                >
+                  Jump to current time
+                </Button>
               </div>
             ) : (
               lanes.map(lane => (

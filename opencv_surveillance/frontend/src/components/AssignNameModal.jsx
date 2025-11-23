@@ -37,7 +37,7 @@ const AssignNameModal = ({ clusterId, onClose, onSuccess }) => {
       // Call success callback
       onSuccess();
     } catch (err) {
-      console.error('Error assigning name:', err);
+      logger.error('Error assigning name:', err);
       setError(err.response?.data?.detail || 'Failed to assign name. Please try again.');
     } finally {
       setLoading(false);

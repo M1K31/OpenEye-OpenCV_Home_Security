@@ -54,7 +54,7 @@ const EventDetailModal = ({ event, onClose, onDelete }) => {
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      console.error('Failed to download:', err);
+      logger.error('Failed to download:', err);
       setError('Failed to download file');
     }
   };
@@ -81,7 +81,7 @@ const EventDetailModal = ({ event, onClose, onDelete }) => {
 
       onClose();
     } catch (err) {
-      console.error('Failed to delete:', err);
+      logger.error('Failed to delete:', err);
       setError(`Failed to delete event: ${err.message}`);
     } finally {
       setDeleting(false);

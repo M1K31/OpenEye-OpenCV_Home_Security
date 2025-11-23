@@ -86,3 +86,4 @@ custom_recordings/
 
 # Archives
 archives/
+.coverage

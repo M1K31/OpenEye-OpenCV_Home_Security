@@ -48,6 +48,12 @@ class TimelineEventResponse(BaseModel):
     person_name: Optional[str] = None
     confidence: Optional[float] = None
 
+    # v3.10.0: Object detection fields
+    objects_detected: int = 0
+    object_class: Optional[str] = None  # vehicle, animal, package
+    object_subclass: Optional[str] = None  # car, dog, backpack, etc.
+    identified_object_name: Optional[str] = None  # "John's Tesla", "My Dog Rex", etc.
+
     @field_validator('thumbnail_path', mode='before')
     @classmethod
     def normalize_thumbnail_path(cls, v):
@@ -121,7 +127,7 @@ def get_timeline_events(
     start_time: Optional[str] = Query(None, description="Start time (ISO format)"),
     end_time: Optional[str] = Query(None, description="End time (ISO format)"),
     camera_ids: Optional[List[str]] = Query(None, description="Filter by camera IDs"),
-    event_types: Optional[List[str]] = Query(None, description="Filter by event types (motion, face, recording)"),
+    event_types: Optional[List[str]] = Query(None, description="Filter by event types (motion, face, recording, object)"),
     limit: int = Query(100, le=1000, description="Maximum number of events"),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_active_user)
@@ -129,12 +135,13 @@ def get_timeline_events(
     """
     Get timeline events for timeline view
 
-    Returns all events (recordings, motion detections, face detections) in a time range,
+    Returns all events (recordings, motion detections, face detections, object detections) in a time range,
     organized for display in a multi-camera timeline interface.
 
     **Event Types:**
     - `motion`: Motion detection events
     - `face`: Face detection events
+    - `object`: Object detection events (v3.10.0 - vehicles, animals, packages)
     - `recording`: Recording start/stop events
 
     **Use Case:**
@@ -234,6 +241,42 @@ def get_timeline_events(
                 motion_detected=face.motion_detected,
                 person_name=face.person_name,
                 confidence=face.confidence
+            ))
+
+    # v3.10.0: Get object detection events
+    if not event_types or 'object' in event_types:
+        object_query = db.query(models.ObjectDetectionEvent).filter(
+            models.ObjectDetectionEvent.detected_at >= start_dt,
+            models.ObjectDetectionEvent.detected_at <= end_dt
+        )
+
+        if camera_ids:
+            object_query = object_query.filter(models.ObjectDetectionEvent.camera_id.in_(camera_ids))
+
+        object_events = object_query.order_by(models.ObjectDetectionEvent.detected_at).limit(limit).all()
+
+        for obj in object_events:
+            cameras_in_range.add(obj.camera_id)
+
+            # Get identified object name if linked
+            identified_name = None
+            if obj.identified_object:
+                identified_name = obj.identified_object.name
+
+            timeline_events.append(TimelineEventResponse(
+                id=obj.id,
+                camera_id=obj.camera_id,
+                event_type='object',
+                timestamp=obj.detected_at,
+                duration=None,
+                thumbnail_path=obj.snapshot_path,
+                video_path=obj.recording_path,
+                motion_detected=obj.motion_detected,
+                objects_detected=1,
+                object_class=obj.object_class,
+                object_subclass=obj.object_subclass,
+                identified_object_name=identified_name,
+                confidence=obj.confidence
             ))
 
     # Sort all events by timestamp

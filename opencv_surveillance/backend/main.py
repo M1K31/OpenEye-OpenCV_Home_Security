@@ -55,6 +55,7 @@ from backend.api.routes import (
     ptz,
     hardware,
     features,
+    objects,  # v3.10.0: Object detection routes
 )
 from backend.core.camera_manager import manager as camera_manager
 from backend.core.websocket_manager import broadcast_statistics_update
@@ -107,7 +108,7 @@ signal.signal(signal.SIGTERM, signal_handler)
 app = FastAPI(
     title="OpenEye Surveillance System",
     description="OpenCV-powered surveillance system with face recognition, motion detection, and video recording",
-    version="3.7.2",  # Security Update - Vite 7 upgrade
+    version="3.10.0",  # Two-Way Audio & Object Detection (YOLO)
     docs_url="/api/docs",
     redoc_url="/api/redoc",
 )
@@ -350,7 +351,7 @@ async def startup_event():
     audit_logger.log_event(
         AuditEventType.SYSTEM_STARTUP,
         details={
-            "version": "3.7.2",
+            "version": "3.10.0",
             "cameras_loaded": loaded_count,
             "known_faces": len(face_manager.known_face_names)
         }
@@ -611,6 +612,9 @@ app.include_router(hardware.router, prefix="/api", tags=["Hardware & Features"])
 # Feature Management (Hardware-Aware Auto-Config)
 app.include_router(features.router, prefix="/api", tags=["Feature Management"])
 
+# v3.10.0: Object Detection - YOLO-based detection and identification
+app.include_router(objects.router, prefix="/api/objects", tags=["Object Detection"])
+
 # First-Run Setup (with /api/setup prefix for consistency)
 app.include_router(setup.router, prefix="/api/setup", tags=["First-Run Setup"])
 
@@ -629,7 +633,7 @@ async def read_root():
         # Fallback to API info if frontend not built
         return {
             "name": "OpenEye Surveillance System",
-            "version": "3.7.2",
+            "version": "3.10.0",
             "description": "OpenCV-powered surveillance with face recognition",
             "features": [
                 "Motion Detection",

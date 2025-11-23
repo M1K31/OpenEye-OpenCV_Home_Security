@@ -3,16 +3,18 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import twoFactorService from '../services/twoFactorService';
+import PasswordResetModal from '../components/PasswordResetModal';
+import { Button, TextField } from '../components/universal';
 
 const LoginPage = ({ setToken }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [requires2FA, setRequires2FA] = useState(false);
   const [totpToken, setTotpToken] = useState('');
   const [backupCode, setBackupCode] = useState('');
   const [useBackupCode, setUseBackupCode] = useState(false);
+  const [showPasswordResetModal, setShowPasswordResetModal] = useState(false);
 
   // Clear any expired or invalid tokens when login page loads
   useEffect(() => {
@@ -52,7 +54,22 @@ const LoginPage = ({ setToken }) => {
       );
 
       if (response.access_token) {
+        // v3.8.0: Store both access_token and refresh_token
         setToken(response.access_token);
+
+        // Store refresh_token if provided
+        if (response.refresh_token) {
+          localStorage.setItem('refresh_token', response.refresh_token);
+        }
+
+        // Store token expiration time
+        if (response.expires_in) {
+          const expiresAt = Date.now() + (response.expires_in * 1000);
+          localStorage.setItem('token_expires_at', expiresAt.toString());
+        }
+
+        // Store username
+        localStorage.setItem('username', username);
       } else if (response.requires_2fa) {
         // 2FA is required - show 2FA input
         setRequires2FA(true);
@@ -85,58 +102,37 @@ const LoginPage = ({ setToken }) => {
             // Step 1: Username and Password
             <>
               <div style={styles.formGroup}>
-                <label style={styles.label}>Username</label>
-                <input
+                <TextField
                   type="text"
+                  label="Username"
                   placeholder="Enter username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  required
-                  style={styles.input}
+                  fullWidth
                 />
               </div>
               <div style={styles.formGroup}>
-                <label style={styles.label}>Password</label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Enter password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    style={{...styles.input, paddingRight: 'var(--spacing-2xl, 48px)'}}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    style={{
-                      position: 'absolute',
-                      right: '4px',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontSize: '18px',
-                      color: 'var(--text-secondary)',
-                      width: '40px',
-                      height: '40px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderRadius: 'var(--radius-sm, 8px)',
-                      transition: 'background-color 0.2s ease',
-                    }}
-                    title={showPassword ? "Hide password" : "Show password"}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                    onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--hover-bg, rgba(0,0,0,0.05))'}
-                    onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-                  >
-                    {showPassword ? '🙈' : '👁️'}
-                  </button>
-                </div>
+                <TextField
+                  type="password"
+                  label="Password"
+                  placeholder="Enter password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  fullWidth
+                />
               </div>
-              <button type="submit" style={styles.button}>Login</button>
+              <Button type="submit" variant="primary" size="medium" fullWidth>
+                Login
+              </Button>
+              <Button
+                type="button"
+                variant="tertiary"
+                size="small"
+                onClick={() => setShowPasswordResetModal(true)}
+                fullWidth
+              >
+                Forgot Password?
+              </Button>
             </>
           ) : (
             // Step 2: Two-Factor Authentication
@@ -149,63 +145,76 @@ const LoginPage = ({ setToken }) => {
 
               {!useBackupCode ? (
                 <div style={styles.formGroup}>
-                  <label style={styles.label}>Authenticator Code</label>
-                  <input
+                  <TextField
                     type="text"
+                    label="Authenticator Code"
                     placeholder="000000"
                     value={totpToken}
                     onChange={(e) => setTotpToken(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    required
-                    style={{...styles.input, textAlign: 'center', letterSpacing: '0.3em', fontSize: '24px'}}
-                    maxLength={6}
-                    pattern="\d{6}"
-                    autoComplete="off"
-                    autoFocus
+                    fullWidth
                   />
-                  <button
+                  <Button
                     type="button"
+                    variant="tertiary"
+                    size="small"
                     onClick={() => setUseBackupCode(true)}
-                    style={styles.linkButton}
+                    fullWidth
                   >
                     Use backup code instead
-                  </button>
+                  </Button>
                 </div>
               ) : (
                 <div style={styles.formGroup}>
-                  <label style={styles.label}>Backup Code</label>
-                  <input
+                  <TextField
                     type="text"
+                    label="Backup Code"
                     placeholder="XXXX-XXXX-XXXX"
                     value={backupCode}
                     onChange={(e) => setBackupCode(e.target.value.toUpperCase())}
-                    required
-                    style={styles.input}
-                    autoComplete="off"
-                    autoFocus
+                    fullWidth
                   />
-                  <button
+                  <Button
                     type="button"
+                    variant="tertiary"
+                    size="small"
                     onClick={() => setUseBackupCode(false)}
-                    style={styles.linkButton}
+                    fullWidth
                   >
                     Use authenticator code instead
-                  </button>
+                  </Button>
                 </div>
               )}
 
               <div style={{ display: 'flex', gap: 'var(--spacing-md, 16px)' }}>
-                <button type="button" onClick={handleBack} style={{...styles.button, ...styles.secondaryButton}}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="medium"
+                  onClick={handleBack}
+                  fullWidth
+                >
                   Back
-                </button>
-                <button type="submit" style={styles.button}>
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="medium"
+                  fullWidth
+                >
                   Verify
-                </button>
+                </Button>
               </div>
             </>
           )}
         </form>
         {error && <div style={styles.error}>{error}</div>}
       </div>
+
+      {/* Password Reset Modal */}
+      <PasswordResetModal
+        isOpen={showPasswordResetModal}
+        onClose={() => setShowPasswordResetModal(false)}
+      />
     </div>
   );
 };
@@ -304,6 +313,17 @@ const styles = {
     backgroundColor: 'var(--bg-secondary, #6c757d)',
     flex: 1,
     lineHeight: '1.5',
+  },
+  forgotPasswordLink: {
+    background: 'none',
+    border: 'none',
+    color: 'var(--theme-primary)',
+    cursor: 'pointer',
+    fontSize: '14px',
+    padding: 'var(--spacing-sm, 8px) 0',
+    textDecoration: 'underline',
+    textAlign: 'center',
+    marginTop: 'var(--spacing-sm, 8px)',
   },
 };
 

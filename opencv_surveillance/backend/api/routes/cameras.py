@@ -9,6 +9,7 @@ import asyncio
 import os
 
 from backend.core.camera_manager import manager as camera_manager
+from backend.core.camera_validation import validate_camera_source
 from backend.database.session import get_db
 from backend.database import crud
 from backend.api.schemas import camera as camera_schema
@@ -46,6 +47,9 @@ def create_camera(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Camera with ID '{camera.camera_id}' already exists",
         )
+
+    # Validate camera source URL to prevent SSRF and command injection
+    validate_camera_source(camera.source, camera.camera_type)
 
     # Create camera in database
     camera_data = camera.model_dump()
@@ -140,6 +144,11 @@ def patch_camera(
     # Get only fields that were provided
     update_data = camera_update.model_dump(exclude_unset=True)
 
+    # Validate camera source if being updated
+    if "source" in update_data:
+        camera_type = update_data.get("camera_type", db_camera.camera_type)
+        validate_camera_source(update_data["source"], camera_type)
+
     # CRITICAL FIX: Recalculate min_contour_area when motion_sensitivity changes
     # Motion sensitivity scale (1-10) maps inversely to min_contour_area
     if "motion_sensitivity" in update_data:
@@ -218,6 +227,11 @@ def update_camera(
 
     # Get only fields that were provided
     update_data = camera_update.model_dump(exclude_unset=True)
+
+    # Validate camera source if being updated
+    if "source" in update_data:
+        camera_type = update_data.get("camera_type", db_camera.camera_type)
+        validate_camera_source(update_data["source"], camera_type)
 
     # If source or type changed, need to restart camera
     restart_required = "source" in update_data or "camera_type" in update_data

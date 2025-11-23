@@ -2,6 +2,7 @@
 // Universal TextField Component - Apple HIG Compliant
 
 import React, { useState, useRef } from 'react';
+import PropTypes from 'prop-types';
 import './TextField.css';
 
 /**
@@ -168,6 +169,85 @@ const TextField = ({
       )}
     </div>
   );
+};
+
+// PropTypes validation
+TextField.propTypes = {
+  /** Input type */
+  type: PropTypes.oneOf(['text', 'password', 'email', 'number', 'search', 'tel', 'url']),
+
+  /** Input label */
+  label: PropTypes.string,
+
+  /** Placeholder text */
+  placeholder: PropTypes.string,
+
+  /** Controlled input value */
+  value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+
+  /** Change event handler */
+  onChange: PropTypes.func,
+
+  /** Error state */
+  error: PropTypes.bool,
+
+  /** Helper or error text */
+  helperText: PropTypes.string,
+
+  /** Disable input */
+  disabled: PropTypes.bool,
+
+  /** Mark field as required */
+  required: PropTypes.bool,
+
+  /** Take full width of container */
+  fullWidth: PropTypes.bool,
+
+  /** Icon at start of input */
+  startIcon: PropTypes.node,
+
+  /** Icon at end of input */
+  endIcon: PropTypes.node,
+
+  /** Show password visibility toggle */
+  showPasswordToggle: PropTypes.bool,
+
+  /** Maximum character length */
+  maxLength: PropTypes.number,
+
+  /** Show character counter */
+  showCharCount: PropTypes.bool,
+
+  /** Additional CSS classes */
+  className: PropTypes.string,
+
+  /** Input ID attribute */
+  id: PropTypes.string,
+
+  /** Input name attribute */
+  name: PropTypes.string,
+};
+
+// Default props
+TextField.defaultProps = {
+  type: 'text',
+  label: undefined,
+  placeholder: undefined,
+  value: '',
+  onChange: undefined,
+  error: false,
+  helperText: undefined,
+  disabled: false,
+  required: false,
+  fullWidth: false,
+  startIcon: null,
+  endIcon: null,
+  showPasswordToggle: false,
+  maxLength: undefined,
+  showCharCount: false,
+  className: '',
+  id: undefined,
+  name: undefined,
 };
 
 export default TextField;

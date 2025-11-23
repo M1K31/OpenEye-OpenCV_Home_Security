@@ -1,18 +1,20 @@
 // Copyright (c) 2025 Mikel Smart
 // This file is part of OpenEye-OpenCV_Home_Security
 import React, { useState } from 'react';
+import { logger } from '../utils/logger';
 import { useNavigate } from 'react-router-dom';
 import CameraManagementPage from './CameraManagementPage';
 import FaceManagementPage from './FaceManagementPage';
 import AlertSettingsPage from './AlertSettingsPage';
 import ThemeSelectorPage from './ThemeSelectorPage';
 import SystemSettingsPage from './SystemSettingsPage';
+import { Button } from '../components/universal';
 
 const SettingsPage = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('cameras');
 
-  console.log('[SettingsPage] Rendering with activeTab:', activeTab);
+  logger.log('[SettingsPage] Rendering with activeTab:', activeTab);
 
   const tabs = [
     { id: 'cameras', label: 'Cameras', icon: '📹' },
@@ -24,7 +26,7 @@ const SettingsPage = () => {
 
   const renderContent = () => {
     try {
-      console.log('[SettingsPage] renderContent called with tab:', activeTab);
+      logger.log('[SettingsPage] renderContent called with tab:', activeTab);
       switch (activeTab) {
         case 'cameras':
           return <CameraManagementPage embedded={true} />;
@@ -40,7 +42,7 @@ const SettingsPage = () => {
           return <div style={styles.loading}>Select a tab</div>;
       }
     } catch (error) {
-      console.error('[SettingsPage] Error rendering tab content:', error);
+      logger.error('[SettingsPage] Error rendering tab content:', error);
       return <div style={styles.error}>Error loading content: {error.message}</div>;
     }
   };
@@ -56,17 +58,15 @@ const SettingsPage = () => {
       <div style={styles.tabContainer}>
         <div style={styles.tabs}>
           {tabs.map(tab => (
-            <button
+            <Button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              style={{
-                ...styles.tab,
-                ...(activeTab === tab.id ? styles.tabActive : {})
-              }}
+              variant={activeTab === tab.id ? 'primary' : 'tertiary'}
+              size="medium"
+              icon={tab.icon}
             >
-              <span style={styles.tabIcon}>{tab.icon}</span>
-              <span style={styles.tabLabel}>{tab.label}</span>
-            </button>
+              {tab.label}
+            </Button>
           ))}
         </div>
 
@@ -126,34 +126,8 @@ const styles = {
     gap: '10px',
     marginBottom: '30px',
     borderBottom: '2px solid var(--border-panel)',
-    paddingBottom: '0',
+    paddingBottom: '8px',
     flexWrap: 'wrap',
-  },
-  tab: {
-    backgroundColor: 'transparent',
-    border: 'none',
-    borderBottom: '3px solid transparent',
-    color: 'var(--text-primary)',
-    padding: '12px 24px',
-    cursor: 'pointer',
-    fontSize: '16px',
-    fontWeight: '500',
-    transition: 'all 0.2s',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    opacity: 0.7,
-  },
-  tabActive: {
-    borderBottomColor: 'var(--text-link)',
-    opacity: 1,
-    color: 'var(--text-link)',
-  },
-  tabIcon: {
-    fontSize: '20px',
-  },
-  tabLabel: {
-    fontSize: '16px',
   },
   content: {
     backgroundColor: 'var(--bg-main)',

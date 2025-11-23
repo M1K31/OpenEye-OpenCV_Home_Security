@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTheme, THEMES } from '../context/ThemeContext';
 import HelpButton from '../components/HelpButton';
 import { HELP_CONTENT } from '../utils/helpContent';
+import { Button } from '../components/universal';
 
 const ThemeSelectorPage = ({ embedded = false }) => {
   const navigate = useNavigate();
@@ -138,15 +139,16 @@ const ThemeSelectorPage = ({ embedded = false }) => {
 
               <div style={styles.cardActions}>
                 {!isActive ? (
-                  <button
+                  <Button
+                    variant="primary"
+                    size="medium"
                     onClick={(e) => {
                       e.stopPropagation();
                       applyTheme(themeId);
                     }}
-                    style={styles.applyButton}
                   >
                     Apply Theme
-                  </button>
+                  </Button>
                 ) : (
                   <div style={styles.currentLabel}>Currently Active</div>
                 )}

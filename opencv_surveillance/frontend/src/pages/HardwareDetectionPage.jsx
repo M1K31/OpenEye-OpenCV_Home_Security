@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { useCachedApi } from '../hooks/useCachedApi';
 import { CacheTTL } from '../services/apiCache';
 import LoadingSkeleton from '../components/LoadingSkeleton';
-import Button from '../components/universal/Button';
+import { Button } from '../components/universal';
 import './HardwareDetectionPage.css';
 
 /**
@@ -391,24 +391,27 @@ const HardwareDetectionPage = () => {
 
       {/* Tabs */}
       <div className="tabs">
-        <button
-          className={`tab ${selectedTab === 'overview' ? 'active' : ''}`}
+        <Button
+          variant={selectedTab === 'overview' ? 'primary' : 'tertiary'}
+          size="medium"
           onClick={() => setSelectedTab('overview')}
         >
           Overview
-        </button>
-        <button
-          className={`tab ${selectedTab === 'features' ? 'active' : ''}`}
+        </Button>
+        <Button
+          variant={selectedTab === 'features' ? 'primary' : 'tertiary'}
+          size="medium"
           onClick={() => setSelectedTab('features')}
         >
           Features
-        </button>
-        <button
-          className={`tab ${selectedTab === 'recommendations' ? 'active' : ''}`}
+        </Button>
+        <Button
+          variant={selectedTab === 'recommendations' ? 'primary' : 'tertiary'}
+          size="medium"
           onClick={() => setSelectedTab('recommendations')}
         >
           Recommendations
-        </button>
+        </Button>
       </div>
 
       {/* Tab Content */}

@@ -2,6 +2,7 @@
 // This file is part of OpenEye-OpenCV_Home_Security
 
 import React, { useState, useEffect } from 'react';
+import { logger } from '../utils/logger';
 import clusteringService from '../services/clusteringService';
 import './Modal.css';
 
@@ -37,7 +38,7 @@ const ClusterDetailModal = ({ clusterId, onClose, onAssignName }) => {
       setHasMore((facesData.faces?.length || 0) >= ITEMS_PER_PAGE);
       setPage(0);
     } catch (err) {
-      console.error('Error loading cluster:', err);
+      logger.error('Error loading cluster:', err);
       setError('Failed to load cluster details');
     } finally {
       setLoading(false);
@@ -56,7 +57,7 @@ const ClusterDetailModal = ({ clusterId, onClose, onAssignName }) => {
       setHasMore((data.faces?.length || 0) >= ITEMS_PER_PAGE);
       setPage(prev => prev + 1);
     } catch (err) {
-      console.error('Error loading more faces:', err);
+      logger.error('Error loading more faces:', err);
     } finally {
       setLoading(false);
     }

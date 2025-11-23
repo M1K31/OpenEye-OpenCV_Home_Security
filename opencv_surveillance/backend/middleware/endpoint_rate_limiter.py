@@ -29,6 +29,12 @@ class EndpointRateLimiter(BaseHTTPMiddleware):
         # Authentication endpoints - stricter limits
         "auth": (10, 60),  # 10 requests per minute
 
+        # Password reset - very strict (5 attempts per hour per IP)
+        "password_reset": (5, 3600),  # 5 requests per hour
+
+        # 2FA verification - strict (10 attempts per 5 minutes)
+        "2fa_verify": (10, 300),  # 10 requests per 5 minutes
+
         # Write operations - moderate limits
         "write": (30, 60),  # 30 requests per minute
 
@@ -46,6 +52,12 @@ class EndpointRateLimiter(BaseHTTPMiddleware):
     ENDPOINT_PATTERNS = {
         # Authentication endpoints (strictest)
         r"^/api/(token|auth/login|auth/register)": "auth",
+
+        # Password reset - very strict (must be before general auth)
+        r"^/api/auth/reset-password": "password_reset",
+
+        # 2FA verification - strict
+        r"^/api/auth/2fa/verify": "2fa_verify",
 
         # Write operations (moderate) - only for specific operations
         r"^/api/(cameras|faces|alerts|recordings)/.*/(delete|update)": "write",

@@ -24,6 +24,17 @@ class AuditEventType(str, Enum):
     LOGOUT = "logout"
     TOKEN_REFRESH = "token_refresh"
     PASSWORD_CHANGE = "password_change"
+    PASSWORD_RESET_ATTEMPTED = "password_reset_attempted"
+    PASSWORD_RESET_SUCCESS = "password_reset_success"
+    PASSWORD_RESET_FAILED = "password_reset_failed"
+
+    # 2FA events
+    TWO_FA_ENABLED = "2fa_enabled"
+    TWO_FA_DISABLED = "2fa_disabled"
+    TWO_FA_VERIFY_SUCCESS = "2fa_verify_success"
+    TWO_FA_VERIFY_FAILED = "2fa_verify_failed"
+    TWO_FA_ACCOUNT_LOCKED = "2fa_account_locked"
+    TWO_FA_ACCOUNT_UNLOCKED = "2fa_account_unlocked"
 
     # Authorization events
     ACCESS_DENIED = "access_denied"

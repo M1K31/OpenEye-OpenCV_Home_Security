@@ -4,18 +4,24 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../api/apiClient';
 import FaceManagementPage from './FaceManagementPage';
+import AudioModal from '../components/AudioModal';
 import wsService from '../services/WebSocketService';
+import authService from '../services/authService';
+import { Button } from '../components/universal';
 
 const DashboardPage = ({ onLogout }) => {
   const [showFaceManagement, setShowFaceManagement] = useState(false);
   const [recentDetections, setRecentDetections] = useState([]);
   const [statistics, setStatistics] = useState({});
+  const [objectStats, setObjectStats] = useState(null); // v3.10.0: Object detection stats
   const [wsStatus, setWsStatus] = useState('disconnected'); // WebSocket connection status
   const [usePolling, setUsePolling] = useState(false); // Fallback to polling if WebSocket fails
   const [cameras, setCameras] = useState([]); // List of all cameras
   const [displayMode, setDisplayMode] = useState('grid'); // Display mode: grid, vertical, horizontal, cycle
   const [currentCameraIndex, setCurrentCameraIndex] = useState(0); // For cycle mode
   const [systemSettings, setSystemSettings] = useState({}); // System settings from backend
+  const [audioModalOpen, setAudioModalOpen] = useState(false); // Audio modal state
+  const [selectedAudioCamera, setSelectedAudioCamera] = useState(null); // Selected camera for audio
   const navigate = useNavigate();
 
   // Load system settings for display mode and cycle interval
@@ -67,8 +73,11 @@ const DashboardPage = ({ onLogout }) => {
     const loadDetections = async () => {
       try {
         const response = await apiClient.get('/faces/history/detections');
-        // Handle wrapped response format {detections: [...], total: N}
-        setRecentDetections(response.data?.detections || response.data || []);
+        // Handle new paginated response format
+        const detectionsData = response.data?.data ||
+          response.data?.detections ||  // Legacy format
+          response.data || [];
+        setRecentDetections(detectionsData);
       } catch (error) {
         console.error('Error loading detections:', error);
       }
@@ -83,9 +92,21 @@ const DashboardPage = ({ onLogout }) => {
       }
     };
 
+    const loadObjectStats = async () => {
+      try {
+        const response = await apiClient.get('/objects/detections/statistics');
+        setObjectStats(response.data);
+      } catch (error) {
+        console.error('Error loading object statistics:', error);
+        // Don't fail silently - object detection might not be enabled
+        setObjectStats(null);
+      }
+    };
+
     // Initial load
     loadDetections();
     loadStats();
+    loadObjectStats(); // v3.10.0: Load object detection stats
 
     // WebSocket setup
     const token = localStorage.getItem('token');
@@ -95,10 +116,24 @@ const DashboardPage = ({ onLogout }) => {
       // Try WebSocket connection first
       wsService.connect(token);
 
+      // Subscribe to token refresh events - reconnect WebSocket with new token
+      const unsubscribeTokenRefresh = authService.onTokenRefresh((newToken) => {
+        console.log('Token refreshed, reconnecting WebSocket with new token');
+
+        // Disconnect with old token
+        wsService.disconnect();
+
+        // Small delay to ensure clean disconnect
+        setTimeout(() => {
+          // Reconnect with new token
+          wsService.connect(newToken);
+        }, 100);
+      });
+
       // Listen for WebSocket status changes
       const unsubscribeStatus = wsService.on('status_change', ({ status }) => {
         setWsStatus(status);
-        
+
         // If WebSocket fails after max retries, fall back to polling
         if (status === 'error' || status === 'disconnected') {
           console.log('WebSocket unavailable, using polling fallback');
@@ -151,6 +186,7 @@ const DashboardPage = ({ onLogout }) => {
 
       // Cleanup
       return () => {
+        unsubscribeTokenRefresh();
         unsubscribeStatus();
         unsubscribeStats();
         unsubscribeCameraEvents();
@@ -213,23 +249,42 @@ const DashboardPage = ({ onLogout }) => {
     }
   };
 
+  // Handler for opening audio modal
+  const handleAudioClick = (camera) => {
+    setSelectedAudioCamera(camera);
+    setAudioModalOpen(true);
+  };
+
   // Helper function to render a single camera
   const renderCamera = (camera) => {
     if (!camera) return null;
-    
+
     return (
       <div key={camera.camera_id} style={styles.cameraCard}>
         <div style={styles.cameraHeader}>
           <h3 style={styles.cameraName}>{camera.name || camera.camera_id}</h3>
-          <span style={camera.is_active ? styles.liveIndicator : styles.offlineIndicator}>
-            {camera.is_active ? '🔴 LIVE' : '⚫ OFFLINE'}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {/* Audio button - only show for active cameras */}
+            {camera.is_active && (
+              <Button
+                variant="tertiary"
+                size="small"
+                onClick={() => handleAudioClick(camera)}
+                icon="🎤"
+                title="Two-way audio"
+                aria-label={`Start two-way audio with ${camera.name || camera.camera_id}`}
+              />
+            )}
+            <span style={camera.is_active ? styles.liveIndicator : styles.offlineIndicator}>
+              {camera.is_active ? '🔴 LIVE' : '⚫ OFFLINE'}
+            </span>
+          </div>
         </div>
         {camera.is_active ? (
-          <img 
+          <img
             src={`/api/cameras/${camera.camera_id}/stream`}
             alt={`${camera.name || camera.camera_id} stream`}
-            className="video-stream" 
+            className="video-stream"
             style={styles.videoStream}
             onError={(e) => {
               e.target.onerror = null;
@@ -272,37 +327,96 @@ const DashboardPage = ({ onLogout }) => {
               </span>
             )}
           </div>
-          <button onClick={() => navigate('/recordings')} className="btn btn-secondary">
-            📼 Recordings
-          </button>
-          <button onClick={() => navigate('/settings')} className="btn btn-primary">
-            ⚙️ Settings
-          </button>
-          <button onClick={onLogout} className="btn btn-danger">
-            🚪 Logout
-          </button>
+          <Button
+            variant="secondary"
+            size="medium"
+            onClick={() => navigate('/recordings')}
+            icon="📼"
+          >
+            Recordings
+          </Button>
+          <Button
+            variant="primary"
+            size="medium"
+            onClick={() => navigate('/settings')}
+            icon="⚙️"
+          >
+            Settings
+          </Button>
+          <Button
+            variant="destructive"
+            size="medium"
+            onClick={onLogout}
+            icon="🚪"
+          >
+            Logout
+          </Button>
         </div>
       </header>
 
-      {/* Face Recognition Stats Banner */}
-      {statistics.total_people > 0 && (
+      {/* Detection Stats Banner - v3.10.0: Combined Face + Object Detection */}
+      {(statistics.total_people > 0 || objectStats?.total_detections > 0) && (
         <div style={styles.statsBanner}>
-          <div style={styles.statItem}>
-            <span style={styles.statLabel}>Known People:</span>
-            <span style={styles.statValue}>{statistics.total_people}</span>
-          </div>
-          <div style={styles.statItem}>
-            <span style={styles.statLabel}>Recognitions Today:</span>
-            <span style={styles.statValue}>{statistics.recognitions_today || 0}</span>
-          </div>
-          <div style={styles.statItem}>
-            <span style={styles.statLabel}>Last Recognition:</span>
-            <span style={styles.statValue}>
-              {statistics.last_recognition 
-                ? new Date(statistics.last_recognition).toLocaleTimeString()
-                : 'Never'}
-            </span>
-          </div>
+          {/* Face Recognition Stats */}
+          {statistics.total_people > 0 && (
+            <>
+              <div style={styles.statItem}>
+                <span style={styles.statIcon}>👤</span>
+                <div>
+                  <span style={styles.statLabel}>Known People</span>
+                  <span style={styles.statValue}>{statistics.total_people}</span>
+                </div>
+              </div>
+              <div style={styles.statItem}>
+                <span style={styles.statIcon}>✅</span>
+                <div>
+                  <span style={styles.statLabel}>Recognitions Today</span>
+                  <span style={styles.statValue}>{statistics.recognitions_today || 0}</span>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Object Detection Stats - v3.10.0 */}
+          {objectStats && objectStats.total_detections > 0 && (
+            <>
+              <div style={styles.statDivider}></div>
+              {objectStats.by_class.vehicle > 0 && (
+                <div style={styles.statItem}>
+                  <span style={styles.statIcon}>🚗</span>
+                  <div>
+                    <span style={styles.statLabel}>Vehicles</span>
+                    <span style={styles.statValue}>{objectStats.by_class.vehicle}</span>
+                  </div>
+                </div>
+              )}
+              {objectStats.by_class.animal > 0 && (
+                <div style={styles.statItem}>
+                  <span style={styles.statIcon}>🐾</span>
+                  <div>
+                    <span style={styles.statLabel}>Animals</span>
+                    <span style={styles.statValue}>{objectStats.by_class.animal}</span>
+                  </div>
+                </div>
+              )}
+              {objectStats.by_class.package > 0 && (
+                <div style={styles.statItem}>
+                  <span style={styles.statIcon}>📦</span>
+                  <div>
+                    <span style={styles.statLabel}>Packages</span>
+                    <span style={styles.statValue}>{objectStats.by_class.package}</span>
+                  </div>
+                </div>
+              )}
+              <div style={styles.statItem}>
+                <span style={styles.statIcon}>🔍</span>
+                <div>
+                  <span style={styles.statLabel}>Total Detections</span>
+                  <span style={styles.statValue}>{objectStats.total_detections}</span>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -312,34 +426,38 @@ const DashboardPage = ({ onLogout }) => {
           <h2>Live Camera Feeds</h2>
           {cameras.length > 0 && (
             <div style={styles.displayModeSelector}>
-              <button
+              <Button
+                variant={displayMode === 'grid' ? 'primary' : 'secondary'}
+                size="small"
                 onClick={() => setDisplayMode('grid')}
-                className={`btn btn-sm ${displayMode === 'grid' ? 'btn-primary' : 'btn-secondary'}`}
                 title="Grid View - Display all cameras in a responsive grid layout (best for 2-6 cameras)"
               >
                 ▦
-              </button>
-              <button
+              </Button>
+              <Button
+                variant={displayMode === 'vertical' ? 'primary' : 'secondary'}
+                size="small"
                 onClick={() => setDisplayMode('vertical')}
-                className={`btn btn-sm ${displayMode === 'vertical' ? 'btn-primary' : 'btn-secondary'}`}
                 title="Vertical Stack - Stack cameras vertically, one per row (best for 1-3 cameras)"
               >
                 ☰
-              </button>
-              <button
+              </Button>
+              <Button
+                variant={displayMode === 'horizontal' ? 'primary' : 'secondary'}
+                size="small"
                 onClick={() => setDisplayMode('horizontal')}
-                className={`btn btn-sm ${displayMode === 'horizontal' ? 'btn-primary' : 'btn-secondary'}`}
                 title="Horizontal Stack - Line up cameras side-by-side with horizontal scroll (best for multiple cameras)"
               >
                 ≡
-              </button>
-              <button
+              </Button>
+              <Button
+                variant={displayMode === 'cycle' ? 'primary' : 'secondary'}
+                size="small"
                 onClick={() => setDisplayMode('cycle')}
-                className={`btn btn-sm ${displayMode === 'cycle' ? 'btn-primary' : 'btn-secondary'}`}
                 title="Cycle Mode - Auto-rotate through cameras one at a time (interval configured in System Settings)"
               >
                 🔄
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -348,12 +466,14 @@ const DashboardPage = ({ onLogout }) => {
           <div style={styles.noCameras}>
             <p>📹 No cameras configured yet.</p>
             <p style={styles.noCamerasSubtext}>Add your first camera to start monitoring</p>
-            <button
+            <Button
+              variant="primary"
+              size="medium"
               onClick={() => navigate('/settings')}
-              className="btn btn-primary"
+              icon="➕"
             >
-              ➕ Add Camera
-            </button>
+              Add Camera
+            </Button>
           </div>
         ) : (
           <>
@@ -422,9 +542,22 @@ const DashboardPage = ({ onLogout }) => {
           <li>✓ Motion Detection</li>
           <li>✓ Automatic Recording</li>
           <li>{statistics.total_people > 0 ? '✓' : '○'} Face Recognition {statistics.total_people === 0 && '(Add people to enable)'}</li>
+          <li>{objectStats?.total_detections > 0 ? '✓' : '○'} Object Detection (v3.10.0) {!objectStats?.total_detections && '(YOLO disabled)'}</li>
           <li>✓ OpenCV Processing</li>
+          <li>✓ Two-Way Audio (v3.10.0)</li>
         </ul>
       </div>
+
+      {/* Two-Way Audio Modal */}
+      <AudioModal
+        isOpen={audioModalOpen}
+        onClose={() => {
+          setAudioModalOpen(false);
+          setSelectedAudioCamera(null);
+        }}
+        cameraId={selectedAudioCamera?.camera_id}
+        cameraName={selectedAudioCamera?.name}
+      />
     </div>
   );
 };
@@ -516,18 +649,31 @@ const styles = {
   },
   statItem: {
     display: 'flex',
-    flexDirection: 'column',
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: '12px',
+  },
+  statIcon: {
+    fontSize: '24px',
+    flexShrink: 0,
   },
   statLabel: {
-    fontSize: '0.9em',
+    fontSize: '0.85em',
     color: 'var(--text-secondary)',
-    marginBottom: '5px',
+    display: 'block',
+    marginBottom: '4px',
   },
   statValue: {
-    fontSize: '1.5em',
-    fontWeight: 'bold',
+    fontSize: '1.4em',
+    fontWeight: '700',
     color: 'var(--text-primary)',
+    display: 'block',
+  },
+  statDivider: {
+    width: '1px',
+    height: '40px',
+    backgroundColor: 'var(--border-panel)',
+    margin: '0 8px',
   },
   videoContainer: {
     marginBottom: '30px',
@@ -740,6 +886,21 @@ const styles = {
     color: 'var(--text-secondary)',
     fontSize: '1.2em',
     fontStyle: 'italic',
+  },
+  audioButton: {
+    background: 'linear-gradient(135deg, var(--theme-primary), var(--theme-secondary))',
+    border: 'none',
+    borderRadius: '8px',
+    padding: '6px 12px',
+    fontSize: '18px',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    minHeight: '36px',
+    minWidth: '36px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
   },
 };
 

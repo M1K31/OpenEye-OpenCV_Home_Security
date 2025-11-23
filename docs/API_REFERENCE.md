@@ -1,6 +1,6 @@
 # OpenEye API Reference Guide
-**Version**: 3.5.3  
-**Last Updated**: 2025-10-18
+**Version**: 3.10.0
+**Last Updated**: 2025-11-15
 
 ## Table of Contents
 1. [Authentication](#authentication)
@@ -8,11 +8,12 @@
 3. [Recordings](#recordings)
 4. [Face Recognition](#face-recognition)
 5. [Detection History](#detection-history)
-6. [Settings](#settings)
-7. [Alerts](#alerts)
-8. [System](#system)
-9. [Data Models](#data-models)
-10. [Error Handling](#error-handling)
+6. [Object Detection](#object-detection) **(v3.10.0 NEW)**
+7. [Settings](#settings)
+8. [Alerts](#alerts)
+9. [System](#system)
+10. [Data Models](#data-models)
+11. [Error Handling](#error-handling)
 
 ---
 
@@ -389,6 +390,333 @@ Get detection statistics
   }
 }
 ```
+
+---
+
+## Object Detection
+
+**NEW in v3.10.0**: AI-powered object detection using YOLOv8
+
+### GET /api/objects/detections/history
+Get object detection history with pagination and filtering
+
+**Headers**: `Authorization: Bearer {token}`
+
+**Query Parameters**:
+- `camera_id` (str, optional): Filter by camera
+- `object_class` (str, optional): Filter by class (`vehicle`, `animal`, `package`, `person`)
+- `identified_object_id` (int, optional): Filter by identified object
+- `start_date` (str, optional): Start date (ISO 8601 format)
+- `end_date` (str, optional): End date (ISO 8601 format)
+- `page` (int, default=1): Page number
+- `page_size` (int, default=20, max=100): Items per page
+
+**Response**:
+```json
+{
+  "data": [
+    {
+      "id": 123,
+      "camera_id": "driveway",
+      "object_class": "vehicle",
+      "object_subclass": "car",
+      "confidence": 0.92,
+      "detected_at": "2025-11-15T10:30:15Z",
+      "bbox_x": 100,
+      "bbox_y": 50,
+      "bbox_width": 200,
+      "bbox_height": 150,
+      "frame_width": 1920,
+      "frame_height": 1080,
+      "motion_detected": true,
+      "recording_id": 456,
+      "identified_object_id": 5,
+      "identified_object_name": "John's Tesla"
+    }
+  ],
+  "total": 1543,
+  "page": 1,
+  "page_size": 20,
+  "total_pages": 78
+}
+```
+
+**Example**:
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/api/objects/detections/history?object_class=vehicle&page=1"
+```
+
+### GET /api/objects/detections/statistics
+Get aggregated object detection statistics
+
+**Headers**: `Authorization: Bearer {token}`
+
+**Query Parameters**:
+- `camera_id` (str, optional): Filter by camera
+- `days` (int, default=7): Number of days to analyze
+
+**Response**:
+```json
+{
+  "total_detections": 1543,
+  "by_class": {
+    "vehicle": 892,
+    "animal": 421,
+    "package": 230,
+    "person": 0
+  },
+  "by_camera": {
+    "driveway": 654,
+    "front_door": 512,
+    "backyard": 377
+  },
+  "by_subclass": {
+    "car": 650,
+    "truck": 242,
+    "dog": 310,
+    "cat": 111,
+    "backpack": 150,
+    "handbag": 80
+  },
+  "recent_detections": [
+    {
+      "id": 1543,
+      "object_class": "vehicle",
+      "object_subclass": "car",
+      "detected_at": "2025-11-15T10:30:15Z",
+      "camera_id": "driveway"
+    }
+  ]
+}
+```
+
+**Example**:
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/api/objects/detections/statistics?days=30"
+```
+
+### GET /api/objects/identified
+List all identified objects (named vehicles, pets, etc.)
+
+**Headers**: `Authorization: Bearer {token}`
+
+**Query Parameters**:
+- `object_class` (str, optional): Filter by class (`vehicle`, `animal`, `package`)
+
+**Response**:
+```json
+[
+  {
+    "id": 5,
+    "object_id": "johns_tesla",
+    "name": "John's Tesla",
+    "object_class": "vehicle",
+    "description": "Blue Tesla Model 3",
+    "detection_count": 87,
+    "first_seen_at": "2025-10-01T08:00:00Z",
+    "last_seen_at": "2025-11-15T10:30:15Z",
+    "created_at": "2025-10-01T07:55:00Z",
+    "updated_at": "2025-11-15T10:30:15Z"
+  },
+  {
+    "id": 8,
+    "object_id": "my_dog_rex",
+    "name": "My Dog Rex",
+    "object_class": "animal",
+    "description": "Golden Retriever",
+    "detection_count": 312,
+    "first_seen_at": "2025-09-15T12:00:00Z",
+    "last_seen_at": "2025-11-15T09:15:00Z"
+  }
+]
+```
+
+**Example**:
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/api/objects/identified?object_class=vehicle"
+```
+
+### POST /api/objects/identified
+Create a new identified object
+
+**Headers**:
+- `Authorization: Bearer {token}`
+- `Content-Type: application/json`
+
+**Request Body**:
+```json
+{
+  "object_id": "johns_tesla",
+  "name": "John's Tesla",
+  "object_class": "vehicle",
+  "description": "Blue Tesla Model 3"
+}
+```
+
+**Validation Rules**:
+- `object_id`: Must be unique, lowercase alphanumeric with underscores
+- `name`: Required, max 100 characters
+- `object_class`: Must be one of: `vehicle`, `animal`, `package`
+- `description`: Optional, max 500 characters
+
+**Response**:
+```json
+{
+  "id": 5,
+  "object_id": "johns_tesla",
+  "name": "John's Tesla",
+  "object_class": "vehicle",
+  "description": "Blue Tesla Model 3",
+  "detection_count": 0,
+  "first_seen_at": null,
+  "last_seen_at": null,
+  "created_at": "2025-11-15T10:35:00Z",
+  "updated_at": "2025-11-15T10:35:00Z"
+}
+```
+
+**Status Codes**:
+- `201 Created`: Successfully created
+- `400 Bad Request`: Validation error (invalid object_id, duplicate, etc.)
+- `401 Unauthorized`: Missing/invalid token
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/api/objects/identified \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "object_id": "johns_tesla",
+    "name": "John'\''s Tesla",
+    "object_class": "vehicle",
+    "description": "Blue Tesla Model 3"
+  }'
+```
+
+### GET /api/objects/identified/{object_id}
+Get details of a specific identified object
+
+**Headers**: `Authorization: Bearer {token}`
+
+**Path Parameters**:
+- `object_id` (str): Unique identifier of the object
+
+**Response**:
+```json
+{
+  "id": 5,
+  "object_id": "johns_tesla",
+  "name": "John's Tesla",
+  "object_class": "vehicle",
+  "description": "Blue Tesla Model 3",
+  "detection_count": 87,
+  "first_seen_at": "2025-10-01T08:00:00Z",
+  "last_seen_at": "2025-11-15T10:30:15Z",
+  "recent_detections": [
+    {
+      "id": 1543,
+      "camera_id": "driveway",
+      "detected_at": "2025-11-15T10:30:15Z",
+      "confidence": 0.92
+    }
+  ]
+}
+```
+
+**Status Codes**:
+- `200 OK`: Success
+- `404 Not Found`: Object ID not found
+
+### PUT /api/objects/identified/{object_id}
+Update an identified object
+
+**Headers**:
+- `Authorization: Bearer {token}`
+- `Content-Type: application/json`
+
+**Path Parameters**:
+- `object_id` (str): Unique identifier of the object
+
+**Request Body** (all fields optional):
+```json
+{
+  "name": "John's New Tesla",
+  "description": "Red Tesla Model Y",
+  "object_class": "vehicle"
+}
+```
+
+**Response**:
+```json
+{
+  "id": 5,
+  "object_id": "johns_tesla",
+  "name": "John's New Tesla",
+  "object_class": "vehicle",
+  "description": "Red Tesla Model Y",
+  "detection_count": 87,
+  "updated_at": "2025-11-15T11:00:00Z"
+}
+```
+
+**Status Codes**:
+- `200 OK`: Successfully updated
+- `404 Not Found`: Object ID not found
+- `400 Bad Request`: Validation error
+
+### DELETE /api/objects/identified/{object_id}
+Delete an identified object
+
+**Headers**: `Authorization: Bearer {token}`
+
+**Path Parameters**:
+- `object_id` (str): Unique identifier of the object
+
+**Response**:
+```
+204 No Content
+```
+
+**Status Codes**:
+- `204 No Content`: Successfully deleted
+- `404 Not Found`: Object ID not found
+
+**Note**: This does not delete associated detection events, only the identification link.
+
+### POST /api/objects/detections/{detection_id}/link
+Link a detection to an identified object
+
+**Headers**:
+- `Authorization: Bearer {token}`
+- `Content-Type: application/json`
+
+**Path Parameters**:
+- `detection_id` (int): ID of the detection event
+
+**Request Body**:
+```json
+{
+  "identified_object_id": 5
+}
+```
+
+**Response**:
+```json
+{
+  "id": 123,
+  "identified_object_id": 5,
+  "identified_object_name": "John's Tesla",
+  "updated_at": "2025-11-15T11:05:00Z"
+}
+```
+
+**Status Codes**:
+- `200 OK`: Successfully linked
+- `404 Not Found`: Detection or identified object not found
+- `400 Bad Request`: Object class mismatch (e.g., linking vehicle detection to animal object)
 
 ---
 

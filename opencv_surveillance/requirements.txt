@@ -60,6 +60,17 @@ azure-storage-blob>=12.19.0  # Azure Blob Storage
 # Mobile Backend Support
 websockets>=12.0  # For real-time updates to mobile
 
+# Two-Way Audio (v3.10.0) - FREE & OPEN SOURCE
+pyaudio>=0.2.13  # Audio I/O library
+aiortc>=1.6.0  # WebRTC implementation for Python
+av>=11.0.0  # Audio/video processing (required by aiortc)
+
+# Object Detection (v3.10.0) - YOLO - FREE & OPEN SOURCE
+ultralytics>=8.0.0  # YOLOv8/v9/v10 for object detection (vehicles, animals, packages)
+torch>=2.0.0  # PyTorch framework (required by YOLO)
+torchvision>=0.15.0  # Computer vision models and datasets
+scipy>=1.10.0  # Scientific computing for YOLO operations
+
 # PostgreSQL (Phase 6 - Production Database) - FREE & OPEN SOURCE
 psycopg2-binary>=2.9.9  # PostgreSQL adapter
 

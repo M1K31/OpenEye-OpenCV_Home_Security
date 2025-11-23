@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from backend.database.session import SessionLocal
 from backend.database import crud, models
 from backend.core.performance import paginate, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
+from backend.api.schemas.pagination import PaginatedResponse
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -55,15 +56,6 @@ class RecordingEventResponse(BaseModel):
         from_attributes = True
 
 
-class FaceDetectionListResponse(BaseModel):
-    detections: List[FaceDetectionEventResponse]
-    total: int
-    filtered: int
-    limit: int = 50
-    skip: int = 0
-    has_more: bool = False
-
-
 def get_db():
     """Dependency to get database session"""
     db = SessionLocal()
@@ -74,7 +66,7 @@ def get_db():
 
 
 @router.get("/history/detections",
-            response_model=FaceDetectionListResponse)
+            response_model=PaginatedResponse[FaceDetectionEventResponse])
 def get_detection_history(
     camera_id: Optional[str] = Query(None, description="Filter by camera ID"),
     person_name: Optional[str] = Query(None, description="Filter by person name"),
@@ -91,11 +83,15 @@ def get_detection_history(
     - Paginated results (default 50, max 1000)
     - Efficient sorting by detection time
 
-    - **camera_id**: Optional camera ID to filter by
-    - **person_name**: Optional person name to filter by
-    - **hours**: Number of hours to look back (default: 24)
-    - **page**: Page number (default: 1)
-    - **page_size**: Items per page (default: 50, max: 1000)
+    Args:
+        - **camera_id**: Optional camera ID to filter by
+        - **person_name**: Optional person name to filter by
+        - **hours**: Number of hours to look back (default: 24)
+        - **page**: Page number (default: 1)
+        - **page_size**: Items per page (default: 50, max: 1000)
+
+    Returns:
+        PaginatedResponse with detection events and pagination metadata
     """
     try:
         # Build query with filters (apply filters FIRST for performance)
@@ -115,6 +111,9 @@ def get_detection_history(
 
         # Order by most recent
         query = query.order_by(models.FaceDetectionEvent.detected_at.desc())
+
+        # Get total count (before pagination)
+        total_count = db.query(models.FaceDetectionEvent).count()
 
         # Apply pagination (this counts the filtered results, not the entire table)
         events, filtered_count, total_pages = paginate(query, page=page, page_size=page_size)
@@ -140,17 +139,17 @@ def get_detection_history(
                 )
             )
 
-        # Calculate skip for backward compatibility
-        skip = (page - 1) * page_size
-
-        return FaceDetectionListResponse(
-            detections=results,
-            total=filtered_count,  # Use filtered count instead of total table count
-            filtered=filtered_count,
-            limit=page_size,
-            skip=skip,
-            has_more=page < total_pages
-        )
+        return {
+            "data": results,
+            "pagination": {
+                "total": total_count,
+                "filtered": filtered_count,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages,
+                "has_more": page < total_pages
+            }
+        }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

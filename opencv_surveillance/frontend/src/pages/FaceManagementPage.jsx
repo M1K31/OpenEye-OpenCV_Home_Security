@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import apiClient from '../api/apiClient';
 import HelpButton from '../components/HelpButton';
 import { HELP_CONTENT } from '../utils/helpContent';
+import { logger } from '../utils/logger';
 import './FaceManagementPage.css';
 
 const FaceManagementPage = ({ embedded = false }) => {
@@ -33,8 +34,9 @@ const FaceManagementPage = ({ embedded = false }) => {
   const loadPeople = async () => {
     try {
       const response = await apiClient.get('/faces/people');
-      // Handle wrapped response or legacy array response
-      const peopleData = response.data?.people || 
+      // Handle new paginated response format
+      const peopleData = response.data?.data ||
+        response.data?.people ||  // Legacy format
         (Array.isArray(response.data) ? response.data : []);
       setPeople(peopleData);
     } catch (error) {
@@ -47,7 +49,7 @@ const FaceManagementPage = ({ embedded = false }) => {
       const response = await apiClient.get('/faces/statistics');
       setStatistics(response.data);
     } catch (error) {
-      console.error('Error loading statistics:', error);
+      logger.error('Error loading statistics:', error);
     }
   };
 
@@ -56,7 +58,7 @@ const FaceManagementPage = ({ embedded = false }) => {
       const response = await apiClient.get('/faces/settings');
       setSettings(response.data);
     } catch (error) {
-      console.error('Error loading settings:', error);
+      logger.error('Error loading settings:', error);
     }
   };
 
@@ -99,18 +101,18 @@ const FaceManagementPage = ({ embedded = false }) => {
   };
 
   const handleFileSelect = (e) => {
-    console.log('[FaceManagement] File input changed');
-    console.log('[FaceManagement] Files selected:', e.target.files);
-    console.log('[FaceManagement] Number of files:', e.target.files.length);
+    logger.log('[FaceManagement] File input changed');
+    logger.log('[FaceManagement] Files selected:', e.target.files);
+    logger.log('[FaceManagement] Number of files:', e.target.files.length);
     const filesArray = Array.from(e.target.files);
-    console.log('[FaceManagement] Files array:', filesArray);
+    logger.log('[FaceManagement] Files array:', filesArray);
     setUploadFiles(filesArray);
   };
 
   const uploadPhotos = async (personName) => {
-    console.log('[FaceManagement] uploadPhotos called for:', personName);
-    console.log('[FaceManagement] uploadFiles:', uploadFiles);
-    console.log('[FaceManagement] uploadFiles.length:', uploadFiles.length);
+    logger.log('[FaceManagement] uploadPhotos called for:', personName);
+    logger.log('[FaceManagement] uploadFiles:', uploadFiles);
+    logger.log('[FaceManagement] uploadFiles.length:', uploadFiles.length);
     
     if (uploadFiles.length === 0) {
       showMessage('Please select photos to upload', 'error');
@@ -120,24 +122,24 @@ const FaceManagementPage = ({ embedded = false }) => {
     setLoading(true);
     const formData = new FormData();
     uploadFiles.forEach(file => {
-      console.log('[FaceManagement] Appending file:', file.name, 'Size:', file.size);
+      logger.log('[FaceManagement] Appending file:', file.name, 'Size:', file.size);
       formData.append('files', file);
     });
 
-    console.log('[FaceManagement] FormData created, sending to API...');
+    logger.log('[FaceManagement] FormData created, sending to API...');
     
     try {
       const response = await apiClient.post(`/faces/people/${personName}/photos`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      console.log('[FaceManagement] Upload response:', response.data);
+      logger.log('[FaceManagement] Upload response:', response.data);
       showMessage(response.data.message, 'success');
       setUploadFiles([]);
       setSelectedPerson(null);
       loadPeople();
     } catch (error) {
-      console.error('[FaceManagement] Upload error:', error);
-      console.error('[FaceManagement] Error response:', error.response?.data);
+      logger.error('[FaceManagement] Upload error:', error);
+      logger.error('[FaceManagement] Error response:', error.response?.data);
       showMessage('Error uploading photos: ' + error.message, 'error');
     } finally {
       setLoading(false);
@@ -309,7 +311,7 @@ const FaceManagementPage = ({ embedded = false }) => {
                 <div className="person-actions">
                   <button
                     onClick={() => {
-                      console.log('[FaceManagement] Add Photos clicked for:', person.name);
+                      logger.log('[FaceManagement] Add Photos clicked for:', person.name);
                       setSelectedPerson(person.name);
                     }}
                     className="btn btn-primary btn-sm"
@@ -336,7 +338,7 @@ const FaceManagementPage = ({ embedded = false }) => {
         <div 
           className="modal-overlay" 
           onClick={() => {
-            console.log('[FaceManagement] Modal overlay clicked, closing modal');
+            logger.log('[FaceManagement] Modal overlay clicked, closing modal');
             setSelectedPerson(null);
           }}
           style={{
@@ -355,7 +357,7 @@ const FaceManagementPage = ({ embedded = false }) => {
           <div 
             className="modal-content" 
             onClick={(e) => {
-              console.log('[FaceManagement] Modal content clicked');
+              logger.log('[FaceManagement] Modal content clicked');
               e.stopPropagation();
             }}
             style={{
@@ -371,7 +373,7 @@ const FaceManagementPage = ({ embedded = false }) => {
             <h2 style={{ color: 'var(--text-primary)', marginTop: 0 }}>
               Add Photos for {selectedPerson}
             </h2>
-            {console.log('[FaceManagement] Modal is rendering for person:', selectedPerson)}
+            {logger.log('[FaceManagement] Modal is rendering for person:', selectedPerson)}
             <div style={{ margin: '20px 0' }}>
               <label 
                 htmlFor="photo-upload" 
@@ -390,7 +392,7 @@ const FaceManagementPage = ({ embedded = false }) => {
                 }}
                 onMouseOver={(e) => e.target.style.background = '#0056b3'}
                 onMouseOut={(e) => e.target.style.background = '#007bff'}
-                onClick={() => console.log('[FaceManagement] Choose Photos label clicked')}
+                onClick={() => logger.log('[FaceManagement] Choose Photos label clicked')}
               >
                 📁 Choose Photos
               </label>

@@ -8,6 +8,8 @@ from fastapi.testclient import TestClient
 
 from backend.database.session import Base
 from backend.database import models
+from backend.database import alert_models  # Import alert models to register them
+from backend.database.models import RefreshToken  # Explicitly import to register
 from backend.main import app
 from backend.database.session import get_db
 
@@ -15,7 +17,14 @@ from backend.database.session import get_db
 @pytest.fixture(scope="session")
 def engine():
     # session-scoped engine for fast tests; use in-memory SQLite
-    return create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    # CRITICAL: Use StaticPool to ensure all connections use the SAME in-memory database
+    # Without this, each connection gets its own separate in-memory database
+    from sqlalchemy.pool import StaticPool
+    return create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool
+    )
 
 
 @pytest.fixture
@@ -41,22 +50,37 @@ def client(db_session):
             pass
 
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as test_client:
-        yield test_client
-    app.dependency_overrides.clear()
+
+    # CRITICAL FIX: Disable startup/shutdown events during testing
+    # Startup events load cameras and create database sessions via get_db_context()
+    # which bypasses dependency injection and accesses production database
+    original_startup = app.router.on_startup.copy()
+    original_shutdown = app.router.on_shutdown.copy()
+    app.router.on_startup.clear()
+    app.router.on_shutdown.clear()
+
+    try:
+        with TestClient(app, raise_server_exceptions=True) as test_client:
+            yield test_client
+    finally:
+        # Restore original event handlers
+        app.router.on_startup = original_startup
+        app.router.on_shutdown = original_shutdown
+        app.dependency_overrides.clear()
 
 
 @pytest.fixture
 def test_user(db_session):
     """Create a test user for authentication tests"""
     from backend.database import crud
+    from backend.api.schemas import user as user_schema
 
-    user = crud.create_user(
-        db=db_session,
+    user_data = user_schema.UserCreate(
         username="testuser",
         password="testpass123",
         email="test@example.com"
     )
+    user = crud.create_user(db=db_session, user=user_data)
     return user
 
 
@@ -64,7 +88,7 @@ def test_user(db_session):
 def auth_headers(client, test_user):
     """Generate authentication headers with valid JWT token"""
     response = client.post(
-        "/api/auth/login",
+        "/api/auth/login-2fa",
         json={"username": "testuser", "password": "testpass123"}
     )
     assert response.status_code == 200
@@ -77,11 +101,11 @@ def test_camera(db_session):
     """Create a test camera in the database"""
     camera = models.Camera(
         camera_id="test_camera_1",
-        camera_name="Test Camera",
-        source_url="mock",
-        enabled=True,
+        camera_type="mock",
+        source="mock",
+        is_active=True,
         motion_detection_enabled=True,
-        face_recognition_enabled=True,
+        face_detection_enabled=True,
         recording_enabled=False
     )
     db_session.add(camera)

@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import notificationService from '../services/notificationService';
+import { Button, Switch } from '../components/universal';
 import './NotificationSettingsPage.css';
 
 const NotificationSettingsPage = () => {
@@ -50,7 +51,7 @@ const NotificationSettingsPage = () => {
       setProviders(providersData.providers || []);
       setTemplates(templatesData.templates || []);
     } catch (err) {
-      console.error('Error loading notification settings:', err);
+      logger.error('Error loading notification settings:', err);
       setError('Failed to load notification settings. Please try again.');
     } finally {
       setLoading(false);
@@ -139,7 +140,7 @@ const NotificationSettingsPage = () => {
       await loadData();
       closeModal();
     } catch (err) {
-      console.error('Error saving provider:', err);
+      logger.error('Error saving provider:', err);
       alert(`Failed to save provider: ${err.response?.data?.detail || err.message}`);
     }
   };
@@ -153,7 +154,7 @@ const NotificationSettingsPage = () => {
       await notificationService.deleteProvider(providerId);
       await loadData();
     } catch (err) {
-      console.error('Error deleting provider:', err);
+      logger.error('Error deleting provider:', err);
       alert('Failed to delete provider. Please try again.');
     }
   };
@@ -190,7 +191,7 @@ const NotificationSettingsPage = () => {
       // Reload providers to update test status
       setTimeout(() => loadData(), 1000);
     } catch (err) {
-      console.error('Error testing provider:', err);
+      logger.error('Error testing provider:', err);
       setTestResult({
         success: false,
         message: 'Test failed',
@@ -280,7 +281,9 @@ const NotificationSettingsPage = () => {
               <div className="template-icon">{template.icon}</div>
               <h3>{template.display_name}</h3>
               <p>{template.description}</p>
-              <button className="btn btn-primary">Configure</button>
+              <Button variant="primary" size="medium">
+                Configure
+              </Button>
             </div>
           ))}
         </div>
@@ -304,17 +307,14 @@ const NotificationSettingsPage = () => {
                       </div>
                     </div>
                     <div className="provider-actions">
-                      <label className="toggle-switch">
-                        <input
-                          type="checkbox"
-                          checked={provider.enabled}
-                          onChange={async (e) => {
-                            await notificationService.updateProvider(provider.id, { enabled: e.target.checked });
-                            loadData();
-                          }}
-                        />
-                        <span className="toggle-slider"></span>
-                      </label>
+                      <Switch
+                        checked={provider.enabled}
+                        onChange={async (checked) => {
+                          await notificationService.updateProvider(provider.id, { enabled: checked });
+                          loadData();
+                        }}
+                        label=""
+                      />
                     </div>
                   </div>
 
@@ -334,15 +334,27 @@ const NotificationSettingsPage = () => {
                   </div>
 
                   <div className="provider-buttons">
-                    <button className="btn btn-sm btn-secondary" onClick={() => openTestModal(provider)}>
+                    <Button
+                      variant="secondary"
+                      size="small"
+                      onClick={() => openTestModal(provider)}
+                    >
                       Test
-                    </button>
-                    <button className="btn btn-sm btn-secondary" onClick={() => openEditModal(provider)}>
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="small"
+                      onClick={() => openEditModal(provider)}
+                    >
                       Edit
-                    </button>
-                    <button className="btn btn-sm btn-danger" onClick={() => handleDelete(provider.id)}>
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="small"
+                      onClick={() => handleDelete(provider.id)}
+                    >
                       Delete
-                    </button>
+                    </Button>
                   </div>
                 </div>
               );
@@ -357,7 +369,9 @@ const NotificationSettingsPage = () => {
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>{modalMode === 'create' ? 'Add' : 'Edit'} {selectedTemplate.display_name}</h2>
-              <button className="modal-close" onClick={closeModal}>&times;</button>
+              <Button variant="tertiary" size="small" onClick={closeModal}>
+                &times;
+              </Button>
             </div>
 
             <form onSubmit={handleSubmit}>
@@ -393,12 +407,21 @@ const NotificationSettingsPage = () => {
               </div>
 
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={closeModal}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="medium"
+                  onClick={closeModal}
+                >
                   Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="medium"
+                >
                   {modalMode === 'create' ? 'Create' : 'Save Changes'}
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -411,7 +434,9 @@ const NotificationSettingsPage = () => {
           <div className="modal-content modal-sm" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Test {testProvider.provider_name}</h2>
-              <button className="modal-close" onClick={closeTestModal}>&times;</button>
+              <Button variant="tertiary" size="small" onClick={closeTestModal}>
+                &times;
+              </Button>
             </div>
 
             <form onSubmit={handleTest}>
@@ -455,12 +480,23 @@ const NotificationSettingsPage = () => {
               </div>
 
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={closeTestModal}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="medium"
+                  onClick={closeTestModal}
+                >
                   Close
-                </button>
-                <button type="submit" className="btn btn-primary" disabled={testLoading}>
-                  {testLoading ? 'Sending...' : 'Send Test'}
-                </button>
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="medium"
+                  disabled={testLoading}
+                  loading={testLoading}
+                >
+                  Send Test
+                </Button>
               </div>
             </form>
           </div>

@@ -1,13 +1,13 @@
 // Copyright (c) 2025 Mikel Smart
 // This file is part of OpenEye-OpenCV_Home_Security
 import React, { useState, useEffect } from 'react';
-import { 
-  Plus, 
-  Trash2, 
-  Edit2, 
-  Power, 
-  PowerOff, 
-  Clock, 
+import {
+  Plus,
+  Trash2,
+  Edit2,
+  Power,
+  PowerOff,
+  Clock,
   Calendar,
   Camera,
   Bell,
@@ -19,6 +19,7 @@ import {
   Play
 } from 'lucide-react';
 import apiClient from '../api/apiClient';
+import { Button } from '../components/universal';
 import './AutomationsPage.css';
 
 const AutomationsPage = () => {
@@ -358,10 +359,14 @@ const AutomationsPage = () => {
           <h1>Automation Rules</h1>
           <p>Trigger actions when specific people are detected</p>
         </div>
-        <button className="btn btn-primary" onClick={handleCreateRule}>
-          <Plus size={20} />
+        <Button
+          variant="primary"
+          size="medium"
+          onClick={handleCreateRule}
+          icon={<Plus size={20} />}
+        >
           Create Rule
-        </button>
+        </Button>
       </div>
 
       {/* Statistics */}
@@ -393,10 +398,14 @@ const AutomationsPage = () => {
             <AlertCircle size={48} />
             <h3>No automation rules yet</h3>
             <p>Create your first rule to get started</p>
-            <button className="btn btn-primary" onClick={handleCreateRule}>
-              <Plus size={20} />
+            <Button
+              variant="primary"
+              size="medium"
+              onClick={handleCreateRule}
+              icon={<Plus size={20} />}
+            >
               Create First Rule
-            </button>
+            </Button>
           </div>
         ) : (
           rules.map(rule => (
@@ -408,34 +417,34 @@ const AutomationsPage = () => {
                   {!rule.enabled && <span className="status-badge disabled">Disabled</span>}
                 </div>
                 <div className="rule-actions">
-                  <button
-                    className="btn-icon"
+                  <Button
+                    variant="tertiary"
+                    size="small"
                     onClick={() => handleTestRule(rule.id)}
+                    icon={<Play size={18} />}
                     title="Test rule"
-                  >
-                    <Play size={18} />
-                  </button>
-                  <button
-                    className={`btn-icon ${rule.enabled ? 'enabled' : 'disabled'}`}
+                  />
+                  <Button
+                    variant="tertiary"
+                    size="small"
                     onClick={() => handleToggleRule(rule.id)}
+                    icon={rule.enabled ? <Power size={18} /> : <PowerOff size={18} />}
                     title={rule.enabled ? 'Disable' : 'Enable'}
-                  >
-                    {rule.enabled ? <Power size={18} /> : <PowerOff size={18} />}
-                  </button>
-                  <button
-                    className="btn-icon"
+                  />
+                  <Button
+                    variant="tertiary"
+                    size="small"
                     onClick={() => handleEditRule(rule)}
+                    icon={<Edit2 size={18} />}
                     title="Edit"
-                  >
-                    <Edit2 size={18} />
-                  </button>
-                  <button
-                    className="btn-icon danger"
+                  />
+                  <Button
+                    variant="destructive"
+                    size="small"
                     onClick={() => handleDeleteRule(rule.id)}
+                    icon={<Trash2 size={18} />}
                     title="Delete"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                  />
                 </div>
               </div>
 
@@ -475,9 +484,12 @@ const AutomationsPage = () => {
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>{editingRule ? 'Edit Rule' : 'Create Rule'}</h2>
-              <button className="btn-icon" onClick={() => setShowModal(false)}>
-                <X size={24} />
-              </button>
+              <Button
+                variant="tertiary"
+                size="small"
+                onClick={() => setShowModal(false)}
+                icon={<X size={24} />}
+              />
             </div>
 
             <div className="modal-body">
@@ -659,40 +671,46 @@ const AutomationsPage = () => {
                           </option>
                         ))}
                       </select>
-                      <button
+                      <Button
                         type="button"
-                        className="btn-icon danger"
+                        variant="destructive"
+                        size="small"
                         onClick={() => handleRemoveAction(index)}
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                        icon={<Trash2 size={18} />}
+                      />
                     </div>
                     {renderActionConfig(action, index)}
                   </div>
                 ))}
-                <button
+                <Button
                   type="button"
-                  className="btn btn-secondary"
+                  variant="secondary"
+                  size="medium"
                   onClick={handleAddAction}
+                  icon={<Plus size={18} />}
                 >
-                  <Plus size={18} />
                   Add Action
-                </button>
+                </Button>
               </div>
             </div>
 
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowModal(false)}>
+              <Button
+                variant="secondary"
+                size="medium"
+                onClick={() => setShowModal(false)}
+              >
                 Cancel
-              </button>
-              <button 
-                className="btn btn-primary" 
+              </Button>
+              <Button
+                variant="primary"
+                size="medium"
                 onClick={handleSaveRule}
                 disabled={!formData.name || !formData.person_name || formData.actions.length === 0}
+                icon={<Save size={18} />}
               >
-                <Save size={18} />
                 Save Rule
-              </button>
+              </Button>
             </div>
           </div>
         </div>

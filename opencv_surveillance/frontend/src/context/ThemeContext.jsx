@@ -49,7 +49,7 @@ export const ThemeProvider = ({ children }) => {
     // Also apply to body for backward compatibility
     document.body.className = `${currentTheme}-theme`;
     
-    console.log(`[ThemeContext] Applied theme: ${currentTheme}`);
+    logger.log(`[ThemeContext] Applied theme: ${currentTheme}`);
   }, [currentTheme]);
 
   const value = {

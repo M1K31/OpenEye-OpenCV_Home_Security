@@ -1,4 +1,5 @@
 /**
+import { logger } from '../utils/logger';
  * OpenEye WebSocket Service
  * Copyright (c) 2025 M1K31
  * 
@@ -41,7 +42,7 @@ class WebSocketService {
    */
   connect(token) {
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
-      console.log('WebSocket already connected or connecting');
+      logger.log('WebSocket already connected or connecting');
       return;
     }
 
@@ -54,7 +55,7 @@ class WebSocketService {
     this.url = `${protocol}//${host}/api/ws/statistics?token=${encodeURIComponent(token)}`;
     
     this.updateStatus('connecting');
-    console.log('Connecting to WebSocket:', this.url.replace(token, '***'));
+    logger.log('Connecting to WebSocket:', this.url.replace(token, '***'));
 
     try {
       this.ws = new WebSocket(this.url);
@@ -64,7 +65,7 @@ class WebSocketService {
       this.ws.onerror = this.handleError.bind(this);
       this.ws.onclose = this.handleClose.bind(this);
     } catch (error) {
-      console.error('Failed to create WebSocket:', error);
+      logger.error('Failed to create WebSocket:', error);
       this.updateStatus('error');
       this.scheduleReconnect();
     }
@@ -74,7 +75,7 @@ class WebSocketService {
    * Handle WebSocket open event
    */
   handleOpen() {
-    console.log('WebSocket connected successfully');
+    logger.log('WebSocket connected successfully');
     this.reconnectAttempts = 0;
     this.reconnectDelay = 1000;
     this.updateStatus('connected');
@@ -102,19 +103,19 @@ class WebSocketService {
             try {
               callback(message);
             } catch (error) {
-              console.error(`Error in ${messageType} listener:`, error);
+              logger.error(`Error in ${messageType} listener:`, error);
             }
           });
         }
 
         // Log certain message types
         if (messageType === 'connection_status') {
-          console.log('Connection status:', message);
+          logger.log('Connection status:', message);
         } else if (messageType === 'statistics_update') {
           // Statistics updates are frequent, only log in debug mode
           // console.debug('Statistics update received');
         } else if (messageType !== 'ping' && messageType !== 'pong') {
-          console.log('WebSocket message:', messageType, message);
+          logger.log('WebSocket message:', messageType, message);
         }
       };
 
@@ -131,7 +132,7 @@ class WebSocketService {
         }
       }
     } catch (error) {
-      console.error('Failed to parse WebSocket message:', error);
+      logger.error('Failed to parse WebSocket message:', error);
     }
   }
 
@@ -139,7 +140,7 @@ class WebSocketService {
    * Handle WebSocket error
    */
   handleError(event) {
-    console.error('WebSocket error:', event);
+    logger.error('WebSocket error:', event);
     this.updateStatus('error');
     this.emit('error', { error: 'WebSocket connection error', event });
   }
@@ -148,7 +149,7 @@ class WebSocketService {
    * Handle WebSocket close event
    */
   handleClose(event) {
-    console.log('WebSocket closed:', event.code, event.reason);
+    logger.log('WebSocket closed:', event.code, event.reason);
     this.stopPingInterval();
     
     if (!this.isIntentionalClose) {
@@ -168,27 +169,35 @@ class WebSocketService {
     }
 
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('Max reconnection attempts reached, giving up');
-      this.emit('error', { 
-        error: 'Max reconnection attempts reached', 
-        fallback: 'polling' 
+      logger.error('Max reconnection attempts reached, giving up');
+      this.emit('error', {
+        error: 'Max reconnection attempts reached',
+        fallback: 'polling'
       });
       return;
     }
 
     this.reconnectAttempts++;
-    
+
     // Exponential backoff with jitter
     const delay = Math.min(
       this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1),
       this.maxReconnectDelay
     ) + Math.random() * 1000;
-    
-    console.log(`Reconnecting in ${Math.round(delay / 1000)}s (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-    
+
+    logger.log(`Reconnecting in ${Math.round(delay / 1000)}s (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+
     this.reconnectTimeout = setTimeout(() => {
-      if (this.token && !this.isIntentionalClose) {
-        this.connect(this.token);
+      if (!this.isIntentionalClose) {
+        // BUGFIX: Fetch fresh token from localStorage before reconnecting
+        // This prevents 403 errors when the token has been refreshed by authService
+        const freshToken = localStorage.getItem('access_token');
+        if (freshToken) {
+          logger.log('Using refreshed token for WebSocket reconnection');
+          this.connect(freshToken);
+        } else {
+          logger.error('No access token available for WebSocket reconnection');
+        }
       }
     }, delay);
   }
@@ -227,10 +236,10 @@ class WebSocketService {
       try {
         this.ws.send(JSON.stringify(message));
       } catch (error) {
-        console.error('Failed to send WebSocket message:', error);
+        logger.error('Failed to send WebSocket message:', error);
       }
     } else {
-      console.warn('WebSocket not connected, cannot send message');
+      logger.warn('WebSocket not connected, cannot send message');
     }
   }
 
@@ -342,7 +351,7 @@ class WebSocketService {
         try {
           callback(data);
         } catch (error) {
-          console.error(`Error in ${eventType} listener:`, error);
+          logger.error(`Error in ${eventType} listener:`, error);
         }
       });
     }

@@ -6,6 +6,7 @@ import axios from 'axios';
 import { ThemeProvider } from './context/ThemeContext';
 import authService from './services/authService';
 import ErrorBoundary from './components/ErrorBoundary';
+import { PageErrorBoundaryWithRouter } from './components/PageErrorBoundary';
 // REMOVED: import './themes.css'; - Now in main.jsx
 
 // New Layout Components
@@ -22,6 +23,7 @@ const CameraManagementPage = lazy(() => import('./pages/CameraManagementPage'));
 const CameraDiscoveryPage = lazy(() => import('./pages/CameraDiscoveryPage'));
 const FaceManagementPage = lazy(() => import('./pages/FaceManagementPage'));
 const FaceClusteringPage = lazy(() => import('./pages/FaceClusteringPage'));
+const DetectionsPage = lazy(() => import('./pages/DetectionsPage')); // v3.10.0: Unified detections
 const AlertSettingsPage = lazy(() => import('./pages/AlertSettingsPage'));
 const NotificationSettingsPage = lazy(() => import('./pages/NotificationSettingsPage'));
 const SystemSettingsPage = lazy(() => import('./pages/SystemSettingsPage'));
@@ -54,9 +56,28 @@ const PageLoadingFallback = () => (
 // for token management and automatic refresh
 
 function App() {
-  const [token, setToken] = useState(authService.getToken());
+  const [token, setToken] = useState(null);
   const [setupComplete, setSetupComplete] = useState(null);
   const [checkingSetup, setCheckingSetup] = useState(true);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    // Validate token on app mount
+    const validateToken = () => {
+      if (authService.isAuthenticated()) {
+        // Token exists and is valid
+        setToken(authService.getToken());
+      } else {
+        // Token is expired or doesn't exist - clear it
+        authService.setToken(null);
+        authService.setRefreshToken(null);
+        setToken(null);
+      }
+      setCheckingAuth(false);
+    };
+
+    validateToken();
+  }, []);
 
   useEffect(() => {
     // Check if setup is complete on initial load
@@ -66,7 +87,7 @@ function App() {
         const response = await axios.get('/api/setup/status');
         setSetupComplete(response.data.setup_complete);
       } catch (error) {
-        console.error('Error checking setup status:', error);
+        logger.error('Error checking setup status:', error);
         // If check fails, assume setup is complete to avoid blocking
         setSetupComplete(true);
       } finally {
@@ -86,11 +107,11 @@ function App() {
     setToken(null);
   };
 
-  // Show loading while checking setup status
-  if (checkingSetup) {
+  // Show loading while checking auth and setup status
+  if (checkingAuth || checkingSetup) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <div>Checking setup status...</div>
+        <div>{checkingAuth ? 'Validating session...' : 'Checking setup status...'}</div>
       </div>
     );
   }
@@ -135,102 +156,109 @@ function App() {
               {/* Section-based Navigation with Working Pages - Wrapped in Suspense for lazy loading */}
               <Route index element={<ErrorBoundary><LiveDashboard /></ErrorBoundary>} />
               <Route path="events" element={
-                <ErrorBoundary>
+                <PageErrorBoundaryWithRouter pageName="Events">
                   <Suspense fallback={<PageLoadingFallback />}>
                     <RecordingsPage />
                   </Suspense>
-                </ErrorBoundary>
+                </PageErrorBoundaryWithRouter>
               } />
               <Route path="timeline" element={
-                <ErrorBoundary>
+                <PageErrorBoundaryWithRouter pageName="Timeline">
                   <Suspense fallback={<PageLoadingFallback />}>
                     <TimelineView />
                   </Suspense>
-                </ErrorBoundary>
+                </PageErrorBoundaryWithRouter>
               } />
               <Route path="cameras" element={
-                <ErrorBoundary>
+                <PageErrorBoundaryWithRouter pageName="Camera Management">
                   <Suspense fallback={<PageLoadingFallback />}>
                     <CameraManagementPage />
                   </Suspense>
-                </ErrorBoundary>
+                </PageErrorBoundaryWithRouter>
               } />
               <Route path="cameras/discovery" element={
-                <ErrorBoundary>
+                <PageErrorBoundaryWithRouter pageName="Camera Discovery">
                   <Suspense fallback={<PageLoadingFallback />}>
                     <CameraDiscoveryPage />
                   </Suspense>
-                </ErrorBoundary>
+                </PageErrorBoundaryWithRouter>
               } />
               <Route path="faces" element={
-                <ErrorBoundary>
+                <PageErrorBoundaryWithRouter pageName="Face Management">
                   <Suspense fallback={<PageLoadingFallback />}>
                     <FaceManagementPage />
                   </Suspense>
-                </ErrorBoundary>
+                </PageErrorBoundaryWithRouter>
               } />
               <Route path="clusters" element={
-                <ErrorBoundary>
+                <PageErrorBoundaryWithRouter pageName="Face Clustering">
                   <Suspense fallback={<PageLoadingFallback />}>
                     <FaceClusteringPage />
                   </Suspense>
-                </ErrorBoundary>
+                </PageErrorBoundaryWithRouter>
+              } />
+              <Route path="detections" element={
+                <PageErrorBoundaryWithRouter pageName="Detections">
+                  <Suspense fallback={<PageLoadingFallback />}>
+                    <DetectionsPage />
+                  </Suspense>
+                </PageErrorBoundaryWithRouter>
               } />
               <Route path="automations" element={
-                <ErrorBoundary>
+                <PageErrorBoundaryWithRouter pageName="Automations">
                   <Suspense fallback={<PageLoadingFallback />}>
                     <AutomationsPage />
                   </Suspense>
-                </ErrorBoundary>
+                </PageErrorBoundaryWithRouter>
               } />
               <Route path="system" element={
-                <ErrorBoundary>
+                <PageErrorBoundaryWithRouter pageName="System Settings">
                   <Suspense fallback={<PageLoadingFallback />}>
                     <SystemSettingsPage />
                   </Suspense>
-                </ErrorBoundary>
+                </PageErrorBoundaryWithRouter>
               } />
               <Route path="system/alerts" element={
-                <ErrorBoundary>
+                <PageErrorBoundaryWithRouter pageName="Alert Settings">
                   <Suspense fallback={<PageLoadingFallback />}>
                     <AlertSettingsPage />
                   </Suspense>
-                </ErrorBoundary>
+                </PageErrorBoundaryWithRouter>
               } />
               <Route path="system/notifications" element={
-                <ErrorBoundary>
+                <PageErrorBoundaryWithRouter pageName="Notification Settings">
                   <Suspense fallback={<PageLoadingFallback />}>
                     <NotificationSettingsPage />
                   </Suspense>
-                </ErrorBoundary>
+                </PageErrorBoundaryWithRouter>
               } />
               <Route path="system/2fa" element={
-                <ErrorBoundary>
+                <PageErrorBoundaryWithRouter pageName="Two-Factor Authentication">
                   <Suspense fallback={<PageLoadingFallback />}>
                     <TwoFactorSettings />
                   </Suspense>
-                </ErrorBoundary>
+                </PageErrorBoundaryWithRouter>
               } />
               <Route path="themes" element={
-                <ErrorBoundary>
+                <PageErrorBoundaryWithRouter pageName="Themes">
                   <Suspense fallback={<PageLoadingFallback />}>
                     <ThemeSelectorPage />
                   </Suspense>
-                </ErrorBoundary>
+                </PageErrorBoundaryWithRouter>
               } />
               <Route path="system/hardware" element={
-                <ErrorBoundary>
+                <PageErrorBoundaryWithRouter pageName="Hardware Detection">
                   <Suspense fallback={<PageLoadingFallback />}>
                     <HardwareDetectionPage />
                   </Suspense>
-                </ErrorBoundary>
+                </PageErrorBoundaryWithRouter>
               } />
               <Route path="system/performance" element={
-                <ErrorBoundary>
+                <PageErrorBoundaryWithRouter pageName="Performance Dashboard">
                   <Suspense fallback={<PageLoadingFallback />}>
                     <PerformanceDashboard />
                   </Suspense>
-                </ErrorBoundary>
+                </PageErrorBoundaryWithRouter>
               } />
             </Route>
           </Routes>

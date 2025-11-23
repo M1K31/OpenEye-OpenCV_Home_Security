@@ -7,6 +7,276 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.10.1] - 2025-11-18
+
+### Added
+- **🎤 Enhanced Two-Way Audio Features** - Comprehensive UX improvements
+- **🧪 Test Infrastructure Improvements** - Established baseline coverage and fixed test suite
+  - Installed `pytest-cov` for coverage analysis (coverage 7.12.0, pytest-cov 7.0.0)
+  - **Current Coverage**: 27% → working toward 60% target
+  - Coverage configured in `pytest.ini` with HTML/XML reports
+  - **Test Results**: 34 passing (was 13), 10 failed, 21 errors (was 65+ errors)
+- **🧪 Backend Unit Tests** - Comprehensive test suite for core modules
+  - **cache.py**: 21 tests, 100% coverage (was 0%) - Tests for CacheEntry, SimpleCache, @cached decorator, singleton pattern
+  - Created `tests/core/test_cache.py` with full coverage of TTL expiration, invalidation patterns, statistics, thread safety
+  - **Push-to-Talk Mode**: Walkie-talkie style hold-to-talk button with visual feedback
+  - **Volume Control**: Adjustable volume slider (0-100%) for remote audio
+  - **Audio Level Indicators**: Real-time visualization for microphone and camera audio using Web Audio API
+  - **Audio Diagnostics Panel**: Collapsible diagnostics showing connection stats, bytes sent/received, track counts
+  - **Browser Autoplay Fix**: Automatic detection with user-triggered playback option for browsers blocking autoplay
+  - Updated `TwoWayAudio.jsx` (713 lines, +383 lines) with all 5 enhancements
+  - Updated `TwoWayAudio.css` (559 lines, +318 lines) with theme-aware styling
+
+### Fixed
+- **🔌 WebSocket 403 Authentication Errors** - Critical bug fix for intermittent connection failures
+  - **Root Cause**: WebSocketService was reusing stale tokens during reconnections after token refresh
+  - **Fix**: Modified `scheduleReconnect()` in `WebSocketService.js` to fetch fresh token from localStorage before reconnecting
+  - **Impact**: Eliminates 403 errors when tokens are refreshed by authService during active WebSocket sessions
+  - **File Modified**: `frontend/src/services/WebSocketService.js:190-202`
+- **🔧 Duplicate Logger Imports** - Fixed build errors in 7 frontend files
+  - Removed duplicate `import { logger }` statements in:
+    - `RecordingsPage.jsx`, `SystemSettingsPage.jsx`, `PerformanceDashboard.jsx`
+    - `TimelineView.jsx`, `ClusterDetailModal.jsx`, `PTZControl.jsx`, `SettingsPage.jsx`
+- **🧪 Test Fixture API Mismatch** - Fixed incompatibility with updated `crud.create_user()` signature
+  - Updated `tests/conftest.py` to use `UserCreate` schema object instead of individual parameters
+  - **Before**: `crud.create_user(db, username="...", password="...", email="...")`
+  - **After**: `crud.create_user(db, user=UserCreate(...))`
+  - **Impact**: Eliminated 65+ test errors from fixture initialization failures
+- **🔧 Test Authentication Errors** - Fixed multiple test infrastructure issues
+  - **HTTP 405 Error**: Updated `auth_headers` fixture to use correct login endpoint (`/api/auth/login-2fa`)
+  - **Duplicate get_db Functions**: Fixed `backend/api/routes/users.py` to import standard `get_db` from `backend.database.session` instead of defining local copy
+  - **Database Schema**: Added explicit imports for `alert_models` and `RefreshToken` in `tests/conftest.py` to ensure all tables are created
+  - **Impact**: Fixed authentication flow, enabled database session override to work correctly
+- **🗄️ Test Database Session Isolation** - Fixed "no such table: refresh_tokens" error in tests
+  - **Root Cause**: SQLite `:memory:` database creates separate databases for each connection. TestClient HTTP requests were accessing different in-memory database than test fixtures
+  - **Fix**: Added `StaticPool` connection pool to `tests/conftest.py:18-27` to ensure all connections use the same in-memory database
+  - **Impact**: All tests now reliably use the same test database. RefreshToken table and other tables are accessible during HTTP requests
+- **🔧 Test Camera Fixture Errors** - Fixed incorrect field names in `test_camera` fixture
+  - Updated `tests/conftest.py:100-114` to match actual Camera model schema
+  - **Field Corrections**: `camera_name`→`camera_type`, `source_url`→`source`, `enabled`→`is_active`, `face_recognition_enabled`→`face_detection_enabled`
+  - **Impact**: Eliminated TypeError in all camera-related tests
+
+### Verified
+- **✅ API Response Wrapping** - Confirmed all endpoints properly use `PaginatedResponse`:
+  - `/api/recordings/` → `PaginatedResponse[RecordingResponse]`
+  - `/api/history/detections` → `PaginatedResponse[FaceDetectionEventResponse]`
+  - `/api/faces/people` → `PaginatedResponse[Person]`
+  - `/api/alerts/logs` → `PaginatedResponse[NotificationLogResponse]`
+- **✅ Field Name Consistency** - Verified frontend uses descriptive field names throughout:
+  - `camera.camera_id` (not `camera.id`)
+  - `camera.is_active` (not `camera.active`)
+  - `recording.recording_id` with fallback to `recording.id`
+
+---
+
+## [3.10.0] - 2025-11-15
+
+### Added
+- **🎤 Two-Way Audio Communication** - WebRTC-based bidirectional audio with cameras
+  - **Real-time Audio**: Low-latency bidirectional audio streaming using WebRTC
+  - **Backend Implementation** (`backend/core/two_way_audio_system.py`):
+    - `TwoWayAudioManager` - Session management and lifecycle
+    - `WebRTCAudioSession` - Per-camera WebRTC peer connections
+    - `AudioCapture` - PyAudio-based audio input/output with echo cancellation and noise suppression
+    - WebSocket endpoint at `/api/audio/ws/{camera_id}` for signaling
+    - Audio devices API at `/api/audio/devices` for device enumeration
+    - Test page at `/api/audio/test` for standalone testing
+  - **Frontend Integration**:
+    - `TwoWayAudio.jsx` component for WebRTC client implementation
+    - `AudioModal.jsx` - Theme-aware modal wrapper with accessibility support
+    - Dashboard integration with 🎤 audio button on active camera cards
+    - Connection states: Connecting → Live → Disconnected
+    - Audio controls: Microphone mute/unmute, speaker mute/unmute, disconnect
+  - **Features**:
+    - ✅ Bidirectional audio (simultaneous listen and speak)
+    - ✅ Echo cancellation and noise suppression
+    - ✅ DTLS-SRTP encryption for secure audio streams
+    - ✅ JWT-authenticated WebSocket connections
+    - ✅ Configurable audio parameters (sample rate, channels, chunk size)
+    - ✅ STUN/TURN server support for NAT traversal
+    - ✅ Multi-camera support (independent sessions)
+  - **Dependencies**:
+    - `pyaudio>=0.2.13` - Audio I/O library
+    - `aiortc>=1.6.0` - WebRTC implementation for Python
+    - `av>=11.0.0` - Audio/video processing
+  - **Documentation**:
+    - Comprehensive guide at `docs/TWO_WAY_AUDIO_GUIDE.md` (400+ lines)
+    - Covers requirements, quick start, configuration, troubleshooting, security
+  - **Testing**:
+    - 13 E2E tests in `frontend/e2e/two-way-audio.spec.js`
+    - Tests dashboard integration, modal behavior, API endpoints
+    - Total E2E coverage: 101 tests across 7 test files
+  - **Browser Support**: Chrome 80+, Edge 80+, Firefox 75+, Safari 14+
+
+- **🔔 Object Detection Notifications** - Smart alerts for AI-detected objects
+  - **Alert Configuration** (`backend/database/alert_models.py`):
+    - Added 5 new fields to `AlertConfiguration` model:
+      - `object_detection_alerts_enabled` - Master toggle for all object detection alerts
+      - `vehicle_alerts_enabled` - Alerts for any vehicle detection
+      - `animal_alerts_enabled` - Alerts for any animal detection
+      - `package_alerts_enabled` - Alerts for any package detection
+      - `identified_object_alerts_enabled` - Alerts for specific identified objects
+    - Database migration: `f9g6h5i4j3k2_add_object_detection_alert_fields_v3_10_0.py`
+  - **Alert Manager** (`backend/core/alert_manager.py`):
+    - New method: `trigger_object_detection_alert()` with class-based and entity-based alerts
+    - Supports throttling and quiet hours for object detection alerts
+    - Event types: `object_vehicle`, `object_animal`, `object_package`, `object_identified_{class}`
+  - **Integration** (`backend/core/object_detector.py`):
+    - Automatic alert triggering when objects are detected
+    - Async background task execution to prevent detection delays
+    - Includes detection metadata (bbox, frame dimensions, confidence)
+  - **Frontend UI** (`frontend/src/pages/AlertSettingsPage.jsx`):
+    - New "Object Detection Alerts" section with master toggle
+    - Hierarchical controls: Enable master toggle to reveal class-specific toggles
+    - Clear icons for each alert type: 🚗 Vehicles, 🐾 Animals, 📦 Packages, 🏷️ Identified Objects
+    - Indented sub-options for better visual hierarchy
+  - **Features**:
+    - ✅ Class-based notifications (notify on any vehicle, animal, or package)
+    - ✅ Entity-based notifications (notify when specific objects like "John's Tesla" are detected)
+    - ✅ Multi-channel support (email, SMS, push, webhook)
+    - ✅ Configurable throttling to prevent alert spam
+    - ✅ Quiet hours support
+    - ✅ Per-class enable/disable controls
+  - **Use Cases**:
+    - Get notified when any vehicle enters your driveway
+    - Alert when specific vehicle (e.g., "John's Tesla") arrives
+    - Detect packages left at doorstep
+    - Monitor wildlife/pets in specific areas
+
+---
+
+## [3.9.0] - 2025-11-14
+
+### Security
+- **🔒 Account Lockout System for 2FA** - Protection against brute force attacks
+  - **New Feature**: Automatic account lockout after 5 failed 2FA verification attempts
+  - **Lockout Duration**: 30 minutes (configurable in `security_helpers.py`)
+  - **Auto-Reset**: Failed attempt counter resets after 15 minutes of inactivity
+  - **User Feedback**: Shows remaining attempts before lockout (e.g., "4 attempts remaining")
+  - **Affected Endpoints**:
+    - `/api/auth/login-2fa` - Login with 2FA
+    - `/api/auth/reset-password` - Password reset with 2FA
+  - **Database Schema**: Added 4 new fields to User model
+    - `failed_2fa_attempts` - Counter for failed attempts
+    - `last_failed_2fa_attempt` - Timestamp of last failure
+    - `account_locked_until` - Lockout expiration time
+    - `lockout_count` - Total number of times locked
+  - **Migration**: `c4d8e2f1b3a7_add_2fa_account_lockout_fields.py`
+
+- **🚦 Enhanced Rate Limiting** - Stricter limits for security-sensitive endpoints
+  - **Password Reset**: 5 attempts per hour per IP (was unlimited)
+  - **2FA Verification**: 10 attempts per 5 minutes per IP (was 10/minute)
+  - **Implementation**: Pattern-based routing in `EndpointRateLimiter`
+  - **Response**: HTTP 429 with `Retry-After` header when exceeded
+
+- **📝 Enhanced Audit Logging** - Comprehensive security event tracking
+  - **New Event Types** (9 total):
+    - `PASSWORD_RESET_ATTEMPTED/SUCCESS/FAILED` - All password reset attempts
+    - `TWO_FA_ENABLED/DISABLED` - 2FA enrollment changes
+    - `TWO_FA_VERIFY_SUCCESS/FAILED` - 2FA verification attempts
+    - `TWO_FA_ACCOUNT_LOCKED/UNLOCKED` - Account lockout events
+  - **Log Format**: JSONL (JSON Lines) at `logs/audit.jsonl`
+  - **Details Tracked**: IP address, username, reason, remaining attempts, timestamps
+  - **Real-time Monitoring**: All events logged to console with appropriate severity
+
+### Performance
+- **📊 Database Query Optimization** - Added 11 new indexes for frequently accessed queries
+  - **RecordingEvent Indexes**:
+    - `idx_recording_started_at` - Sorting recordings by date
+    - `idx_recording_camera_time` - Composite index for camera + time queries
+    - `idx_recording_ended_at` - Filtering completed recordings
+  - **FaceDetectionEvent Indexes**:
+    - `idx_face_camera_time` - Face history per camera over time
+    - `idx_face_person_time` - Face history per person over time
+  - **MotionDetectionEvent Indexes**:
+    - `idx_motion_camera_time` - Motion history per camera over time
+  - **FaceCluster Indexes**:
+    - `idx_cluster_identified` - Filtering identified vs unidentified clusters
+    - `idx_cluster_created_at` - Sorting clusters by creation date
+    - `idx_cluster_last_seen` - Finding recently seen clusters
+  - **User Indexes**:
+    - `idx_user_locked_until` - Checking account lockout status (new security feature)
+    - `idx_user_is_active` - Filtering active users
+  - **Migration**: `d5e9f3a2b8c4_add_performance_indexes_v3_9_0.py`
+  - **Impact**: Significant performance improvement for recordings list, face/motion history queries, and cluster filtering
+
+- **🚀 Query Result Caching Layer** - In-memory cache with TTL support
+  - **Implementation**: New `SimpleCache` class in `backend/core/cache.py`
+  - **Features**:
+    - Thread-safe operations with automatic locking
+    - Time-to-live (TTL) expiration (default: 5 minutes)
+    - Manual invalidation by key or pattern matching
+    - Hit/miss statistics tracking
+    - Automatic cleanup of expired entries
+  - **Decorator Support**: `@cached(ttl=600, key_prefix="settings")` for easy function caching
+  - **Use Cases**: System settings, notification provider configs, frequently accessed data
+  - **Benefits**: Reduces database load for rarely changing data
+
+- **⚡ WebSocket Broadcast Optimization** - Reduced bandwidth via change detection
+  - **Implementation**: Updated `statistics_broadcaster.py` with smart change detection
+  - **How It Works**:
+    - Creates hash of statistics data (excluding timestamp)
+    - Only broadcasts when data actually changes
+    - Tracks broadcasts sent vs skipped for monitoring
+  - **Performance Metrics**: New `get_performance_stats()` method
+    - `broadcasts_sent` - Number of actual broadcasts
+    - `broadcasts_skipped` - Number of skipped (unchanged data)
+    - `skip_rate_percent` - Efficiency metric
+    - `bandwidth_saved_percent` - Estimated bandwidth reduction
+  - **Impact**: Significantly reduces WebSocket traffic when camera stats are stable
+  - **Logging**: Debug logs every 20 skipped broadcasts showing efficiency percentage
+
+### Added
+- **New Security Helper Module** (`backend/core/security_helpers.py`)
+  - `is_account_locked()` - Check if user account is currently locked
+  - `get_lockout_remaining_time()` - Get remaining lockout time in seconds
+  - `record_failed_2fa_attempt()` - Track failures and auto-lock after threshold
+  - `record_successful_2fa_attempt()` - Reset counters on successful verification
+  - `unlock_account()` - Manual unlock by admin (future admin panel feature)
+  - `get_account_security_status()` - Complete security status for monitoring
+
+- **New Caching Module** (`backend/core/cache.py`)
+  - `SimpleCache` class - Thread-safe in-memory cache with TTL
+  - `get_cache()` - Singleton cache instance factory
+  - `@cached()` decorator - Function result caching with auto invalidation
+  - Cache statistics tracking (hits, misses, evictions, hit rate)
+
+### Changed
+- **Authentication Flow Improvements**
+  - Login and password reset now check for account lockout before verification
+  - Failed attempts now return specific error messages with remaining attempt count
+  - Successful verifications reset all failed attempt counters
+  - Backup code failures now also count toward lockout threshold
+
+### Fixed
+- **Authentication Token Validation** - Fixed bug where expired tokens were accepted on page reload
+  - Added `isAuthenticated()` check in `App.jsx` on mount
+  - Expired tokens now properly cleared from localStorage
+  - WebSocket connections no longer show "offline" state with invalid tokens
+  - Users must login again after token expiration (proper session management)
+
+### Technical Details
+- **Files Created**:
+  - `backend/core/security_helpers.py` - Security helper functions
+  - `backend/core/cache.py` - In-memory caching layer with TTL support
+  - `backend/api/schemas/pagination.py` - Standardized pagination wrapper
+  - `alembic/versions/c4d8e2f1b3a7_add_2fa_account_lockout_fields.py` - 2FA lockout database migration
+  - `alembic/versions/d5e9f3a2b8c4_add_performance_indexes_v3_9_0.py` - Performance indexes migration
+
+- **Files Modified**:
+  - `backend/middleware/endpoint_rate_limiter.py` - Added password reset and 2FA categories
+  - `backend/core/audit_logger.py` - Added 9 new security event types
+  - `backend/core/statistics_broadcaster.py` - Added change detection and performance tracking
+  - `backend/database/models.py` - Added lockout tracking fields to User model
+  - `backend/api/routes/users.py` - Integrated lockout logic into auth endpoints
+  - `frontend/src/App.jsx` - Added token validation on app mount
+  - `frontend/src/pages/RecordingsPage.jsx` - Updated for new pagination format
+  - `frontend/src/pages/FaceManagementPage.jsx` - Updated for new pagination format
+  - `frontend/src/pages/DashboardPage.jsx` - Updated for new pagination format
+  - `frontend/src/pages/AlertSettingsPage.jsx` - Updated for new pagination format
+
+---
+
 ## [3.7.2] - 2025-11-08
 
 ### Security

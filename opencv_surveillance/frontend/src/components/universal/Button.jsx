@@ -2,6 +2,7 @@
 // Universal Button Component - Apple HIG Compliant
 
 import React from 'react';
+import PropTypes from 'prop-types';
 import './Button.css';
 
 /**
@@ -85,6 +86,56 @@ const Button = ({
       )}
     </button>
   );
+};
+
+// PropTypes validation
+Button.propTypes = {
+  /** Button style variant */
+  variant: PropTypes.oneOf(['primary', 'secondary', 'tertiary', 'destructive']),
+
+  /** Button size */
+  size: PropTypes.oneOf(['small', 'medium', 'large']),
+
+  /** Show loading spinner */
+  loading: PropTypes.bool,
+
+  /** Disable button */
+  disabled: PropTypes.bool,
+
+  /** Optional icon on the left */
+  icon: PropTypes.node,
+
+  /** Optional icon on the right */
+  endIcon: PropTypes.node,
+
+  /** Take full width of container */
+  fullWidth: PropTypes.bool,
+
+  /** Additional CSS classes */
+  className: PropTypes.string,
+
+  /** Click event handler */
+  onClick: PropTypes.func,
+
+  /** Button type attribute */
+  type: PropTypes.oneOf(['button', 'submit', 'reset']),
+
+  /** Button label/content */
+  children: PropTypes.node.isRequired,
+};
+
+// Default props
+Button.defaultProps = {
+  variant: 'primary',
+  size: 'medium',
+  loading: false,
+  disabled: false,
+  icon: null,
+  endIcon: null,
+  fullWidth: false,
+  className: '',
+  onClick: undefined,
+  type: 'button',
 };
 
 export default Button;

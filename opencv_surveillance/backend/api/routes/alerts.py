@@ -14,6 +14,8 @@ from datetime import datetime
 
 from backend.database.session import SessionLocal
 from backend.database import alert_models
+from backend.core.performance import paginate, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
+from backend.api.schemas.pagination import PaginatedResponse
 
 router = APIRouter()
 
@@ -81,17 +83,6 @@ class NotificationLogResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
-
-class NotificationLogListResponse(BaseModel):
-    """Schema for notification log list response"""
-
-    logs: List[NotificationLogResponse]
-    total: int
-    filtered: int
-    limit: int = 50
-    skip: int = 0
-    has_more: bool = False
 
 
 class TestAlertRequest(BaseModel):
@@ -221,66 +212,62 @@ def delete_alert_configuration(config_id: int, db: Session = Depends(get_db)):
     return {"message": f"Alert configuration {config_id} deleted successfully"}
 
 
-@router.get("/alerts/logs", response_model=NotificationLogListResponse)
+@router.get("/alerts/logs", response_model=PaginatedResponse[NotificationLogResponse])
 def get_notification_logs(
-        event_type: Optional[str] = Query(
-            None,
-            description="Filter by event type"),
-    camera_id: Optional[str] = Query(
-            None,
-            description="Filter by camera ID"),
-        channel: Optional[str] = Query(
-            None,
-            description="Filter by channel"),
-        skip: int = Query(
-            0,
-            ge=0,
-            description="Number of logs to skip"),
-        limit: int = Query(
-            50,
-            description="Maximum number of results",
-            le=500),
-        db: Session = Depends(get_db),
+    event_type: Optional[str] = Query(None, description="Filter by event type"),
+    camera_id: Optional[str] = Query(None, description="Filter by camera ID"),
+    channel: Optional[str] = Query(None, description="Filter by channel"),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description="Items per page"),
+    db: Session = Depends(get_db),
 ):
     """
-    Get notification logs with optional filters
+    Get notification logs with optional filters and pagination
 
     Returns a history of all sent notifications for debugging and tracking.
+
+    Args:
+        - **event_type**: Optional event type filter
+        - **camera_id**: Optional camera ID filter
+        - **channel**: Optional channel filter (email, sms, push, webhook)
+        - **page**: Page number (default: 1)
+        - **page_size**: Items per page (default: 50, max: 1000)
+
+    Returns:
+        PaginatedResponse with notification logs and pagination metadata
     """
     # Get total count before filtering
     total_count = db.query(alert_models.NotificationLog).count()
-    
+
     query = db.query(alert_models.NotificationLog)
 
+    # Apply filters
     if event_type:
-        query = query.filter(
-            alert_models.NotificationLog.event_type == event_type)
+        query = query.filter(alert_models.NotificationLog.event_type == event_type)
 
     if camera_id:
-        query = query.filter(
-            alert_models.NotificationLog.camera_id == camera_id)
+        query = query.filter(alert_models.NotificationLog.camera_id == camera_id)
 
     if channel:
         query = query.filter(alert_models.NotificationLog.channel == channel)
 
-    # Get filtered count
-    filtered_count = query.count()
+    # Order by most recent
+    query = query.order_by(alert_models.NotificationLog.created_at.desc())
 
-    logs = (
-        query.order_by(alert_models.NotificationLog.created_at.desc())
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
+    # Apply pagination
+    logs, filtered_count, total_pages = paginate(query, page=page, page_size=page_size)
 
-    return NotificationLogListResponse(
-        logs=logs,
-        total=total_count,
-        filtered=filtered_count,
-        limit=limit,
-        skip=skip,
-        has_more=(skip + limit) < filtered_count
-    )
+    return {
+        "data": logs,
+        "pagination": {
+            "total": total_count,
+            "filtered": filtered_count,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+            "has_more": page < total_pages
+        }
+    }
 
 
 @router.post("/alerts/test", status_code=200)

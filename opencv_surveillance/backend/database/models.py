@@ -32,6 +32,41 @@ class User(Base):
     backup_codes = Column(String, nullable=True)  # JSON array of hashed backup codes
     two_factor_enrolled_at = Column(DateTime, nullable=True)  # When 2FA was enabled
 
+    # v3.9.0: Account lockout for failed 2FA attempts
+    failed_2fa_attempts = Column(Integer, default=0)  # Failed 2FA verification count
+    last_failed_2fa_attempt = Column(DateTime, nullable=True)  # Last failed attempt timestamp
+    account_locked_until = Column(DateTime, nullable=True)  # Account locked until this time
+    lockout_count = Column(Integer, default=0)  # Number of times account has been locked
+
+    # v3.8.0: Refresh Token Relationship
+    refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
+
+
+class RefreshToken(Base):
+    """
+    v3.8.0: Refresh Token model for JWT token rotation
+    Enables automatic token refresh without re-authentication
+    """
+
+    __tablename__ = "refresh_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    token = Column(String(512), unique=True, nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    revoked = Column(Boolean, default=False, index=True)
+
+    # Device tracking for security audit
+    device_info = Column(String(255), nullable=True)  # User agent
+    ip_address = Column(String(45), nullable=True)  # IPv4 or IPv6
+
+    # Relationship
+    user = relationship("User", back_populates="refresh_tokens")
+
+    def __repr__(self):
+        return f"<RefreshToken(id={self.id}, user_id={self.user_id}, revoked={self.revoked})>"
+
 
 class FaceDetectionEvent(Base):
     """
@@ -220,6 +255,8 @@ class RecordingEvent(Base):
     motion_detected = Column(Boolean, default=False)
     faces_detected = Column(Integer, default=0)
     known_faces_detected = Column(Integer, default=0)
+    objects_detected = Column(Integer, default=0)  # v3.10.0: Total objects detected
+    identified_objects_detected = Column(Integer, default=0)  # v3.10.0: Known objects detected
 
     # File metadata
     file_size_bytes = Column(Integer, nullable=True)
@@ -229,6 +266,7 @@ class RecordingEvent(Base):
     # Relationships
     face_detections = relationship("FaceDetectionEvent", back_populates="recording")
     motion_detections = relationship("MotionDetectionEvent", back_populates="recording")
+    object_detections = relationship("ObjectDetectionEvent", back_populates="recording")  # v3.10.0
 
     def __repr__(self):
         return f"<Recording(camera={
@@ -536,3 +574,113 @@ class HardwareScanHistory(Base):
 
     def __repr__(self):
         return f"<HardwareScanHistory(id={self.id}, tier={self.hardware_tier}, scanned_at={self.scanned_at})>"
+
+
+class ObjectDetectionEvent(Base):
+    """
+    v3.10.0: Object Detection Event Model
+    Tracks detected objects (vehicles, animals, packages) using YOLO
+    Similar to FaceDetectionEvent but for general objects
+    """
+
+    __tablename__ = "object_detection_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    camera_id = Column(String, index=True, nullable=False)
+
+    # Object classification
+    object_class = Column(String, index=True, nullable=False)  # vehicle, animal, package, person
+    object_subclass = Column(String, nullable=True)  # car, truck, dog, cat, box, etc. (from YOLO)
+    confidence = Column(Float, nullable=False)
+
+    # Detection timestamp
+    detected_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # Bounding box location in frame
+    bbox_x = Column(Integer, nullable=False)  # Top-left X coordinate
+    bbox_y = Column(Integer, nullable=False)  # Top-left Y coordinate
+    bbox_width = Column(Integer, nullable=False)  # Bounding box width
+    bbox_height = Column(Integer, nullable=False)  # Bounding box height
+
+    # Frame metadata
+    frame_width = Column(Integer, nullable=True)
+    frame_height = Column(Integer, nullable=True)
+
+    # Snapshot of detection
+    snapshot_path = Column(String, nullable=True)
+
+    # Recording linkage
+    recording_id = Column(Integer, ForeignKey('recording_events.id'), nullable=True, index=True)
+    recording_path = Column(String, nullable=True)
+
+    # Motion detection context
+    motion_detected = Column(Boolean, default=False)
+
+    # Identified object linkage (nullable - only if object has been identified)
+    identified_object_id = Column(Integer, ForeignKey('identified_objects.id'), nullable=True, index=True)
+
+    # Additional YOLO metadata (JSON string)
+    # Can store additional tracking info like object trajectory, speed, direction
+    # Note: Renamed from 'metadata' to avoid SQLAlchemy reserved attribute conflict
+    detection_metadata = Column(String, nullable=True)
+
+    # Relationships
+    recording = relationship("RecordingEvent", back_populates="object_detections")
+    identified_object = relationship("IdentifiedObject", back_populates="detections")
+
+    def __repr__(self):
+        obj_name = f"{self.object_subclass or self.object_class}"
+        return f"<ObjectDetection(object={obj_name}, confidence={self.confidence:.2f}, time={self.detected_at})>"
+
+
+class IdentifiedObject(Base):
+    """
+    v3.10.0: Identified Object Model
+    Stores user-identified specific objects (e.g., "John's Tesla", "My Dog Rex")
+    Allows tracking of specific vehicles, animals, or packages
+    Similar to Person model for face recognition
+    """
+
+    __tablename__ = "identified_objects"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Unique identifier (user-defined, e.g., "johns_tesla", "my_dog_rex")
+    object_id = Column(String, unique=True, index=True, nullable=False)
+
+    # Display name (e.g., "John's Tesla", "My Dog Rex")
+    name = Column(String, nullable=False, index=True)
+
+    # Object classification
+    object_class = Column(String, index=True, nullable=False)  # vehicle, animal, package
+    object_subclass = Column(String, nullable=True)  # car, dog, box, etc.
+
+    # Description and notes
+    description = Column(String, nullable=True)  # User notes about the object
+
+    # Representative image path (for UI display)
+    representative_image_path = Column(String, nullable=True)
+
+    # Object features for identification (JSON string)
+    # Can store color, make/model for vehicles, breed for animals, etc.
+    features = Column(String, nullable=True)
+
+    # Tracking statistics
+    detection_count = Column(Integer, default=0)  # Total number of detections
+    first_seen_at = Column(DateTime, nullable=True)  # First detection timestamp
+    last_seen_at = Column(DateTime, nullable=True)  # Most recent detection
+
+    # Notification settings (JSON string)
+    # Allow per-object notification preferences
+    notification_config = Column(String, nullable=True)
+
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    is_active = Column(Boolean, default=True, index=True)  # Enable/disable tracking
+
+    # Relationships
+    detections = relationship("ObjectDetectionEvent", back_populates="identified_object")
+
+    def __repr__(self):
+        return f"<IdentifiedObject(id={self.object_id}, name={self.name}, class={self.object_class})>"
