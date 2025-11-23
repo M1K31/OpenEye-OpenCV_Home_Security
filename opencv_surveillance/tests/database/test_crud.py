@@ -71,7 +71,7 @@ class TestCameraCRUD:
         """Test retrieving existing camera by camera_id"""
         camera_data = {
             "camera_id": "test_cam_1",
-            "name": "Test Camera",
+            "camera_type": "Test Camera",
             "source": "rtsp://test",
             "is_active": True
         }
@@ -81,7 +81,7 @@ class TestCameraCRUD:
 
         assert retrieved_camera is not None
         assert retrieved_camera.camera_id == "test_cam_1"
-        assert retrieved_camera.name == "Test Camera"
+        assert retrieved_camera.camera_type == "Test Camera"
 
     def test_get_camera_by_id_not_exists(self, db_session: Session):
         """Test retrieving non-existent camera returns None"""
@@ -92,7 +92,7 @@ class TestCameraCRUD:
         """Test retrieving camera by primary key"""
         camera_data = {
             "camera_id": "pk_test_cam",
-            "name": "PK Test Camera",
+            "camera_type": "PK Test Camera",
             "source": "rtsp://pktest",
             "is_active": True
         }
@@ -120,7 +120,7 @@ class TestCameraCRUD:
         for i in range(5):
             camera_data = {
                 "camera_id": f"cam_{i}",
-                "name": f"Camera {i}",
+                "camera_type": f"Camera {i}",
                 "source": f"rtsp://test{i}",
                 "is_active": True
             }
@@ -137,7 +137,7 @@ class TestCameraCRUD:
         for i in range(10):
             camera_data = {
                 "camera_id": f"pag_cam_{i}",
-                "name": f"Pagination Camera {i}",
+                "camera_type": f"Pagination Camera {i}",
                 "source": f"rtsp://pag{i}",
                 "is_active": True
             }
@@ -162,7 +162,7 @@ class TestCameraCRUD:
         for i in range(3):
             camera_data = {
                 "camera_id": f"active_cam_{i}",
-                "name": f"Active Camera {i}",
+                "camera_type": f"Active Camera {i}",
                 "source": f"rtsp://active{i}",
                 "is_active": True
             }
@@ -172,7 +172,7 @@ class TestCameraCRUD:
         for i in range(2):
             camera_data = {
                 "camera_id": f"inactive_cam_{i}",
-                "name": f"Inactive Camera {i}",
+                "camera_type": f"Inactive Camera {i}",
                 "source": f"rtsp://inactive{i}",
                 "is_active": False
             }
@@ -188,7 +188,7 @@ class TestCameraCRUD:
         """Test camera creation"""
         camera_data = {
             "camera_id": "new_camera",
-            "name": "New Test Camera",
+            "camera_type": "New Test Camera",
             "source": "rtsp://new",
             "is_active": True,
             "enable_motion_detection": True,
@@ -198,7 +198,7 @@ class TestCameraCRUD:
 
         assert created_camera.id is not None
         assert created_camera.camera_id == "new_camera"
-        assert created_camera.name == "New Test Camera"
+        assert created_camera.camera_type == "New Test Camera"
         assert created_camera.is_active is True
         assert created_camera.enable_motion_detection is True
         assert created_camera.enable_face_recognition is False
@@ -208,7 +208,7 @@ class TestCameraCRUD:
         # Create camera
         camera_data = {
             "camera_id": "update_cam",
-            "name": "Original Name",
+            "camera_type": "Original Name",
             "source": "rtsp://original",
             "is_active": True
         }
@@ -216,21 +216,21 @@ class TestCameraCRUD:
 
         # Update camera
         update_data = {
-            "name": "Updated Name",
+            "camera_type": "Updated Name",
             "enable_motion_detection": True
         }
         updated_camera = crud.update_camera(db_session, "update_cam", update_data)
 
         assert updated_camera is not None
         assert updated_camera.camera_id == "update_cam"
-        assert updated_camera.name == "Updated Name"
+        assert updated_camera.camera_type == "Updated Name"
         assert updated_camera.enable_motion_detection is True
         # Original source should be unchanged
         assert updated_camera.source == "rtsp://original"
 
     def test_update_camera_not_found(self, db_session: Session):
         """Test updating non-existent camera returns None"""
-        update_data = {"name": "Updated"}
+        update_data = {"camera_type": "Updated"}
         result = crud.update_camera(db_session, "nonexistent_cam", update_data)
         assert result is None
 
@@ -239,7 +239,7 @@ class TestCameraCRUD:
         # Create camera
         camera_data = {
             "camera_id": "delete_cam",
-            "name": "To Be Deleted",
+            "camera_type": "To Be Deleted",
             "source": "rtsp://delete",
             "is_active": True
         }
@@ -263,7 +263,7 @@ class TestCameraCRUD:
         # Create active camera
         camera_data = {
             "camera_id": "deactivate_cam",
-            "name": "Active Camera",
+            "camera_type": "Active Camera",
             "source": "rtsp://deactivate",
             "is_active": True
         }
@@ -286,7 +286,7 @@ class TestCameraCRUD:
         # Create camera
         camera_data = {
             "camera_id": "last_active_cam",
-            "name": "Last Active Test",
+            "camera_type": "Last Active Test",
             "source": "rtsp://lastactive",
             "is_active": True
         }
@@ -800,7 +800,7 @@ class TestPTZPresetsCRUD:
         """Test creating PTZ preset"""
         preset_data = {
             "preset_number": 1,
-            "name": "Home Position",
+            "camera_type": "Home Position",
             "pan": 0.0,
             "tilt": 0.0,
             "zoom": 1.0
@@ -810,7 +810,7 @@ class TestPTZPresetsCRUD:
         assert created_preset.id is not None
         assert created_preset.camera_id == "ptz_cam_1"
         assert created_preset.preset_number == 1
-        assert created_preset.name == "Home Position"
+        assert created_preset.camera_type == "Home Position"
         assert created_preset.pan == 0.0
         assert created_preset.tilt == 0.0
         assert created_preset.zoom == 1.0
@@ -819,7 +819,7 @@ class TestPTZPresetsCRUD:
         """Test retrieving PTZ preset by ID"""
         preset_data = {
             "preset_number": 1,
-            "name": "Test Preset",
+            "camera_type": "Test Preset",
             "pan": 45.0,
             "tilt": 30.0,
             "zoom": 2.0
@@ -830,7 +830,7 @@ class TestPTZPresetsCRUD:
 
         assert retrieved_preset is not None
         assert retrieved_preset.id == created_preset.id
-        assert retrieved_preset.name == "Test Preset"
+        assert retrieved_preset.camera_type == "Test Preset"
 
     def test_get_ptz_preset_by_id_not_found(self, db_session: Session):
         """Test retrieving non-existent preset by ID returns None"""
@@ -841,7 +841,7 @@ class TestPTZPresetsCRUD:
         """Test deleting PTZ preset"""
         preset_data = {
             "preset_number": 1,
-            "name": "Delete Me",
+            "camera_type": "Delete Me",
             "pan": 0.0,
             "tilt": 0.0,
             "zoom": 1.0

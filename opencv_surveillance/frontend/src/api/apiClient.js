@@ -3,6 +3,7 @@
 
 import axios from 'axios';
 import { API_CONFIG, RETRY_CONFIG, PUBLIC_ENDPOINTS } from '../config';
+import { logger } from '../utils/logger';
 
 /**
  * Centralized API Client with Authentication Handling (v3.8.0)
