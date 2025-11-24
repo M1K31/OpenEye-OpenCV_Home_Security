@@ -1,8 +1,7 @@
 /**
-import { logger } from '../utils/logger';
  * OpenEye WebSocket Service
  * Copyright (c) 2025 M1K31
- * 
+ *
  * Manages WebSocket connection for real-time statistics and event streaming.
  * Features:
  * - Automatic reconnection with exponential backoff
@@ -10,6 +9,8 @@ import { logger } from '../utils/logger';
  * - Connection health monitoring
  * - Graceful fallback to polling
  */
+
+import { logger } from '../utils/logger';
 
 class WebSocketService {
   constructor() {
