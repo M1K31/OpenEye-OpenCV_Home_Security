@@ -37,7 +37,7 @@ const EventDetailModal = ({ event, onClose, onDelete }) => {
         filename = `recording_${event.recording_id}_${event.camera_id}.mp4`;
       } else if (hasSnapshot) {
         // Download snapshot image
-        downloadUrl = event.snapshot_path;
+        downloadUrl = event.snapshot_path ? `/${event.snapshot_path}` : `/data/snapshots/${event.camera_id}/${event.id}.jpg`;
         filename = `snapshot_${event.id}_${event.camera_id}.jpg`;
       }
 
@@ -171,7 +171,7 @@ const EventDetailModal = ({ event, onClose, onDelete }) => {
               </video>
             ) : hasSnapshot ? (
               <img
-                src={event.snapshot_path || `/data/snapshots/${event.camera_id}/${event.id}.jpg`}
+                src={event.snapshot_path ? `/${event.snapshot_path}` : `/data/snapshots/${event.camera_id}/${event.id}.jpg`}
                 alt="Event snapshot"
                 className="event-snapshot"
                 onError={(e) => {

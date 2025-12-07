@@ -136,7 +136,7 @@ class FaceRecognitionManager:
                         self.known_face_encodings.append(face_encodings[0])
                         self.known_face_names.append(person_name)
                         encodings_count += 1
-                        logger.debug(f"Encoded face from: {image_file}")
+                        logger.debug(f"Encoded face from: {image_path}")
                     else:
                         logger.warning(f"No face found in: {image_path}")
 

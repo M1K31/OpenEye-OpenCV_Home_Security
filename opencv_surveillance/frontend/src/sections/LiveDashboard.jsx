@@ -175,10 +175,10 @@ const LiveDashboard = () => {
       transform: (data) => data?.events || []
     },
     {
-      url: '/faces/history/detections',
-      params: { skip: 0, limit: 15 },
+      url: '/faces/history',
+      params: { page: 1, page_size: 15 },
       ttl: CacheTTL.SHORT,
-      transform: (data) => data?.detections || []
+      transform: (data) => data?.data || []
     }
   ], []); // Empty deps - requests are static
 
@@ -447,6 +447,22 @@ const LiveDashboard = () => {
     return '';
   };
 
+  const getEventIcon = (event) => {
+    if (event.type === 'face') {
+      return '👤';
+    } else if (event.type === 'motion') {
+      // Prioritize video recording over snapshot
+      if (event.recording_id || event.hasRecording) {
+        return '📹'; // Motion with video
+      } else if (event.snapshot_path || event.hasSnapshot) {
+        return '📷'; // Motion with snapshot only
+      } else {
+        return '🔍'; // Motion detection only (no media)
+      }
+    }
+    return '❓'; // Unknown event type
+  };
+
   return (
     <div className="live-dashboard">
       {/* Global Status Bar */}
@@ -569,7 +585,7 @@ const LiveDashboard = () => {
                     }
                   >
                     <div className="event-icon">
-                      {event.type === 'face' ? '�' : '�'}
+                      {getEventIcon(event)}
                     </div>
                     <div className="event-details">
                       <p className="event-title">
