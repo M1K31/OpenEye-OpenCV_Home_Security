@@ -369,12 +369,14 @@ button:disabled {
 
 /* Spinner Animation */
 .spinner {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.2em;
+  height: 1.2em;
   animation: spin 1s linear infinite;
   font-size: 1.2em;
   margin-right: 8px;
-  transform-origin: center center;
-  vertical-align: middle;
 }
 
 @keyframes spin {

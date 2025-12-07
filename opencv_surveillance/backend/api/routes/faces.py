@@ -37,8 +37,17 @@ def list_people(current_user: user_schema.User = Depends(
     """
     try:
         face_manager = get_face_manager()
-        people = face_manager.list_people()
-        total = len(people)
+        people_data = face_manager.list_people()
+        total = len(people_data)
+
+        # Convert dictionaries to Person model instances for Pydantic v2 validation
+        people = [
+            face_schema.Person(**person_dict)
+            for person_dict in people_data
+        ]
+
+        # page_size must be >= 1 per PaginationMetadata schema
+        page_size = total if total > 0 else 50  # Default to 50 for empty lists
 
         return {
             "data": people,
@@ -46,8 +55,8 @@ def list_people(current_user: user_schema.User = Depends(
                 "total": total,
                 "filtered": total,
                 "page": 1,
-                "page_size": total,
-                "total_pages": 1,
+                "page_size": page_size,
+                "total_pages": 1,  # Always at least 1 page (may be empty)
                 "has_more": False
             }
         }
@@ -98,7 +107,7 @@ def add_person(
         return face_schema.Person(
             name=clean_name,
             photo_count=0,
-            path=person_path)
+            path=str(person_path))
 
     except HTTPException:
         raise
@@ -138,7 +147,7 @@ def get_person(
             )
 
         return face_schema.Person(
-            name=person_name, photo_count=photo_count, path=person_path
+            name=person_name, photo_count=photo_count, path=str(person_path)
         )
 
     except HTTPException:
@@ -207,7 +216,7 @@ def update_person(
         )
 
         return face_schema.Person(
-            name=clean_name, photo_count=photo_count, path=new_path
+            name=clean_name, photo_count=photo_count, path=str(new_path)
         )
 
     except HTTPException:
