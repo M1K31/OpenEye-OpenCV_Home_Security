@@ -154,7 +154,7 @@ const Sidebar = ({ isCollapsed }) => {
         <WebSocketStatus />
         <div className="version-info">
           <span className="version-label">OpenEye</span>
-          <span className="version-number">v3.7.0</span>
+          <span className="version-number">v3.10.2</span>
         </div>
       </div>
     </aside>

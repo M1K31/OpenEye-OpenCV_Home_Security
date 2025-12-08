@@ -176,12 +176,14 @@ const RecordingsPage = () => {
         params.append('camera_id', filterCamera);
       }
       if (startDate) {
-        params.append('start_date', new Date(startDate).toISOString());
+        // Set to start of day in local timezone, then convert to ISO
+        const startDateTime = new Date(startDate);
+        startDateTime.setHours(0, 0, 0, 0);
+        params.append('start_date', startDateTime.toISOString());
       }
       if (endDate) {
-        // Add 1 day and set to end of day to include the entire end date
+        // Set to end of day in local timezone (don't add extra day - that causes wrong dates)
         const endDateTime = new Date(endDate);
-        endDateTime.setDate(endDateTime.getDate() + 1);
         endDateTime.setHours(23, 59, 59, 999);
         params.append('end_date', endDateTime.toISOString());
       }
@@ -250,19 +252,23 @@ const RecordingsPage = () => {
         params.append('camera_id', filterCamera);
       }
       if (startDate) {
-        params.append('start_date', new Date(startDate).toISOString());
+        // Set to start of day in local timezone, then convert to ISO
+        const startDateTime = new Date(startDate);
+        startDateTime.setHours(0, 0, 0, 0);
+        params.append('start_date', startDateTime.toISOString());
       }
       if (endDate) {
+        // Set to end of day in local timezone (don't add extra day)
         const endDateTime = new Date(endDate);
-        endDateTime.setDate(endDateTime.getDate() + 1);
         endDateTime.setHours(23, 59, 59, 999);
         params.append('end_date', endDateTime.toISOString());
       }
       if (searchPersonName) {
         params.append('person_name', searchPersonName);
       }
-      params.append('limit', itemsPerPage.toString());
-      params.append('skip', (reset ? 0 : (currentPage - 1) * itemsPerPage).toString());
+      // Use page and page_size (not skip/limit) to match backend API
+      params.append('page', (reset ? 1 : currentPage).toString());
+      params.append('page_size', itemsPerPage.toString());
       
       const queryString = params.toString();
       

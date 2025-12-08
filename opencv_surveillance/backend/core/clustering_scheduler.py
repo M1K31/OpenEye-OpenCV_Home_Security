@@ -29,6 +29,11 @@ class ClusteringScheduler:
         min_faces_threshold: int = 10,
         eps: float = 0.5,
         min_samples: int = 2,
+        auto_export_enabled: bool = True,
+        auto_export_threshold: int = 5,
+        auto_train_enabled: bool = True,
+        auto_name_enabled: bool = True,
+        cluster_known_faces: bool = True,
     ):
         """
         Initialize clustering scheduler
@@ -36,15 +41,25 @@ class ClusteringScheduler:
         Args:
             auto_cluster_enabled: Enable automatic clustering
             auto_cluster_interval_minutes: Minutes between clustering runs
-            min_faces_threshold: Minimum unknown faces to trigger clustering
+            min_faces_threshold: Minimum faces (known + unknown) to trigger clustering
             eps: DBSCAN epsilon parameter
             min_samples: DBSCAN min_samples parameter
+            auto_export_enabled: Automatically export clusters that hit threshold
+            auto_export_threshold: Minimum faces in cluster to trigger auto-export
+            auto_train_enabled: Automatically train model after export
+            auto_name_enabled: Automatically assign names (unknown1, unknown2, etc.) to unknown clusters
+            cluster_known_faces: Whether to cluster known faces (for profile updates)
         """
         self.auto_cluster_enabled = auto_cluster_enabled
         self.interval_minutes = auto_cluster_interval_minutes
         self.min_faces_threshold = min_faces_threshold
         self.eps = eps
         self.min_samples = min_samples
+        self.auto_export_enabled = auto_export_enabled
+        self.auto_export_threshold = auto_export_threshold
+        self.auto_train_enabled = auto_train_enabled
+        self.auto_name_enabled = auto_name_enabled
+        self.cluster_known_faces = cluster_known_faces
 
         self.last_run_time: Optional[datetime] = None
         self.is_running = False
@@ -118,9 +133,10 @@ class ClusteringScheduler:
             if time_since_last_run < timedelta(minutes=self.interval_minutes):
                 return False
 
-        # Check if there are enough unknown faces to cluster
+        # Check if there are enough faces (known + unknown) to cluster
         # FIXED: Use context manager to prevent session leak (v3.6.0.1)
         with get_db_context() as db:
+            # Count unknown faces
             unknown_count = (
                 db.query(FaceDetectionEvent)
                 .filter(
@@ -130,9 +146,23 @@ class ClusteringScheduler:
                 )
                 .count()
             )
-
-            logger.debug(f"Unknown unclustered faces: {unknown_count}")
-            return unknown_count >= self.min_faces_threshold
+            
+            # Count known faces if clustering enabled
+            known_count = 0
+            if self.cluster_known_faces:
+                known_count = (
+                    db.query(FaceDetectionEvent)
+                    .filter(
+                        FaceDetectionEvent.person_name != "Unknown",
+                        FaceDetectionEvent.face_encoding.isnot(None),
+                        FaceDetectionEvent.cluster_id.is_(None),
+                    )
+                    .count()
+                )
+            
+            total_count = unknown_count + known_count
+            logger.debug(f"Unclustered faces: {unknown_count} unknown, {known_count} known (total: {total_count})")
+            return total_count >= self.min_faces_threshold
 
     async def _run_clustering(self):
         """Run the clustering algorithm"""
@@ -142,8 +172,16 @@ class ClusteringScheduler:
                 self.statistics["total_runs"] += 1
                 self.last_run_time = datetime.now()
 
-                # Run clustering
-                service = FaceClusteringService(eps=self.eps, min_samples=self.min_samples)
+                # Run clustering with enhanced features
+                service = FaceClusteringService(
+                    eps=self.eps,
+                    min_samples=self.min_samples,
+                    auto_export_enabled=self.auto_export_enabled,
+                    auto_export_threshold=self.auto_export_threshold,
+                    auto_train_enabled=self.auto_train_enabled,
+                    auto_name_enabled=self.auto_name_enabled,
+                    cluster_known_faces=self.cluster_known_faces
+                )
                 result = service.cluster_unknown_faces(db, recalculate=False)
 
                 # Update statistics
@@ -172,7 +210,15 @@ class ClusteringScheduler:
         """
         # FIXED: Use context manager to prevent session leak (v3.6.0.1)
         with get_db_context() as db:
-            service = FaceClusteringService(eps=self.eps, min_samples=self.min_samples)
+            service = FaceClusteringService(
+                eps=self.eps,
+                min_samples=self.min_samples,
+                auto_export_enabled=self.auto_export_enabled,
+                auto_export_threshold=self.auto_export_threshold,
+                auto_train_enabled=self.auto_train_enabled,
+                auto_name_enabled=self.auto_name_enabled,
+                cluster_known_faces=self.cluster_known_faces
+            )
             result = service.cluster_unknown_faces(db, recalculate=False)
 
             self.last_run_time = datetime.now()
@@ -200,6 +246,11 @@ class ClusteringScheduler:
         min_faces_threshold: Optional[int] = None,
         eps: Optional[float] = None,
         min_samples: Optional[int] = None,
+        auto_export_enabled: Optional[bool] = None,
+        auto_export_threshold: Optional[int] = None,
+        auto_train_enabled: Optional[bool] = None,
+        auto_name_enabled: Optional[bool] = None,
+        cluster_known_faces: Optional[bool] = None,
     ):
         """Update scheduler settings"""
         if auto_cluster_enabled is not None:
@@ -212,6 +263,16 @@ class ClusteringScheduler:
             self.eps = max(0.3, min(0.7, eps))
         if min_samples is not None:
             self.min_samples = max(2, min_samples)
+        if auto_export_enabled is not None:
+            self.auto_export_enabled = auto_export_enabled
+        if auto_export_threshold is not None:
+            self.auto_export_threshold = max(2, auto_export_threshold)
+        if auto_train_enabled is not None:
+            self.auto_train_enabled = auto_train_enabled
+        if auto_name_enabled is not None:
+            self.auto_name_enabled = auto_name_enabled
+        if cluster_known_faces is not None:
+            self.cluster_known_faces = cluster_known_faces
 
         logger.info(f"Clustering scheduler settings updated")
 

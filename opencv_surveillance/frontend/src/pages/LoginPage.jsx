@@ -108,6 +108,7 @@ const LoginPage = ({ setToken }) => {
                   placeholder="Enter username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
+                  autoComplete="username"
                   fullWidth
                 />
               </div>
@@ -118,6 +119,7 @@ const LoginPage = ({ setToken }) => {
                   placeholder="Enter password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
                   fullWidth
                 />
               </div>

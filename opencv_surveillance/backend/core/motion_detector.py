@@ -594,7 +594,7 @@ class MotionDetector:
         if brightness_change_threshold is not None:
             self.brightness_change_threshold = max(1, min(50, brightness_change_threshold))
 
-    def detect(self, frame: np.ndarray) -> Tuple[np.ndarray, bool, List[Dict]]:
+    def detect(self, frame: np.ndarray, draw_boxes: bool = True) -> Tuple[np.ndarray, bool, List[Dict]]:
         """
         Detects motion in a given frame with lighting change compensation.
 
@@ -606,10 +606,11 @@ class MotionDetector:
 
         Args:
             frame: The video frame to process (numpy array)
+            draw_boxes: Whether to draw green bounding boxes on detected motion (default: True)
 
         Returns:
             A tuple containing:
-            - The frame with motion contours drawn on it
+            - The frame with motion contours drawn on it (if draw_boxes=True)
             - A boolean indicating if motion was detected
             - A list of motion areas with bounding boxes and areas
         """
@@ -700,19 +701,21 @@ class MotionDetector:
             motion_areas.append({"x": int(x), "y": int(
                 y), "w": int(w), "h": int(h), "area": int(area)})
 
-            # Draw bounding box on original frame
-            cv2.rectangle(original_frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            # Only draw bounding boxes if draw_boxes is True
+            if draw_boxes:
+                # Draw bounding box on original frame
+                cv2.rectangle(original_frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
-            # Optionally draw area text
-            cv2.putText(
-                original_frame,
-                f"{area}px",
-                (x, y - 5),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                (0, 255, 0),
-                1,
-            )
+                # Optionally draw area text
+                cv2.putText(
+                    original_frame,
+                    f"{area}px",
+                    (x, y - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (0, 255, 0),
+                    1,
+                )
 
         # STEP 6: TEMPORAL FILTERING - Apply temporal filter to reduce flicker
         # BUT: Skip temporal filter during lighting changes to allow fast reset

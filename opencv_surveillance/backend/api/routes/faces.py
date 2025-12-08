@@ -5,12 +5,13 @@ Face Recognition Management API Routes
 Provides endpoints for managing people and training face recognition
 """
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends, BackgroundTasks
 from fastapi.responses import JSONResponse
 from typing import List
 import os
 import logging
 from datetime import datetime
+from sqlalchemy.orm import Session
 
 from backend.api.schemas import face as face_schema
 from backend.api.schemas.pagination import PaginatedResponse
@@ -19,6 +20,7 @@ from backend.core.paths import paths
 from backend.core.camera_manager import manager as camera_manager
 from backend.core.auth import get_current_active_user, require_user, require_admin
 from backend.api.schemas import user as user_schema
+from backend.database.session import get_db
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -94,7 +96,65 @@ def add_person(
         if not clean_name:
             raise HTTPException(status_code=400, detail="Invalid person name")
 
-        # Add person
+        # Check if person folder already exists
+        person_path = paths.faces_dir / clean_name
+        
+        # If person folder exists, handle merge/overwrite options
+        if os.path.exists(person_path) and os.path.isdir(person_path):
+            # Handle overwrite option
+            if person.overwrite_if_exists:
+                import shutil
+                shutil.rmtree(person_path)
+                logger.info(f"Overwrote existing person folder: {clean_name}")
+                # Continue to create new folder below
+            # Handle merge option (just return existing person)
+            elif person.merge_if_exists:
+                # Count existing photos and get preview
+                photo_files = [
+                    f for f in os.listdir(person_path)
+                    if f.lower().endswith((".jpg", ".jpeg", ".png"))
+                ]
+                photo_count = len(photo_files)
+                
+                # Get preview photo URL
+                preview_photo_url = None
+                if photo_files:
+                    photo_files.sort()
+                    preview_photo_url = f"/faces/{clean_name}/{photo_files[0]}"
+                
+                logger.info(f"Person '{clean_name}' folder already exists with {photo_count} photos - merging")
+                
+                return face_schema.Person(
+                    name=clean_name,
+                    photo_count=photo_count,
+                    path=str(person_path),
+                    preview_photo_url=preview_photo_url
+                )
+            # Default: return existing person info (don't error)
+            else:
+                # Count existing photos and get preview
+                photo_files = [
+                    f for f in os.listdir(person_path)
+                    if f.lower().endswith((".jpg", ".jpeg", ".png"))
+                ]
+                photo_count = len(photo_files)
+                
+                # Get preview photo URL
+                preview_photo_url = None
+                if photo_files:
+                    photo_files.sort()
+                    preview_photo_url = f"/faces/{clean_name}/{photo_files[0]}"
+                
+                logger.info(f"Person '{clean_name}' folder already exists with {photo_count} photos - returning existing person")
+                
+                return face_schema.Person(
+                    name=clean_name,
+                    photo_count=photo_count,
+                    path=str(person_path),
+                    preview_photo_url=preview_photo_url
+                )
+        
+        # Add person (creates new folder)
         success = face_manager.add_person(clean_name)
 
         if not success:
@@ -102,12 +162,12 @@ def add_person(
                 status_code=400, detail=f"Person '{clean_name}' already exists"
             )
 
-        # Return person info
-        person_path = paths.faces_dir / clean_name
+        # Return person info (new person, no photos yet)
         return face_schema.Person(
             name=clean_name,
             photo_count=0,
-            path=str(person_path))
+            path=str(person_path),
+            preview_photo_url=None)
 
     except HTTPException:
         raise
@@ -135,19 +195,27 @@ def get_person(
                 status_code=404, detail=f"Person '{person_name}' not found"
             )
 
-        # Count photos
+        # Count photos and get preview
         photo_count = 0
+        preview_photo_url = None
         if os.path.isdir(person_path):
-            photo_count = len(
-                [
-                    f
-                    for f in os.listdir(person_path)
-                    if f.lower().endswith((".jpg", ".jpeg", ".png"))
-                ]
-            )
+            photo_files = [
+                f
+                for f in os.listdir(person_path)
+                if f.lower().endswith((".jpg", ".jpeg", ".png"))
+            ]
+            photo_count = len(photo_files)
+            
+            # Get preview photo URL
+            if photo_files:
+                photo_files.sort()
+                preview_photo_url = f"/faces/{person_name}/{photo_files[0]}"
 
         return face_schema.Person(
-            name=person_name, photo_count=photo_count, path=str(person_path)
+            name=person_name,
+            photo_count=photo_count,
+            path=str(person_path),
+            preview_photo_url=preview_photo_url
         )
 
     except HTTPException:
@@ -206,17 +274,25 @@ def update_person(
             os.rename(old_path, new_path)
             logger.info(f"Renamed person '{person_name}' to '{clean_name}'")
 
-        # Count photos
-        photo_count = len(
-            [
-                f
-                for f in os.listdir(new_path)
-                if f.lower().endswith((".jpg", ".jpeg", ".png"))
-            ]
-        )
+        # Count photos and get preview
+        photo_files = [
+            f
+            for f in os.listdir(new_path)
+            if f.lower().endswith((".jpg", ".jpeg", ".png"))
+        ]
+        photo_count = len(photo_files)
+        
+        # Get preview photo URL
+        preview_photo_url = None
+        if photo_files:
+            photo_files.sort()
+            preview_photo_url = f"/faces/{clean_name}/{photo_files[0]}"
 
         return face_schema.Person(
-            name=clean_name, photo_count=photo_count, path=str(new_path)
+            name=clean_name,
+            photo_count=photo_count,
+            path=str(new_path),
+            preview_photo_url=preview_photo_url
         )
 
     except HTTPException:
@@ -327,22 +403,44 @@ async def upload_photos(
             )
 
         uploaded_count = 0
+        MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB per file
+        MAX_TOTAL_SIZE = 100 * 1024 * 1024  # 100MB total
+        total_size = 0
 
         for file in files:
             # Validate file type
             if not file.filename.lower().endswith((".jpg", ".jpeg", ".png")):
+                logger.warning(f"Skipping invalid file type: {file.filename}")
                 continue
 
             # Read file content
             content = await file.read()
+            file_size = len(content)
+
+            # Validate file size
+            if file_size > MAX_FILE_SIZE:
+                logger.warning(f"File {file.filename} exceeds size limit ({file_size} bytes)")
+                continue
+
+            total_size += file_size
+            if total_size > MAX_TOTAL_SIZE:
+                logger.warning(f"Total upload size exceeds limit ({total_size} bytes)")
+                break
+
+            # Generate unique filename if file already exists
+            file_path = os.path.join(person_path, file.filename)
+            if os.path.exists(file_path):
+                # Add timestamp to filename
+                name, ext = os.path.splitext(file.filename)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                file_path = os.path.join(person_path, f"{name}_{timestamp}{ext}")
 
             # Save file
-            file_path = os.path.join(person_path, file.filename)
             with open(file_path, "wb") as f:
                 f.write(content)
 
             uploaded_count += 1
-            logger.info(f"Uploaded photo: {file.filename} for {person_name}")
+            logger.info(f"Uploaded photo: {os.path.basename(file_path)} ({file_size} bytes) for {person_name}")
 
         if uploaded_count == 0:
             raise HTTPException(
@@ -452,6 +550,7 @@ def train_face_recognition(
 @router.get("/faces/statistics", response_model=face_schema.FaceStatistics)
 def get_face_statistics(
     current_user: user_schema.User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
 ):
     """
     Get face recognition statistics (cached for 2 minutes)
@@ -461,11 +560,32 @@ def get_face_statistics(
     """
     try:
         from backend.core.performance import timed_lru_cache
+        from backend.database.models import FaceDetectionEvent
+        from datetime import datetime, timedelta
 
         @timed_lru_cache(seconds=120, maxsize=4)
         def _get_cached_stats():
             face_manager = get_face_manager()
-            return face_manager.get_statistics()
+            manager_stats = face_manager.get_statistics()
+            
+            # Query database for accurate "today" counts
+            today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            recognitions_today = db.query(FaceDetectionEvent).filter(
+                FaceDetectionEvent.detected_at >= today_start
+            ).count()
+            
+            # Get last recognition from database
+            last_event = db.query(FaceDetectionEvent).order_by(
+                FaceDetectionEvent.detected_at.desc()
+            ).first()
+            last_recognition = last_event.detected_at.isoformat() if last_event else None
+            
+            return {
+                "total_people": manager_stats.get("total_people", 0),
+                "total_encodings": manager_stats.get("total_encodings", 0),
+                "recognitions_today": recognitions_today,
+                "last_recognition": last_recognition,
+            }
 
         stats = _get_cached_stats()
 

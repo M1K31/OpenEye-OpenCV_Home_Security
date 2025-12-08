@@ -283,30 +283,34 @@ const CameraManagementPage = ({ embedded = false }) => {
                         size="small"
                         onClick={() => window.open(`/api/cameras/${camera.camera_id}/stream`, '_blank')}
                         icon="👁️"
+                        title="View camera stream"
                       >
-                        View Stream
+                        Stream
                       </Button>
                       <Button
                         variant="secondary"
                         size="small"
                         onClick={() => setSettingsCamera(camera)}
                         icon="⚙️"
+                        title="Configure camera settings"
                       >
-                        Settings
+                        Config
                       </Button>
                       <Button
                         variant="secondary"
                         size="small"
                         onClick={() => setPtzCamera(camera)}
                         icon="🎮"
+                        title="PTZ controls"
                       >
-                        PTZ Control
+                        PTZ
                       </Button>
                       <Button
                         variant={camera.is_active ? 'secondary' : 'primary'}
                         size="small"
                         onClick={() => handleToggleCamera(camera.camera_id, camera.is_active)}
                         icon={camera.is_active ? '⏸️' : '▶️'}
+                        title={camera.is_active ? 'Disable camera' : 'Enable camera'}
                       >
                         {camera.is_active ? 'Disable' : 'Enable'}
                       </Button>
@@ -315,6 +319,7 @@ const CameraManagementPage = ({ embedded = false }) => {
                         size="small"
                         onClick={() => handleDeleteCamera(camera.camera_id)}
                         icon="🗑️"
+                        title="Delete camera"
                       >
                         Delete
                       </Button>
@@ -783,7 +788,8 @@ const styles = {
   cardFooter: {
     padding: '15px',
     display: 'flex',
-    gap: '10px',
+    flexWrap: 'wrap',
+    gap: '8px',
     background: 'var(--bg-panel)',
   },
   viewButton: {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { logger } from '../utils/logger';
 import apiClient from '../api/apiClient';
@@ -19,6 +19,8 @@ const EventDetailModal = ({ event, onClose, onDelete }) => {
   const navigate = useNavigate();
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState(null);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
+  const videoRef = React.useRef(null);
 
   if (!event) return null;
 
@@ -36,8 +38,8 @@ const EventDetailModal = ({ event, onClose, onDelete }) => {
         downloadUrl = `/api/recordings/${event.recording_id}/download`;
         filename = `recording_${event.recording_id}_${event.camera_id}.mp4`;
       } else if (hasSnapshot) {
-        // Download snapshot image
-        downloadUrl = event.snapshot_path ? `/${event.snapshot_path}` : `/data/snapshots/${event.camera_id}/${event.id}.jpg`;
+        // Download snapshot image - use /data/snapshots/ prefix for normalized paths
+        downloadUrl = event.snapshot_path ? `/data/snapshots/${event.snapshot_path}` : `/data/snapshots/${event.camera_id}/${event.id}.jpg`;
         filename = `snapshot_${event.id}_${event.camera_id}.jpg`;
       }
 
@@ -160,18 +162,53 @@ const EventDetailModal = ({ event, onClose, onDelete }) => {
           {/* Event Preview */}
           <div className="event-preview">
             {isVideo ? (
-              <video
-                src={`/api/recordings/${event.recording_id}/download`}
-                controls
-                className="event-video"
-                preload="metadata"
-                style={{ width: '100%', maxHeight: '480px', borderRadius: '8px' }}
-              >
-                Your browser does not support the video tag.
-              </video>
+              <div className="video-container">
+                <video
+                  ref={videoRef}
+                  src={`/api/recordings/${event.recording_id}/download`}
+                  controls
+                  className="event-video"
+                  preload="metadata"
+                  style={{ width: '100%', maxHeight: '480px', borderRadius: '8px' }}
+                  onLoadedData={(e) => {
+                    // Set playback speed when video loads
+                    e.target.playbackRate = playbackSpeed;
+                  }}
+                >
+                  Your browser does not support the video tag.
+                </video>
+                {/* Playback Speed Control */}
+                <div className="video-speed-control" style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ fontSize: '14px', fontWeight: '500' }}>Playback Speed:</label>
+                  <div style={{ display: 'flex', gap: '5px' }}>
+                    {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 4].map(speed => (
+                      <button
+                        key={speed}
+                        onClick={() => {
+                          setPlaybackSpeed(speed);
+                          if (videoRef.current) {
+                            videoRef.current.playbackRate = speed;
+                          }
+                        }}
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: '12px',
+                          border: '1px solid #ccc',
+                          borderRadius: '4px',
+                          background: playbackSpeed === speed ? '#007bff' : '#fff',
+                          color: playbackSpeed === speed ? '#fff' : '#333',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {speed}x
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             ) : hasSnapshot ? (
               <img
-                src={event.snapshot_path ? `/${event.snapshot_path}` : `/data/snapshots/${event.camera_id}/${event.id}.jpg`}
+                src={event.snapshot_path ? `/data/snapshots/${event.snapshot_path}` : `/data/snapshots/${event.camera_id}/${event.id}.jpg`}
                 alt="Event snapshot"
                 className="event-snapshot"
                 onError={(e) => {

@@ -193,7 +193,9 @@ class FFmpegRecorder:
         max_recording_duration: int = 300,
         use_hardware_encoding: bool = True,
         enable_frame_buffer: bool = True,
-        buffer_size: int = 300
+        buffer_size: int = 300,
+        enable_audio: bool = False,
+        audio_device: Optional[str] = None
     ):
         """
         Initialize FFmpeg recorder
@@ -204,11 +206,15 @@ class FFmpegRecorder:
             use_hardware_encoding: Enable hardware acceleration if available
             enable_frame_buffer: Enable async frame buffering
             buffer_size: Maximum frames to buffer (default: 300)
+            enable_audio: Enable audio recording from microphone (default: False)
+            audio_device: Audio input device (None = default system microphone)
         """
         self.output_dir = Path(output_dir)
         self.max_recording_duration = max_recording_duration
         self.use_hardware_encoding = use_hardware_encoding
         self.enable_frame_buffer = enable_frame_buffer
+        self.enable_audio = enable_audio
+        self.audio_device = audio_device
 
         # Recording state
         self.is_recording = False
@@ -218,6 +224,13 @@ class FFmpegRecorder:
         self.recording_start_time: Optional[datetime] = None
         self.frame_count = 0
         self.detected_faces: List[Dict] = []
+        
+        # Track motion event IDs associated with this recording
+        # These will be linked to recording_id when recording stops
+        self.associated_motion_event_ids = []
+        
+        # Store the last created recording_id (set after stop())
+        self.last_recording_id = None
 
         # Frame buffer
         self.frame_buffer: Optional[FrameBuffer] = None
@@ -261,7 +274,7 @@ class FFmpegRecorder:
         # Select codec and build FFmpeg command
         codec = self.encoder if self.use_hardware_encoding else 'libx264'
 
-        # Build FFmpeg command
+        # Build FFmpeg command - video input first
         ffmpeg_cmd = [
             'ffmpeg',
             '-y',  # Overwrite output file
@@ -270,9 +283,59 @@ class FFmpegRecorder:
             '-pix_fmt', 'bgr24',
             '-s', f'{frame_width}x{frame_height}',
             '-r', str(fps),
-            '-i', '-',  # Read from stdin
-            '-c:v', codec,
+            '-i', '-',  # Read video from stdin
         ]
+        
+        # Add audio input if enabled (before video codec settings)
+        if self.enable_audio:
+            # Use default system microphone
+            try:
+                import platform
+                if platform.system() == 'Darwin':
+                    # macOS - use avfoundation
+                    if self.audio_device:
+                        # Use specific audio device index
+                        ffmpeg_cmd.extend([
+                            '-f', 'avfoundation',
+                            '-i', f':{self.audio_device}'
+                        ])
+                    else:
+                        # Use default audio input device
+                        ffmpeg_cmd.extend([
+                            '-f', 'avfoundation',
+                            '-i', ':0'  # Default audio input device
+                        ])
+                elif platform.system() == 'Linux':
+                    # Linux - use pulse or alsa
+                    if self.audio_device:
+                        ffmpeg_cmd.extend([
+                            '-f', 'pulse',
+                            '-i', self.audio_device
+                        ])
+                    else:
+                        ffmpeg_cmd.extend([
+                            '-f', 'pulse',
+                            '-i', 'default'
+                        ])
+                else:
+                    # Windows - use dshow
+                    if self.audio_device:
+                        ffmpeg_cmd.extend([
+                            '-f', 'dshow',
+                            '-i', f'audio="{self.audio_device}"'
+                        ])
+                    else:
+                        ffmpeg_cmd.extend([
+                            '-f', 'dshow',
+                            '-i', 'audio="Microphone"'
+                        ])
+            except Exception as e:
+                logger.warning(f"Could not detect audio input device, audio recording disabled: {e}")
+                self.enable_audio = False
+        
+        # Add video codec settings
+        ffmpeg_cmd.append('-c:v')
+        ffmpeg_cmd.append(codec)
 
         # Add codec-specific parameters
         if codec == 'h264_nvenc':
@@ -308,6 +371,15 @@ class FFmpegRecorder:
                 '-bufsize', '8M'
             ])
 
+        # Add audio codec if audio is enabled
+        if self.enable_audio:
+            ffmpeg_cmd.extend([
+                '-c:a', 'aac',  # AAC audio codec (widely supported)
+                '-b:a', '128k',  # Audio bitrate
+                '-ar', '44100',  # Audio sample rate
+                '-ac', '2',  # Stereo audio
+            ])
+        
         # Add web optimization (moov atom at start for progressive playback)
         ffmpeg_cmd.extend([
             '-movflags', '+faststart',  # CRITICAL for web playback
@@ -334,6 +406,8 @@ class FFmpegRecorder:
             self.recording_start_time = datetime.now()
             self.frame_count = 0
             self.detected_faces = []
+            self.associated_motion_event_ids = []  # Reset for new recording
+            self.last_recording_id = None
 
             # Start frame buffer if enabled
             if self.enable_frame_buffer:
@@ -486,6 +560,73 @@ class FFmpegRecorder:
             logger.error(f"❌ Recording file not created: {self.filename}")
             return None
 
+        # Save to database and link motion events
+        try:
+            from backend.database.utils import get_db_context
+            from backend.database import crud
+            from backend.database.models import MotionDetectionEvent, FaceDetectionEvent
+            from backend.core.paths import paths
+
+            with get_db_context() as db:
+                # Get relative path for database storage
+                relative_path = paths.get_relative_path(self.filename)
+
+                camera_id = getattr(self, "camera_id", "unknown")
+
+                # Count known vs unknown faces
+                known_faces_count = sum(1 for face in self.detected_faces 
+                                      if face.get("person_name", "Unknown") != "Unknown")
+                unknown_faces_count = len(self.detected_faces) - known_faces_count
+
+                recording_data = {
+                    "camera_id": camera_id,
+                    "recording_path": relative_path,
+                    "started_at": self.recording_start_time,
+                    "ended_at": datetime.now(),
+                    "duration_seconds": duration_seconds,
+                    "motion_detected": True,  # Always true if we're recording
+                    "faces_detected": len(self.detected_faces),
+                    "known_faces_detected": known_faces_count,
+                    "file_size_bytes": file_size,
+                    "frame_count": self.frame_count,
+                }
+
+                db_event = crud.create_recording_event(db, recording_data)
+                self.last_recording_id = db_event.id
+                logger.info(f"✅ Recording event created in database: ID={db_event.id}")
+                
+                # Link associated motion events to this recording
+                if self.associated_motion_event_ids:
+                    linked_count = db.query(MotionDetectionEvent).filter(
+                        MotionDetectionEvent.id.in_(self.associated_motion_event_ids)
+                    ).update(
+                        {"recording_id": db_event.id, "recording_path": relative_path},
+                        synchronize_session=False
+                    )
+                    db.commit()
+                    logger.info(f"🔗 Linked {linked_count} motion events to recording ID={db_event.id}")
+                
+                # Also link any face detection events from this recording period
+                if self.recording_start_time:
+                    face_linked_count = db.query(FaceDetectionEvent).filter(
+                        FaceDetectionEvent.camera_id == camera_id,
+                        FaceDetectionEvent.detected_at >= self.recording_start_time,
+                        FaceDetectionEvent.detected_at <= datetime.now(),
+                        FaceDetectionEvent.recording_id.is_(None)
+                    ).update(
+                        {"recording_id": db_event.id, "recording_path": relative_path},
+                        synchronize_session=False
+                    )
+                    db.commit()
+                    if face_linked_count > 0:
+                        logger.info(f"🔗 Linked {face_linked_count} face events to recording ID={db_event.id}")
+
+        except Exception as db_error:
+            logger.error(f"⚠️ Failed to save recording to database: {db_error}")
+            import traceback
+            traceback.print_exc()
+            # Don't fail the entire operation if database save fails
+
         # Cleanup
         self.ffmpeg_process = None
         self.frame_buffer = None
@@ -531,3 +672,16 @@ class FFmpegRecorder:
             face_data_copy["frame_number"] = self.frame_count
             face_data_copy["timestamp"] = (datetime.now() - self.recording_start_time).total_seconds() if self.recording_start_time else 0
             self.detected_faces.append(face_data_copy)
+
+    def add_motion_event_id(self, motion_event_id: int):
+        """
+        Track a motion event ID associated with this recording.
+        These will be linked to the recording when it stops.
+
+        Args:
+            motion_event_id: ID of the motion event to associate
+        """
+        if self.is_recording and motion_event_id:
+            if motion_event_id not in self.associated_motion_event_ids:
+                self.associated_motion_event_ids.append(motion_event_id)
+                logger.info(f"📎 Linked motion event {motion_event_id} to current recording")

@@ -40,7 +40,7 @@ def safe_file_response(
     Safely serve a file with path traversal protection
 
     Args:
-        file_path: Path to file (from database or user input)
+        file_path: Path to file (from database - can be relative or absolute)
         allowed_dir: Directory that file must be within
         media_type: MIME type for response
         filename: Optional filename for download
@@ -52,14 +52,14 @@ def safe_file_response(
         HTTPException: If file is outside allowed directory or doesn't exist
     """
     try:
-        # Resolve paths to absolute, following symlinks
-        full_path = Path(file_path).resolve()
-        allowed_dir = allowed_dir.resolve()
+        # Use PathManager to properly resolve relative paths (stored relative to PROJECT_ROOT)
+        full_path = paths.resolve_path(file_path)
+        allowed_dir_resolved = allowed_dir.resolve()
 
         # Security check: Ensure file is within allowed directory
-        if not str(full_path).startswith(str(allowed_dir)):
+        if not str(full_path).startswith(str(allowed_dir_resolved)):
             logger.warning(
-                f"Path traversal attempt blocked: {file_path} not in {allowed_dir}"
+                f"Path traversal attempt blocked: {file_path} -> {full_path} not in {allowed_dir_resolved}"
             )
             raise HTTPException(
                 status_code=403,
@@ -68,7 +68,8 @@ def safe_file_response(
 
         # Check file exists and is a file (not directory)
         if not full_path.exists():
-            raise HTTPException(status_code=404, detail="File not found")
+            logger.warning(f"Recording file not found: {full_path} (original path: {file_path})")
+            raise HTTPException(status_code=404, detail=f"File not found: {full_path.name}")
 
         if not full_path.is_file():
             raise HTTPException(status_code=400, detail="Path is not a file")
@@ -87,7 +88,7 @@ def safe_file_response(
         raise
     except Exception as e:
         logger.error(f"Error serving file {file_path}: {e}")
-        raise HTTPException(status_code=500, detail="Error serving file")
+        raise HTTPException(status_code=500, detail=f"Error serving file: {str(e)}")
 
 
 # Pydantic Models
@@ -164,11 +165,21 @@ def list_recordings(
         query = query.filter(models.RecordingEvent.camera_id == camera_id)
 
     if start_date:
-        start_dt = datetime.fromisoformat(start_date)
+        # Parse ISO format date string (handles timezone-aware strings)
+        start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+        # Ensure timezone-aware for comparison
+        if start_dt.tzinfo is None:
+            from datetime import timezone
+            start_dt = start_dt.replace(tzinfo=timezone.utc)
         query = query.filter(models.RecordingEvent.started_at >= start_dt)
 
     if end_date:
-        end_dt = datetime.fromisoformat(end_date)
+        # Parse ISO format date string (handles timezone-aware strings)
+        end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+        # Ensure timezone-aware for comparison
+        if end_dt.tzinfo is None:
+            from datetime import timezone
+            end_dt = end_dt.replace(tzinfo=timezone.utc)
         query = query.filter(models.RecordingEvent.started_at <= end_dt)
 
     if has_faces is not None:

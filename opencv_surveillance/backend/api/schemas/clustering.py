@@ -79,14 +79,22 @@ class ClusteringRequest(BaseModel):
     recalculate: bool = Field(False, description="Recalculate clusters from scratch")
     eps: Optional[float] = Field(0.5, description="DBSCAN eps parameter (0.4-0.6 typical)")
     min_samples: Optional[int] = Field(2, description="Minimum faces per cluster")
+    auto_export_enabled: Optional[bool] = Field(True, description="Automatically export clusters that hit threshold")
+    auto_export_threshold: Optional[int] = Field(5, description="Minimum faces in cluster to trigger auto-export")
+    auto_train_enabled: Optional[bool] = Field(True, description="Automatically train model after export")
+    auto_name_enabled: Optional[bool] = Field(True, description="Automatically assign names (unknown1, unknown2, etc.) to unknown clusters")
+    cluster_known_faces: Optional[bool] = Field(True, description="Whether to cluster known faces (for profile updates)")
 
 
 class ClusteringResponse(BaseModel):
     """Schema for clustering response"""
     total_unknown_faces: int
+    total_known_faces: Optional[int] = Field(0, description="Number of known faces clustered")
     clusters_created: int
     faces_clustered: int
     faces_unclustered: int
+    auto_exports: Optional[int] = Field(0, description="Number of clusters auto-exported")
+    auto_names: Optional[int] = Field(0, description="Number of clusters auto-named")
     clustering_time: float
     success: bool = True
     message: str
@@ -103,7 +111,11 @@ class AssignNameResponse(BaseModel):
     message: str
     faces_updated: int
     images_copied: Optional[int] = Field(None, description="Number of face images copied to person folder")
-    person_created: Optional[bool] = Field(None, description="Whether person was created in AI & Faces")
+    images_skipped: Optional[int] = Field(None, description="Number of images skipped (duplicates)")
+    person_created: Optional[bool] = Field(None, description="Whether a new person was created in AI & Faces")
+    is_merge: Optional[bool] = Field(None, description="Whether this was a merge with an existing person")
+    training_required: Optional[bool] = Field(None, description="Whether face recognition training is required")
+    training_result: Optional[dict] = Field(None, description="Training result if auto-trained")
 
 
 class MergeClustersRequest(BaseModel):

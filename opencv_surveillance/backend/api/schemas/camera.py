@@ -72,6 +72,8 @@ class CameraBase(BaseModel):
     # Recording settings
     recording_enabled: Optional[bool] = True
     post_motion_cooldown: Optional[int] = Field(5, ge=1, le=300)
+    audio_recording_enabled: Optional[bool] = Field(False, description="Enable audio recording with motion recordings (requires hardware encoding)")
+    audio_device: Optional[str] = Field(None, description="Audio input device (None = default system microphone)")
 
     # Video quality settings
     resolution: Optional[str] = Field("1920x1080", pattern="^\\d+x\\d+$")

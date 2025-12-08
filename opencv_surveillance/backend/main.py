@@ -237,6 +237,32 @@ async def startup_event():
     models.Base.metadata.create_all(bind=engine)
     alert_models.Base.metadata.create_all(bind=engine)
     logger.info("Database tables verified successfully")
+    
+    # Add missing columns for audio recording (migration)
+    logger.info("Checking for database schema updates...")
+    try:
+        from sqlalchemy import text, inspect
+        inspector = inspect(engine)
+        
+        # Check if cameras table exists
+        if 'cameras' in inspector.get_table_names():
+            columns = [col['name'] for col in inspector.get_columns('cameras')]
+            
+            if 'audio_recording_enabled' not in columns:
+                logger.info("Adding audio_recording_enabled column to cameras table...")
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE cameras ADD COLUMN audio_recording_enabled BOOLEAN DEFAULT 0"))
+                    conn.commit()
+                logger.info("✅ Added audio_recording_enabled column")
+            
+            if 'audio_device' not in columns:
+                logger.info("Adding audio_device column to cameras table...")
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE cameras ADD COLUMN audio_device TEXT"))
+                    conn.commit()
+                logger.info("✅ Added audio_device column")
+    except Exception as e:
+        logger.warning(f"Schema migration check failed (non-critical): {e}")
 
     # Enable query profiling if configured
     import os
@@ -293,10 +319,10 @@ async def startup_event():
     # PathManager automatically creates all required directories
     logger.info("Required directories handled by PathManager")
 
-    # Initialize face recognition manager with configured path
+    # Initialize face recognition manager with configured path (uses PathManager default)
     logger.info(
         f"Initializing face recognition with faces directory: {paths.faces_dir}")
-    face_manager = get_face_manager(faces_folder=str(paths.faces_dir))
+    face_manager = get_face_manager()  # Uses paths.faces_dir by default
     logger.info(
         f"Face recognition initialized: {len(face_manager.known_face_names)} known faces"
     )

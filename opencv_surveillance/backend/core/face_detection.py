@@ -35,7 +35,8 @@ class FaceDetector:
         """
         self.enabled = enabled
         self.faces_dir = faces_dir or paths.faces_dir
-        self.face_manager = get_face_manager(faces_folder=self.faces_dir)
+        # Use get_face_manager() without args to use consistent PathManager default
+        self.face_manager = get_face_manager()
         self.last_detection_time = None
         self.detection_cooldown = 2.0  # Seconds between detections to reduce CPU load
         self.detections_buffer = []  # Store recent detections
@@ -58,9 +59,11 @@ class FaceDetector:
             True if frame should be processed
         """
         if not self.enabled:
+            logger.debug("Face detection disabled")
             return False
 
         if not self.face_manager.is_available():
+            logger.debug("Face recognition library not available")
             return False
 
         if self.last_detection_time is None:
@@ -169,10 +172,12 @@ class FaceDetector:
             "enabled": self.enabled,
             "total_detections": len(self.detections_buffer),
             "unique_people_detected": len(unique_people),
+            "unknown_detections": len([d for d in self.detections_buffer if d["name"] == "Unknown"]),
             "last_detection_time": (
                 self.last_detection_time.isoformat()
                 if self.last_detection_time
                 else None
             ),
             "face_manager_ready": self.face_manager.is_available(),
+            "known_faces_trained": len(self.face_manager.known_face_encodings),
         }

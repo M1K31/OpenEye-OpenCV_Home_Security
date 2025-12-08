@@ -40,6 +40,7 @@ class TimelineEventResponse(BaseModel):
     duration: Optional[float] = None
     thumbnail_path: Optional[str] = None
     video_path: Optional[str] = None
+    recording_id: Optional[int] = None  # Recording ID for video playback (different from event id)
 
     # Event-specific data
     motion_detected: bool = False
@@ -184,6 +185,7 @@ def get_timeline_events(
                 timestamp=rec.started_at,
                 duration=rec.duration_seconds,
                 video_path=rec.recording_path,
+                recording_id=rec.id,  # For recordings, id == recording_id
                 thumbnail_path=rec.thumbnail_path,
                 motion_detected=rec.motion_detected,
                 faces_detected=rec.faces_detected or 0,
@@ -212,6 +214,7 @@ def get_timeline_events(
                 duration=None,
                 thumbnail_path=motion.snapshot_path,
                 video_path=motion.recording_path,
+                recording_id=motion.recording_id,  # Link to associated recording
                 motion_detected=True,
                 faces_detected=motion.faces_detected or 0
             ))
@@ -238,6 +241,7 @@ def get_timeline_events(
                 duration=None,
                 thumbnail_path=face.snapshot_path,
                 video_path=face.recording_path,
+                recording_id=face.recording_id,  # Link to associated recording
                 motion_detected=face.motion_detected,
                 person_name=face.person_name,
                 confidence=face.confidence
@@ -271,6 +275,7 @@ def get_timeline_events(
                 duration=None,
                 thumbnail_path=obj.snapshot_path,
                 video_path=obj.recording_path,
+                recording_id=obj.recording_id,  # Link to associated recording
                 motion_detected=obj.motion_detected,
                 objects_detected=1,
                 object_class=obj.object_class,
@@ -299,6 +304,7 @@ def get_timeline_view(
     start_time: Optional[str] = Query(None, description="Start time (ISO format)"),
     end_time: Optional[str] = Query(None, description="End time (ISO format)"),
     camera_ids: Optional[List[str]] = Query(None, description="Filter by camera IDs"),
+    limit: Optional[int] = Query(500, description="Max events per camera for performance"),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_active_user)
 ):
@@ -334,6 +340,9 @@ def get_timeline_view(
     lanes = []
     total_events = 0
 
+    # Cap limit to prevent performance issues
+    per_camera_limit = min(limit or 500, 1000)
+
     for camera in cameras:
         # Get events for this camera
         events_response = get_timeline_events(
@@ -341,7 +350,7 @@ def get_timeline_view(
             end_time=end_dt.isoformat(),
             camera_ids=[camera.camera_id],
             event_types=None,
-            limit=1000,
+            limit=per_camera_limit,
             db=db,
             current_user=current_user
         )

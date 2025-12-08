@@ -65,7 +65,7 @@ def get_db():
         db.close()
 
 
-@router.get("/history/detections",
+@router.get("/history",
             response_model=PaginatedResponse[FaceDetectionEventResponse])
 def get_detection_history(
     camera_id: Optional[str] = Query(None, description="Filter by camera ID"),

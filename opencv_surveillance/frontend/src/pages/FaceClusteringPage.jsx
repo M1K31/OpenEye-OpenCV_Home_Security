@@ -65,7 +65,7 @@ const FaceClusteringPage = () => {
 
       // Load clusters and statistics with individual error handling
       const [clustersResult, statsResult] = await Promise.allSettled([
-        clusteringService.getClusters(0, ITEMS_PER_PAGE),
+        clusteringService.getClusters(1, ITEMS_PER_PAGE),  // page=1 (1-indexed)
         clusteringService.getStatistics(),
       ]);
 
@@ -135,12 +135,12 @@ const FaceClusteringPage = () => {
     
     try {
       setLoading(true);
-      const skip = (page + 1) * ITEMS_PER_PAGE;
-      const data = await clusteringService.getClusters(skip, ITEMS_PER_PAGE);
+      const nextPage = page + 1;  // page is 0-indexed internally, but API is 1-indexed
+      const data = await clusteringService.getClusters(nextPage + 1, ITEMS_PER_PAGE);
       
       setClusters(prev => [...prev, ...(data.clusters || [])]);
       setHasMore((data.clusters?.length || 0) >= ITEMS_PER_PAGE);
-      setPage(prev => prev + 1);
+      setPage(nextPage);
     } catch (err) {
       logger.error('Error loading more clusters:', err);
     } finally {
