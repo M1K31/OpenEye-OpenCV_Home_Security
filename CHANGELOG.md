@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.10.2] - 2025-12-08
+
+### Fixed
+- **⏱️ Timeline Playback Performance & Reliability Improvements**
+  - **Performance**: Added memoization with `useMemo` for expensive calculations (timeline width, axis marks, sorted events)
+  - **Performance**: Added debouncing (300ms) to prevent excessive API calls when time range changes
+  - **Performance**: Added `limit` parameter to timeline API (default 500 events per camera, max 1000)
+  - **Playback Bug Fix**: Replaced unstable playback logic with index-based state machine to prevent race conditions
+  - **Playback Bug Fix**: Added `currentEventIndex` state to track position reliably during sequential playback
+  - **Playback Bug Fix**: Used `isPlayingRef` to prevent stale closure issues in async callbacks
+  - **Playback Bug Fix**: Fixed video/image sequencing that could skip events or fail to load
+  - **Files Modified**: `frontend/src/pages/TimelineView.jsx`, `backend/api/routes/timeline.py`
+
+- **🧠 AI & Faces - Delete/Add Person Freeze Fix**
+  - **Root Cause**: Synchronous `train_face_recognition()` calls blocked the main thread during dlib operations
+  - **Fix**: Made `auto_train=False` default for `delete_person` and `assign_name_to_cluster`
+  - **Fix**: Added `BackgroundTasks` for training after cluster operations
+  - **Fix**: Enhanced `assign_name_to_cluster` with merge detection and duplicate file handling
+  - **Impact**: App no longer freezes when adding/deleting people or assigning names to clusters
+  - **Files Modified**: `backend/core/face_recognition.py`, `backend/core/face_clustering.py`, `backend/api/routes/clusters.py`, `backend/api/schemas/clustering.py`
+
+- **🔍 Face Detection Not Recording to Database** (Critical Bug Fix)
+  - **Root Cause**: `is_available()` returned `False` if no known faces were trained, completely blocking face detection
+  - **Impact**: Face detection events (0 in database) were never created even though face snapshots existed
+  - **Fix 1**: Changed `is_available()` to return `True` if face_recognition library is available (not just if known faces exist)
+  - **Fix 2**: Modified `recognize_faces_in_frame()` to detect faces even when no known faces are trained
+  - **Fix 3**: Unknown faces are now properly detected, saved to database, and available for clustering
+  - **Result**: Face detection now works for both known and unknown faces, enabling proper clustering workflow
+  - **Files Modified**: `backend/core/face_recognition.py`, `backend/core/face_detection.py`
+
+### Removed
+- **🧹 Project Cleanup - Removed Red Herring Files**
+  - **`backend/.env`**: Duplicate config with insecure placeholder credentials (root `.env` has proper secure keys)
+  - **`docker/docker-compose.yml`**: Outdated Docker compose with wrong paths referencing insecure `backend/.env`
+  - **`backend/api/routes/recordings_optimized_example.py`**: Orphaned example file never imported
+  - **`frontend/src/pages/SettingsPageSimple.jsx`**: Orphaned test file never imported
+  - **`data/surveillance.db`**: Orphaned 0-byte database file (actual database is `surveillance.db` in project root)
+
+---
+
 ## [3.10.1] - 2025-11-18
 
 ### Added

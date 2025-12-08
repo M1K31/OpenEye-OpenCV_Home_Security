@@ -17,8 +17,9 @@ class PersonBase(BaseModel):
 
 class PersonCreate(PersonBase):
     """Schema for creating a new person"""
-
-    pass
+    
+    merge_if_exists: bool = Field(False, description="If person folder exists, merge instead of error")
+    overwrite_if_exists: bool = Field(False, description="If person folder exists, overwrite (delete existing) instead of error")
 
 
 class PersonUpdate(BaseModel):
@@ -30,8 +31,9 @@ class PersonUpdate(BaseModel):
 class Person(PersonBase):
     """Schema for person response"""
 
-    photo_count: int = Field(0, description="Number of photos for this person")
+    photo_count: int = Field(default=0, description="Number of photos for this person")
     path: str = Field(..., description="Path to person's photo directory")
+    preview_photo_url: Optional[str] = Field(None, description="URL to preview photo (first photo)")
 
     class Config:
         from_attributes = True

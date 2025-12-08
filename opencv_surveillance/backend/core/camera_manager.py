@@ -24,7 +24,7 @@ import asyncio
 from backend.core.alert_manager import get_alert_manager
 from backend.core.automation_engine import process_face_detection
 from backend.database.session import SessionLocal
-from backend.database.models import Camera as CameraModel
+from backend.database.models import Camera as CameraModel, MotionDetectionEvent
 from backend.database.utils import get_db_context
 
 
@@ -102,6 +102,10 @@ class Camera(ABC):
 
         # Check if hardware video encoding is enabled (v3.7.1+)
         use_hardware_encoding = settings.get("hardware_video_encoding", False)
+        
+        # Check if audio recording is enabled
+        enable_audio = settings.get("audio_recording_enabled", False)
+        audio_device = settings.get("audio_device", None)
 
         # Create recorder based on hardware encoding setting
         if use_hardware_encoding:
@@ -112,9 +116,12 @@ class Camera(ABC):
                     max_recording_duration=max_recording_duration,
                     use_hardware_encoding=True,
                     enable_frame_buffer=True,
-                    buffer_size=300
+                    buffer_size=300,
+                    enable_audio=enable_audio,
+                    audio_device=audio_device
                 )
-                print(f"✅ FFmpeg recorder initialized for camera '{camera_id}' with hardware acceleration")
+                audio_status = "with audio" if enable_audio else "without audio"
+                print(f"✅ FFmpeg recorder initialized for camera '{camera_id}' with hardware acceleration ({audio_status})")
             except Exception as e:
                 print(f"⚠️ Failed to initialize FFmpeg recorder, falling back to standard recorder: {e}")
                 self.recorder = Recorder(
@@ -122,7 +129,9 @@ class Camera(ABC):
                     max_recording_duration=max_recording_duration
                 )
         else:
-            # Use standard OpenCV VideoWriter recorder
+            # Use standard OpenCV VideoWriter recorder (doesn't support audio)
+            if enable_audio:
+                print(f"⚠️ Audio recording requested but hardware encoding is disabled. Audio recording requires FFmpeg recorder.")
             self.recorder = Recorder(
                 output_dir=recordings_path,
                 max_recording_duration=max_recording_duration
@@ -679,8 +688,9 @@ class MockCamera(Camera):
             processed_frame = self.image_processor.process(processed_frame)
 
         # Motion detection on processed frame
+        # draw_boxes=False to only show face detection boxes, not motion boxes
         processed_frame, self.motion_detected, motion_areas = (
-            self.motion_detector.detect(processed_frame)
+            self.motion_detector.detect(processed_frame, draw_boxes=False)
         )
 
         # Check motion percentage threshold before triggering event
@@ -768,6 +778,10 @@ class MockCamera(Camera):
             self.last_motion_time = time.time()
             if not self.recorder.is_recording:
                 self.recorder.start(self.width, self.height, fps=30, camera_id=self.camera_id or "mock")
+            
+            # Link motion event to the recording (if recording is active)
+            if self.recorder.is_recording and self.current_motion_event_id:
+                self.recorder.add_motion_event_id(self.current_motion_event_id)
 
         if self.recorder.is_recording:
             # Add recording indicator to the processed frame for streaming
@@ -872,8 +886,9 @@ class RTSPCamera(Camera):
             processed_frame = self.image_processor.process(processed_frame)
 
         # Motion detection on processed frame
+        # draw_boxes=False to only show face detection boxes, not motion boxes
         processed_frame, self.motion_detected, motion_areas = (
-            self.motion_detector.detect(processed_frame)
+            self.motion_detector.detect(processed_frame, draw_boxes=False)
         )
 
         # Check motion percentage threshold before triggering event
@@ -965,6 +980,10 @@ class RTSPCamera(Camera):
             if not self.recorder.is_recording:
                 height, width, _ = clean_frame.shape
                 self.recorder.start(width, height, fps=30, camera_id=self.camera_id or "rtsp")
+            
+            # Link motion event to the recording (if recording is active)
+            if self.recorder.is_recording and self.current_motion_event_id:
+                self.recorder.add_motion_event_id(self.current_motion_event_id)
 
         if self.recorder.is_recording:
             height, width, _ = clean_frame.shape

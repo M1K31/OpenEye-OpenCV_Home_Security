@@ -72,7 +72,9 @@ const DashboardPage = ({ onLogout }) => {
   useEffect(() => {
     const loadDetections = async () => {
       try {
-        const response = await apiClient.get('/faces/history/detections');
+        const response = await apiClient.get('/faces/history', {
+          params: { page: 1, page_size: 15 }
+        });
         // Handle new paginated response format
         const detectionsData = response.data?.data ||
           response.data?.detections ||  // Legacy format

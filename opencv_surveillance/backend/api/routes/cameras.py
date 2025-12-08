@@ -7,6 +7,7 @@ from datetime import datetime
 import cv2
 import asyncio
 import os
+import logging
 
 from backend.core.camera_manager import manager as camera_manager
 from backend.core.camera_validation import validate_camera_source
@@ -16,6 +17,7 @@ from backend.api.schemas import camera as camera_schema
 
 from backend.core.paths import paths
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # CAMERA CRUD ENDPOINTS
@@ -403,28 +405,40 @@ def get_camera_status(camera_id: str, db: Session = Depends(get_db)):
 
 async def generate_frames(camera_id: str):
     """
-    Generator function to yield frames from a camera as MJPEG
+    Async generator function to yield frames from a camera as MJPEG
     """
     camera = camera_manager.get_camera(camera_id)
-    if not camera or not camera.is_running:
-        print(f"Camera '{camera_id}' not found or not running.")
+    if not camera:
+        logger.error(f"Camera '{camera_id}' not found in camera manager")
+        return
+    if not camera.is_running:
+        logger.error(f"Camera '{camera_id}' is not running")
         return
 
-    while True:
-        frame, motion_detected = camera.get_frame()
-        if frame is None:
-            await asyncio.sleep(0.1)
-            continue
+    try:
+        while True:
+            frame, motion_detected = camera.get_frame()
+            if frame is None:
+                await asyncio.sleep(0.1)
+                continue
 
-        ret, buffer = cv2.imencode(".jpg", frame)
-        if not ret:
-            continue
+            # Encode frame as JPEG
+            ret, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            if not ret:
+                logger.warning(f"Failed to encode frame for camera {camera_id}")
+                await asyncio.sleep(0.1)
+                continue
 
-        frame_bytes = buffer.tobytes()
-        yield (
-            b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n"
-        )
-        await asyncio.sleep(0.03)  # Limit to ~30 FPS
+            frame_bytes = buffer.tobytes()
+            # MJPEG stream format
+            yield (
+                b"--frame\r\n" 
+                b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n"
+            )
+            await asyncio.sleep(0.033)  # Limit to ~30 FPS
+    except Exception as e:
+        logger.error(f"Error generating frames for camera {camera_id}: {e}")
+        raise
 
 
 @router.get("/{camera_id}/stream")

@@ -125,6 +125,39 @@ const DetectionsPage = () => {
     }
   };
 
+  const handleAddToKnownPerson = async (detection) => {
+    const personName = window.prompt('Enter a name for this person:');
+    if (!personName || !personName.trim()) {
+      return;
+    }
+
+    try {
+      // Create person if doesn't exist
+      await apiClient.post('/faces/people', { name: personName.trim() });
+      
+      // Download snapshot and upload as photo
+      if (detection.snapshot_path) {
+        const snapshotUrl = `/data/snapshots/${detection.snapshot_path}`;
+        const response = await fetch(snapshotUrl);
+        const blob = await response.blob();
+        const file = new File([blob], detection.snapshot_path, { type: 'image/jpeg' });
+        
+        const formData = new FormData();
+        formData.append('files', file);
+        
+        await apiClient.post(`/faces/people/${personName.trim()}/photos`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        
+        alert(`Added ${personName} with photo. Please train the model to enable recognition.`);
+        window.location.href = '/ai-faces';
+      }
+    } catch (error) {
+      console.error('Error adding to known person:', error);
+      alert('Error adding person: ' + (error.response?.data?.detail || error.message));
+    }
+  };
+
   const loadStatistics = async () => {
     try {
       const response = await apiClient.get('/objects/detections/statistics');
@@ -386,6 +419,40 @@ const DetectionCard = ({ detection }) => {
             </span>
           </div>
         </div>
+
+        {/* Management Actions for Unknown Faces */}
+        {detection.type === 'person' && !detection.identified && (
+          <div style={styles.detectionActions}>
+            <Button
+              variant="primary"
+              size="small"
+              onClick={() => handleAddToKnownPerson(detection)}
+              style={{ marginRight: '8px' }}
+            >
+              Add to Known Person
+            </Button>
+            <Button
+              variant="secondary"
+              size="small"
+              onClick={() => window.location.href = '/face-clustering'}
+            >
+              View Clusters
+            </Button>
+          </div>
+        )}
+
+        {/* Management Actions for Known Faces */}
+        {detection.type === 'person' && detection.identified && (
+          <div style={styles.detectionActions}>
+            <Button
+              variant="secondary"
+              size="small"
+              onClick={() => window.location.href = `/ai-faces?person=${encodeURIComponent(detection.name)}`}
+            >
+              Manage Person
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -557,6 +624,13 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     gap: '8px',
+  },
+  detectionActions: {
+    display: 'flex',
+    gap: '8px',
+    marginTop: '16px',
+    paddingTop: '16px',
+    borderTop: '1px solid rgba(255, 255, 255, 0.1)',
   },
   detectionMetaItem: {
     display: 'flex',

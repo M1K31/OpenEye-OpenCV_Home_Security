@@ -19,6 +19,8 @@ const FaceManagementPage = ({ embedded = false }) => {
   const [isTraining, setIsTraining] = useState(false);
   const [message, setMessage] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [existingPersonInfo, setExistingPersonInfo] = useState(null);
 
   // Load data on component mount
   useEffect(() => {
@@ -62,7 +64,7 @@ const FaceManagementPage = ({ embedded = false }) => {
     }
   };
 
-  const addPerson = async (e) => {
+  const addPerson = async (e, mergeIfExists = false, overwriteIfExists = false) => {
     e.preventDefault();
     if (!newPersonName.trim()) {
       showMessage('Please enter a person name', 'error');
@@ -71,14 +73,40 @@ const FaceManagementPage = ({ embedded = false }) => {
 
     setLoading(true);
     try {
-      await apiClient.post('/faces/people', { name: newPersonName });
-      showMessage(`Added person: ${newPersonName}`, 'success');
-      setNewPersonName('');
-      loadPeople();
+      const response = await apiClient.post('/faces/people', {
+        name: newPersonName,
+        merge_if_exists: mergeIfExists,
+        overwrite_if_exists: overwriteIfExists
+      });
+      
+      // Check if person already existed (has photos)
+      if (response.data.photo_count > 0 && !mergeIfExists && !overwriteIfExists) {
+        // Show merge dialog
+        setExistingPersonInfo(response.data);
+        setShowMergeDialog(true);
+      } else {
+        showMessage(`Added person: ${newPersonName}`, 'success');
+        setNewPersonName('');
+        loadPeople();
+      }
     } catch (error) {
-      showMessage('Error adding person: ' + error.response?.data?.detail || error.message, 'error');
+      showMessage('Error adding person: ' + (error.response?.data?.detail || error.message), 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleMergeChoice = async (choice) => {
+    setShowMergeDialog(false);
+    if (choice === 'merge') {
+      await addPerson({ preventDefault: () => {} }, true, false);
+    } else if (choice === 'overwrite') {
+      if (window.confirm(`Are you sure you want to delete all existing photos for ${newPersonName}? This cannot be undone.`)) {
+        await addPerson({ preventDefault: () => {} }, false, true);
+      }
+    } else {
+      // Cancel - do nothing
+      setNewPersonName('');
     }
   };
 
@@ -100,47 +128,235 @@ const FaceManagementPage = ({ embedded = false }) => {
     }
   };
 
-  const handleFileSelect = (e) => {
-    logger.log('[FaceManagement] File input changed');
-    logger.log('[FaceManagement] Files selected:', e.target.files);
-    logger.log('[FaceManagement] Number of files:', e.target.files.length);
-    const filesArray = Array.from(e.target.files);
-    logger.log('[FaceManagement] Files array:', filesArray);
-    setUploadFiles(filesArray);
+  // Image compression utility with timeout and error handling
+  const compressImage = (file, maxWidth = 1920, maxHeight = 1920, quality = 0.85) => {
+    return new Promise((resolve, reject) => {
+      // Add timeout to prevent hanging
+      const timeout = setTimeout(() => {
+        reject(new Error('Image compression timeout'));
+      }, 30000); // 30 second timeout
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+
+            // Calculate new dimensions
+            if (width > maxWidth || height > maxHeight) {
+              if (width > height) {
+                height = (height / width) * maxWidth;
+                width = maxWidth;
+              } else {
+                width = (width / height) * maxHeight;
+                height = maxHeight;
+              }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            canvas.toBlob(
+              (blob) => {
+                clearTimeout(timeout);
+                if (blob) {
+                  const compressedFile = new File([blob], file.name, {
+                    type: 'image/jpeg',
+                    lastModified: Date.now()
+                  });
+                  resolve(compressedFile);
+                } else {
+                  reject(new Error('Failed to compress image'));
+                }
+              },
+              'image/jpeg',
+              quality
+            );
+          } catch (error) {
+            clearTimeout(timeout);
+            reject(error);
+          }
+        };
+        img.onerror = () => {
+          clearTimeout(timeout);
+          reject(new Error('Failed to load image'));
+        };
+        img.src = e.target.result;
+      };
+      reader.onerror = () => {
+        clearTimeout(timeout);
+        reject(new Error('Failed to read file'));
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFileSelect = async (e) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    // File size and count limits
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file
+    const MAX_FILES = 20;
+    const MAX_TOTAL_SIZE = 50 * 1024 * 1024; // 50MB total
+
+    // Validate file count
+    if (files.length > MAX_FILES) {
+      showMessage(`Maximum ${MAX_FILES} files allowed. Please select fewer files.`, 'error');
+      e.target.value = ''; // Reset input
+      return;
+    }
+
+    // Validate file types and sizes
+    const validFiles = [];
+    let totalSize = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      
+      // Check file type
+      if (!file.type.match(/^image\/(jpeg|jpg|png)$/i)) {
+        showMessage(`Skipping ${file.name}: Only JPEG and PNG images are allowed.`, 'error');
+        continue;
+      }
+
+      // Check file size
+      if (file.size > MAX_FILE_SIZE) {
+        showMessage(`Skipping ${file.name}: File size exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit.`, 'error');
+        continue;
+      }
+
+      totalSize += file.size;
+      if (totalSize > MAX_TOTAL_SIZE) {
+        showMessage(`Total file size exceeds ${MAX_TOTAL_SIZE / 1024 / 1024}MB limit.`, 'error');
+        break;
+      }
+
+      validFiles.push(file);
+    }
+
+    if (validFiles.length === 0) {
+      showMessage('No valid files selected.', 'error');
+      e.target.value = ''; // Reset input
+      return;
+    }
+
+    // Process files asynchronously with compression (one at a time to avoid blocking)
+    setLoading(true);
+    showMessage(`Processing ${validFiles.length} file(s)...`, 'warning');
+
+    try {
+      const processedFiles = [];
+      
+      // Process files one at a time with yielding to prevent UI freeze
+      for (let i = 0; i < validFiles.length; i++) {
+        const file = validFiles[i];
+        
+        // Yield control to browser every file to prevent freezing
+        await new Promise(resolve => setTimeout(resolve, 0));
+        
+        try {
+          // Only compress if file is larger than 2MB
+          if (file.size > 2 * 1024 * 1024) {
+            const compressed = await compressImage(file);
+            processedFiles.push(compressed);
+          } else {
+            processedFiles.push(file);
+          }
+          
+          // Update progress
+          showMessage(`Processing ${i + 1}/${validFiles.length} files...`, 'warning');
+        } catch (error) {
+          logger.error(`[FaceManagement] Error processing file ${file.name}:`, error);
+          // Skip this file but continue with others
+          showMessage(`Skipping ${file.name}: ${error.message}`, 'error');
+        }
+      }
+
+      setUploadFiles(processedFiles);
+      showMessage(`Ready to upload ${processedFiles.length} file(s)`, 'success');
+    } catch (error) {
+      logger.error('[FaceManagement] Error processing files:', error);
+      showMessage('Error processing files: ' + error.message, 'error');
+      setUploadFiles([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const uploadPhotos = async (personName) => {
-    logger.log('[FaceManagement] uploadPhotos called for:', personName);
-    logger.log('[FaceManagement] uploadFiles:', uploadFiles);
-    logger.log('[FaceManagement] uploadFiles.length:', uploadFiles.length);
-    
     if (uploadFiles.length === 0) {
       showMessage('Please select photos to upload', 'error');
       return;
     }
 
     setLoading(true);
-    const formData = new FormData();
-    uploadFiles.forEach(file => {
-      logger.log('[FaceManagement] Appending file:', file.name, 'Size:', file.size);
-      formData.append('files', file);
-    });
+    showMessage(`Uploading ${uploadFiles.length} photo(s)...`, 'warning');
 
-    logger.log('[FaceManagement] FormData created, sending to API...');
-    
     try {
-      const response = await apiClient.post(`/faces/people/${personName}/photos`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      logger.log('[FaceManagement] Upload response:', response.data);
-      showMessage(response.data.message, 'success');
-      setUploadFiles([]);
-      setSelectedPerson(null);
-      loadPeople();
+      // Upload files in smaller batches to avoid overwhelming the server
+      const BATCH_SIZE = 3; // Reduced batch size
+      const batches = [];
+      
+      for (let i = 0; i < uploadFiles.length; i += BATCH_SIZE) {
+        batches.push(uploadFiles.slice(i, i + BATCH_SIZE));
+      }
+
+      let totalUploaded = 0;
+      
+      // Process batches one at a time with yielding
+      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+        const batch = batches[batchIndex];
+        
+        // Yield control to browser before each batch
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        const formData = new FormData();
+        
+        batch.forEach(file => {
+          formData.append('files', file);
+        });
+
+        showMessage(
+          `Uploading batch ${batchIndex + 1}/${batches.length} (${totalUploaded + batch.length}/${uploadFiles.length} files)...`,
+          'warning'
+        );
+
+        try {
+          const response = await apiClient.post(`/faces/people/${personName}/photos`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: 120000 // 120 second timeout per batch
+          });
+
+          totalUploaded += batch.length;
+          logger.log(`[FaceManagement] Batch ${batchIndex + 1} uploaded:`, response.data);
+        } catch (error) {
+          logger.error(`[FaceManagement] Error uploading batch ${batchIndex + 1}:`, error);
+          // Continue with next batch even if one fails
+          showMessage(`Error uploading batch ${batchIndex + 1}, continuing...`, 'error');
+        }
+      }
+
+      if (totalUploaded > 0) {
+        showMessage(`Successfully uploaded ${totalUploaded} photo(s)`, 'success');
+        setUploadFiles([]);
+        setSelectedPerson(null);
+        loadPeople();
+      } else {
+        showMessage('No photos were uploaded. Please try again.', 'error');
+      }
     } catch (error) {
       logger.error('[FaceManagement] Upload error:', error);
       logger.error('[FaceManagement] Error response:', error.response?.data);
-      showMessage('Error uploading photos: ' + error.message, 'error');
+      showMessage('Error uploading photos: ' + (error.response?.data?.detail || error.message), 'error');
     } finally {
       setLoading(false);
     }
@@ -306,6 +522,23 @@ const FaceManagementPage = ({ embedded = false }) => {
           <div className="people-grid">
             {people.map(person => (
               <div key={person.name} className="person-card">
+                {person.preview_photo_url ? (
+                  <div className="person-photo-preview">
+                    <img 
+                      src={person.preview_photo_url} 
+                      alt={person.name}
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.nextSibling.style.display = 'block';
+                      }}
+                    />
+                    <div className="person-photo-placeholder" style={{display: 'none'}}>
+                      👤
+                    </div>
+                  </div>
+                ) : (
+                  <div className="person-photo-placeholder">👤</div>
+                )}
                 <h3>{person.name}</h3>
                 <p>Photos: {person.photo_count}</p>
                 <div className="person-actions">
@@ -403,12 +636,33 @@ const FaceManagementPage = ({ embedded = false }) => {
                 accept="image/jpeg,image/jpg,image/png"
                 onChange={handleFileSelect}
                 style={{ display: 'none' }}
+                disabled={loading}
               />
             </div>
-            {uploadFiles.length > 0 && (
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px', marginBottom: '8px' }}>
+              Max 20 files, 10MB per file, 50MB total. Large images will be automatically compressed.
+            </p>
+            {loading && uploadFiles.length === 0 && (
               <p style={{ color: 'var(--text-primary)' }}>
-                ✅ {uploadFiles.length} file(s) selected
+                ⏳ Processing files...
               </p>
+            )}
+            {uploadFiles.length > 0 && (
+              <div>
+                <p style={{ color: 'var(--text-primary)', marginBottom: '8px' }}>
+                  ✅ {uploadFiles.length} file(s) ready to upload
+                </p>
+                <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                  Total size: {(uploadFiles.reduce((sum, f) => sum + f.size, 0) / 1024 / 1024).toFixed(2)} MB
+                </div>
+              </div>
+            )}
+            {loading && uploadFiles.length > 0 && (
+              <div style={{ marginTop: '12px', padding: '8px', background: 'var(--bg-main)', borderRadius: '4px', border: '1px solid var(--border-panel)' }}>
+                <p style={{ color: 'var(--text-primary)', fontSize: '14px', margin: 0 }}>
+                  ⏳ Uploading... Please wait, do not close this window
+                </p>
+              </div>
             )}
             <div className="modal-actions">
               <button
@@ -422,6 +676,40 @@ const FaceManagementPage = ({ embedded = false }) => {
                 setSelectedPerson(null);
                 setUploadFiles([]);
               }} className="btn btn-secondary">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Merge/Overwrite Dialog */}
+      {showMergeDialog && existingPersonInfo && (
+        <div className="modal-overlay" onClick={() => handleMergeChoice('cancel')}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Person Already Exists</h2>
+            <p>
+              A person folder for <strong>{existingPersonInfo.name}</strong> already exists 
+              with <strong>{existingPersonInfo.photo_count}</strong> photo(s).
+            </p>
+            <p>What would you like to do?</p>
+            <div className="modal-actions" style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              <button
+                onClick={() => handleMergeChoice('merge')}
+                className="btn btn-primary"
+              >
+                Merge (Keep Existing Photos)
+              </button>
+              <button
+                onClick={() => handleMergeChoice('overwrite')}
+                className="btn btn-danger"
+              >
+                Overwrite (Delete Existing)
+              </button>
+              <button
+                onClick={() => handleMergeChoice('cancel')}
+                className="btn btn-secondary"
+              >
                 Cancel
               </button>
             </div>

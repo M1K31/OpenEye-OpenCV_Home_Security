@@ -2,6 +2,7 @@
 // This file is part of OpenEye-OpenCV_Home_Security
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useCachedApi } from '../hooks/useCachedApi';
 import { CacheTTL } from '../services/apiCache';
 import LoadingSkeleton from '../components/LoadingSkeleton';
@@ -15,7 +16,26 @@ import './HardwareDetectionPage.css';
  * based on detected hardware.
  */
 const HardwareDetectionPage = () => {
+  const navigate = useNavigate();
   const [selectedTab, setSelectedTab] = useState('overview'); // 'overview', 'features', 'recommendations'
+
+  // Feature ID to route mapping
+  const featureRouteMap = {
+    'motion_detection': '/cameras',  // Configure per-camera in Camera Management
+    'face_recognition': '/faces',
+    'face_clustering': '/clusters',
+    'object_detection': '/system',  // System settings for object detection
+    'recording': '/cameras',  // Configure per-camera in Camera Management
+    'hardware_acceleration': '/system/hardware',
+    'cloud_storage': '/system',
+    'two_way_audio': '/cameras',
+    'ptz_control': '/cameras',
+    'alert_system': '/system/alerts',
+    'notification_system': '/system/notifications',
+    'automation_engine': '/automations',
+    'performance_monitoring': '/system/performance',
+    'two_factor_auth': '/system/2fa'
+  };
 
   // Fetch hardware information
   const {
@@ -70,6 +90,23 @@ const HardwareDetectionPage = () => {
         return 'tier-low';
       default:
         return 'tier-minimal';
+    }
+  };
+
+  // Handle feature card click
+  const handleFeatureClick = (featureId, isRecommended) => {
+    const route = featureRouteMap[featureId];
+
+    if (route) {
+      // Navigate to the feature's settings page
+      navigate(route);
+    } else {
+      // Show notification for features without dedicated settings
+      const message = isRecommended
+        ? `${featureId.replace(/_/g, ' ')} is always enabled for your configuration`
+        : `${featureId.replace(/_/g, ' ')} is not available for your configuration`;
+
+      alert(message); // TODO: Replace with proper notification component
     }
   };
 
@@ -263,7 +300,13 @@ const HardwareDetectionPage = () => {
               {enabledFeatures.map(([featureId, config]) => {
                 const featureDetails = allFeatures?.features?.find(f => f.feature_id === featureId);
                 return (
-                  <div key={featureId} className="feature-card recommended">
+                  <div
+                    key={featureId}
+                    className="feature-card recommended clickable"
+                    onClick={() => handleFeatureClick(featureId, true)}
+                    style={{ cursor: 'pointer' }}
+                    title="Click to view settings"
+                  >
                     <div className="feature-header">
                       <h4>{featureDetails?.name || featureId}</h4>
                       {config.use_gpu && <span className="badge badge-gpu">GPU</span>}
@@ -290,7 +333,13 @@ const HardwareDetectionPage = () => {
             {disabledFeatures.map(([featureId, config]) => {
               const featureDetails = allFeatures?.features?.find(f => f.feature_id === featureId);
               return (
-                <div key={featureId} className="feature-card not-recommended">
+                <div
+                  key={featureId}
+                  className="feature-card not-recommended clickable"
+                  onClick={() => handleFeatureClick(featureId, false)}
+                  style={{ cursor: 'pointer' }}
+                  title="Click to view details"
+                >
                   <div className="feature-header">
                     <h4>{featureDetails?.name || featureId}</h4>
                   </div>

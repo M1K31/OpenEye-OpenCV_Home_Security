@@ -1,7 +1,7 @@
 // Copyright (c) 2025 Mikel Smart
 // This file is part of OpenEye-OpenCV_Home_Security
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { logger } from '../utils/logger';
 import apiClient from '../api/apiClient';
 import { Button } from '../components/universal';
@@ -17,6 +17,12 @@ import './TimelineView.css';
  * - Event markers (motion, face, recording)
  * - Scrubber for seeking
  * - Synchronized playback across cameras
+ * 
+ * Performance optimizations (v3.10.1):
+ * - Memoized calculations to prevent expensive re-renders
+ * - Debounced data loading
+ * - Simplified playback state machine to prevent race conditions
+ * - Limited initial data load
  */
 const TimelineView = () => {
   // Time range state
@@ -34,6 +40,7 @@ const TimelineView = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [playing, setPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
+  const [currentEventIndex, setCurrentEventIndex] = useState(-1); // Track current event by index for reliable sequencing
 
   // UI state
   const [timeInterval, setTimeInterval] = useState('1h'); // '5m', '15m', '30m', '1h'
@@ -51,74 +58,212 @@ const TimelineView = () => {
   // Refs
   const timelineRef = useRef(null);
   const timelineCanvasRef = useRef(null);
-  const playbackIntervalRef = useRef(null);
+  const playbackTimeoutRef = useRef(null);
+  const isPlayingRef = useRef(false); // Ref to track playing state without re-renders
+  const loadTimeoutRef = useRef(null); // Debounce data loading
 
   // Camera filter
   const [selectedCameras, setSelectedCameras] = useState([]);
   const [availableCameras, setAvailableCameras] = useState([]);
 
-  // Load timeline data
+  // Load timeline data with debouncing
   useEffect(() => {
-    loadTimelineData();
-    loadCameras();
+    // Clear any pending load
+    if (loadTimeoutRef.current) {
+      clearTimeout(loadTimeoutRef.current);
+    }
+
+    // Debounce data loading to prevent excessive API calls
+    loadTimeoutRef.current = setTimeout(() => {
+      loadTimelineData();
+    }, 300);
+
+    return () => {
+      if (loadTimeoutRef.current) {
+        clearTimeout(loadTimeoutRef.current);
+      }
+    };
   }, [timeRange, selectedCameras]);
 
-  // Playback loop - advances time and displays events
+  // Load cameras once on mount
+  useEffect(() => {
+    loadCameras();
+  }, []);
+
+  // Memoize sorted events to prevent recalculation on every render
+  const sortedEvents = useMemo(() => {
+    return lanes.flatMap(lane => lane.events)
+      .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  }, [lanes]);
+
+  // Handle video end or move to next image
+  const advanceToNextEvent = useCallback(() => {
+    if (!isPlayingRef.current) return;
+
+    const nextIndex = currentEventIndex + 1;
+    if (nextIndex >= sortedEvents.length) {
+      // No more events - stop playback
+      setPlaying(false);
+      isPlayingRef.current = false;
+      setPlaybackMedia(null);
+      return;
+    }
+
+    const nextEvent = sortedEvents[nextIndex];
+    const eventTime = new Date(nextEvent.timestamp);
+
+    // Check if event is beyond time range
+    if (eventTime > timeRange.end) {
+      setPlaying(false);
+      isPlayingRef.current = false;
+      setPlaybackMedia(null);
+      setCurrentTime(timeRange.end);
+      return;
+    }
+
+    // Update state
+    setCurrentEventIndex(nextIndex);
+    setCurrentTime(eventTime);
+    setSelectedEvent(nextEvent);
+
+    // Set media for display
+    if (nextEvent.video_path && nextEvent.recording_id) {
+      const thumbnailUrl = nextEvent.thumbnail_path 
+        ? (nextEvent.thumbnail_path.startsWith('/') 
+            ? nextEvent.thumbnail_path 
+            : `/data/snapshots/${nextEvent.thumbnail_path}`)
+        : null;
+      setPlaybackMedia({
+        type: 'video',
+        url: `/api/recordings/${nextEvent.recording_id}/download`,
+        thumbnailUrl: thumbnailUrl,
+        event: nextEvent
+      });
+      // Video will call handleVideoEnded when done
+    } else if (nextEvent.thumbnail_path) {
+      const snapshotUrl = nextEvent.thumbnail_path.startsWith('/') 
+        ? nextEvent.thumbnail_path 
+        : `/data/snapshots/${nextEvent.thumbnail_path}`;
+      setPlaybackMedia({
+        type: 'image',
+        url: snapshotUrl,
+        event: nextEvent
+      });
+      // Schedule next event after delay
+      const baseDelay = 2000; // 2 seconds per image
+      const delay = baseDelay / playbackSpeed;
+      playbackTimeoutRef.current = setTimeout(() => advanceToNextEvent(), delay);
+    } else {
+      // No media, skip to next immediately
+      playbackTimeoutRef.current = setTimeout(() => advanceToNextEvent(), 100);
+    }
+  }, [currentEventIndex, sortedEvents, timeRange, playbackSpeed]);
+
+  // Start playback from current event index
+  const startPlayback = useCallback(() => {
+    if (sortedEvents.length === 0) {
+      setPlaying(false);
+      isPlayingRef.current = false;
+      return;
+    }
+
+    // Find starting index - either current or find first event after currentTime
+    let startIndex = currentEventIndex;
+    if (startIndex < 0) {
+      // Find first event at or after currentTime
+      startIndex = sortedEvents.findIndex(e => new Date(e.timestamp) >= currentTime);
+      if (startIndex < 0) {
+        // All events are before current time, start from first event
+        startIndex = 0;
+      }
+    }
+
+    const event = sortedEvents[startIndex];
+    const eventTime = new Date(event.timestamp);
+
+    // Update state
+    setCurrentEventIndex(startIndex);
+    setCurrentTime(eventTime);
+    setSelectedEvent(event);
+
+    // Set media for display
+    if (event.video_path && event.recording_id) {
+      const thumbnailUrl = event.thumbnail_path 
+        ? (event.thumbnail_path.startsWith('/') 
+            ? event.thumbnail_path 
+            : `/data/snapshots/${event.thumbnail_path}`)
+        : null;
+      setPlaybackMedia({
+        type: 'video',
+        url: `/api/recordings/${event.recording_id}/download`,
+        thumbnailUrl: thumbnailUrl,
+        event: event
+      });
+    } else if (event.thumbnail_path) {
+      const snapshotUrl = event.thumbnail_path.startsWith('/') 
+        ? event.thumbnail_path 
+        : `/data/snapshots/${event.thumbnail_path}`;
+      setPlaybackMedia({
+        type: 'image',
+        url: snapshotUrl,
+        event: event
+      });
+      // Schedule next event
+      const baseDelay = 2000;
+      const delay = baseDelay / playbackSpeed;
+      playbackTimeoutRef.current = setTimeout(() => advanceToNextEvent(), delay);
+    }
+  }, [currentEventIndex, sortedEvents, currentTime, playbackSpeed, advanceToNextEvent]);
+
+  // Update video playback speed when it changes
+  useEffect(() => {
+    const videoElement = document.querySelector('.media-video');
+    if (videoElement) {
+      videoElement.playbackRate = playbackSpeed;
+    }
+  }, [playbackSpeed]);
+
+  // Playback control - start/stop playback
   useEffect(() => {
     if (playing) {
-      playbackIntervalRef.current = setInterval(() => {
-        setCurrentTime(prev => {
-          const next = new Date(prev.getTime() + (playbackSpeed * 1000));
-          if (next > timeRange.end) {
-            setPlaying(false);
-            setPlaybackMedia(null);
-            return timeRange.end;
-          }
-
-          // Find events at or near current time (within 1 second window)
-          const allEvents = lanes.flatMap(lane => lane.events);
-          const nearbyEvents = allEvents.filter(event => {
-            const eventTime = new Date(event.timestamp).getTime();
-            const currentMs = next.getTime();
-            return Math.abs(eventTime - currentMs) < 1000; // Within 1 second
-          });
-
-          // If we found an event, display it
-          if (nearbyEvents.length > 0) {
-            const event = nearbyEvents[0];
-            setSelectedEvent(event);
-
-            // Set media for display
-            if (event.video_path) {
-              setPlaybackMedia({
-                type: 'video',
-                url: `/api/recordings/${event.video_path}/download`,
-                event: event
-              });
-            } else if (event.thumbnail_path) {
-              setPlaybackMedia({
-                type: 'image',
-                url: `/api/snapshots/${event.thumbnail_path}`,
-                event: event
-              });
-            }
-          }
-
-          return next;
-        });
-      }, 1000);
+      isPlayingRef.current = true;
+      startPlayback();
     } else {
-      if (playbackIntervalRef.current) {
-        clearInterval(playbackIntervalRef.current);
+      isPlayingRef.current = false;
+      // Clear any pending timeouts
+      if (playbackTimeoutRef.current) {
+        clearTimeout(playbackTimeoutRef.current);
+        playbackTimeoutRef.current = null;
+      }
+      // Pause video if playing
+      const videoElement = document.querySelector('.media-video');
+      if (videoElement) {
+        videoElement.pause();
       }
     }
 
     return () => {
-      if (playbackIntervalRef.current) {
-        clearInterval(playbackIntervalRef.current);
+      if (playbackTimeoutRef.current) {
+        clearTimeout(playbackTimeoutRef.current);
+        playbackTimeoutRef.current = null;
       }
     };
-  }, [playing, playbackSpeed, timeRange, lanes]);
+  }, [playing]);
+
+  // Handle video element play/pause (separate from playback control)
+  useEffect(() => {
+    const videoElement = document.querySelector('.media-video');
+    if (videoElement && playbackMedia && playbackMedia.type === 'video' && playing) {
+      videoElement.playbackRate = playbackSpeed;
+      videoElement.play().catch(err => {
+        logger.error('Video play error:', err);
+        // If video fails to play, skip to next event
+        if (isPlayingRef.current) {
+          setTimeout(() => advanceToNextEvent(), 500);
+        }
+      });
+    }
+  }, [playbackMedia, playing, playbackSpeed, advanceToNextEvent]);
 
   const loadCameras = async () => {
     try {
@@ -140,7 +285,8 @@ const TimelineView = () => {
 
       const params = {
         start_time: timeRange.start.toISOString(),
-        end_time: timeRange.end.toISOString()
+        end_time: timeRange.end.toISOString(),
+        limit: 500  // Limit events for performance
       };
 
       if (selectedCameras.length > 0 && selectedCameras.length < availableCameras.length) {
@@ -150,6 +296,8 @@ const TimelineView = () => {
       const response = await apiClient.get('/timeline/view', { params });
 
       setLanes(response.data.lanes || []);
+      // Reset event index when new data loads
+      setCurrentEventIndex(-1);
     } catch (err) {
       logger.error('Error loading timeline:', err);
       setError('Failed to load timeline data. Please try again.');
@@ -161,40 +309,43 @@ const TimelineView = () => {
   // Time axis helpers - Scrollable ruler approach
   const PIXELS_PER_INTERVAL = 150; // Fixed spacing between time marks
 
-  const getIntervalMs = () => {
+  // Memoize interval calculation
+  const intervalMs = useMemo(() => {
     return {
       '5m': 5 * 60 * 1000,
       '15m': 15 * 60 * 1000,
       '30m': 30 * 60 * 1000,
       '1h': 60 * 60 * 1000
     }[timeInterval];
-  };
+  }, [timeInterval]);
 
-  const getTimelineWidth = () => {
-    // Calculate total width of timeline based on time range and interval
+  const getIntervalMs = () => intervalMs;
+
+  // Memoize timeline width calculation
+  const timelineWidth = useMemo(() => {
     const duration = timeRange.end - timeRange.start;
-    const intervalMs = getIntervalMs();
     const numIntervals = Math.ceil(duration / intervalMs);
     return numIntervals * PIXELS_PER_INTERVAL;
-  };
+  }, [timeRange, intervalMs]);
 
-  const getTimeAxisMarks = () => {
-    const intervalMs = getIntervalMs();
+  const getTimelineWidth = () => timelineWidth;
+
+  // Memoize time axis marks calculation
+  const timeAxisMarks = useMemo(() => {
     const marks = [];
-
-    // Round start time to nearest interval
     const startMs = timeRange.start.getTime();
     const roundedStart = Math.floor(startMs / intervalMs) * intervalMs;
     let current = new Date(roundedStart);
 
-    // Generate marks for entire time range
     while (current <= timeRange.end) {
       marks.push(new Date(current));
       current = new Date(current.getTime() + intervalMs);
     }
 
     return marks;
-  };
+  }, [timeRange, intervalMs]);
+
+  const getTimeAxisMarks = () => timeAxisMarks;
 
   const getTimePosition = (time) => {
     // Convert time to pixel position on timeline
@@ -274,30 +425,92 @@ const TimelineView = () => {
   };
 
   const handlePreviousEvent = () => {
-    // Find previous event before current time
-    const allEvents = lanes.flatMap(lane => lane.events);
-    const previousEvents = allEvents
-      .filter(e => new Date(e.timestamp) < currentTime)
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    // Use sortedEvents which is already memoized
+    if (sortedEvents.length === 0) return;
 
-    if (previousEvents.length > 0) {
-      const prevEvent = previousEvents[0];
+    // Find previous event before current time
+    let prevIndex = -1;
+    for (let i = sortedEvents.length - 1; i >= 0; i--) {
+      if (new Date(sortedEvents[i].timestamp) < currentTime) {
+        prevIndex = i;
+        break;
+      }
+    }
+
+    if (prevIndex >= 0) {
+      const prevEvent = sortedEvents[prevIndex];
+      setCurrentEventIndex(prevIndex);
       setCurrentTime(new Date(prevEvent.timestamp));
       setSelectedEvent(prevEvent);
+
+      // Load media for the event
+      if (prevEvent.video_path && prevEvent.recording_id) {
+        const thumbnailUrl = prevEvent.thumbnail_path 
+          ? (prevEvent.thumbnail_path.startsWith('/') 
+              ? prevEvent.thumbnail_path 
+              : `/data/snapshots/${prevEvent.thumbnail_path}`)
+          : null;
+        setPlaybackMedia({
+          type: 'video',
+          url: `/api/recordings/${prevEvent.recording_id}/download`,
+          thumbnailUrl: thumbnailUrl,
+          event: prevEvent
+        });
+      } else if (prevEvent.thumbnail_path) {
+        const snapshotUrl = prevEvent.thumbnail_path.startsWith('/') 
+          ? prevEvent.thumbnail_path 
+          : `/data/snapshots/${prevEvent.thumbnail_path}`;
+        setPlaybackMedia({
+          type: 'image',
+          url: snapshotUrl,
+          event: prevEvent
+        });
+      }
     }
   };
 
   const handleNextEvent = () => {
-    // Find next event after current time
-    const allEvents = lanes.flatMap(lane => lane.events);
-    const nextEvents = allEvents
-      .filter(e => new Date(e.timestamp) > currentTime)
-      .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    // Use sortedEvents which is already memoized
+    if (sortedEvents.length === 0) return;
 
-    if (nextEvents.length > 0) {
-      const nextEvent = nextEvents[0];
+    // Find next event after current time
+    let nextIndex = -1;
+    for (let i = 0; i < sortedEvents.length; i++) {
+      if (new Date(sortedEvents[i].timestamp) > currentTime) {
+        nextIndex = i;
+        break;
+      }
+    }
+
+    if (nextIndex >= 0) {
+      const nextEvent = sortedEvents[nextIndex];
+      setCurrentEventIndex(nextIndex);
       setCurrentTime(new Date(nextEvent.timestamp));
       setSelectedEvent(nextEvent);
+
+      // Load media for the event
+      if (nextEvent.video_path && nextEvent.recording_id) {
+        const thumbnailUrl = nextEvent.thumbnail_path 
+          ? (nextEvent.thumbnail_path.startsWith('/') 
+              ? nextEvent.thumbnail_path 
+              : `/data/snapshots/${nextEvent.thumbnail_path}`)
+          : null;
+        setPlaybackMedia({
+          type: 'video',
+          url: `/api/recordings/${nextEvent.recording_id}/download`,
+          thumbnailUrl: thumbnailUrl,
+          event: nextEvent
+        });
+      } else if (nextEvent.thumbnail_path) {
+        const snapshotUrl = nextEvent.thumbnail_path.startsWith('/') 
+          ? nextEvent.thumbnail_path 
+          : `/data/snapshots/${nextEvent.thumbnail_path}`;
+        setPlaybackMedia({
+          type: 'image',
+          url: snapshotUrl,
+          event: nextEvent
+        });
+      }
     }
   };
 
@@ -305,8 +518,27 @@ const TimelineView = () => {
     setPlaying(!playing);
   };
 
+  const stopPlayback = () => {
+    setPlaying(false);
+    setPlaybackMedia(null);
+    setSelectedEvent(null);
+    setCurrentEventIndex(-1);
+  };
+
+  const handleVideoEnded = useCallback(() => {
+    // When a video ends during playback, continue to next event
+    if (isPlayingRef.current) {
+      advanceToNextEvent();
+    }
+  }, [advanceToNextEvent]);
+
   const handleSpeedChange = (speed) => {
     setPlaybackSpeed(speed);
+    // Update video playback rate if video is currently playing
+    const videoElement = document.querySelector('.media-video');
+    if (videoElement) {
+      videoElement.playbackRate = speed;
+    }
   };
 
   const jumpToNow = () => {
@@ -317,6 +549,21 @@ const TimelineView = () => {
       end: now
     });
     setCurrentTime(now);
+  };
+
+  const setTimeRangePreset = (hours) => {
+    const now = new Date();
+    setTimeRange({
+      start: new Date(now.getTime() - hours * 60 * 60 * 1000),
+      end: now
+    });
+    setCurrentTime(now);
+  };
+
+  const getCurrentTimeRangeHours = () => {
+    const duration = timeRange.end - timeRange.start;
+    const hours = duration / (60 * 60 * 1000);
+    return hours;
   };
 
   const formatTime = (date) => {
@@ -461,6 +708,29 @@ const TimelineView = () => {
         </span>
       </div>
 
+      {/* Time Range Selector */}
+      <div className="time-range-selector">
+        <label>Time Range:</label>
+        <div className="button-group">
+          {[
+            { hours: 1, label: 'Last Hour' },
+            { hours: 6, label: 'Last 6 Hours' },
+            { hours: 24, label: 'Last 24 Hours' },
+            { hours: 24 * 7, label: 'Last 7 Days' },
+            { hours: 24 * 30, label: 'Last 30 Days' }
+          ].map(preset => (
+            <Button
+              key={preset.hours}
+              variant={Math.abs(getCurrentTimeRangeHours() - preset.hours) < 0.1 ? 'primary' : 'secondary'}
+              size="small"
+              onClick={() => setTimeRangePreset(preset.hours)}
+            >
+              {preset.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
       {/* Camera Filter */}
       {availableCameras.length > 0 && (
         <div className="camera-filter">
@@ -582,10 +852,27 @@ const TimelineView = () => {
                 <video
                   key={playbackMedia.url}
                   src={playbackMedia.url}
+                  poster={playbackMedia.thumbnailUrl || undefined}
                   controls
-                  autoPlay={playing}
                   className="media-video"
-                  onEnded={() => setPlaybackMedia(null)}
+                  onEnded={handleVideoEnded}
+                  onError={(e) => {
+                    logger.error('Video playback error:', e);
+                    // If video fails to load, skip to next event
+                    if (isPlayingRef.current) {
+                      setTimeout(() => advanceToNextEvent(), 500);
+                    }
+                  }}
+                  onLoadedData={(e) => {
+                    // Set playback speed when video loads
+                    e.target.playbackRate = playbackSpeed;
+                    // Explicitly play if playing state is true
+                    if (isPlayingRef.current) {
+                      e.target.play().catch(err => {
+                        logger.error('Video play error after load:', err);
+                      });
+                    }
+                  }}
                 />
               ) : playbackMedia && playbackMedia.type === 'image' ? (
                 <img
@@ -694,6 +981,17 @@ const TimelineView = () => {
               icon={playing ? '⏸' : '▶'}
             >
               {playing ? 'Pause' : 'Play'}
+            </Button>
+
+            <Button
+              variant="secondary"
+              size="small"
+              onClick={stopPlayback}
+              title="Stop playback"
+              disabled={loading || !playing}
+              icon="⏹"
+            >
+              Stop
             </Button>
 
             <Button

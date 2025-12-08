@@ -1,6 +1,6 @@
 # OpenEye - AI-Powered Home Security System
 
-![Version](https://img.shields.io/badge/version-3.7.1-blue.svg) ![License](https://img.shields.io/badge/license-MIT-yellow.svg) ![Cost](https://img.shields.io/badge/cost-$0/month-success.svg)
+![Version](https://img.shields.io/badge/version-3.10.2-blue.svg) ![License](https://img.shields.io/badge/license-MIT-yellow.svg) ![Cost](https://img.shields.io/badge/cost-$0/month-success.svg)
 
 **100% free and open-source** AI-powered surveillance with face recognition, motion detection, and smart home integration. Your data stays on your hardware - no subscriptions, no cloud dependencies.
 
@@ -54,25 +54,21 @@
 
 ---
 
-## 🆕 What's New in v3.7.1 (January 2025)
+## 🆕 What's New in v3.10.2 (December 2025)
 
-### 🚀 FFmpeg Hardware Encoding Integration (Major Performance Boost!)
-- ✅ **70-90% CPU Reduction** - GPU-accelerated video recording using FFmpeg
-- ✅ **Multi-Platform Support** - NVENC (NVIDIA), QuickSync (Intel), VideoToolbox (Apple), VAAPI (Linux)
-- ✅ **Automatic Encoder Detection** - Intelligently selects best available encoder
-- ✅ **Async Frame Buffer** - 300-frame queue for smooth recording
-- ✅ **Performance Settings UI** - Configure hardware encoding preferences in System Settings
-- ✅ **Fallback to Software** - Gracefully falls back to CPU encoding if hardware unavailable
+### 🔍 Critical Bug Fixes
+- ✅ **Face Detection Fix** - Face detection now works even without known faces trained (enables clustering workflow)
+- ✅ **Timeline Playback** - Fixed playback issues with memoization, debouncing, and index-based state machine
+- ✅ **AI & Faces Performance** - Delete/add person no longer freezes the app (async background training)
 
-### 🎨 UI/UX Improvements
-- ✅ **Contrast Fixes** - Improved readability across PerformanceDashboard and HardwareDetectionPage
-- ✅ **Universal Component Patterns** - All cards now follow Apple HIG + Material-UI standards
-- ✅ **16px Border Radius** - Consistent with HIG specifications across all components
+### 🧹 Project Cleanup
+- ✅ **Removed Red Herrings** - Cleaned orphaned files (duplicate configs, test files, example code)
+- ✅ **Database Consolidation** - Single surveillance.db at project root
 
-### 📚 Documentation Overhaul
-- ✅ **Consolidated 252+ Files** - Organized into clear structure with archived releases
-- ✅ **Hardware Encoding Guide** - Complete upgrade and configuration documentation
-- ✅ **Updated README** - Reflects all v3.7.1 features and improvements
+### 🔍 v3.10.0 Features
+- ✅ **Object Detection** - YOLOv8-powered AI detection for vehicles, animals, packages
+- ✅ **Two-Way Audio** - WebRTC bidirectional audio communication with cameras
+- ✅ **Object Identification** - Track specific vehicles, pets, or items with named detection
 
 See [CHANGELOG.md](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/blob/main/CHANGELOG.md) for full details.
 

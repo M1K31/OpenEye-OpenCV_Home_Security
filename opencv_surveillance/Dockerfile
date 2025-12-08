@@ -34,6 +34,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     liblapack-dev \
     libx11-dev \
     libboost-python-dev \
+    portaudio19-dev \
     git \
     wget \
     && rm -rf /var/lib/apt/lists/*
@@ -62,6 +63,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     liblapack3 \
     ffmpeg \
     curl \
+    libportaudio2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user first

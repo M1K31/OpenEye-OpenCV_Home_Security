@@ -3,11 +3,16 @@
 """
 Face Recognition Manager for OpenEye Surveillance System
 Uses face_recognition library built on dlib for accurate face detection and recognition
+
+IMPORTANT: Face recognition training and OpenCV MOG2 motion detection can cause
+memory corruption when running concurrently due to thread safety issues in dlib/OpenCV.
+A global lock is used to prevent concurrent access during intensive operations.
 """
 
 import os
 import pickle
 import logging
+import threading
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime
 from pathlib import Path
@@ -18,6 +23,11 @@ from backend.core.paths import paths
 from backend.core.image_preprocessing import get_preprocessor
 
 logger = logging.getLogger(__name__)
+
+# Global lock to prevent concurrent dlib/OpenCV operations that cause memory corruption
+# This is necessary because dlib (used by face_recognition) and OpenCV's MOG2 
+# background subtractor can corrupt memory when running in parallel threads
+_face_recognition_lock = threading.Lock()
 
 
 class FaceRecognitionManager:
@@ -38,7 +48,12 @@ class FaceRecognitionManager:
         """
         # Use PathManager for faces directory
         self.faces_folder = Path(faces_folder) if faces_folder else paths.faces_dir
-        self.encodings_file = encodings_file
+        # Store encodings file in the faces folder for better organization
+        if os.path.isabs(encodings_file):
+            self.encodings_file = encodings_file
+        else:
+            # Relative path - store in faces folder
+            self.encodings_file = str(self.faces_folder / encodings_file)
         self.known_face_encodings = []
         self.known_face_names = []
         self.face_locations = []
@@ -87,79 +102,87 @@ class FaceRecognitionManager:
 
     def train_face_recognition(self) -> Dict:
         """
-        Train the face recognition model by loading all images from the faces folder
+        Train the face recognition model by loading all images from the faces folder.
+        
+        Uses a global lock to prevent concurrent access that can cause memory corruption
+        when running alongside OpenCV's MOG2 background subtractor.
 
         Returns:
             Dict with training statistics
         """
         logger.info("Starting face recognition training...")
-        start_time = datetime.now()
+        logger.info("🔒 Acquiring face recognition lock to prevent memory corruption...")
+        
+        # Acquire lock to prevent concurrent dlib operations that cause crashes
+        with _face_recognition_lock:
+            logger.info("🔓 Lock acquired, beginning training...")
+            start_time = datetime.now()
 
-        self.known_face_encodings = []
-        self.known_face_names = []
+            self.known_face_encodings = []
+            self.known_face_names = []
 
-        if not self.faces_folder.exists():
-            logger.warning(f"Faces folder not found: {self.faces_folder}")
-            return {
-                "total_people": 0,
-                "total_encodings": 0,
-                "training_time": 0}
+            if not self.faces_folder.exists():
+                logger.warning(f"Faces folder not found: {self.faces_folder}")
+                return {
+                    "total_people": 0,
+                    "total_encodings": 0,
+                    "training_time": 0}
 
-        people_count = 0
-        encodings_count = 0
+            people_count = 0
+            encodings_count = 0
 
-        # Iterate through each person's folder
-        for person_path in self.faces_folder.iterdir():
-            if not person_path.is_dir():
-                continue
-            person_name = person_path.name
-
-            people_count += 1
-            logger.info(f"Processing images for: {person_name}")
-
-            # Load all images for this person
-            for image_file_path in person_path.iterdir():
-                if not image_file_path.name.lower().endswith((".jpg", ".jpeg", ".png")):
+            # Iterate through each person's folder
+            for person_path in self.faces_folder.iterdir():
+                if not person_path.is_dir():
                     continue
+                person_name = person_path.name
 
-                image_path = image_file_path
+                people_count += 1
+                logger.info(f"Processing images for: {person_name}")
 
-                try:
-                    # Load image and get face encodings
-                    image = face_recognition.load_image_file(image_path)
-                    face_encodings = face_recognition.face_encodings(
-                        image, model="large"  # Use large model for better accuracy
-                    )
+                # Load all images for this person
+                for image_file_path in person_path.iterdir():
+                    if not image_file_path.name.lower().endswith((".jpg", ".jpeg", ".png")):
+                        continue
 
-                    if len(face_encodings) > 0:
-                        # Use the first face found in the image
-                        self.known_face_encodings.append(face_encodings[0])
-                        self.known_face_names.append(person_name)
-                        encodings_count += 1
-                        logger.debug(f"Encoded face from: {image_path}")
-                    else:
-                        logger.warning(f"No face found in: {image_path}")
+                    image_path = image_file_path
 
-                except Exception as e:
-                    logger.error(f"Error processing {image_path}: {e}")
+                    try:
+                        # Load image and get face encodings
+                        image = face_recognition.load_image_file(image_path)
+                        face_encodings = face_recognition.face_encodings(
+                            image, model="large"  # Use large model for better accuracy
+                        )
 
-        # Save encodings to file
-        self.save_encodings()
+                        if len(face_encodings) > 0:
+                            # Use the first face found in the image
+                            self.known_face_encodings.append(face_encodings[0])
+                            self.known_face_names.append(person_name)
+                            encodings_count += 1
+                            logger.debug(f"Encoded face from: {image_path}")
+                        else:
+                            logger.warning(f"No face found in: {image_path}")
 
-        training_time = (datetime.now() - start_time).total_seconds()
+                    except Exception as e:
+                        logger.error(f"Error processing {image_path}: {e}")
 
-        # Update statistics
-        self.statistics["total_people"] = people_count
-        self.statistics["total_encodings"] = encodings_count
+            # Save encodings to file
+            self.save_encodings()
 
-        result = {
-            "total_people": people_count,
-            "total_encodings": encodings_count,
-            "training_time": training_time,
-        }
+            training_time = (datetime.now() - start_time).total_seconds()
 
-        logger.info(f"Training complete: {result}")
-        return result
+            # Update statistics
+            self.statistics["total_people"] = people_count
+            self.statistics["total_encodings"] = encodings_count
+
+            result = {
+                "total_people": people_count,
+                "total_encodings": encodings_count,
+                "training_time": training_time,
+            }
+
+            logger.info(f"Training complete: {result}")
+            return result
 
     def save_encodings(self):
         """Save face encodings to file"""
@@ -214,8 +237,8 @@ class FaceRecognitionManager:
         Returns:
             Tuple of (annotated_frame, list of detected faces with metadata)
         """
-        if len(self.known_face_encodings) == 0:
-            return frame, []
+        # Track if we have known faces to compare against
+        has_known_faces = len(self.known_face_encodings) > 0
 
         # Apply preprocessing for better face recognition
         processed_frame = frame
@@ -249,26 +272,28 @@ class FaceRecognitionManager:
             bottom *= 4
             left *= 4
 
-            # Compare with known faces
-            matches = face_recognition.compare_faces(
-                self.known_face_encodings,
-                face_encoding,
-                tolerance=self.recognition_threshold,
-            )
-
             name = "Unknown"
             confidence = 0.0
 
-            # Calculate face distances
-            face_distances = face_recognition.face_distance(
-                self.known_face_encodings, face_encoding
-            )
+            # Only compare with known faces if we have any
+            if has_known_faces:
+                # Compare with known faces
+                matches = face_recognition.compare_faces(
+                    self.known_face_encodings,
+                    face_encoding,
+                    tolerance=self.recognition_threshold,
+                )
 
-            if len(face_distances) > 0:
-                best_match_index = np.argmin(face_distances)
-                if matches[best_match_index]:
-                    name = self.known_face_names[best_match_index]
-                    confidence = 1.0 - face_distances[best_match_index]
+                # Calculate face distances
+                face_distances = face_recognition.face_distance(
+                    self.known_face_encodings, face_encoding
+                )
+
+                if len(face_distances) > 0:
+                    best_match_index = np.argmin(face_distances)
+                    if matches[best_match_index]:
+                        name = self.known_face_names[best_match_index]
+                        confidence = 1.0 - face_distances[best_match_index]
 
             # Encode face encoding to base64 for database storage
             import base64
@@ -345,12 +370,13 @@ class FaceRecognitionManager:
             logger.error(f"Error creating person directory: {e}")
             return False
 
-    def delete_person(self, person_name: str) -> bool:
+    def delete_person(self, person_name: str, auto_train: bool = False) -> bool:
         """
         Delete a person and all their images
 
         Args:
             person_name: Name of the person to delete
+            auto_train: If True, retrain the model after deletion (default False to prevent freezing)
 
         Returns:
             True if successful, False otherwise
@@ -367,8 +393,23 @@ class FaceRecognitionManager:
             shutil.rmtree(person_path)
             logger.info(f"Deleted person: {person_name}")
 
-            # Retrain model
-            self.train_face_recognition()
+            # Remove encodings for this person from memory (fast operation)
+            indices_to_remove = [i for i, name in enumerate(self.known_face_names) if name == person_name]
+            for i in sorted(indices_to_remove, reverse=True):
+                del self.known_face_encodings[i]
+                del self.known_face_names[i]
+            
+            # Update statistics
+            self.statistics["total_people"] = len(set(self.known_face_names))
+            self.statistics["total_encodings"] = len(self.known_face_encodings)
+            
+            # Save updated encodings
+            self.save_encodings()
+            
+            # Optionally retrain model (can be slow, caller should use background task)
+            if auto_train:
+                self.train_face_recognition()
+            
             return True
         except Exception as e:
             logger.error(f"Error deleting person: {e}")
@@ -377,6 +418,9 @@ class FaceRecognitionManager:
     def list_people(self) -> List[Dict]:
         """
         Get list of all people with their photo counts
+        This scans the filesystem to find all person folders, ensuring
+        that people with existing photos are always included even if
+        they're not in the encodings file yet.
 
         Returns:
             List of person dictionaries
@@ -387,22 +431,43 @@ class FaceRecognitionManager:
             return people
 
         for person_path in self.faces_folder.iterdir():
+            # Skip files (like face_encodings.pkl)
             if not person_path.is_dir():
                 continue
+                
+            # Skip hidden directories
+            if person_path.name.startswith('.'):
+                continue
+                
             person_name = person_path.name
 
-            # Count photos
-            photo_count = len(
-                [
+            # Count photos and get preview photo
+            try:
+                photo_files = [
                     f
                     for f in os.listdir(person_path)
                     if f.lower().endswith((".jpg", ".jpeg", ".png"))
                 ]
-            )
+                photo_count = len(photo_files)
+                
+                # Get first photo for preview (sorted by name for consistency)
+                preview_photo_url = None
+                if photo_files:
+                    photo_files.sort()
+                    first_photo = photo_files[0]
+                    # URL format: /faces/{person_name}/{filename}
+                    preview_photo_url = f"/faces/{person_name}/{first_photo}"
+            except (OSError, PermissionError) as e:
+                logger.warning(f"Error reading photos from {person_path}: {e}")
+                photo_count = 0
+                preview_photo_url = None
 
-            people.append({"name": person_name,
-                           "photo_count": photo_count,
-                           "path": str(person_path)})
+            people.append({
+                "name": person_name,
+                "photo_count": photo_count,
+                "path": str(person_path),
+                "preview_photo_url": preview_photo_url
+            })
 
         return sorted(people, key=lambda x: x["name"])
 
@@ -411,31 +476,60 @@ class FaceRecognitionManager:
         return self.statistics.copy()
 
     def is_available(self) -> bool:
-        """Check if face recognition is available and ready"""
-        return len(self.known_face_encodings) > 0
+        """
+        Check if face recognition is available and ready.
+        
+        Returns True if face_recognition library is available, regardless of
+        whether known faces are loaded. This allows the system to detect
+        unknown faces for clustering.
+        """
+        # Face detection should always work - unknown faces can be clustered
+        try:
+            import face_recognition
+            return True
+        except ImportError:
+            return False
 
 
 # Global instance
 _face_manager: Optional[FaceRecognitionManager] = None
 
 
-def get_face_manager(faces_folder: str = "faces") -> FaceRecognitionManager:
+def reset_face_manager():
+    """
+    Reset the global face manager instance (useful for testing or path changes)
+    """
+    global _face_manager
+    _face_manager = None
+    logger.info("Face manager singleton reset")
+
+
+def get_face_manager(faces_folder: str = None) -> FaceRecognitionManager:
     """
     Get or create the global face recognition manager instance
 
     Args:
         faces_folder: Directory containing person subdirectories with face images
+                     If None, uses the default from PathManager (data/faces)
 
     Returns:
         Global FaceRecognitionManager instance
     """
     global _face_manager
+    
+    # Always use PathManager default if no folder specified
+    if faces_folder is None:
+        faces_folder = str(paths.faces_dir)
+    
+    # Resolve paths for comparison
+    faces_folder_resolved = str(Path(faces_folder).resolve())
+    
     if _face_manager is None:
+        logger.info(f"Initializing FaceRecognitionManager with folder: {faces_folder_resolved}")
         _face_manager = FaceRecognitionManager(faces_folder=faces_folder)
-    elif _face_manager.faces_folder != faces_folder:
+    elif str(_face_manager.faces_folder.resolve()) != faces_folder_resolved:
         # Reinitialize if faces folder changed
         logger.info(
-            f"Faces folder changed from {
-                _face_manager.faces_folder} to {faces_folder}")
+            f"Faces folder changed from {_face_manager.faces_folder} to {faces_folder_resolved}, reinitializing...")
         _face_manager = FaceRecognitionManager(faces_folder=faces_folder)
     return _face_manager

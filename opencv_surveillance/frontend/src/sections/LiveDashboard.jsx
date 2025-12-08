@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { logger } from '../utils/logger';
+import { formatTimestampShort } from '../utils/dateUtils';
 import apiClient, { isAuthenticated } from '../api/apiClient';
 import PipVideoPlayer from '../components/PipVideoPlayer';
 import CameraSettingsModal from '../components/CameraSettingsModal';
@@ -596,7 +597,7 @@ const LiveDashboard = () => {
                       </p>
                       <p className="event-camera">{event.camera_id}</p>
                       <p className="event-time">
-                        {new Date(event.timestamp).toLocaleString()}
+                        {formatTimestampShort(event.timestamp)}
                       </p>
                       {event.recording_id && (
                         <span className="event-badge">📹 Recording Available</span>

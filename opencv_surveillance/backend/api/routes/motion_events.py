@@ -59,9 +59,19 @@ def list_motion_events(
         query = query.filter(models.MotionDetectionEvent.camera_id == camera_id)
 
     if start_date:
+        # Ensure timezone-aware comparison (convert naive datetime to UTC if needed)
+        if start_date.tzinfo is None:
+            # Assume UTC if timezone-naive
+            from datetime import timezone
+            start_date = start_date.replace(tzinfo=timezone.utc)
         query = query.filter(models.MotionDetectionEvent.detected_at >= start_date)
 
     if end_date:
+        # Ensure timezone-aware comparison (convert naive datetime to UTC if needed)
+        if end_date.tzinfo is None:
+            # Assume UTC if timezone-naive
+            from datetime import timezone
+            end_date = end_date.replace(tzinfo=timezone.utc)
         query = query.filter(models.MotionDetectionEvent.detected_at <= end_date)
 
     if has_faces is not None:

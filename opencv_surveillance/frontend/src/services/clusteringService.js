@@ -28,13 +28,13 @@ const clusteringService = {
 
   /**
    * Get all face clusters (paginated)
-   * @param {number} skip - Records to skip (default: 0)
-   * @param {number} limit - Max records (default: 100)
+   * @param {number} page - Page number, 1-indexed (default: 1)
+   * @param {number} pageSize - Items per page (default: 50, max: 1000)
    * @returns {Promise<Object>} List of clusters
    */
-  async getClusters(skip = 0, limit = 100) {
+  async getClusters(page = 1, pageSize = 50) {
     const response = await apiClient.get('/clusters/', {
-      params: { skip, limit },
+      params: { page, page_size: pageSize },
     });
     return response.data;
   },

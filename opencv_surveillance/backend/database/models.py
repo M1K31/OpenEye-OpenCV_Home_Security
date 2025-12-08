@@ -199,6 +199,8 @@ class Camera(Base):
     # CHANGED: Default to False
     recording_enabled = Column(Boolean, default=False)
     post_motion_cooldown = Column(Integer, default=5)
+    audio_recording_enabled = Column(Boolean, default=False)  # Enable audio recording with video
+    audio_device = Column(String, nullable=True)  # Audio input device (None = default)
 
     # Video quality settings
     resolution = Column(String, default="1920x1080")

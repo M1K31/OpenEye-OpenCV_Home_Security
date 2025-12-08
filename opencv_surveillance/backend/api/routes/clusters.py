@@ -5,7 +5,7 @@ API routes for face clustering
 """
 
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -65,7 +65,12 @@ def cluster_unknown_faces(
     try:
         service = FaceClusteringService(
             eps=request.eps or 0.5,
-            min_samples=request.min_samples or 2
+            min_samples=request.min_samples or 2,
+            auto_export_enabled=request.auto_export_enabled if request.auto_export_enabled is not None else True,
+            auto_export_threshold=request.auto_export_threshold or 5,
+            auto_train_enabled=request.auto_train_enabled if request.auto_train_enabled is not None else True,
+            auto_name_enabled=request.auto_name_enabled if request.auto_name_enabled is not None else True,
+            cluster_known_faces=request.cluster_known_faces if request.cluster_known_faces is not None else True
         )
         
         result = service.cluster_unknown_faces(db, recalculate=request.recalculate)
@@ -214,6 +219,7 @@ def get_cluster_faces(
 def assign_name_to_cluster(
     cluster_id: int,
     request: AssignNameRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_active_user)
 ):
@@ -222,6 +228,7 @@ def assign_name_to_cluster(
     
     Identifies a cluster by assigning a person name to it.
     All faces in the cluster will be updated with this name.
+    Face recognition training will run in the background.
     
     **Path Parameters:**
     - **cluster_id:** Unique identifier for the cluster
@@ -233,6 +240,8 @@ def assign_name_to_cluster(
     1. Update cluster label
     2. Mark cluster as identified
     3. Update all face detections in cluster with new name
+    4. Copy face images to person folder
+    5. Trigger background training (non-blocking)
     
     **Returns:**
     - Success status
@@ -241,13 +250,27 @@ def assign_name_to_cluster(
     """
     try:
         service = FaceClusteringService()
-        result = service.assign_name_to_cluster(db, cluster_id, request.person_name)
+        result = service.assign_name_to_cluster(db, cluster_id, request.person_name, auto_train=False)
         
         if not result["success"]:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=result["message"]
             )
+        
+        # Schedule background training if images were copied
+        if result.get("training_required"):
+            def train_in_background():
+                try:
+                    from backend.core.face_recognition import get_face_manager
+                    face_manager = get_face_manager()
+                    face_manager.train_face_recognition()
+                    logger.info(f"Background training completed after assigning name to cluster {cluster_id}")
+                except Exception as e:
+                    logger.error(f"Background training failed: {e}")
+            
+            background_tasks.add_task(train_in_background)
+            logger.info(f"Scheduled background training for cluster {cluster_id}")
         
         return AssignNameResponse(**result)
         

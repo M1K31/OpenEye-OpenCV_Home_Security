@@ -83,9 +83,23 @@ class ImagePreprocessor:
                     self.bilateral_sigma_space
                 )
 
-            # Step 2: Histogram equalization for contrast normalization
+            # Step 2: CLAHE (Contrast Limited Adaptive Histogram Equalization) for contrast normalization
+            # CLAHE is better than standard histogram equalization for varying lighting conditions
+            # It's adaptive and less prone to over-enhancement
+            # CLAHE was introduced in OpenCV 2.4.0 (2012), so it's available on all supported systems
+            # Fallback to standard histogram equalization if CLAHE is unavailable (shouldn't happen)
             if self.enable_histogram_eq:
-                gray = cv2.equalizeHist(gray)
+                try:
+                    clahe = cv2.createCLAHE(
+                        clipLimit=self.clahe_clip_limit,
+                        tileGridSize=self.clahe_tile_size
+                    )
+                    gray = clahe.apply(gray)
+                except (AttributeError, cv2.error) as e:
+                    # Fallback to standard histogram equalization for very old OpenCV versions
+                    # This should not occur with OpenCV >= 2.4.0 (project requires >= 4.8.1)
+                    logger.warning(f"CLAHE not available, falling back to standard histogram equalization: {e}")
+                    gray = cv2.equalizeHist(gray)
 
             # Step 3: Gamma correction for low-light enhancement
             if self.auto_gamma:
