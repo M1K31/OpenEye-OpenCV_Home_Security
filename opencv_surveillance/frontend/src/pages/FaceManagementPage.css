@@ -418,6 +418,35 @@ button:disabled {
   100% { transform: rotate(360deg); }
 }
 
+@keyframes pulse-warning {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+
+/* Training Warning Banner */
+.training-warning-banner {
+  background: linear-gradient(90deg, #ff9800, #f57c00);
+  color: #fff;
+  padding: 16px 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
+  animation: pulse-warning 2s ease-in-out infinite;
+}
+
+.training-spinner {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(255,255,255,0.3);
+  border-top: 3px solid #fff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
 /* Improve button styles */
 .btn-warning {
   display: flex;

@@ -171,7 +171,11 @@ class Camera(Base):
 
     # Face detection settings
     face_detection_enabled = Column(Boolean, default=True)
-    face_detection_threshold = Column(Float, default=0.6)
+    face_detection_threshold = Column(Float, default=0.6)  # Recognition confidence threshold (0.4-0.8, lower=stricter)
+    face_detection_model = Column(String, default="hog")  # "hog" (CPU) or "cnn" (GPU, requires CUDA)
+    face_detection_upsample = Column(Integer, default=1)  # Times to upsample image (0-2, higher=slower but finds smaller faces)
+    face_detection_scale = Column(String, default="auto")  # "auto", "none", or float like "0.5" (manual scale factor)
+    min_face_size_pixels = Column(Integer, default=20)  # Minimum face size to detect (pixels, after scaling)
 
     # Motion detection settings
     motion_detection_enabled = Column(

@@ -17,6 +17,8 @@ const FaceManagementPage = ({ embedded = false }) => {
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [uploadFiles, setUploadFiles] = useState([]);
   const [isTraining, setIsTraining] = useState(false);
+  const [trainingWarning, setTrainingWarning] = useState(null); // Warning message from server
+  const [trainingPollInterval, setTrainingPollInterval] = useState(null); // Polling interval ID
   const [message, setMessage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
@@ -63,6 +65,51 @@ const FaceManagementPage = ({ embedded = false }) => {
       logger.error('Error loading settings:', error);
     }
   };
+
+  // Check if training is in progress (for warning display)
+  const checkTrainingStatus = async () => {
+    try {
+      const response = await apiClient.get('/faces/training-status');
+      if (response.data.training_in_progress) {
+        setTrainingWarning(response.data.message);
+      } else {
+        setTrainingWarning(null);
+      }
+      return response.data.training_in_progress;
+    } catch (error) {
+      logger.error('Error checking training status:', error);
+      return false;
+    }
+  };
+
+  // Start polling for training status
+  const startTrainingPoll = () => {
+    // Clear any existing interval
+    if (trainingPollInterval) {
+      clearInterval(trainingPollInterval);
+    }
+    // Poll every 2 seconds during training
+    const intervalId = setInterval(checkTrainingStatus, 2000);
+    setTrainingPollInterval(intervalId);
+  };
+
+  // Stop polling for training status
+  const stopTrainingPoll = () => {
+    if (trainingPollInterval) {
+      clearInterval(trainingPollInterval);
+      setTrainingPollInterval(null);
+    }
+    setTrainingWarning(null);
+  };
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (trainingPollInterval) {
+        clearInterval(trainingPollInterval);
+      }
+    };
+  }, [trainingPollInterval]);
 
   const addPerson = async (e, mergeIfExists = false, overwriteIfExists = false) => {
     e.preventDefault();
@@ -364,6 +411,8 @@ const FaceManagementPage = ({ embedded = false }) => {
 
   const trainModel = async () => {
     setIsTraining(true);
+    setTrainingWarning('Face recognition training in progress. Live face detection is temporarily paused to prevent system instability. Some frames may be skipped.');
+    startTrainingPoll(); // Start polling for training status
     showMessage('🔄 Training model... This may take a minute.', 'warning');
     try {
       const response = await apiClient.post('/faces/train', {});
@@ -373,6 +422,7 @@ const FaceManagementPage = ({ embedded = false }) => {
       showMessage('❌ Error training model: ' + error.message, 'error');
     } finally {
       setIsTraining(false);
+      stopTrainingPoll(); // Stop polling and clear warning
     }
   };
 
@@ -411,6 +461,42 @@ const FaceManagementPage = ({ embedded = false }) => {
             {message.type === 'success' ? '✓' : message.type === 'error' ? '⚠️' : 'ℹ️'}
           </span>
           <div className="alert-content">{message.text}</div>
+        </div>
+      )}
+
+      {/* Training Warning Overlay */}
+      {trainingWarning && (
+        <div
+          className="training-warning-banner"
+          style={{
+            background: 'linear-gradient(90deg, #ff9800, #f57c00)',
+            color: '#fff',
+            padding: '16px 20px',
+            borderRadius: '8px',
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            boxShadow: '0 4px 12px rgba(255, 152, 0, 0.3)',
+            animation: 'pulse-warning 2s ease-in-out infinite'
+          }}
+        >
+          <span
+            className="training-spinner"
+            style={{
+              display: 'inline-block',
+              width: '24px',
+              height: '24px',
+              border: '3px solid rgba(255,255,255,0.3)',
+              borderTop: '3px solid #fff',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }}
+          />
+          <div style={{ flex: 1 }}>
+            <strong style={{ display: 'block', marginBottom: '4px' }}>Training in Progress</strong>
+            <span style={{ fontSize: '14px', opacity: 0.9 }}>{trainingWarning}</span>
+          </div>
         </div>
       )}
 

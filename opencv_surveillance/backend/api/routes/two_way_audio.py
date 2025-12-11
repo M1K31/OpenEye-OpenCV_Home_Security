@@ -3,12 +3,11 @@
 
 from fastapi import APIRouter, WebSocket
 from fastapi.responses import HTMLResponse
-from backend.core.two_way_audio_system import TwoWayAudioManager
+from backend.core.two_way_audio_system import audio_manager  # Use singleton from core module
 import logging
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-audio_manager = TwoWayAudioManager()
 
 @router.get("/test")
 async def index():
