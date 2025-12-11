@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from backend.api.schemas import face as face_schema
 from backend.api.schemas.pagination import PaginatedResponse
-from backend.core.face_recognition import get_face_manager
+from backend.core.face_recognition import get_face_manager, is_training_in_progress
 from backend.core.paths import paths
 from backend.core.camera_manager import manager as camera_manager
 from backend.core.auth import get_current_active_user, require_user, require_admin
@@ -515,6 +515,28 @@ def delete_person_photo(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/faces/training-status")
+def get_training_status(
+    current_user: user_schema.User = Depends(get_current_active_user),
+):
+    """
+    Check if face recognition training is currently in progress.
+
+    Used by the UI to display a warning that face detections may be skipped
+    during training to prevent crashes.
+
+    **Authentication Required**: Any authenticated user
+
+    Returns:
+        Object with training_in_progress boolean and warning message
+    """
+    training = is_training_in_progress()
+    return {
+        "training_in_progress": training,
+        "message": "Face recognition training in progress. Live face detection is temporarily paused to prevent system crashes. Detections will resume automatically when training completes." if training else None
+    }
+
+
 @router.post("/faces/train", response_model=face_schema.TrainingResponse)
 def train_face_recognition(
     request: face_schema.TrainingRequest = None,
@@ -524,7 +546,8 @@ def train_face_recognition(
     Train the face recognition model with current photos
 
     **Authentication Required**: Admin role only
-    **Note**: Training can take several minutes depending on the number of photos
+    **Note**: Training can take several minutes depending on the number of photos.
+    During training, live face detection is temporarily paused to prevent crashes.
     """
     try:
         face_manager = get_face_manager()

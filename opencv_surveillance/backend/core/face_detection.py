@@ -23,27 +23,58 @@ class FaceDetector:
     """
     Integrates face recognition with camera streams
     Works alongside motion detection to identify people in video
+
+    Configurable Settings (from database Camera model):
+    - scale_mode: "auto", "none", or float like "0.5"
+    - upsample_times: 0, 1, or 2 (higher = slower but finds smaller faces)
+    - min_face_size: Minimum face size in pixels to detect
     """
 
-    def __init__(self, enabled: bool = True, faces_dir: Optional[Path] = None):
+    def __init__(
+        self,
+        enabled: bool = True,
+        faces_dir: Optional[Path] = None,
+        scale_mode: str = "auto",
+        upsample_times: int = 1,
+        min_face_size: int = 20,
+        detection_cooldown: float = 2.0
+    ):
         """
         Initialize face detector
 
         Args:
             enabled: Whether face detection is enabled
             faces_dir: Directory where face images are stored (uses PathManager if None)
+            scale_mode: Scaling strategy for face detection
+                - "auto": Adaptive scaling based on resolution (default, recommended)
+                - "none": No scaling, use native resolution (slower but more accurate)
+                - "0.5": Manual scale factor (0.1 to 1.0)
+            upsample_times: Number of times to upsample image (0-2)
+                - 0: Fastest, may miss small faces
+                - 1: Default, good balance
+                - 2: Slowest, finds smaller faces
+            min_face_size: Minimum face size in pixels to detect (default: 20)
+            detection_cooldown: Seconds between detections (default: 2.0)
         """
         self.enabled = enabled
         self.faces_dir = faces_dir or paths.faces_dir
+
+        # Configurable detection settings
+        self.scale_mode = scale_mode
+        self.upsample_times = max(0, min(2, upsample_times))  # Clamp to 0-2
+        self.min_face_size = max(10, min_face_size)  # Minimum 10px
+        self.detection_cooldown = max(0.1, detection_cooldown)  # Minimum 0.1s
+
         # Use get_face_manager() without args to use consistent PathManager default
         self.face_manager = get_face_manager()
         self.last_detection_time = None
-        self.detection_cooldown = 2.0  # Seconds between detections to reduce CPU load
         self.detections_buffer = []  # Store recent detections
         self.max_buffer_size = 10
 
         logger.info(
-            f"FaceDetector initialized (enabled={enabled}, faces_dir={faces_dir})")
+            f"FaceDetector initialized (enabled={enabled}, scale={scale_mode}, "
+            f"upsample={upsample_times}, min_size={min_face_size}px, cooldown={detection_cooldown}s)"
+        )
 
     def set_enabled(self, enabled: bool):
         """Enable or disable face detection"""
@@ -91,9 +122,14 @@ class FaceDetector:
             return frame, []
 
         try:
-            # Perform face recognition
+            # Perform face recognition with configurable settings
             annotated_frame, detected_faces = (
-                self.face_manager.recognize_faces_in_frame(frame)
+                self.face_manager.recognize_faces_in_frame(
+                    frame,
+                    scale_mode=self.scale_mode,
+                    upsample_times=self.upsample_times,
+                    min_face_size=self.min_face_size
+                )
             )
 
             # Update last detection time

@@ -437,7 +437,7 @@ async def shutdown_event():
 
     # Step 1: Stop face clustering scheduler
     try:
-        logger.info("[1/8] Stopping face clustering scheduler...")
+        logger.info("[1/9] Stopping face clustering scheduler...")
         clustering_scheduler = get_clustering_scheduler()
 
         # Set timeout for scheduler stop
@@ -451,7 +451,7 @@ async def shutdown_event():
 
     # Step 2: Stop statistics broadcaster (WebSocket updates)
     try:
-        logger.info("[2/8] Stopping statistics broadcaster...")
+        logger.info("[2/9] Stopping statistics broadcaster...")
         broadcaster = get_broadcaster()
 
         # Set timeout for broadcaster stop
@@ -465,7 +465,7 @@ async def shutdown_event():
 
     # Step 3: Close all WebSocket connections
     try:
-        logger.info("[3/8] Closing WebSocket connections...")
+        logger.info("[3/9] Closing WebSocket connections...")
         from backend.core.websocket_manager import ws_manager
 
         # Close all connections gracefully
@@ -479,7 +479,7 @@ async def shutdown_event():
 
     # Step 4: Stop all cameras and release resources
     try:
-        logger.info("[4/8] Stopping all cameras...")
+        logger.info("[4/9] Stopping all cameras...")
         camera_count = len(camera_manager.cameras)
 
         for camera_id in list(camera_manager.cameras.keys()):
@@ -494,11 +494,19 @@ async def shutdown_event():
         logger.error(f"✗ Error stopping cameras: {e}")
 
     # Step 5: Face recognition uses stateless get_face_manager() - no cleanup needed
-    logger.info("[5/8] Face recognition uses stateless manager - skipping")
+    logger.info("[5/9] Face recognition uses stateless manager - skipping")
 
-    # Step 6: Stop cloud storage upload threads
+    # Step 6: Stop two-way audio sessions
     try:
-        logger.info("[6/8] Stopping cloud storage threads...")
+        logger.info("[6/9] Stopping two-way audio sessions...")
+        await audio_manager.close_all()
+        logger.info("✓ Two-way audio sessions stopped")
+    except Exception as e:
+        logger.error(f"✗ Error stopping audio sessions: {e}")
+
+    # Step 7: Stop cloud storage upload threads
+    try:
+        logger.info("[7/9] Stopping cloud storage threads...")
         from backend.core.cloud_storage_system import cloud_storage
 
         if hasattr(cloud_storage, 'stop_upload_worker'):
@@ -509,9 +517,9 @@ async def shutdown_event():
     except Exception as e:
         logger.error(f"✗ Error stopping cloud storage: {e}")
 
-    # Step 7: Close database connections
+    # Step 8: Close database connections
     try:
-        logger.info("[7/8] Closing database connections...")
+        logger.info("[8/9] Closing database connections...")
         from backend.database import engine
 
         if engine:
@@ -520,9 +528,9 @@ async def shutdown_event():
     except Exception as e:
         logger.error(f"✗ Error closing database: {e}")
 
-    # Step 8: Cancel all remaining async tasks
+    # Step 9: Cancel all remaining async tasks
     try:
-        logger.info("[8/8] Canceling remaining async tasks...")
+        logger.info("[9/9] Canceling remaining async tasks...")
         tasks = [task for task in asyncio.all_tasks() if not task.done()]
 
         if tasks:

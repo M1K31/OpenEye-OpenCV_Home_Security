@@ -25,9 +25,12 @@ from backend.core.image_preprocessing import get_preprocessor
 logger = logging.getLogger(__name__)
 
 # Global lock to prevent concurrent dlib/OpenCV operations that cause memory corruption
-# This is necessary because dlib (used by face_recognition) and OpenCV's MOG2 
+# This is necessary because dlib (used by face_recognition) and OpenCV's MOG2
 # background subtractor can corrupt memory when running in parallel threads
 _face_recognition_lock = threading.Lock()
+
+# Flag to indicate training is in progress (for UI feedback)
+_training_in_progress = False
 
 
 class FaceRecognitionManager:
@@ -103,18 +106,21 @@ class FaceRecognitionManager:
     def train_face_recognition(self) -> Dict:
         """
         Train the face recognition model by loading all images from the faces folder.
-        
+
         Uses a global lock to prevent concurrent access that can cause memory corruption
         when running alongside OpenCV's MOG2 background subtractor.
 
         Returns:
             Dict with training statistics
         """
+        global _training_in_progress
+
         logger.info("Starting face recognition training...")
         logger.info("🔒 Acquiring face recognition lock to prevent memory corruption...")
-        
+
         # Acquire lock to prevent concurrent dlib operations that cause crashes
         with _face_recognition_lock:
+            _training_in_progress = True
             logger.info("🔓 Lock acquired, beginning training...")
             start_time = datetime.now()
 
@@ -182,6 +188,7 @@ class FaceRecognitionManager:
             }
 
             logger.info(f"Training complete: {result}")
+            _training_in_progress = False
             return result
 
     def save_encodings(self):
@@ -226,125 +233,191 @@ class FaceRecognitionManager:
             logger.error(f"Error loading encodings: {e}")
 
     def recognize_faces_in_frame(
-        self, frame: np.ndarray
+        self, frame: np.ndarray,
+        scale_mode: str = "auto",
+        upsample_times: int = 1,
+        min_face_size: int = 20
     ) -> Tuple[np.ndarray, List[Dict]]:
         """
         Detect and recognize faces in a video frame
 
         Args:
             frame: OpenCV frame (BGR format)
+            scale_mode: Scaling strategy - "auto", "none", or float string like "0.5"
+                - "auto": Adaptive scaling based on resolution (recommended)
+                - "none": No scaling, use native resolution (slower but more accurate)
+                - "0.5": Manual scale factor (0.25 to 1.0)
+            upsample_times: Number of times to upsample image for face detection (0-2)
+                - 0: Fastest, may miss small faces
+                - 1: Default, good balance (recommended)
+                - 2: Slowest, finds smaller faces
+            min_face_size: Minimum face size in pixels to return (filters small false positives)
 
         Returns:
             Tuple of (annotated_frame, list of detected faces with metadata)
         """
-        # Track if we have known faces to compare against
-        has_known_faces = len(self.known_face_encodings) > 0
+        # Try to acquire lock without blocking - skip frame if training is in progress
+        # This prevents SIGSEGV crashes from concurrent dlib operations
+        if not _face_recognition_lock.acquire(blocking=False):
+            logger.debug("Face recognition skipped - training in progress")
+            return frame, []
 
-        # Apply preprocessing for better face recognition
-        processed_frame = frame
-        if self.enable_preprocessing and self.preprocessor:
-            processed_frame = self.preprocessor.preprocess_for_face_recognition(frame)
+        try:
+            # Track if we have known faces to compare against
+            has_known_faces = len(self.known_face_encodings) > 0
 
-        # Convert BGR to RGB for face_recognition
-        rgb_frame = cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB)
+            # Apply preprocessing for better face recognition
+            processed_frame = frame
+            if self.enable_preprocessing and self.preprocessor:
+                processed_frame = self.preprocessor.preprocess_for_face_recognition(frame)
 
-        # Resize frame for faster processing (optional)
-        small_frame = cv2.resize(rgb_frame, (0, 0), fx=0.25, fy=0.25)
+            # Convert BGR to RGB for face_recognition
+            rgb_frame = cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB)
 
-        # Detect faces
-        face_locations = face_recognition.face_locations(
-            small_frame, model=self.detection_method
-        )
+            height, width = rgb_frame.shape[:2]
 
-        # Get face encodings
-        face_encodings = face_recognition.face_encodings(
-            small_frame, face_locations)
+            # Determine scale factor based on mode
+            if scale_mode == "none":
+                # No scaling - use native resolution
+                scale_factor = 1.0
+            elif scale_mode == "auto":
+                # Adaptive scaling based on input resolution
+                # Goal: Scale to a size where faces are still detectable (~80px minimum)
+                # while keeping processing time reasonable
+                if width > 1920:
+                    # 4K or higher: Scale down significantly for performance
+                    scale_factor = 1280 / width
+                elif width > 1280:
+                    # HD (1080p): Moderate scaling
+                    scale_factor = 960 / width
+                elif width > 800:
+                    # Medium resolution: Light scaling
+                    scale_factor = min(1.0, 720 / width)
+                else:
+                    # Low resolution: No scaling to preserve face detail
+                    scale_factor = 1.0
+            else:
+                # Manual scale factor (parse from string)
+                try:
+                    scale_factor = float(scale_mode)
+                    scale_factor = max(0.1, min(1.0, scale_factor))
+                except ValueError:
+                    logger.warning(f"Invalid scale_mode '{scale_mode}', using auto")
+                    scale_factor = 1.0
 
-        detected_faces = []
+            # Apply scaling if needed
+            if scale_factor < 1.0:
+                small_frame = cv2.resize(rgb_frame, (0, 0), fx=scale_factor, fy=scale_factor)
+            else:
+                small_frame = rgb_frame
 
-        # Process each detected face
-        for (top, right, bottom, left), face_encoding in zip(
-            face_locations, face_encodings
-        ):
-            # Scale back up face locations
-            top *= 4
-            right *= 4
-            bottom *= 4
-            left *= 4
+            # Detect faces using face_recognition library
+            # number_of_times_to_upsample helps find smaller faces at cost of speed
+            face_locations = face_recognition.face_locations(
+                small_frame,
+                model=self.detection_method,
+                number_of_times_to_upsample=upsample_times
+            )
 
-            name = "Unknown"
-            confidence = 0.0
+            # Get face encodings
+            face_encodings = face_recognition.face_encodings(
+                small_frame, face_locations)
 
-            # Only compare with known faces if we have any
-            if has_known_faces:
-                # Compare with known faces
-                matches = face_recognition.compare_faces(
-                    self.known_face_encodings,
-                    face_encoding,
-                    tolerance=self.recognition_threshold,
+            detected_faces = []
+
+            # Calculate inverse scale factor for scaling locations back to original size
+            inverse_scale = 1.0 / scale_factor if scale_factor > 0 else 1.0
+
+            # Process each detected face
+            for (top, right, bottom, left), face_encoding in zip(
+                face_locations, face_encodings
+            ):
+                # Scale back up face locations to original frame coordinates
+                top = int(top * inverse_scale)
+                right = int(right * inverse_scale)
+                bottom = int(bottom * inverse_scale)
+                left = int(left * inverse_scale)
+
+                # Filter out faces smaller than minimum size
+                face_height = bottom - top
+                face_width = right - left
+                if face_height < min_face_size or face_width < min_face_size:
+                    logger.debug(f"Skipping small face: {face_width}x{face_height}px < {min_face_size}px minimum")
+                    continue
+
+                name = "Unknown"
+                confidence = 0.0
+
+                # Only compare with known faces if we have any
+                if has_known_faces:
+                    # Compare with known faces
+                    matches = face_recognition.compare_faces(
+                        self.known_face_encodings,
+                        face_encoding,
+                        tolerance=self.recognition_threshold,
+                    )
+
+                    # Calculate face distances
+                    face_distances = face_recognition.face_distance(
+                        self.known_face_encodings, face_encoding
+                    )
+
+                    if len(face_distances) > 0:
+                        best_match_index = np.argmin(face_distances)
+                        if matches[best_match_index]:
+                            name = self.known_face_names[best_match_index]
+                            confidence = 1.0 - face_distances[best_match_index]
+
+                # Encode face encoding to base64 for database storage
+                import base64
+                encoding_str = base64.b64encode(face_encoding.tobytes()).decode('utf-8')
+
+                # Store detection info
+                detected_faces.append(
+                    {
+                        "name": name,
+                        "confidence": float(confidence),
+                        "location": {
+                            "top": int(top),
+                            "right": int(right),
+                            "bottom": int(bottom),
+                            "left": int(left),
+                        },
+                        "timestamp": datetime.now().isoformat(),
+                        "encoding": encoding_str,  # Add encoding for clustering
+                    }
                 )
 
-                # Calculate face distances
-                face_distances = face_recognition.face_distance(
-                    self.known_face_encodings, face_encoding
+                # Draw rectangle around face
+                color = (0, 255, 0) if name != "Unknown" else (0, 0, 255)
+                cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
+
+                # Draw label background
+                cv2.rectangle(
+                    frame, (left, bottom - 35), (right, bottom), color, cv2.FILLED
                 )
 
-                if len(face_distances) > 0:
-                    best_match_index = np.argmin(face_distances)
-                    if matches[best_match_index]:
-                        name = self.known_face_names[best_match_index]
-                        confidence = 1.0 - face_distances[best_match_index]
+                # Draw label text
+                label = f"{name} ({confidence:.2f})" if name != "Unknown" else "Unknown"
+                cv2.putText(
+                    frame,
+                    label,
+                    (left + 6, bottom - 6),
+                    cv2.FONT_HERSHEY_DUPLEX,
+                    0.6,
+                    (255, 255, 255),
+                    1,
+                )
 
-            # Encode face encoding to base64 for database storage
-            import base64
-            encoding_str = base64.b64encode(face_encoding.tobytes()).decode('utf-8')
+            # Update statistics
+            if detected_faces:
+                self.last_recognition_time = datetime.now()
+                self.statistics["last_recognition"] = self.last_recognition_time.isoformat()
+                self.statistics["recognitions_today"] += len(detected_faces)
 
-            # Store detection info
-            detected_faces.append(
-                {
-                    "name": name,
-                    "confidence": float(confidence),
-                    "location": {
-                        "top": int(top),
-                        "right": int(right),
-                        "bottom": int(bottom),
-                        "left": int(left),
-                    },
-                    "timestamp": datetime.now().isoformat(),
-                    "encoding": encoding_str,  # Add encoding for clustering
-                }
-            )
-
-            # Draw rectangle around face
-            color = (0, 255, 0) if name != "Unknown" else (0, 0, 255)
-            cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
-
-            # Draw label background
-            cv2.rectangle(
-                frame, (left, bottom - 35), (right, bottom), color, cv2.FILLED
-            )
-
-            # Draw label text
-            label = f"{name} ({
-                confidence:.2f})" if name != "Unknown" else "Unknown"
-            cv2.putText(
-                frame,
-                label,
-                (left + 6, bottom - 6),
-                cv2.FONT_HERSHEY_DUPLEX,
-                0.6,
-                (255, 255, 255),
-                1,
-            )
-
-        # Update statistics
-        if detected_faces:
-            self.last_recognition_time = datetime.now()
-            self.statistics["last_recognition"] = self.last_recognition_time.isoformat(
-            )
-            self.statistics["recognitions_today"] += len(detected_faces)
-
-        return frame, detected_faces
+            return frame, detected_faces
+        finally:
+            _face_recognition_lock.release()
 
     def add_person(self, person_name: str) -> bool:
         """
@@ -533,3 +606,14 @@ def get_face_manager(faces_folder: str = None) -> FaceRecognitionManager:
             f"Faces folder changed from {_face_manager.faces_folder} to {faces_folder_resolved}, reinitializing...")
         _face_manager = FaceRecognitionManager(faces_folder=faces_folder)
     return _face_manager
+
+
+def is_training_in_progress() -> bool:
+    """
+    Check if face recognition training is currently in progress.
+    Used by UI to display warning about skipped face detections.
+
+    Returns:
+        True if training is in progress, False otherwise
+    """
+    return _training_in_progress

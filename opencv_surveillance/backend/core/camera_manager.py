@@ -137,8 +137,15 @@ class Camera(ABC):
                 max_recording_duration=max_recording_duration
             )
 
+        # Initialize Face Detector with configurable settings
+        # These settings allow tuning for different camera types and resolutions
         self.face_detector = FaceDetector(
-            enabled=enable_face_detection, faces_dir=faces_path
+            enabled=enable_face_detection,
+            faces_dir=faces_path,
+            scale_mode=settings.get("face_detection_scale", "auto"),  # "auto", "none", or "0.5"
+            upsample_times=settings.get("face_detection_upsample", 1),  # 0, 1, or 2
+            min_face_size=settings.get("min_face_size_pixels", 20),  # Minimum face size in pixels
+            detection_cooldown=2.0  # Seconds between detections
         )
 
         # Store snapshots path for motion detection
