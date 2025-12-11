@@ -3,7 +3,7 @@
 # ============================================
 # Stage 1: Frontend Builder - Build React app
 # ============================================
-FROM node:18-alpine AS frontend-builder
+FROM node:20-alpine AS frontend-builder
 
 WORKDIR /frontend
 
