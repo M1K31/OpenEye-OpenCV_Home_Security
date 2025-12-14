@@ -1,0 +1,67 @@
+# CI/CD Testing Requirements
+# Minimal dependencies for running tests without heavy packages
+
+# Core FastAPI dependencies
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+
+# Database
+sqlalchemy>=2.0.0
+alembic>=1.13.0
+
+# Authentication & Security
+passlib[bcrypt]>=1.7.4
+python-jose[cryptography]>=3.3.0
+bcrypt>=4.0.0
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# Computer Vision & Face Recognition
+opencv-contrib-python>=4.8.1.78
+numpy>=1.24.0
+face_recognition>=1.3.0
+pillow>=10.1.0
+scikit-learn>=1.3.0
+dlib>=19.24.0
+
+# Email notifications
+aiosmtplib>=2.0.0
+email-validator>=2.1.0
+
+# Async HTTP for webhooks
+aiohttp>=3.9.0
+
+# Utilities
+python-dateutil>=2.8.2
+netifaces>=0.11.0
+psutil>=5.9.0
+
+# PTZ Camera Control
+onvif-zeep>=0.2.12
+
+# Two-Factor Authentication
+pyotp>=2.9.0
+pyqrcode>=1.2.1
+
+# Encryption
+cryptography>=41.0.0
+
+# WebSockets
+websockets>=12.0
+
+# Testing dependencies
+pytest>=8.0.0
+pytest-cov>=4.1.0
+pytest-asyncio>=0.23.0
+httpx>=0.27.0
+
+# NOTE: Heavy optional dependencies excluded for CI:
+# - torch, torchvision, ultralytics (YOLO object detection)
+# - firebase-admin (push notifications)
+# - twilio (SMS)
+# - boto3, google-cloud-*, azure-* (cloud storage)
+# - paho-mqtt, HAP-python (smart home)
+# - pyaudio (two-way audio)
+

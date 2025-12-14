@@ -197,10 +197,7 @@ class FaceDetectionEvent(Base):
     cluster = relationship("FaceCluster", back_populates="face_detections")
 
     def __repr__(self):
-        return f"<FaceDetection(person={
-            self.person_name}, confidence={
-            self.confidence:.2f}, time={
-            self.detected_at})>"
+        return f"<FaceDetection(person={self.person_name}, confidence={self.confidence:.2f}, time={self.detected_at})>"
 
 
 class FaceCluster(Base):
@@ -361,9 +358,7 @@ class RecordingEvent(Base):
     object_detections = relationship("ObjectDetectionEvent", back_populates="recording")  # v3.10.0
 
     def __repr__(self):
-        return f"<Recording(camera={
-            self.camera_id}, started={
-            self.started_at})>"
+        return f"<Recording(camera={self.camera_id}, started={self.started_at})>"
 
 
 class MotionDetectionEvent(Base):
@@ -424,10 +419,7 @@ class SystemLog(Base):
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     def __repr__(self):
-        return f"<SystemLog({
-            self.log_level}: {
-            self.component} - {
-            self.message})>"
+        return f"<SystemLog({self.log_level}: {self.component} - {self.message})>"
 
 
 class SystemSettings(Base):
