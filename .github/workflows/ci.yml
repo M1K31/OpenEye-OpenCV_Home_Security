@@ -39,7 +39,11 @@ jobs:
           cmake \
           libopencv-dev \
           libopenblas-dev \
-          liblapack-dev
+          liblapack-dev \
+          portaudio19-dev \
+          libgl1 \
+          libglib2.0-0 \
+          ffmpeg
     
     - name: Install Python dependencies
       run: |
