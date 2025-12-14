@@ -38,8 +38,20 @@ class User(Base):
     account_locked_until = Column(DateTime, nullable=True)  # Account locked until this time
     lockout_count = Column(Integer, default=0)  # Number of times account has been locked
 
+    # v3.11.1: Multi-user ecosystem support
+    display_name = Column(String(100), nullable=True)  # Friendly display name
+    avatar_url = Column(String(255), nullable=True)  # Profile picture URL
+    face_profile_name = Column(String(100), nullable=True)  # Linked face recognition profile
+    synced_from = Column(String(50), nullable=True)  # Source app if synced (magicmirror, etc)
+    synced_at = Column(DateTime, nullable=True)  # When user was synced
+    external_id = Column(String(255), nullable=True)  # External ID from source app
+    last_login = Column(DateTime, nullable=True)  # Last login timestamp
+    
     # v3.8.0: Refresh Token Relationship
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
+    
+    # v3.11.1: User Preferences Relationship
+    preferences = relationship("UserPreferences", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
 
 class RefreshToken(Base):
@@ -66,6 +78,80 @@ class RefreshToken(Base):
 
     def __repr__(self):
         return f"<RefreshToken(id={self.id}, user_id={self.user_id}, revoked={self.revoked})>"
+
+
+class UserPreferences(Base):
+    """
+    v3.11.1: User Preferences Model
+    Per-user settings for notifications, camera access, UI, and ecosystem integration
+    
+    Supports:
+    - Notification preferences (which events to receive)
+    - Camera access permissions (which cameras user can see)
+    - Face recognition associations (link user to their face profile)
+    - UI preferences (theme, layout)
+    - Ecosystem sync settings
+    """
+
+    __tablename__ = "user_preferences"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    
+    # Notification Preferences (JSON)
+    # {"motion": true, "face_known": true, "face_unknown": false, "doorbell": true}
+    notification_types = Column(String, default='{"motion": true, "face_known": true, "face_unknown": true, "doorbell": true, "alarm": true}')
+    
+    # Notification Channels (JSON)
+    # {"push": true, "email": false, "sms": false}
+    notification_channels = Column(String, default='{"push": true, "email": false, "sms": false}')
+    
+    # Quiet Hours (JSON)
+    # {"enabled": false, "start": "22:00", "end": "07:00"}
+    quiet_hours = Column(String, default='{"enabled": false, "start": "22:00", "end": "07:00"}')
+    
+    # Camera Access Permissions (JSON array)
+    # null = all cameras, ["front_door", "backyard"] = specific cameras only
+    camera_access = Column(String, nullable=True)
+    
+    # Face Recognition Associations (JSON array of person names)
+    # When these faces are detected, notify this user
+    # ["John", "Jane"] = notify when John or Jane detected
+    face_associations = Column(String, nullable=True)
+    
+    # UI Preferences (JSON)
+    # {"theme": "dark", "default_view": "grid", "show_timestamps": true}
+    ui_preferences = Column(String, default='{"theme": "dark", "default_view": "grid", "show_timestamps": true}')
+    
+    # Dashboard Layout (JSON)
+    # {"cameras_per_row": 2, "show_events": true, "max_events": 10}
+    dashboard_preferences = Column(String, default='{"cameras_per_row": 2, "show_events": true, "max_events": 10}')
+    
+    # Ecosystem Preferences (JSON)
+    # {"sync_enabled": true, "receive_from": ["magicmirror"], "send_to": ["magicmirror"]}
+    ecosystem_preferences = Column(String, default='{"sync_enabled": true, "receive_from": [], "send_to": []}')
+    
+    # Home Presence (for automation)
+    # {"home_detection": "face", "away_timeout_minutes": 30}
+    presence_settings = Column(String, default='{"home_detection": "face", "away_timeout_minutes": 30}')
+    
+    # Automation Preferences (JSON)
+    # {"automation_ids": [1, 2, 3], "can_trigger": true, "can_receive": true}
+    automation_preferences = Column(String, default='{"automation_ids": [], "can_trigger": true, "can_receive": true}')
+    
+    # Mobile Push Settings
+    push_token = Column(String(512), nullable=True)  # APNs or FCM token
+    push_platform = Column(String(20), nullable=True)  # ios, android
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationship
+    user = relationship("User", back_populates="preferences")
+
+    def __repr__(self):
+        return f"<UserPreferences(user_id={self.user_id})>"
 
 
 class FaceDetectionEvent(Base):
@@ -690,3 +776,181 @@ class IdentifiedObject(Base):
 
     def __repr__(self):
         return f"<IdentifiedObject(id={self.object_id}, name={self.name}, class={self.object_class})>"
+
+
+# ============================================================================
+# ECOSYSTEM INTEGRATION MODELS (v3.11.0)
+# ============================================================================
+
+
+class EcosystemConnection(Base):
+    """
+    v3.11.0: Ecosystem Connection Model
+    v3.11.1: Enhanced for multi-device/multi-user support
+    
+    Stores connections to companion apps (MagicMirror, mobile apps, etc.)
+    Enables cross-app integration for notifications, user sync, and event streaming
+    
+    Multi-device architecture:
+    - Each device (MagicMirror, phone) has its own connection record
+    - device_id uniquely identifies a physical device
+    - location identifies where the device is (living_room, kitchen, etc.)
+    - Associated users determine which notifications/events route to this device
+    - Camera subscriptions filter which camera events this device receives
+    """
+
+    __tablename__ = "ecosystem_connections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # App identification
+    app_name = Column(String(50), nullable=False, index=True)  # magicmirror, ios_app, android_app
+    app_version = Column(String(20), nullable=True)
+    
+    # v3.11.1: Device identification for multi-device support
+    device_id = Column(String(100), nullable=True, index=True)  # Unique device identifier
+    device_name = Column(String(100), nullable=True)  # Human-friendly name (e.g., "Kitchen Mirror")
+    location = Column(String(100), nullable=True, index=True)  # Location in home (kitchen, living_room, etc.)
+    
+    # Connection details
+    host = Column(String(255), nullable=False)  # e.g., http://192.168.1.100:8080
+    
+    # Authentication tokens
+    remote_token = Column(String(512), nullable=True)  # Token to call companion app
+    local_token = Column(String(512), nullable=False, unique=True, index=True)  # Token companion uses for us
+    
+    # Capabilities (JSON array)
+    capabilities = Column(String, default="[]")  # ["notifications", "users", "integrations"]
+    
+    # Webhook configuration
+    webhook_url = Column(String(255), nullable=True)  # Callback URL for events
+    
+    # Connection state
+    connected_at = Column(DateTime, default=datetime.utcnow)
+    last_seen = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    is_active = Column(Boolean, default=True, index=True)
+    
+    # Connection metadata
+    device_info = Column(String(255), nullable=True)  # User agent or device identifier
+    ip_address = Column(String(45), nullable=True)  # IPv4 or IPv6
+    
+    # v3.11.1: Multi-user/Multi-device routing
+    # Associated users (JSON array of user IDs or usernames)
+    # If empty/null, receives ALL user events; if set, only receives events for these users
+    associated_users = Column(String, nullable=True)  # ["john", "jane"] or [1, 2]
+    
+    # Camera subscriptions (JSON array of camera IDs)
+    # If empty/null, receives ALL camera events; if set, only receives events from these cameras
+    subscribed_cameras = Column(String, nullable=True)  # ["front_door", "backyard"]
+    
+    # Notification preferences (JSON object)
+    # Overrides per-device: {"motion": true, "face_known": true, "face_unknown": false}
+    notification_preferences = Column(String, default="{}")
+    
+    # Automation scope (JSON array of automation rule IDs this device can trigger)
+    # If empty/null, can trigger ALL automations; if set, only these
+    automation_scope = Column(String, nullable=True)
+    
+    # Priority for notifications (higher = more important, receives first)
+    priority = Column(Integer, default=0)
+
+    def __repr__(self):
+        name = self.device_name or self.device_id or self.host
+        return f"<EcosystemConnection(app={self.app_name}, device={name}, active={self.is_active})>"
+
+
+class NotificationDedup(Base):
+    """
+    v3.11.0: Notification Deduplication Model
+    Prevents duplicate notifications across ecosystem apps
+    """
+
+    __tablename__ = "notification_dedup"
+
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Deduplication key (hash of notification content)
+    dedupe_key = Column(String(64), unique=True, nullable=False, index=True)
+    
+    # Source tracking
+    source = Column(String(50), nullable=False)  # openeye, magicmirror, ios_app, etc.
+    notification_type = Column(String(50), nullable=True)  # motion, face, doorbell, etc.
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False, index=True)
+
+    def __repr__(self):
+        return f"<NotificationDedup(key={self.dedupe_key[:16]}..., source={self.source})>"
+
+
+class MobileDevice(Base):
+    """
+    v3.11.0: Mobile Device Registration Model
+    Stores registered mobile devices for push notifications
+    """
+
+    __tablename__ = "mobile_devices"
+
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Device identification
+    device_id = Column(String(255), unique=True, nullable=False, index=True)
+    platform = Column(String(20), nullable=False)  # ios, android
+    
+    # Push notification token
+    device_token = Column(String(512), nullable=False)
+    
+    # App information
+    app_version = Column(String(20), nullable=True)
+    
+    # User association
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    
+    # Notification preferences (JSON)
+    notification_preferences = Column(String, default="{}")
+    
+    # Registration metadata
+    registered_at = Column(DateTime, default=datetime.utcnow)
+    last_active = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    is_active = Column(Boolean, default=True, index=True)
+
+    def __repr__(self):
+        return f"<MobileDevice(id={self.device_id[:20]}..., platform={self.platform})>"
+
+
+class FaceTrainingSession(Base):
+    """
+    v3.11.0: Face Training Session Model
+    Tracks interactive face training sessions (for voice commands)
+    """
+
+    __tablename__ = "face_training_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Session identification
+    session_id = Column(String(64), unique=True, nullable=False, index=True)
+    
+    # Training target
+    person_name = Column(String(100), nullable=False)
+    camera_id = Column(String(100), nullable=True)
+    
+    # Session configuration
+    photos_required = Column(Integer, default=5)
+    auto_capture = Column(Boolean, default=True)
+    
+    # Session progress
+    photos_captured = Column(Integer, default=0)
+    status = Column(String(20), default="active")  # active, completed, cancelled, expired
+    
+    # Captured photo paths (JSON array)
+    captured_photos = Column(String, default="[]")
+    
+    # Timestamps
+    started_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=False)  # Session timeout
+
+    def __repr__(self):
+        return f"<FaceTrainingSession(person={self.person_name}, status={self.status})>"

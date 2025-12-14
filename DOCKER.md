@@ -1,6 +1,6 @@
 # OpenEye - AI-Powered Home Security System
 
-![Version](https://img.shields.io/badge/version-3.10.2-blue.svg) ![License](https://img.shields.io/badge/license-MIT-yellow.svg) ![Cost](https://img.shields.io/badge/cost-$0/month-success.svg)
+![Version](https://img.shields.io/badge/version-3.11.1-blue.svg) ![License](https://img.shields.io/badge/license-MIT-yellow.svg) ![Cost](https://img.shields.io/badge/cost-$0/month-success.svg)
 
 **100% free and open-source** AI-powered surveillance with face recognition, motion detection, and smart home integration. Your data stays on your hardware - no subscriptions, no cloud dependencies.
 
@@ -54,21 +54,29 @@
 
 ---
 
-## 🆕 What's New in v3.10.2 (December 2025)
+## 🆕 What's New in v3.11.1 (December 2025)
 
-### 🔍 Critical Bug Fixes
-- ✅ **Face Detection Fix** - Face detection now works even without known faces trained (enables clustering workflow)
-- ✅ **Timeline Playback** - Fixed playback issues with memoization, debouncing, and index-based state machine
-- ✅ **AI & Faces Performance** - Delete/add person no longer freezes the app (async background training)
+### 👥 Multi-User System
+- ✅ **User Management** - Full CRUD for users with role-based access control
+- ✅ **Per-User Preferences** - Notification types, camera access, UI settings, face associations
+- ✅ **Face Profile Linking** - Associate user accounts with face recognition profiles
+- ✅ **User Management UI** - Admin page for managing users at `/users`
+- ✅ **User Profile UI** - Personal settings page at `/profile`
 
-### 🧹 Project Cleanup
-- ✅ **Removed Red Herrings** - Cleaned orphaned files (duplicate configs, test files, example code)
-- ✅ **Database Consolidation** - Single surveillance.db at project root
+### 🌐 Ecosystem Integration
+- ✅ **MagicMirror Integration** - Secure token exchange, user sync, event streaming
+- ✅ **Mobile App Support** - REST API for timeline, thumbnails, playback
+- ✅ **Multi-Device Support** - Multiple devices on same network with smart routing
+- ✅ **Smart Notifications** - Per-user routing with quiet hours, camera filters
 
-### 🔍 v3.10.0 Features
-- ✅ **Object Detection** - YOLOv8-powered AI detection for vehicles, animals, packages
-- ✅ **Two-Way Audio** - WebRTC bidirectional audio communication with cameras
-- ✅ **Object Identification** - Track specific vehicles, pets, or items with named detection
+### 🔧 Dynamic Configuration
+- ✅ **Environment Variables** - `OPENEYE_HOST`, `OPENEYE_PORT`, `MAGICMIRROR_HOST`
+- ✅ **Dynamic CORS** - Ecosystem apps auto-allowed
+
+### Previous: v3.10.2
+- ✅ **Face Detection Fix** - Works without known faces trained
+- ✅ **Timeline Playback** - Fixed with memoization and index-based state
+- ✅ **Object Detection** - YOLOv8-powered AI detection
 
 See [CHANGELOG.md](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/blob/main/CHANGELOG.md) for full details.
 

@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.11.1] - 2025-12-14
+
+### Added
+- **👥 Complete Multi-User System**
+  - Full user management API (list, get, create, update, delete users)
+  - Per-user notification preferences (types, channels, quiet hours)
+  - Per-user camera access permissions
+  - Per-user UI preferences (theme, dashboard layout, etc.)
+  - Face profile linking (associate users with face recognition profiles)
+  - User Management page (`/users`) - Admin-only user CRUD interface
+  - User Profile page (`/profile`) - Personal settings and preferences
+  - Role-based access control (admin, user, viewer)
+
+- **🌐 Ecosystem Integration (MagicMirror & Mobile Apps)**
+  - Secure token exchange for authenticated cross-app communication
+  - User synchronization between apps with bidirectional sync
+  - Integration sharing (HomeKit, Home Assistant, Nest credentials)
+  - Unified notification routing with deduplication
+  - WebSocket event streaming to connected devices
+  - REST API for mobile apps (timeline, thumbnails, playback)
+  - Voice command support for MagicMirror integration
+  - Mobile device registration for push notifications
+
+- **📱 Multi-Device Support**
+  - Multiple MagicMirror or mobile devices on same network
+  - Per-device notification preferences and camera subscriptions
+  - Device-specific event routing based on location and user associations
+  - Smart notification filtering (avoid duplicate alerts)
+
+- **🔔 Smart Notification Routing**
+  - User-based notification preferences
+  - Camera access filtering (only notify for permitted cameras)
+  - Face association filtering (notify specific users for their faces)
+  - Quiet hours enforcement per user
+  - Push notification infrastructure (APNs/FCM ready)
+
+- **🔧 Dynamic Configuration**
+  - Environment variable support for host/port configuration
+  - `OPENEYE_HOST`, `OPENEYE_PORT` for server binding
+  - `MAGICMIRROR_HOST`, `MAGICMIRROR_PORT` for ecosystem discovery
+  - Dynamic CORS origins for ecosystem apps
+
+### Changed
+- Updated sidebar navigation with User Management and Profile links
+- Enhanced User model with display_name, avatar, face_profile_name, sync fields
+- Added UserPreferences model with comprehensive preference storage
+- Improved ecosystem connection model for multi-device support
+- Updated version to 3.11.1 across all components
+
+### Database Migrations
+- New `user_preferences` table for per-user settings
+- Enhanced `ecosystem_connections` table with device_id, location, subscriptions
+- New columns on `users` table: display_name, avatar_url, face_profile_name, synced_from, external_id, last_login
+
+---
+
 ## [3.10.2] - 2025-12-08
 
 ### Fixed

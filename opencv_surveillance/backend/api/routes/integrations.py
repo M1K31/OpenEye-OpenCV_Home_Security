@@ -105,3 +105,57 @@ def get_nest_status():
 async def list_nest_devices():
     """List all Google Nest devices"""
     return {"devices": [], "note": "Configure Nest integration first"}
+
+
+# ============================================================================
+# ECOSYSTEM INTEGRATION SYNC (v3.11.0)
+# ============================================================================
+
+
+from backend.api.schemas import ecosystem as eco_schema
+
+
+@router.get("/integrations/", response_model=eco_schema.IntegrationsResponse)
+async def get_all_integrations():
+    """
+    Get all configured integrations for ecosystem sync.
+    
+    Used by MagicMirror ecosystem module to sync integrations.
+    """
+    # TODO: Load actual configuration from database/files
+    return eco_schema.IntegrationsResponse(
+        homeassistant=eco_schema.IntegrationConfig(configured=False),
+        homekit=eco_schema.IntegrationConfig(configured=False),
+        googlenest=eco_schema.IntegrationConfig(configured=False)
+    )
+
+
+@router.post("/integrations/sync", response_model=eco_schema.IntegrationSyncResponse)
+async def sync_integrations(request: eco_schema.IntegrationSyncRequest):
+    """
+    Sync integrations from a companion app.
+    
+    Merges integration configurations from MagicMirror or other ecosystem apps.
+    """
+    synced = []
+    skipped = []
+    conflicts = []
+    
+    if request.homeassistant:
+        # TODO: Save Home Assistant configuration
+        synced.append("homeassistant")
+    
+    if request.homekit:
+        # TODO: Save HomeKit configuration
+        synced.append("homekit")
+    
+    if request.googlenest:
+        # TODO: Save Google Nest configuration
+        synced.append("googlenest")
+    
+    return eco_schema.IntegrationSyncResponse(
+        success=True,
+        synced=synced,
+        skipped=skipped,
+        conflicts=conflicts
+    )

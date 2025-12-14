@@ -77,6 +77,20 @@ const Sidebar = ({ isCollapsed }) => {
       priority: 'high'
     },
     {
+      id: 'users',
+      icon: '👥',
+      label: 'User Management',
+      path: '/users',
+      priority: 'medium'
+    },
+    {
+      id: 'profile',
+      icon: '👤',
+      label: 'My Profile',
+      path: '/profile',
+      priority: 'medium'
+    },
+    {
       id: '2fa',
       icon: '🔐',
       label: 'Two-Factor Auth',
@@ -154,7 +168,7 @@ const Sidebar = ({ isCollapsed }) => {
         <WebSocketStatus />
         <div className="version-info">
           <span className="version-label">OpenEye</span>
-          <span className="version-number">v3.10.2</span>
+          <span className="version-number">v3.11.1</span>
         </div>
       </div>
     </aside>

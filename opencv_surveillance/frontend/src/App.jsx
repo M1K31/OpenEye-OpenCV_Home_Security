@@ -34,6 +34,8 @@ const AutomationsPage = lazy(() => import('./pages/AutomationsPage'));
 const TimelineView = lazy(() => import('./pages/TimelineView'));
 const HardwareDetectionPage = lazy(() => import('./pages/HardwareDetectionPage'));
 const PerformanceDashboard = lazy(() => import('./pages/PerformanceDashboard'));
+const UserManagementPage = lazy(() => import('./pages/UserManagementPage'));
+const UserProfilePage = lazy(() => import('./pages/UserProfilePage'));
 
 // Loading fallback component
 const PageLoadingFallback = () => (
@@ -258,6 +260,20 @@ function App() {
                 <PageErrorBoundaryWithRouter pageName="Performance Dashboard">
                   <Suspense fallback={<PageLoadingFallback />}>
                     <PerformanceDashboard />
+                  </Suspense>
+                </PageErrorBoundaryWithRouter>
+              } />
+              <Route path="users" element={
+                <PageErrorBoundaryWithRouter pageName="User Management">
+                  <Suspense fallback={<PageLoadingFallback />}>
+                    <UserManagementPage />
+                  </Suspense>
+                </PageErrorBoundaryWithRouter>
+              } />
+              <Route path="profile" element={
+                <PageErrorBoundaryWithRouter pageName="User Profile">
+                  <Suspense fallback={<PageLoadingFallback />}>
+                    <UserProfilePage />
                   </Suspense>
                 </PageErrorBoundaryWithRouter>
               } />

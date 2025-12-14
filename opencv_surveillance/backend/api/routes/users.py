@@ -560,3 +560,782 @@ def reset_password_with_2fa(
         success=True,
         message="Password reset successfully. Please login with your new password."
     )
+
+
+# ============================================================================
+# USER MANAGEMENT API (v3.11.1) - Full CRUD with preferences
+# ============================================================================
+
+from backend.database import models
+from datetime import datetime
+from typing import List, Optional
+
+
+@router.get("/users/", response_model=user_schema.UserListResponse)
+async def list_users(
+    page: int = 1,
+    page_size: int = 50,
+    include_inactive: bool = False,
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(auth.get_current_active_user)
+):
+    """
+    List all users (admin only for full list, viewers see only themselves).
+    
+    Returns:
+        Paginated list of users with basic info
+    """
+    # Build query
+    query = db.query(models.User)
+    
+    # Non-admins only see themselves
+    if current_user.role != "admin":
+        query = query.filter(models.User.id == current_user.id)
+    elif not include_inactive:
+        query = query.filter(models.User.is_active == True)
+    
+    # Get total count
+    total = query.count()
+    
+    # Paginate
+    users = query.offset((page - 1) * page_size).limit(page_size).all()
+    
+    # Convert to response
+    user_list = []
+    for user in users:
+        user_list.append(user_schema.User(
+            id=user.id,
+            username=user.username,
+            email=user.email,
+            is_active=user.is_active,
+            role=user.role,
+            display_name=user.display_name,
+            avatar_url=user.avatar_url,
+            face_profile_name=user.face_profile_name,
+            two_factor_enabled=user.two_factor_enabled,
+            created_at=user.created_at,
+            last_login=user.last_login,
+            synced_from=user.synced_from,
+            synced_at=user.synced_at,
+            external_id=user.external_id
+        ))
+    
+    return user_schema.UserListResponse(
+        users=user_list,
+        total=total,
+        page=page,
+        page_size=page_size
+    )
+
+
+@router.get("/users/{user_id}", response_model=user_schema.UserWithPreferences)
+async def get_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(auth.get_current_active_user)
+):
+    """
+    Get user details with preferences.
+    
+    Users can only view their own profile unless they are admin.
+    """
+    # Check permissions
+    if current_user.role != "admin" and current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only view your own profile"
+        )
+    
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Get preferences
+    prefs = db.query(models.UserPreferences).filter(
+        models.UserPreferences.user_id == user_id
+    ).first()
+    
+    return user_schema.UserWithPreferences(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        is_active=user.is_active,
+        role=user.role,
+        display_name=user.display_name,
+        avatar_url=user.avatar_url,
+        face_profile_name=user.face_profile_name,
+        two_factor_enabled=user.two_factor_enabled,
+        created_at=user.created_at,
+        last_login=user.last_login,
+        synced_from=user.synced_from,
+        synced_at=user.synced_at,
+        external_id=user.external_id,
+        preferences=_preferences_to_schema(prefs) if prefs else None
+    )
+
+
+@router.put("/users/{user_id}", response_model=user_schema.User)
+async def update_user(
+    user_id: int,
+    user_update: user_schema.UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(auth.get_current_active_user)
+):
+    """
+    Update user profile.
+    
+    Users can update their own profile. Admins can update anyone.
+    """
+    # Check permissions
+    if current_user.role != "admin" and current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only update your own profile"
+        )
+    
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Update fields that were provided
+    update_data = user_update.model_dump(exclude_unset=True)
+    
+    # Non-admins cannot deactivate themselves or change certain fields
+    if current_user.role != "admin":
+        update_data.pop("is_active", None)
+    
+    # Check username uniqueness if being changed
+    if "username" in update_data and update_data["username"] != user.username:
+        existing = crud.get_user_by_username(db, update_data["username"])
+        if existing:
+            raise HTTPException(status_code=400, detail="Username already taken")
+    
+    for field, value in update_data.items():
+        setattr(user, field, value)
+    
+    db.commit()
+    db.refresh(user)
+    
+    # Log profile update
+    audit_logger.log_event(
+        event_type=AuditEventType.PROFILE_UPDATED,
+        username=current_user.username,
+        ip_address="unknown",
+        details={"updated_user_id": user_id, "fields": list(update_data.keys())}
+    )
+    
+    return user
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(auth.get_current_active_user)
+):
+    """
+    Delete a user (admin only).
+    
+    Note: This also deletes user preferences and revokes all tokens.
+    """
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can delete users"
+        )
+    
+    # Prevent self-deletion
+    if current_user.id == user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot delete your own account"
+        )
+    
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    username = user.username
+    
+    # Revoke all tokens first
+    crud.revoke_all_user_tokens(db, user_id)
+    
+    # Delete user (cascades to preferences and tokens)
+    db.delete(user)
+    db.commit()
+    
+    # Log deletion
+    audit_logger.log_event(
+        event_type=AuditEventType.USER_DELETED,
+        username=current_user.username,
+        ip_address="unknown",
+        details={"deleted_user": username, "deleted_user_id": user_id}
+    )
+    
+    return {"message": f"User '{username}' deleted successfully"}
+
+
+@router.patch("/users/{user_id}/role", response_model=user_schema.User)
+async def change_user_role(
+    user_id: int,
+    role_change: user_schema.UserRoleChange,
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(auth.get_current_active_user)
+):
+    """
+    Change user role (admin only).
+    """
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can change user roles"
+        )
+    
+    # Prevent demoting yourself
+    if current_user.id == user_id and role_change.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot demote yourself from admin"
+        )
+    
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    old_role = user.role
+    user.role = role_change.role.value
+    db.commit()
+    db.refresh(user)
+    
+    # Log role change
+    audit_logger.log_event(
+        event_type=AuditEventType.ROLE_CHANGED,
+        username=current_user.username,
+        ip_address="unknown",
+        details={
+            "target_user": user.username,
+            "old_role": old_role,
+            "new_role": role_change.role.value
+        }
+    )
+    
+    return user
+
+
+@router.post("/users/{user_id}/password", response_model=dict)
+async def change_password(
+    user_id: int,
+    password_change: user_schema.UserPasswordChange,
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(auth.get_current_active_user)
+):
+    """
+    Change user password.
+    
+    Users can only change their own password. Requires current password.
+    """
+    # Users can only change their own password
+    if current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only change your own password"
+        )
+    
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Verify current password
+    if not auth.verify_password(password_change.current_password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect"
+        )
+    
+    # Update password
+    user.hashed_password = auth.hash_password(password_change.new_password)
+    
+    # Revoke all refresh tokens for security
+    tokens_revoked = crud.revoke_all_user_tokens(db, user_id)
+    
+    db.commit()
+    
+    # Log password change
+    audit_logger.log_event(
+        event_type=AuditEventType.PASSWORD_CHANGED,
+        username=current_user.username,
+        ip_address="unknown",
+        details={"tokens_revoked": tokens_revoked}
+    )
+    
+    return {"message": "Password changed successfully", "tokens_revoked": tokens_revoked}
+
+
+# ============================================================================
+# USER PREFERENCES API (v3.11.1)
+# ============================================================================
+
+
+def _preferences_to_schema(prefs: models.UserPreferences) -> user_schema.UserPreferences:
+    """Convert database preferences to schema with JSON parsing."""
+    import json
+    
+    def parse_json(json_str: str, default):
+        if not json_str:
+            return default
+        try:
+            return json.loads(json_str)
+        except:
+            return default
+    
+    return user_schema.UserPreferences(
+        id=prefs.id,
+        user_id=prefs.user_id,
+        notification_types=user_schema.NotificationTypes(**parse_json(prefs.notification_types, {})),
+        notification_channels=user_schema.NotificationChannels(**parse_json(prefs.notification_channels, {})),
+        quiet_hours=user_schema.QuietHours(**parse_json(prefs.quiet_hours, {})),
+        camera_access=parse_json(prefs.camera_access, None),
+        face_associations=parse_json(prefs.face_associations, None),
+        ui_preferences=user_schema.UIPreferences(**parse_json(prefs.ui_preferences, {})),
+        dashboard_preferences=user_schema.DashboardPreferences(**parse_json(prefs.dashboard_preferences, {})),
+        ecosystem_preferences=user_schema.EcosystemPreferences(**parse_json(prefs.ecosystem_preferences, {})),
+        presence_settings=user_schema.PresenceSettings(**parse_json(prefs.presence_settings, {})),
+        automation_preferences=user_schema.AutomationPreferences(**parse_json(prefs.automation_preferences, {})),
+        push_token=prefs.push_token,
+        push_platform=prefs.push_platform,
+        created_at=prefs.created_at,
+        updated_at=prefs.updated_at
+    )
+
+
+@router.get("/users/{user_id}/preferences", response_model=user_schema.UserPreferences)
+async def get_user_preferences(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(auth.get_current_active_user)
+):
+    """
+    Get user preferences.
+    
+    Users can only view their own preferences unless admin.
+    """
+    if current_user.role != "admin" and current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only view your own preferences"
+        )
+    
+    prefs = db.query(models.UserPreferences).filter(
+        models.UserPreferences.user_id == user_id
+    ).first()
+    
+    if not prefs:
+        # Create default preferences
+        prefs = models.UserPreferences(user_id=user_id)
+        db.add(prefs)
+        db.commit()
+        db.refresh(prefs)
+    
+    return _preferences_to_schema(prefs)
+
+
+@router.put("/users/{user_id}/preferences", response_model=user_schema.UserPreferences)
+async def update_user_preferences(
+    user_id: int,
+    prefs_update: user_schema.UserPreferencesUpdate,
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(auth.get_current_active_user)
+):
+    """
+    Update user preferences.
+    
+    Users can only update their own preferences unless admin.
+    """
+    import json
+    
+    if current_user.role != "admin" and current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only update your own preferences"
+        )
+    
+    prefs = db.query(models.UserPreferences).filter(
+        models.UserPreferences.user_id == user_id
+    ).first()
+    
+    if not prefs:
+        prefs = models.UserPreferences(user_id=user_id)
+        db.add(prefs)
+    
+    # Update each preference section if provided
+    if prefs_update.notification_types:
+        prefs.notification_types = json.dumps(prefs_update.notification_types.model_dump())
+    if prefs_update.notification_channels:
+        prefs.notification_channels = json.dumps(prefs_update.notification_channels.model_dump())
+    if prefs_update.quiet_hours:
+        prefs.quiet_hours = json.dumps(prefs_update.quiet_hours.model_dump())
+    if prefs_update.camera_access is not None:
+        prefs.camera_access = json.dumps(prefs_update.camera_access)
+    if prefs_update.face_associations is not None:
+        prefs.face_associations = json.dumps(prefs_update.face_associations)
+    if prefs_update.ui_preferences:
+        prefs.ui_preferences = json.dumps(prefs_update.ui_preferences.model_dump())
+    if prefs_update.dashboard_preferences:
+        prefs.dashboard_preferences = json.dumps(prefs_update.dashboard_preferences.model_dump())
+    if prefs_update.ecosystem_preferences:
+        prefs.ecosystem_preferences = json.dumps(prefs_update.ecosystem_preferences.model_dump())
+    if prefs_update.presence_settings:
+        prefs.presence_settings = json.dumps(prefs_update.presence_settings.model_dump())
+    if prefs_update.automation_preferences:
+        prefs.automation_preferences = json.dumps(prefs_update.automation_preferences.model_dump())
+    
+    prefs.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(prefs)
+    
+    return _preferences_to_schema(prefs)
+
+
+# ============================================================================
+# FACE PROFILE LINKING (v3.11.1)
+# ============================================================================
+
+
+@router.post("/users/{user_id}/link-face", response_model=user_schema.LinkFaceProfileResponse)
+async def link_face_profile(
+    user_id: int,
+    request: user_schema.LinkFaceProfileRequest,
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(auth.get_current_active_user)
+):
+    """
+    Link a user account to a face recognition profile.
+    
+    This allows:
+    - User to be automatically detected when their face is seen
+    - Notifications to be routed to the correct user
+    - Home presence detection for automations
+    
+    Users can only link their own profile unless admin.
+    """
+    if current_user.role != "admin" and current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only link your own face profile"
+        )
+    
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Check if face profile exists
+    from backend.core.paths import paths
+    import os
+    face_dir = paths.faces_dir / request.face_profile_name
+    face_exists = face_dir.exists() and any(face_dir.iterdir())
+    
+    # Link the face profile
+    user.face_profile_name = request.face_profile_name
+    db.commit()
+    
+    # Log the linking
+    audit_logger.log_event(
+        event_type=AuditEventType.FACE_LINKED,
+        username=current_user.username,
+        ip_address="unknown",
+        details={
+            "target_user_id": user_id,
+            "face_profile": request.face_profile_name,
+            "face_exists": face_exists
+        }
+    )
+    
+    return user_schema.LinkFaceProfileResponse(
+        user_id=user_id,
+        username=user.username,
+        face_profile_name=request.face_profile_name,
+        linked_at=datetime.utcnow(),
+        face_exists=face_exists
+    )
+
+
+@router.delete("/users/{user_id}/link-face")
+async def unlink_face_profile(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(auth.get_current_active_user)
+):
+    """
+    Unlink a user account from their face profile.
+    """
+    if current_user.role != "admin" and current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only unlink your own face profile"
+        )
+    
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    old_profile = user.face_profile_name
+    user.face_profile_name = None
+    db.commit()
+    
+    return {"message": f"Face profile '{old_profile}' unlinked successfully"}
+
+
+# ============================================================================
+# CAMERA PERMISSIONS (v3.11.1)
+# ============================================================================
+
+
+@router.get("/users/{user_id}/camera-permissions", response_model=user_schema.CameraPermissions)
+async def get_camera_permissions(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(auth.get_current_active_user)
+):
+    """
+    Get camera access permissions for a user.
+    """
+    import json
+    
+    if current_user.role != "admin" and current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only view your own camera permissions"
+        )
+    
+    prefs = db.query(models.UserPreferences).filter(
+        models.UserPreferences.user_id == user_id
+    ).first()
+    
+    camera_ids = None
+    if prefs and prefs.camera_access:
+        try:
+            camera_ids = json.loads(prefs.camera_access)
+        except:
+            pass
+    
+    # Admins and users can control, viewers can only view
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    can_control = user.role in ["admin", "user"] if user else False
+    can_record = user.role == "admin" if user else False
+    
+    return user_schema.CameraPermissions(
+        user_id=user_id,
+        camera_ids=camera_ids,
+        can_view=True,
+        can_control=can_control,
+        can_record=can_record
+    )
+
+
+@router.put("/users/{user_id}/camera-permissions", response_model=user_schema.CameraPermissions)
+async def update_camera_permissions(
+    user_id: int,
+    permissions: user_schema.UpdateCameraPermissions,
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(auth.get_current_active_user)
+):
+    """
+    Update camera access permissions for a user (admin only).
+    """
+    import json
+    
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can update camera permissions"
+        )
+    
+    prefs = db.query(models.UserPreferences).filter(
+        models.UserPreferences.user_id == user_id
+    ).first()
+    
+    if not prefs:
+        prefs = models.UserPreferences(user_id=user_id)
+        db.add(prefs)
+    
+    if permissions.camera_ids is not None:
+        prefs.camera_access = json.dumps(permissions.camera_ids) if permissions.camera_ids else None
+    
+    prefs.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(prefs)
+    
+    camera_ids = None
+    if prefs.camera_access:
+        try:
+            camera_ids = json.loads(prefs.camera_access)
+        except:
+            pass
+    
+    return user_schema.CameraPermissions(
+        user_id=user_id,
+        camera_ids=camera_ids,
+        can_view=permissions.can_view if permissions.can_view is not None else True,
+        can_control=permissions.can_control if permissions.can_control is not None else False,
+        can_record=permissions.can_record if permissions.can_record is not None else False
+    )
+
+
+# ============================================================================
+# ECOSYSTEM USER SYNC (v3.11.1) - Enhanced
+# ============================================================================
+
+
+@router.post("/users/sync", response_model=user_schema.UserSyncResponse)
+async def sync_user_from_ecosystem(
+    request: user_schema.UserSyncRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Create or update a user synced from a companion app.
+    
+    Used by MagicMirror ecosystem module to sync users bidirectionally.
+    """
+    # Check if user already exists by external_id or username
+    existing = None
+    
+    if request.external_id:
+        existing = db.query(models.User).filter(
+            models.User.external_id == request.external_id,
+            models.User.synced_from == request.source_app
+        ).first()
+    
+    if not existing:
+        existing = crud.get_user_by_username(db, request.username)
+    
+    if existing:
+        # Update existing user with sync info
+        existing.synced_from = request.source_app
+        existing.synced_at = datetime.utcnow()
+        existing.external_id = request.external_id
+        
+        if request.display_name:
+            existing.display_name = request.display_name
+        if request.email:
+            existing.email = request.email
+        if request.face_profile_name:
+            existing.face_profile_name = request.face_profile_name
+        
+        db.commit()
+        
+        return user_schema.UserSyncResponse(
+            user_id=existing.id,
+            username=existing.username,
+            action="updated",
+            synced_at=datetime.utcnow()
+        )
+    
+    # Create new user
+    import secrets
+    new_user = models.User(
+        username=request.username,
+        email=request.email,
+        display_name=request.display_name,
+        hashed_password=auth.hash_password(secrets.token_urlsafe(32)),  # Random password
+        role=request.role.value,
+        face_profile_name=request.face_profile_name,
+        synced_from=request.source_app,
+        synced_at=datetime.utcnow(),
+        external_id=request.external_id,
+        is_active=True
+    )
+    
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    # Create default preferences if provided
+    if request.preferences:
+        await update_user_preferences(new_user.id, request.preferences, db, new_user)
+    
+    return user_schema.UserSyncResponse(
+        user_id=new_user.id,
+        username=new_user.username,
+        action="created",
+        synced_at=datetime.utcnow()
+    )
+
+
+@router.post("/users/sync/bulk", response_model=user_schema.UserBulkSyncResponse)
+async def bulk_sync_users(
+    request: user_schema.UserBulkSyncRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Bulk sync users from a companion app.
+    
+    Efficiently syncs multiple users in a single request.
+    """
+    results = []
+    errors = []
+    created_count = 0
+    updated_count = 0
+    
+    for user_req in request.users:
+        try:
+            # Override source_app with the bulk request's source
+            user_req.source_app = request.source_app
+            
+            result = await sync_user_from_ecosystem(user_req, db)
+            results.append(result)
+            
+            if result.action == "created":
+                created_count += 1
+            else:
+                updated_count += 1
+                
+        except HTTPException as e:
+            errors.append(f"User '{user_req.username}': {e.detail}")
+        except Exception as e:
+            errors.append(f"User '{user_req.username}': {str(e)}")
+    
+    return user_schema.UserBulkSyncResponse(
+        synced_count=len(results),
+        created_count=created_count,
+        updated_count=updated_count,
+        errors=errors,
+        users=results
+    )
+
+
+# ============================================================================
+# PUSH NOTIFICATION REGISTRATION (v3.11.1)
+# ============================================================================
+
+
+@router.post("/users/{user_id}/push-token")
+async def register_push_token(
+    user_id: int,
+    token: str,
+    platform: str,  # "ios" or "android"
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(auth.get_current_active_user)
+):
+    """
+    Register a push notification token for a user's device.
+    """
+    if current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only register push tokens for yourself"
+        )
+    
+    prefs = db.query(models.UserPreferences).filter(
+        models.UserPreferences.user_id == user_id
+    ).first()
+    
+    if not prefs:
+        prefs = models.UserPreferences(user_id=user_id)
+        db.add(prefs)
+    
+    prefs.push_token = token
+    prefs.push_platform = platform
+    prefs.updated_at = datetime.utcnow()
+    db.commit()
+    
+    return {"message": "Push token registered successfully", "platform": platform}
