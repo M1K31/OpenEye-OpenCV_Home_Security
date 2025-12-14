@@ -82,6 +82,23 @@ class SystemSettingsUpdate(BaseModel):
         None, description="Show keyboard focus indicators (Apple HIG)"
     )
 
+    # v3.11.0: Ecosystem Integration Settings
+    openeye_host: Optional[str] = Field(
+        None, description="OpenEye host URL for ecosystem discovery (e.g., http://192.168.1.50:8000)"
+    )
+    openeye_port: Optional[int] = Field(
+        None, ge=1, le=65535, description="OpenEye server port (default: 8000)"
+    )
+    magicmirror_host: Optional[str] = Field(
+        None, description="MagicMirror host URL for callbacks (e.g., http://192.168.1.100:8080)"
+    )
+    magicmirror_port: Optional[int] = Field(
+        None, ge=1, le=65535, description="MagicMirror port (default: 8080)"
+    )
+    ecosystem_auto_connect: Optional[bool] = Field(
+        None, description="Automatically accept ecosystem connections"
+    )
+
 
 class PathValidationResponse(BaseModel):
     path: str

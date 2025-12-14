@@ -46,6 +46,16 @@ class AuditEventType(str, Enum):
     USER_UPDATED = "user_updated"
     USER_DISABLED = "user_disabled"
     USER_ENABLED = "user_enabled"
+    PROFILE_UPDATED = "profile_updated"
+    ROLE_CHANGED = "role_changed"
+    PASSWORD_CHANGED = "password_changed"
+    FACE_LINKED = "face_linked"
+    FACE_UNLINKED = "face_unlinked"
+    
+    # Ecosystem events
+    ECOSYSTEM_CONNECTED = "ecosystem_connected"
+    ECOSYSTEM_DISCONNECTED = "ecosystem_disconnected"
+    USER_SYNCED = "user_synced"
 
     # Camera operations
     CAMERA_ADDED = "camera_added"

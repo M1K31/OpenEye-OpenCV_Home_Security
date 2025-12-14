@@ -523,3 +523,235 @@ def capture_snapshot(camera_id: str, db: Session = Depends(get_db)):
 # Use the dedicated discovery router at /api/cameras/discover/* instead.
 # See: opencv_surveillance/backend/api/routes/discovery.py
 # ============================================================================
+
+
+# ============================================================================
+# VOICE COMMAND ENDPOINTS (v3.11.0 - Ecosystem Integration)
+# ============================================================================
+
+
+from backend.api.schemas import ecosystem as eco_schema
+
+
+@router.post("/{camera_id}/snapshot", response_model=eco_schema.SnapshotResponse)
+def capture_snapshot_voice(
+    camera_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Capture a snapshot from a camera (voice command endpoint).
+    
+    Used by voice command "Take photo from [camera]" from MagicMirror.
+    Returns JSON with snapshot URL instead of raw image.
+    
+    For raw image, use GET /{camera_id}/snapshot instead.
+    """
+    db_camera = crud.get_camera_by_id(db, camera_id)
+    if not db_camera:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Camera '{camera_id}' not found",
+        )
+
+    active_camera = camera_manager.get_camera(camera_id)
+    if not active_camera:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Camera '{camera_id}' is not running",
+        )
+
+    frame, _ = active_camera.get_frame()
+    if frame is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to capture frame from camera '{camera_id}'",
+        )
+
+    # Create snapshots directory
+    snapshots_dir = paths.snapshots_dir
+    snapshots_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save snapshot
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{camera_id}_{timestamp}.jpg"
+    filepath = snapshots_dir / filename
+
+    cv2.imwrite(str(filepath), frame)
+
+    # Update last_active in database
+    crud.update_camera_last_active(db, camera_id)
+    
+    # Get resolution
+    height, width = frame.shape[:2]
+
+    return eco_schema.SnapshotResponse(
+        success=True,
+        snapshot_url=f"/api/snapshots/{filename}",
+        camera_id=camera_id,
+        timestamp=datetime.now(),
+        resolution=f"{width}x{height}"
+    )
+
+
+@router.post("/{camera_id}/record/start", response_model=eco_schema.RecordingStartResponse)
+def start_recording(
+    camera_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Start recording on a camera.
+    
+    Used by voice command "Start recording on [camera]" from MagicMirror.
+    """
+    db_camera = crud.get_camera_by_id(db, camera_id)
+    if not db_camera:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Camera '{camera_id}' not found",
+        )
+
+    active_camera = camera_manager.get_camera(camera_id)
+    if not active_camera:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Camera '{camera_id}' is not running",
+        )
+
+    try:
+        # Check if already recording
+        if hasattr(active_camera, 'is_recording') and active_camera.is_recording:
+            return eco_schema.RecordingStartResponse(
+                success=True,
+                recording_id=None,
+                camera_id=camera_id,
+                started_at=datetime.now()
+            )
+        
+        # Start recording
+        if hasattr(active_camera, 'start_recording'):
+            active_camera.start_recording()
+        else:
+            # Fallback: Enable recording via camera settings
+            db_camera.recording_enabled = True
+            db.commit()
+        
+        # Update last_active
+        crud.update_camera_last_active(db, camera_id)
+        
+        return eco_schema.RecordingStartResponse(
+            success=True,
+            recording_id=None,  # Will be assigned when recording completes
+            camera_id=camera_id,
+            started_at=datetime.now()
+        )
+        
+    except Exception as e:
+        logger.error(f"Error starting recording: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{camera_id}/record/stop", response_model=eco_schema.RecordingStopResponse)
+def stop_recording(
+    camera_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Stop recording on a camera.
+    
+    Used by voice command "Stop recording" from MagicMirror.
+    """
+    db_camera = crud.get_camera_by_id(db, camera_id)
+    if not db_camera:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Camera '{camera_id}' not found",
+        )
+
+    active_camera = camera_manager.get_camera(camera_id)
+    if not active_camera:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Camera '{camera_id}' is not running",
+        )
+
+    try:
+        recording_path = None
+        duration = 0.0
+        file_size = 0
+        
+        # Stop recording
+        if hasattr(active_camera, 'stop_recording'):
+            result = active_camera.stop_recording()
+            if result:
+                recording_path = result.get('path')
+                duration = result.get('duration', 0)
+                file_size = result.get('size', 0)
+        else:
+            # Fallback: Disable recording via camera settings
+            db_camera.recording_enabled = False
+            db.commit()
+        
+        # Get last recording from database
+        last_recording = db.query(models.RecordingEvent).filter(
+            models.RecordingEvent.camera_id == camera_id
+        ).order_by(models.RecordingEvent.started_at.desc()).first()
+        
+        recording_id = last_recording.id if last_recording else None
+        
+        return eco_schema.RecordingStopResponse(
+            success=True,
+            recording_id=recording_id,
+            duration_seconds=duration,
+            file_path=recording_path,
+            file_size_bytes=file_size
+        )
+        
+    except Exception as e:
+        logger.error(f"Error stopping recording: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/discover", response_model=eco_schema.CameraDiscoveryResponse)
+async def discover_cameras_voice():
+    """
+    Discover cameras on the network.
+    
+    Used by voice command "Search for cameras" from MagicMirror.
+    Scans for ONVIF and RTSP cameras on the local network.
+    """
+    import time
+    start_time = time.time()
+    
+    discovered = []
+    
+    try:
+        # Try ONVIF discovery
+        from backend.core.onvif_discovery import discover_onvif_cameras
+        onvif_cameras = await discover_onvif_cameras()
+        
+        for cam in onvif_cameras:
+            discovered.append(eco_schema.DiscoveredCamera(
+                id=f"discovered_{len(discovered)}",
+                name=cam.get('name', f"Camera {len(discovered) + 1}"),
+                ip=cam.get('ip', ''),
+                port=cam.get('port', 554),
+                protocol='onvif',
+                manufacturer=cam.get('manufacturer'),
+                model=cam.get('model'),
+                onvif=True
+            ))
+    except ImportError:
+        logger.warning("ONVIF discovery not available")
+    except Exception as e:
+        logger.warning(f"ONVIF discovery failed: {e}")
+    
+    # Also check for common RTSP ports on local network
+    # This is a simplified version - a full scan would take too long
+    
+    elapsed_ms = int((time.time() - start_time) * 1000)
+    
+    return eco_schema.CameraDiscoveryResponse(
+        success=True,
+        cameras=discovered,
+        scan_duration_ms=elapsed_ms
+    )

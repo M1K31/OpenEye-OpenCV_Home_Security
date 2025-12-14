@@ -712,3 +712,291 @@ def enable_face_detection(
     except Exception as e:
         logger.error(f"Error toggling face detection: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# VOICE COMMAND ENDPOINTS (v3.11.0 - Ecosystem Integration)
+# ============================================================================
+
+
+from backend.api.schemas import ecosystem as eco_schema
+from backend.database import models
+import secrets
+import uuid
+
+
+@router.post("/faces/training/start", response_model=eco_schema.FaceTrainingStartResponse)
+def start_face_training(
+    request: eco_schema.FaceTrainingStartRequest,
+    current_user: user_schema.User = Depends(require_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Start an interactive face training session.
+    
+    Used by voice command "Train face for [name]" from MagicMirror.
+    Creates a training session that captures photos progressively.
+    
+    **Authentication Required**: Admin or User role
+    """
+    try:
+        # Check if person already exists
+        face_manager = get_face_manager()
+        existing_people = [p['name'] for p in face_manager.list_people()]
+        
+        if request.person_name in existing_people:
+            # Allow adding more photos to existing person
+            logger.info(f"Adding training photos to existing person: {request.person_name}")
+        
+        # Create training session
+        session_id = str(uuid.uuid4())
+        expires_at = datetime.now() + timedelta(minutes=10)  # 10 minute session timeout
+        
+        session = models.FaceTrainingSession(
+            session_id=session_id,
+            person_name=request.person_name,
+            camera_id=request.camera_id,
+            photos_required=request.photos_required,
+            auto_capture=request.auto_capture,
+            status="active",
+            expires_at=expires_at
+        )
+        db.add(session)
+        db.commit()
+        
+        logger.info(f"Started face training session {session_id} for {request.person_name}")
+        
+        return eco_schema.FaceTrainingStartResponse(
+            success=True,
+            session_id=session_id,
+            person_name=request.person_name,
+            photos_required=request.photos_required,
+            instructions="Please look at the camera and slowly turn your head left and right"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error starting face training: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/faces/training/capture", response_model=eco_schema.FaceTrainingCaptureResponse)
+def capture_training_photo(
+    request: eco_schema.FaceTrainingCaptureRequest,
+    current_user: user_schema.User = Depends(require_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Capture a training photo during an active session.
+    
+    Used by voice command "Capture training photo" from MagicMirror.
+    
+    **Authentication Required**: Admin or User role
+    """
+    import cv2
+    import json
+    
+    try:
+        # Find active session
+        session = db.query(models.FaceTrainingSession).filter(
+            models.FaceTrainingSession.session_id == request.session_id,
+            models.FaceTrainingSession.status == "active"
+        ).first()
+        
+        if not session:
+            raise HTTPException(status_code=404, detail="Training session not found or expired")
+        
+        if session.expires_at < datetime.now():
+            session.status = "expired"
+            db.commit()
+            raise HTTPException(status_code=410, detail="Training session has expired")
+        
+        # Get camera frame
+        camera_id = session.camera_id
+        camera = None
+        
+        if camera_id:
+            camera = camera_manager.get_camera(camera_id)
+        else:
+            # Use first available camera
+            cameras = camera_manager.list_cameras()
+            if cameras:
+                camera = camera_manager.get_camera(cameras[0])
+        
+        if not camera:
+            raise HTTPException(status_code=503, detail="No camera available for capture")
+        
+        frame, _ = camera.get_frame()
+        if frame is None:
+            raise HTTPException(status_code=500, detail="Failed to capture frame")
+        
+        # Check for face in frame
+        face_manager = get_face_manager()
+        face_locations = face_manager.detector.detect_faces(frame)
+        
+        if not face_locations:
+            return eco_schema.FaceTrainingCaptureResponse(
+                success=False,
+                photo_number=session.photos_captured,
+                total_needed=session.photos_required,
+                remaining=session.photos_required - session.photos_captured,
+                quality_score=0.0,
+                feedback="No face detected. Please position your face in the camera view."
+            )
+        
+        # Save the photo
+        person_dir = paths.faces_dir / session.person_name
+        person_dir.mkdir(parents=True, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        filename = f"training_{timestamp}.jpg"
+        filepath = person_dir / filename
+        
+        cv2.imwrite(str(filepath), frame)
+        
+        # Update session
+        session.photos_captured += 1
+        captured_photos = json.loads(session.captured_photos) if session.captured_photos else []
+        captured_photos.append(str(filepath))
+        session.captured_photos = json.dumps(captured_photos)
+        db.commit()
+        
+        remaining = session.photos_required - session.photos_captured
+        
+        # Generate feedback
+        if remaining > 0:
+            feedback = f"Good! {remaining} more photo(s) needed. Try turning your head slightly."
+        else:
+            feedback = "All photos captured! Say 'Complete training' to finish."
+        
+        return eco_schema.FaceTrainingCaptureResponse(
+            success=True,
+            photo_number=session.photos_captured,
+            total_needed=session.photos_required,
+            remaining=remaining,
+            quality_score=0.9,  # TODO: Calculate actual quality
+            feedback=feedback
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error capturing training photo: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/faces/training/complete", response_model=eco_schema.FaceTrainingCompleteResponse)
+def complete_face_training(
+    request: eco_schema.FaceTrainingCompleteRequest,
+    background_tasks: BackgroundTasks,
+    current_user: user_schema.User = Depends(require_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Complete a face training session and enroll the face.
+    
+    Used by voice command "Complete training" from MagicMirror.
+    Triggers model retraining with the captured photos.
+    
+    **Authentication Required**: Admin or User role
+    """
+    try:
+        # Find session
+        session = db.query(models.FaceTrainingSession).filter(
+            models.FaceTrainingSession.session_id == request.session_id
+        ).first()
+        
+        if not session:
+            raise HTTPException(status_code=404, detail="Training session not found")
+        
+        if session.status != "active":
+            raise HTTPException(status_code=400, detail=f"Session is {session.status}")
+        
+        if session.photos_captured == 0:
+            raise HTTPException(status_code=400, detail="No photos captured. Capture at least one photo.")
+        
+        # Mark session as completed
+        session.status = "completed"
+        session.completed_at = datetime.now()
+        db.commit()
+        
+        # Trigger model retraining in background
+        face_manager = get_face_manager()
+        background_tasks.add_task(face_manager.train_model)
+        
+        logger.info(f"Completed face training for {session.person_name} with {session.photos_captured} photos")
+        
+        return eco_schema.FaceTrainingCompleteResponse(
+            success=True,
+            face_id=session.person_name,
+            person_name=session.person_name,
+            photos_used=session.photos_captured,
+            encoding_quality=0.9  # TODO: Calculate actual quality
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error completing face training: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/faces/identify", response_model=eco_schema.FaceIdentifyResponse)
+def identify_face_in_frame(
+    request: eco_schema.FaceIdentifyRequest,
+    current_user: user_schema.User = Depends(require_user)
+):
+    """
+    Identify a person in the current camera frame.
+    
+    Used by voice command "Who's at the [location]" from MagicMirror.
+    Returns the identified person's name and confidence.
+    
+    **Authentication Required**: Admin or User role
+    """
+    try:
+        camera = camera_manager.get_camera(request.camera_id)
+        if not camera:
+            raise HTTPException(status_code=404, detail=f"Camera '{request.camera_id}' not found")
+        
+        frame, _ = camera.get_frame()
+        if frame is None:
+            raise HTTPException(status_code=500, detail="Failed to capture frame")
+        
+        # Run face recognition
+        face_manager = get_face_manager()
+        results = face_manager.recognize_faces_in_frame(frame)
+        
+        if not results:
+            return eco_schema.FaceIdentifyResponse(
+                success=True,
+                identified=False,
+                person_name=None,
+                confidence=None,
+                face_id=None,
+                bounding_box=None
+            )
+        
+        # Return the first (highest confidence) result
+        best_match = results[0]
+        
+        is_known = best_match['name'] != 'Unknown'
+        
+        return eco_schema.FaceIdentifyResponse(
+            success=True,
+            identified=is_known,
+            person_name=best_match['name'] if is_known else None,
+            confidence=best_match.get('confidence', 0.0),
+            face_id=best_match['name'] if is_known else None,
+            bounding_box={
+                "x": best_match['location'][3],  # left
+                "y": best_match['location'][0],  # top
+                "width": best_match['location'][1] - best_match['location'][3],  # right - left
+                "height": best_match['location'][2] - best_match['location'][0]  # bottom - top
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error identifying face: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

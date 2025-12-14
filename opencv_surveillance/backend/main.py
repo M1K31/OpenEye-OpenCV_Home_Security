@@ -21,7 +21,7 @@ import signal
 import sys
 import os
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, WebSocket
+from fastapi import FastAPI, HTTPException, WebSocket, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -56,6 +56,7 @@ from backend.api.routes import (
     hardware,
     features,
     objects,  # v3.10.0: Object detection routes
+    ecosystem,  # v3.11.0: Ecosystem integration (MagicMirror, mobile apps)
 )
 from backend.core.camera_manager import manager as camera_manager
 from backend.core.websocket_manager import broadcast_statistics_update
@@ -108,23 +109,39 @@ signal.signal(signal.SIGTERM, signal_handler)
 app = FastAPI(
     title="OpenEye Surveillance System",
     description="OpenCV-powered surveillance system with face recognition, motion detection, and video recording",
-    version="3.10.0",  # Two-Way Audio & Object Detection (YOLO)
+    version="3.11.1",  # Multi-User & Ecosystem Integration
     docs_url="/api/docs",
     redoc_url="/api/redoc",
 )
 
 # Configure CORS - Load allowed origins from environment
+# v3.11.0: Added MagicMirror default port (8080) for ecosystem integration
+# v3.11.1: Support for dynamic ecosystem origins and custom ports
 CORS_ORIGINS_STR = os.getenv(
     "CORS_ORIGINS",
-    "http://localhost:8000,http://localhost:3000,http://127.0.0.1:8000,http://127.0.0.1:3000"  # Dev defaults
+    "http://localhost:8000,http://localhost:3000,http://localhost:8080,"
+    "http://127.0.0.1:8000,http://127.0.0.1:3000,http://127.0.0.1:8080"  # Dev defaults + MagicMirror
 )
-CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS_STR.split(",")]
+CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS_STR.split(",") if origin.strip()]
+
+# Add MagicMirror port from environment if set
+MAGICMIRROR_PORT = os.getenv("MAGICMIRROR_PORT")
+if MAGICMIRROR_PORT:
+    CORS_ORIGINS.extend([
+        f"http://localhost:{MAGICMIRROR_PORT}",
+        f"http://127.0.0.1:{MAGICMIRROR_PORT}"
+    ])
+
+# Allow all ecosystem origins mode (for development/trusted networks)
+CORS_ALLOW_ECOSYSTEM = os.getenv("CORS_ALLOW_ECOSYSTEM", "false").lower() == "true"
 
 logger.info(f"CORS origins configured: {CORS_ORIGINS}")
+if CORS_ALLOW_ECOSYSTEM:
+    logger.warning("CORS_ALLOW_ECOSYSTEM=true: Accepting connections from any origin (ecosystem mode)")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS,  # Specific origins only (no wildcard)
+    allow_origins=["*"] if CORS_ALLOW_ECOSYSTEM else CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
@@ -377,7 +394,7 @@ async def startup_event():
     audit_logger.log_event(
         AuditEventType.SYSTEM_STARTUP,
         details={
-            "version": "3.10.0",
+            "version": "3.11.1",
             "cameras_loaded": loaded_count,
             "known_faces": len(face_manager.known_face_names)
         }
@@ -649,6 +666,9 @@ app.include_router(features.router, prefix="/api", tags=["Feature Management"])
 # v3.10.0: Object Detection - YOLO-based detection and identification
 app.include_router(objects.router, prefix="/api/objects", tags=["Object Detection"])
 
+# v3.11.0: Ecosystem Integration - MagicMirror, mobile apps, cross-app sync
+app.include_router(ecosystem.router, prefix="/api", tags=["Ecosystem Integration"])
+
 # First-Run Setup (with /api/setup prefix for consistency)
 app.include_router(setup.router, prefix="/api/setup", tags=["First-Run Setup"])
 
@@ -667,7 +687,7 @@ async def read_root():
         # Fallback to API info if frontend not built
         return {
             "name": "OpenEye Surveillance System",
-            "version": "3.10.0",
+            "version": "3.11.1",
             "description": "OpenCV-powered surveillance with face recognition",
             "features": [
                 "Motion Detection",
@@ -687,15 +707,47 @@ async def read_root():
         }
 
 
-@app.get("/api")
-async def api_root():
+@app.get("/api/")
+async def api_root(request: Request):
     """
-    API root endpoint - System information
+    API root endpoint - System information for ecosystem discovery.
+    
+    MagicMirror and other ecosystem apps use this endpoint to discover OpenEye
+    and determine its capabilities.
     """
+    # Calculate uptime
+    from backend.api.routes.ecosystem import get_uptime_seconds
+    
+    # Get configured port
+    openeye_port = os.getenv("OPENEYE_PORT", "8000")
+    
+    # Build host URL from request or environment
+    host_header = request.headers.get("host", f"localhost:{openeye_port}")
+    scheme = request.url.scheme or "http"
+    server_url = os.getenv("OPENEYE_HOST", f"{scheme}://{host_header}")
+    
     return {
+        "app_name": "OpenEye",
         "name": "OpenEye Surveillance System API",
-        "version": "3.7.2",
+        "version": "3.11.1",
         "description": "OpenCV-powered surveillance with face recognition",
+        "capabilities": [
+            "notifications",
+            "users", 
+            "integrations",
+            "cameras",
+            "events",
+            "faces",
+            "recordings"
+        ],
+        "uptime": get_uptime_seconds(),
+        "status": "healthy",
+        "server_url": server_url,
+        "ecosystem": {
+            "connect_endpoint": "/api/ecosystem/connect",
+            "events_websocket": "/api/ecosystem/events",
+            "status_endpoint": "/api/status"
+        },
         "features": [
             "Motion Detection",
             "Face Recognition",
@@ -707,9 +759,9 @@ async def api_root():
             "Multi-camera support",
             "Historical analytics",
             "REST API access",
+            "Ecosystem Integration (v3.11.0)"
         ],
         "documentation": "/api/docs",
-        "status": "operational",
     }
 
 
@@ -787,9 +839,13 @@ if frontend_path.exists():
 
 
 if __name__ == "__main__":
+    # Read port from environment variable for deployment flexibility
+    port = int(os.getenv("OPENEYE_PORT", "8000"))
+    host = os.getenv("OPENEYE_BIND_HOST", "0.0.0.0")
+    
     uvicorn.run(
         "backend.main:app",
-        host="0.0.0.0",
-        port=8000,
+        host=host,
+        port=port,
         reload=True,
         log_level="info")

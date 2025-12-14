@@ -17,8 +17,6 @@ const FaceManagementPage = ({ embedded = false }) => {
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [uploadFiles, setUploadFiles] = useState([]);
   const [isTraining, setIsTraining] = useState(false);
-  const [trainingWarning, setTrainingWarning] = useState(null); // Warning message from server
-  const [trainingPollInterval, setTrainingPollInterval] = useState(null); // Polling interval ID
   const [message, setMessage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
@@ -65,51 +63,6 @@ const FaceManagementPage = ({ embedded = false }) => {
       logger.error('Error loading settings:', error);
     }
   };
-
-  // Check if training is in progress (for warning display)
-  const checkTrainingStatus = async () => {
-    try {
-      const response = await apiClient.get('/faces/training-status');
-      if (response.data.training_in_progress) {
-        setTrainingWarning(response.data.message);
-      } else {
-        setTrainingWarning(null);
-      }
-      return response.data.training_in_progress;
-    } catch (error) {
-      logger.error('Error checking training status:', error);
-      return false;
-    }
-  };
-
-  // Start polling for training status
-  const startTrainingPoll = () => {
-    // Clear any existing interval
-    if (trainingPollInterval) {
-      clearInterval(trainingPollInterval);
-    }
-    // Poll every 2 seconds during training
-    const intervalId = setInterval(checkTrainingStatus, 2000);
-    setTrainingPollInterval(intervalId);
-  };
-
-  // Stop polling for training status
-  const stopTrainingPoll = () => {
-    if (trainingPollInterval) {
-      clearInterval(trainingPollInterval);
-      setTrainingPollInterval(null);
-    }
-    setTrainingWarning(null);
-  };
-
-  // Cleanup polling on unmount
-  useEffect(() => {
-    return () => {
-      if (trainingPollInterval) {
-        clearInterval(trainingPollInterval);
-      }
-    };
-  }, [trainingPollInterval]);
 
   const addPerson = async (e, mergeIfExists = false, overwriteIfExists = false) => {
     e.preventDefault();
@@ -175,71 +128,54 @@ const FaceManagementPage = ({ embedded = false }) => {
     }
   };
 
-  // Image compression utility with timeout and error handling
+  // Image compression utility
   const compressImage = (file, maxWidth = 1920, maxHeight = 1920, quality = 0.85) => {
     return new Promise((resolve, reject) => {
-      // Add timeout to prevent hanging
-      const timeout = setTimeout(() => {
-        reject(new Error('Image compression timeout'));
-      }, 30000); // 30 second timeout
-
       const reader = new FileReader();
       reader.onload = (e) => {
         const img = new Image();
         img.onload = () => {
-          try {
-            const canvas = document.createElement('canvas');
-            let width = img.width;
-            let height = img.height;
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
 
-            // Calculate new dimensions
-            if (width > maxWidth || height > maxHeight) {
-              if (width > height) {
-                height = (height / width) * maxWidth;
-                width = maxWidth;
-              } else {
-                width = (width / height) * maxHeight;
-                height = maxHeight;
-              }
+          // Calculate new dimensions
+          if (width > maxWidth || height > maxHeight) {
+            if (width > height) {
+              height = (height / width) * maxWidth;
+              width = maxWidth;
+            } else {
+              width = (width / height) * maxHeight;
+              height = maxHeight;
             }
-
-            canvas.width = width;
-            canvas.height = height;
-
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, width, height);
-
-            canvas.toBlob(
-              (blob) => {
-                clearTimeout(timeout);
-                if (blob) {
-                  const compressedFile = new File([blob], file.name, {
-                    type: 'image/jpeg',
-                    lastModified: Date.now()
-                  });
-                  resolve(compressedFile);
-                } else {
-                  reject(new Error('Failed to compress image'));
-                }
-              },
-              'image/jpeg',
-              quality
-            );
-          } catch (error) {
-            clearTimeout(timeout);
-            reject(error);
           }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                const compressedFile = new File([blob], file.name, {
+                  type: 'image/jpeg',
+                  lastModified: Date.now()
+                });
+                resolve(compressedFile);
+              } else {
+                reject(new Error('Failed to compress image'));
+              }
+            },
+            'image/jpeg',
+            quality
+          );
         };
-        img.onerror = () => {
-          clearTimeout(timeout);
-          reject(new Error('Failed to load image'));
-        };
+        img.onerror = reject;
         img.src = e.target.result;
       };
-      reader.onerror = () => {
-        clearTimeout(timeout);
-        reject(new Error('Failed to read file'));
-      };
+      reader.onerror = reject;
       reader.readAsDataURL(file);
     });
   };
@@ -296,37 +232,20 @@ const FaceManagementPage = ({ embedded = false }) => {
       return;
     }
 
-    // Process files asynchronously with compression (one at a time to avoid blocking)
+    // Process files asynchronously with compression
     setLoading(true);
     showMessage(`Processing ${validFiles.length} file(s)...`, 'warning');
 
     try {
-      const processedFiles = [];
-      
-      // Process files one at a time with yielding to prevent UI freeze
-      for (let i = 0; i < validFiles.length; i++) {
-        const file = validFiles[i];
-        
-        // Yield control to browser every file to prevent freezing
-        await new Promise(resolve => setTimeout(resolve, 0));
-        
-        try {
+      const processedFiles = await Promise.all(
+        validFiles.map(async (file) => {
           // Only compress if file is larger than 2MB
           if (file.size > 2 * 1024 * 1024) {
-            const compressed = await compressImage(file);
-            processedFiles.push(compressed);
-          } else {
-            processedFiles.push(file);
+            return await compressImage(file);
           }
-          
-          // Update progress
-          showMessage(`Processing ${i + 1}/${validFiles.length} files...`, 'warning');
-        } catch (error) {
-          logger.error(`[FaceManagement] Error processing file ${file.name}:`, error);
-          // Skip this file but continue with others
-          showMessage(`Skipping ${file.name}: ${error.message}`, 'error');
-        }
-      }
+          return file;
+        })
+      );
 
       setUploadFiles(processedFiles);
       showMessage(`Ready to upload ${processedFiles.length} file(s)`, 'success');
@@ -349,8 +268,8 @@ const FaceManagementPage = ({ embedded = false }) => {
     showMessage(`Uploading ${uploadFiles.length} photo(s)...`, 'warning');
 
     try {
-      // Upload files in smaller batches to avoid overwhelming the server
-      const BATCH_SIZE = 3; // Reduced batch size
+      // Upload files in batches to avoid overwhelming the server
+      const BATCH_SIZE = 5;
       const batches = [];
       
       for (let i = 0; i < uploadFiles.length; i += BATCH_SIZE) {
@@ -359,13 +278,8 @@ const FaceManagementPage = ({ embedded = false }) => {
 
       let totalUploaded = 0;
       
-      // Process batches one at a time with yielding
       for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
         const batch = batches[batchIndex];
-        
-        // Yield control to browser before each batch
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
         const formData = new FormData();
         
         batch.forEach(file => {
@@ -377,29 +291,19 @@ const FaceManagementPage = ({ embedded = false }) => {
           'warning'
         );
 
-        try {
-          const response = await apiClient.post(`/faces/people/${personName}/photos`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-            timeout: 120000 // 120 second timeout per batch
-          });
+        const response = await apiClient.post(`/faces/people/${personName}/photos`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 60000 // 60 second timeout per batch
+        });
 
-          totalUploaded += batch.length;
-          logger.log(`[FaceManagement] Batch ${batchIndex + 1} uploaded:`, response.data);
-        } catch (error) {
-          logger.error(`[FaceManagement] Error uploading batch ${batchIndex + 1}:`, error);
-          // Continue with next batch even if one fails
-          showMessage(`Error uploading batch ${batchIndex + 1}, continuing...`, 'error');
-        }
+        totalUploaded += batch.length;
+        logger.log(`[FaceManagement] Batch ${batchIndex + 1} uploaded:`, response.data);
       }
 
-      if (totalUploaded > 0) {
-        showMessage(`Successfully uploaded ${totalUploaded} photo(s)`, 'success');
-        setUploadFiles([]);
-        setSelectedPerson(null);
-        loadPeople();
-      } else {
-        showMessage('No photos were uploaded. Please try again.', 'error');
-      }
+      showMessage(`Successfully uploaded ${totalUploaded} photo(s)`, 'success');
+      setUploadFiles([]);
+      setSelectedPerson(null);
+      loadPeople();
     } catch (error) {
       logger.error('[FaceManagement] Upload error:', error);
       logger.error('[FaceManagement] Error response:', error.response?.data);
@@ -411,8 +315,6 @@ const FaceManagementPage = ({ embedded = false }) => {
 
   const trainModel = async () => {
     setIsTraining(true);
-    setTrainingWarning('Face recognition training in progress. Live face detection is temporarily paused to prevent system instability. Some frames may be skipped.');
-    startTrainingPoll(); // Start polling for training status
     showMessage('🔄 Training model... This may take a minute.', 'warning');
     try {
       const response = await apiClient.post('/faces/train', {});
@@ -422,7 +324,6 @@ const FaceManagementPage = ({ embedded = false }) => {
       showMessage('❌ Error training model: ' + error.message, 'error');
     } finally {
       setIsTraining(false);
-      stopTrainingPoll(); // Stop polling and clear warning
     }
   };
 
@@ -461,42 +362,6 @@ const FaceManagementPage = ({ embedded = false }) => {
             {message.type === 'success' ? '✓' : message.type === 'error' ? '⚠️' : 'ℹ️'}
           </span>
           <div className="alert-content">{message.text}</div>
-        </div>
-      )}
-
-      {/* Training Warning Overlay */}
-      {trainingWarning && (
-        <div
-          className="training-warning-banner"
-          style={{
-            background: 'linear-gradient(90deg, #ff9800, #f57c00)',
-            color: '#fff',
-            padding: '16px 20px',
-            borderRadius: '8px',
-            marginBottom: '20px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            boxShadow: '0 4px 12px rgba(255, 152, 0, 0.3)',
-            animation: 'pulse-warning 2s ease-in-out infinite'
-          }}
-        >
-          <span
-            className="training-spinner"
-            style={{
-              display: 'inline-block',
-              width: '24px',
-              height: '24px',
-              border: '3px solid rgba(255,255,255,0.3)',
-              borderTop: '3px solid #fff',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite'
-            }}
-          />
-          <div style={{ flex: 1 }}>
-            <strong style={{ display: 'block', marginBottom: '4px' }}>Training in Progress</strong>
-            <span style={{ fontSize: '14px', opacity: 0.9 }}>{trainingWarning}</span>
-          </div>
         </div>
       )}
 
@@ -741,13 +606,6 @@ const FaceManagementPage = ({ embedded = false }) => {
                 <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
                   Total size: {(uploadFiles.reduce((sum, f) => sum + f.size, 0) / 1024 / 1024).toFixed(2)} MB
                 </div>
-              </div>
-            )}
-            {loading && uploadFiles.length > 0 && (
-              <div style={{ marginTop: '12px', padding: '8px', background: 'var(--bg-main)', borderRadius: '4px', border: '1px solid var(--border-panel)' }}>
-                <p style={{ color: 'var(--text-primary)', fontSize: '14px', margin: 0 }}>
-                  ⏳ Uploading... Please wait, do not close this window
-                </p>
               </div>
             )}
             <div className="modal-actions">
