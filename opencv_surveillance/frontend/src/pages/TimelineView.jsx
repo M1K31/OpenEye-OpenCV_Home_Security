@@ -62,6 +62,9 @@ const TimelineView = () => {
   const isPlayingRef = useRef(false); // Ref to track playing state without re-renders
   const loadTimeoutRef = useRef(null); // Debounce data loading
 
+  // Progress tracking for sequential playback
+  const [playbackProgress, setPlaybackProgress] = useState({ current: 0, total: 0 });
+
   // Camera filter
   const [selectedCameras, setSelectedCameras] = useState([]);
   const [availableCameras, setAvailableCameras] = useState([]);
@@ -89,6 +92,63 @@ const TimelineView = () => {
   useEffect(() => {
     loadCameras();
   }, []);
+
+  // Keyboard shortcuts for timeline navigation
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ignore if typing in an input
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      switch (e.key) {
+        case ' ': // Space - Play/Pause
+          e.preventDefault();
+          togglePlayback();
+          break;
+        case 'ArrowLeft': // Left - Previous event
+          e.preventDefault();
+          handlePreviousEvent();
+          break;
+        case 'ArrowRight': // Right - Next event
+          e.preventDefault();
+          handleNextEvent();
+          break;
+        case 'ArrowUp': // Up - Increase speed
+          e.preventDefault();
+          {
+            const speeds = [0.5, 1, 2, 4, 8];
+            const currentIdx = speeds.indexOf(playbackSpeed);
+            if (currentIdx < speeds.length - 1) {
+              handleSpeedChange(speeds[currentIdx + 1]);
+            }
+          }
+          break;
+        case 'ArrowDown': // Down - Decrease speed
+          e.preventDefault();
+          {
+            const speeds = [0.5, 1, 2, 4, 8];
+            const currentIdx = speeds.indexOf(playbackSpeed);
+            if (currentIdx > 0) {
+              handleSpeedChange(speeds[currentIdx - 1]);
+            }
+          }
+          break;
+        case 'Escape': // Escape - Stop playback
+          e.preventDefault();
+          stopPlayback();
+          break;
+        case 'l': // L - Jump to live
+        case 'L':
+          e.preventDefault();
+          jumpToNow();
+          break;
+        default:
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [playbackSpeed]);
 
   // Memoize sorted events to prevent recalculation on every render
   const sortedEvents = useMemo(() => {
@@ -125,6 +185,7 @@ const TimelineView = () => {
     setCurrentEventIndex(nextIndex);
     setCurrentTime(eventTime);
     setSelectedEvent(nextEvent);
+    setPlaybackProgress({ current: nextIndex + 1, total: sortedEvents.length });
 
     // Set media for display
     if (nextEvent.video_path && nextEvent.recording_id) {
@@ -185,6 +246,7 @@ const TimelineView = () => {
     setCurrentEventIndex(startIndex);
     setCurrentTime(eventTime);
     setSelectedEvent(event);
+    setPlaybackProgress({ current: startIndex + 1, total: sortedEvents.length });
 
     // Set media for display
     if (event.video_path && event.recording_id) {
@@ -1033,6 +1095,28 @@ const TimelineView = () => {
               ))}
             </div>
           </div>
+
+          {/* Playback Progress */}
+          {playing && playbackProgress.total > 0 && (
+            <div className="playback-progress">
+              <span className="progress-text">
+                Event {playbackProgress.current} of {playbackProgress.total}
+              </span>
+              <div className="progress-bar">
+                <div 
+                  className="progress-fill"
+                  style={{ width: `${(playbackProgress.current / playbackProgress.total) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Keyboard Shortcuts Help */}
+        <div className="keyboard-shortcuts-hint">
+          <span title="Space: Play/Pause | ←/→: Prev/Next | ↑/↓: Speed | L: Live | Esc: Stop">
+            ⌨️ Shortcuts
+          </span>
         </div>
       </div>
 
