@@ -860,3 +860,82 @@
     width: 100%;
   }
 }
+
+/* ===== PLAYBACK PROGRESS ===== */
+.playback-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  background: var(--bg-panel);
+  border-radius: 8px;
+  border: 1px solid var(--border-panel);
+}
+
+.playback-progress .progress-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  min-width: 90px;
+}
+
+.playback-progress .progress-bar {
+  width: 80px;
+  height: 4px;
+  background: var(--border-panel);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.playback-progress .progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary, #10b981));
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+/* ===== KEYBOARD SHORTCUTS HINT ===== */
+.keyboard-shortcuts-hint {
+  display: flex;
+  align-items: center;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: help;
+}
+
+.keyboard-shortcuts-hint span {
+  padding: 4px 8px;
+  background: var(--bg-panel);
+  border-radius: 6px;
+  border: 1px solid var(--border-panel);
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.keyboard-shortcuts-hint span:hover {
+  opacity: 1;
+}
+
+/* Keyboard shortcut highlight feedback */
+@keyframes shortcut-flash {
+  0% { background-color: var(--accent-primary); }
+  100% { background-color: transparent; }
+}
+
+/* Mobile: hide keyboard shortcuts hint */
+@media (max-width: 768px) {
+  .keyboard-shortcuts-hint {
+    display: none;
+  }
+  
+  .playback-progress {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .playback-progress .progress-bar {
+    flex: 1;
+    max-width: 150px;
+  }
+}

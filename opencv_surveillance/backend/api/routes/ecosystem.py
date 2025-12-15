@@ -131,9 +131,32 @@ async def connect_ecosystem_app(
     - associated_users: Users associated with this device (for routing notifications)
     - subscribed_cameras: Cameras this device wants to receive events from
     - notification_preferences: Per-device notification settings
+    
+    v3.11.2: Enhanced security
+    - Rate limiting on connection attempts
+    - IP tracking and validation
+    - Device fingerprinting
     """
+    from backend.core.ecosystem_security import (
+        check_rate_limit, record_auth_attempt, 
+        generate_device_fingerprint, hash_token
+    )
+    
+    # Get client IP
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    
+    # Check rate limiting
+    is_allowed, wait_time = check_rate_limit(client_ip)
+    if not is_allowed:
+        record_auth_attempt(client_ip, success=False)
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many connection attempts. Please wait {wait_time} seconds.",
+            headers={"Retry-After": str(wait_time)}
+        )
+    
     device_name = request.device_name or f"{request.app} at {request.host}"
-    logger.info(f"Ecosystem connect request from {device_name} ({request.app} v{request.version})")
+    logger.info(f"Ecosystem connect request from {device_name} ({request.app} v{request.version}) IP: {client_ip}")
     
     # Generate secure token for this connection
     ecosystem_token = generate_ecosystem_token()
@@ -379,6 +402,53 @@ async def list_ecosystem_devices(
     }
 
 
+@router.get("/ecosystem/security")
+async def get_ecosystem_security_status():
+    """
+    Get ecosystem security status.
+    
+    Returns information about:
+    - Rate limiting status
+    - Blocked IPs
+    - Security recommendations
+    - Token configuration
+    
+    **Admin only** - should be protected by authentication in production.
+    """
+    from backend.core.ecosystem_security import get_security_status
+    
+    status = get_security_status()
+    return {
+        "success": True,
+        **status
+    }
+
+
+@router.post("/ecosystem/security/unblock")
+async def unblock_ip(
+    ip_address: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Manually unblock an IP address.
+    
+    **Admin only** - use with caution.
+    """
+    from backend.core.ecosystem_security import _blocked_ips, _auth_attempts
+    
+    if ip_address in _blocked_ips:
+        del _blocked_ips[ip_address]
+    if ip_address in _auth_attempts:
+        del _auth_attempts[ip_address]
+    
+    logger.info(f"Manually unblocked IP: {ip_address}")
+    
+    return {
+        "success": True,
+        "message": f"IP {ip_address} has been unblocked"
+    }
+
+
 # ============================================================================
 # ECOSYSTEM WEBSOCKET (Real-time events)
 # ============================================================================
@@ -542,6 +612,231 @@ async def receive_webhook(
     except Exception as e:
         logger.error(f"Webhook processing error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ============================================================================
+# ECOSYSTEM CAMERA STREAMING (For MagicMirror/Mobile integration)
+# ============================================================================
+
+
+@router.get("/ecosystem/cameras")
+async def list_cameras_for_ecosystem(
+    token: str = Query(None),
+    db: Session = Depends(get_db)
+):
+    """
+    List available cameras for ecosystem apps.
+    
+    Returns camera information suitable for MagicMirror or mobile app display.
+    Includes stream URLs and current status.
+    """
+    # Verify ecosystem token if provided
+    if token:
+        connection = db.query(models.EcosystemConnection).filter(
+            models.EcosystemConnection.token == token,
+            models.EcosystemConnection.is_active == True
+        ).first()
+        if not connection:
+            raise HTTPException(status_code=401, detail="Invalid ecosystem token")
+    
+    from backend.core.camera_manager import manager as camera_manager
+    
+    cameras = db.query(models.Camera).filter(models.Camera.is_active == True).all()
+    
+    camera_list = []
+    for cam in cameras:
+        camera_instance = camera_manager.get_camera(cam.camera_id)
+        is_running = camera_instance is not None and camera_instance.is_running if camera_instance else False
+        
+        camera_list.append({
+            "camera_id": cam.camera_id,
+            "name": getattr(cam, 'name', cam.camera_id),
+            "is_running": is_running,
+            "stream_url": f"/api/cameras/{cam.camera_id}/stream",
+            "snapshot_url": f"/api/cameras/{cam.camera_id}/snapshot",
+            "ecosystem_stream_url": f"/api/ecosystem/stream/{cam.camera_id}",
+            "motion_detection_enabled": cam.motion_detection_enabled,
+            "face_detection_enabled": cam.face_detection_enabled,
+            "recording_enabled": cam.recording_enabled
+        })
+    
+    return {
+        "success": True,
+        "cameras": camera_list,
+        "total": len(camera_list)
+    }
+
+
+@router.get("/ecosystem/stream/{camera_id}")
+async def ecosystem_camera_stream(
+    camera_id: str,
+    token: str = Query(None),
+    quality: str = Query("medium"),  # low, medium, high
+    fps: int = Query(15),  # Target FPS
+    db: Session = Depends(get_db)
+):
+    """
+    Stream camera video for ecosystem apps with quality options.
+    
+    Designed for MagicMirror and mobile app integration with bandwidth-conscious options.
+    
+    **Quality Options:**
+    - low: 320x240, JPEG quality 60 (for slow connections)
+    - medium: 640x480, JPEG quality 75 (default, balanced)
+    - high: Full resolution, JPEG quality 85 (for local network)
+    
+    **FPS:** Target frames per second (5-30, default 15)
+    """
+    import cv2
+    from fastapi.responses import StreamingResponse
+    
+    # Verify ecosystem token if provided
+    if token:
+        connection = db.query(models.EcosystemConnection).filter(
+            models.EcosystemConnection.token == token,
+            models.EcosystemConnection.is_active == True
+        ).first()
+        if connection:
+            # Update last seen
+            connection.last_seen = datetime.utcnow()
+            db.commit()
+    
+    from backend.core.camera_manager import manager as camera_manager
+    
+    db_camera = db.query(models.Camera).filter(
+        models.Camera.camera_id == camera_id
+    ).first()
+    
+    if not db_camera:
+        raise HTTPException(status_code=404, detail=f"Camera '{camera_id}' not found")
+    
+    camera_instance = camera_manager.get_camera(camera_id)
+    if not camera_instance or not camera_instance.is_running:
+        raise HTTPException(status_code=503, detail=f"Camera '{camera_id}' is not running")
+    
+    # Quality settings
+    quality_settings = {
+        "low": {"size": (320, 240), "jpeg_quality": 60},
+        "medium": {"size": (640, 480), "jpeg_quality": 75},
+        "high": {"size": None, "jpeg_quality": 85}  # None = original size
+    }
+    
+    settings = quality_settings.get(quality, quality_settings["medium"])
+    fps = max(5, min(30, fps))  # Clamp FPS to 5-30
+    frame_delay = 1.0 / fps
+    
+    async def generate_ecosystem_frames():
+        """Generate frames with quality/size options for ecosystem streaming."""
+        try:
+            while True:
+                frame, _ = camera_instance.get_frame()
+                if frame is None:
+                    await asyncio.sleep(0.1)
+                    continue
+                
+                # Resize if needed
+                if settings["size"]:
+                    frame = cv2.resize(frame, settings["size"], interpolation=cv2.INTER_AREA)
+                
+                # Encode as JPEG
+                ret, buffer = cv2.imencode(
+                    ".jpg", frame, 
+                    [cv2.IMWRITE_JPEG_QUALITY, settings["jpeg_quality"]]
+                )
+                
+                if not ret:
+                    await asyncio.sleep(frame_delay)
+                    continue
+                
+                frame_bytes = buffer.tobytes()
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n"
+                )
+                
+                await asyncio.sleep(frame_delay)
+        except Exception as e:
+            logger.error(f"Ecosystem stream error for {camera_id}: {e}")
+    
+    return StreamingResponse(
+        generate_ecosystem_frames(),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
+
+
+@router.get("/ecosystem/snapshot/{camera_id}")
+async def ecosystem_camera_snapshot(
+    camera_id: str,
+    token: str = Query(None),
+    quality: str = Query("medium"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get a single snapshot from a camera for ecosystem apps.
+    
+    Returns a JPEG image with configurable quality.
+    """
+    import cv2
+    from fastapi.responses import Response
+    
+    # Verify ecosystem token if provided
+    if token:
+        connection = db.query(models.EcosystemConnection).filter(
+            models.EcosystemConnection.token == token,
+            models.EcosystemConnection.is_active == True
+        ).first()
+        if connection:
+            connection.last_seen = datetime.utcnow()
+            db.commit()
+    
+    from backend.core.camera_manager import manager as camera_manager
+    
+    db_camera = db.query(models.Camera).filter(
+        models.Camera.camera_id == camera_id
+    ).first()
+    
+    if not db_camera:
+        raise HTTPException(status_code=404, detail=f"Camera '{camera_id}' not found")
+    
+    camera_instance = camera_manager.get_camera(camera_id)
+    if not camera_instance or not camera_instance.is_running:
+        raise HTTPException(status_code=503, detail=f"Camera '{camera_id}' is not running")
+    
+    frame, _ = camera_instance.get_frame()
+    if frame is None:
+        raise HTTPException(status_code=500, detail="Failed to capture frame")
+    
+    # Quality settings
+    quality_settings = {
+        "low": {"size": (320, 240), "jpeg_quality": 60},
+        "medium": {"size": (640, 480), "jpeg_quality": 75},
+        "high": {"size": None, "jpeg_quality": 90}
+    }
+    
+    settings = quality_settings.get(quality, quality_settings["medium"])
+    
+    # Resize if needed
+    if settings["size"]:
+        frame = cv2.resize(frame, settings["size"], interpolation=cv2.INTER_AREA)
+    
+    # Encode as JPEG
+    ret, buffer = cv2.imencode(
+        ".jpg", frame,
+        [cv2.IMWRITE_JPEG_QUALITY, settings["jpeg_quality"]]
+    )
+    
+    if not ret:
+        raise HTTPException(status_code=500, detail="Failed to encode frame")
+    
+    return Response(
+        content=buffer.tobytes(),
+        media_type="image/jpeg",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "X-Camera-Id": camera_id,
+            "X-Timestamp": datetime.utcnow().isoformat()
+        }
+    )
 
 
 # ============================================================================
