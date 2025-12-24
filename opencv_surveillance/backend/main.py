@@ -57,6 +57,7 @@ from backend.api.routes import (
     features,
     objects,  # v3.10.0: Object detection routes
     ecosystem,  # v3.11.0: Ecosystem integration (MagicMirror, mobile apps)
+    network_discovery,  # v3.11.4: Network discovery with Fing integration
 )
 from backend.core.camera_manager import manager as camera_manager
 from backend.core.websocket_manager import broadcast_statistics_update
@@ -668,6 +669,9 @@ app.include_router(objects.router, prefix="/api/objects", tags=["Object Detectio
 
 # v3.11.0: Ecosystem Integration - MagicMirror, mobile apps, cross-app sync
 app.include_router(ecosystem.router, prefix="/api", tags=["Ecosystem Integration"])
+
+# v3.11.4: Network Discovery with Fing integration
+app.include_router(network_discovery.router, prefix="/api", tags=["Network Discovery"])
 
 # First-Run Setup (with /api/setup prefix for consistency)
 app.include_router(setup.router, prefix="/api/setup", tags=["First-Run Setup"])

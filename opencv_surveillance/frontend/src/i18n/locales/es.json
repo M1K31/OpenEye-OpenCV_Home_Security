@@ -1,0 +1,269 @@
+{
+  "app": {
+    "name": "OpenEye",
+    "tagline": "Seguridad del Hogar con IA"
+  },
+  "common": {
+    "loading": "Cargando...",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "add": "Agregar",
+    "close": "Cerrar",
+    "confirm": "Confirmar",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "search": "Buscar",
+    "filter": "Filtrar",
+    "refresh": "Actualizar",
+    "settings": "Configuración",
+    "actions": "Acciones",
+    "status": "Estado",
+    "enabled": "Activado",
+    "disabled": "Desactivado",
+    "online": "En línea",
+    "offline": "Fuera de línea",
+    "active": "Activo",
+    "inactive": "Inactivo",
+    "success": "Éxito",
+    "error": "Error",
+    "warning": "Advertencia",
+    "info": "Información",
+    "yes": "Sí",
+    "no": "No",
+    "all": "Todos",
+    "none": "Ninguno",
+    "unknown": "Desconocido",
+    "noData": "No hay datos disponibles",
+    "noResults": "No se encontraron resultados"
+  },
+  "nav": {
+    "dashboard": "Panel",
+    "cameras": "Cámaras",
+    "recordings": "Grabaciones",
+    "faces": "Reconocimiento Facial",
+    "alerts": "Alertas",
+    "automations": "Automatizaciones",
+    "timeline": "Línea de Tiempo",
+    "settings": "Configuración",
+    "users": "Usuarios",
+    "profile": "Perfil",
+    "logout": "Cerrar Sesión",
+    "help": "Ayuda"
+  },
+  "auth": {
+    "login": "Iniciar Sesión",
+    "logout": "Cerrar Sesión",
+    "username": "Usuario",
+    "password": "Contraseña",
+    "rememberMe": "Recordarme",
+    "forgotPassword": "¿Olvidaste tu contraseña?",
+    "loginButton": "Entrar",
+    "loggingIn": "Iniciando sesión...",
+    "loginError": "Usuario o contraseña inválidos",
+    "sessionExpired": "Tu sesión ha expirado. Por favor, inicia sesión de nuevo.",
+    "twoFactor": {
+      "title": "Autenticación de Dos Factores",
+      "code": "Código de Verificación",
+      "verify": "Verificar",
+      "invalidCode": "Código de verificación inválido",
+      "setup": "Configurar 2FA",
+      "disable": "Desactivar 2FA",
+      "backupCodes": "Códigos de Respaldo"
+    }
+  },
+  "dashboard": {
+    "title": "Panel",
+    "welcome": "Bienvenido, {name}",
+    "systemStatus": "Estado del Sistema",
+    "liveView": "Vista en Vivo",
+    "recentEvents": "Eventos Recientes",
+    "statistics": "Estadísticas",
+    "cameras": {
+      "title": "Cámaras",
+      "count": "{count} cámaras",
+      "online": "{count} en línea",
+      "offline": "{count} fuera de línea",
+      "noFeed": "Sin señal disponible"
+    },
+    "events": {
+      "title": "Eventos",
+      "motion": "Movimiento detectado",
+      "face": "Rostro detectado",
+      "person": "Persona detectada",
+      "vehicle": "Vehículo detectado",
+      "unknown": "Evento desconocido"
+    },
+    "storage": {
+      "title": "Almacenamiento",
+      "used": "{used} de {total} usado",
+      "free": "{free} libre",
+      "recordings": "{count} grabaciones"
+    }
+  },
+  "cameras": {
+    "title": "Gestión de Cámaras",
+    "addCamera": "Agregar Cámara",
+    "editCamera": "Editar Cámara",
+    "deleteCamera": "Eliminar Cámara",
+    "discover": "Descubrir Cámaras",
+    "startStream": "Iniciar Transmisión",
+    "stopStream": "Detener Transmisión",
+    "snapshot": "Capturar Imagen",
+    "recording": "Grabando",
+    "startRecording": "Iniciar Grabación",
+    "stopRecording": "Detener Grabación",
+    "form": {
+      "name": "Nombre de Cámara",
+      "source": "URL de Origen",
+      "type": "Tipo de Cámara",
+      "location": "Ubicación",
+      "rtsp": "Transmisión RTSP",
+      "usb": "Cámara USB",
+      "mock": "Cámara de Prueba"
+    },
+    "settings": {
+      "title": "Configuración de Cámara",
+      "resolution": "Resolución",
+      "fps": "Cuadros por Segundo",
+      "quality": "Calidad",
+      "motionDetection": "Detección de Movimiento",
+      "faceRecognition": "Reconocimiento Facial",
+      "recording": "Grabación"
+    },
+    "ptz": {
+      "title": "Controles PTZ",
+      "pan": "Panorámica",
+      "tilt": "Inclinación",
+      "zoom": "Zoom",
+      "preset": "Preajuste",
+      "home": "Posición Inicial"
+    },
+    "errors": {
+      "connectionFailed": "Error al conectar con la cámara",
+      "streamError": "Error de transmisión",
+      "notFound": "Cámara no encontrada"
+    }
+  },
+  "recordings": {
+    "title": "Grabaciones",
+    "search": "Buscar grabaciones",
+    "filter": {
+      "camera": "Cámara",
+      "date": "Fecha",
+      "type": "Tipo de Evento",
+      "duration": "Duración"
+    },
+    "actions": {
+      "play": "Reproducir",
+      "download": "Descargar",
+      "delete": "Eliminar",
+      "share": "Compartir"
+    },
+    "info": {
+      "duration": "Duración",
+      "size": "Tamaño",
+      "recorded": "Grabado",
+      "camera": "Cámara",
+      "trigger": "Disparador"
+    },
+    "noRecordings": "No se encontraron grabaciones"
+  },
+  "faces": {
+    "title": "Reconocimiento Facial",
+    "people": "Personas Conocidas",
+    "addPerson": "Agregar Persona",
+    "editPerson": "Editar Persona",
+    "deletePerson": "Eliminar Persona",
+    "train": "Entrenar Modelo",
+    "training": "Entrenamiento en progreso...",
+    "trainingComplete": "Entrenamiento completado",
+    "clusters": {
+      "title": "Grupos de Rostros",
+      "identify": "Identificar",
+      "merge": "Combinar Grupos",
+      "delete": "Eliminar Grupo"
+    },
+    "history": {
+      "title": "Historial de Detección",
+      "detected": "Detectado",
+      "recognized": "Reconocido",
+      "unknown": "Rostro Desconocido"
+    },
+    "form": {
+      "name": "Nombre",
+      "photos": "Fotos",
+      "uploadPhotos": "Subir Fotos",
+      "capturePhoto": "Capturar Foto"
+    }
+  },
+  "alerts": {
+    "title": "Alertas",
+    "configure": "Configurar Alertas",
+    "history": "Historial de Alertas",
+    "types": {
+      "motion": "Alerta de Movimiento",
+      "face": "Alerta de Rostro",
+      "person": "Alerta de Persona",
+      "vehicle": "Alerta de Vehículo",
+      "offline": "Alerta de Cámara Desconectada"
+    },
+    "channels": {
+      "email": "Correo Electrónico",
+      "push": "Notificación Push",
+      "sms": "SMS",
+      "webhook": "Webhook"
+    },
+    "settings": {
+      "enabled": "Alertas Activadas",
+      "schedule": "Horario de Alertas",
+      "quietHours": "Horas de Silencio",
+      "cooldown": "Período de Espera"
+    }
+  },
+  "network": {
+    "title": "Red",
+    "devices": "Dispositivos",
+    "status": "Estado de Red",
+    "speedTest": "Prueba de Velocidad",
+    "connectivity": "Conectividad",
+    "discovery": {
+      "title": "Descubrimiento de Dispositivos",
+      "scanning": "Escaneando red...",
+      "found": "Se encontraron {count} dispositivos",
+      "fing": "Agente Fing",
+      "available": "Disponible",
+      "simulated": "Simulado"
+    },
+    "device": {
+      "online": "En línea",
+      "offline": "Fuera de línea",
+      "known": "Dispositivo Conocido",
+      "unknown": "Dispositivo Desconocido",
+      "gateway": "Puerta de Enlace"
+    }
+  },
+  "errors": {
+    "generic": "Ocurrió un error",
+    "network": "Error de red",
+    "unauthorized": "Acceso no autorizado",
+    "forbidden": "Acceso prohibido",
+    "notFound": "No encontrado",
+    "serverError": "Error del servidor",
+    "timeout": "Tiempo de espera agotado",
+    "validation": "Error de validación"
+  },
+  "time": {
+    "now": "Ahora",
+    "today": "Hoy",
+    "yesterday": "Ayer",
+    "tomorrow": "Mañana",
+    "seconds": "{count} segundos",
+    "minutes": "{count} minutos",
+    "hours": "{count} horas",
+    "days": "{count} días",
+    "ago": "hace {time}",
+    "in": "en {time}"
+  }
+}
