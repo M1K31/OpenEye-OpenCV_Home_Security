@@ -1,0 +1,400 @@
+{
+  "app": {
+    "name": "OpenEye",
+    "tagline": "AI-Powered Home Security"
+  },
+  "common": {
+    "loading": "Loading...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "close": "Close",
+    "confirm": "Confirm",
+    "back": "Back",
+    "next": "Next",
+    "search": "Search",
+    "filter": "Filter",
+    "refresh": "Refresh",
+    "settings": "Settings",
+    "actions": "Actions",
+    "status": "Status",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "online": "Online",
+    "offline": "Offline",
+    "active": "Active",
+    "inactive": "Inactive",
+    "success": "Success",
+    "error": "Error",
+    "warning": "Warning",
+    "info": "Information",
+    "yes": "Yes",
+    "no": "No",
+    "all": "All",
+    "none": "None",
+    "unknown": "Unknown",
+    "noData": "No data available",
+    "noResults": "No results found"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "cameras": "Cameras",
+    "recordings": "Recordings",
+    "faces": "Face Recognition",
+    "alerts": "Alerts",
+    "automations": "Automations",
+    "timeline": "Timeline",
+    "settings": "Settings",
+    "users": "Users",
+    "profile": "Profile",
+    "logout": "Logout",
+    "help": "Help"
+  },
+  "auth": {
+    "login": "Login",
+    "logout": "Logout",
+    "username": "Username",
+    "password": "Password",
+    "rememberMe": "Remember me",
+    "forgotPassword": "Forgot password?",
+    "loginButton": "Sign In",
+    "loggingIn": "Signing in...",
+    "loginError": "Invalid username or password",
+    "sessionExpired": "Your session has expired. Please log in again.",
+    "twoFactor": {
+      "title": "Two-Factor Authentication",
+      "code": "Verification Code",
+      "verify": "Verify",
+      "invalidCode": "Invalid verification code",
+      "setup": "Set up 2FA",
+      "disable": "Disable 2FA",
+      "backupCodes": "Backup Codes"
+    }
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome back, {name}",
+    "systemStatus": "System Status",
+    "liveView": "Live View",
+    "recentEvents": "Recent Events",
+    "statistics": "Statistics",
+    "cameras": {
+      "title": "Cameras",
+      "count": "{count} cameras",
+      "online": "{count} online",
+      "offline": "{count} offline",
+      "noFeed": "No feed available"
+    },
+    "events": {
+      "title": "Events",
+      "motion": "Motion detected",
+      "face": "Face detected",
+      "person": "Person detected",
+      "vehicle": "Vehicle detected",
+      "unknown": "Unknown event"
+    },
+    "storage": {
+      "title": "Storage",
+      "used": "{used} of {total} used",
+      "free": "{free} free",
+      "recordings": "{count} recordings"
+    }
+  },
+  "cameras": {
+    "title": "Camera Management",
+    "addCamera": "Add Camera",
+    "editCamera": "Edit Camera",
+    "deleteCamera": "Delete Camera",
+    "discover": "Discover Cameras",
+    "startStream": "Start Stream",
+    "stopStream": "Stop Stream",
+    "snapshot": "Take Snapshot",
+    "recording": "Recording",
+    "startRecording": "Start Recording",
+    "stopRecording": "Stop Recording",
+    "form": {
+      "name": "Camera Name",
+      "source": "Source URL",
+      "type": "Camera Type",
+      "location": "Location",
+      "rtsp": "RTSP Stream",
+      "usb": "USB Camera",
+      "mock": "Mock Camera"
+    },
+    "settings": {
+      "title": "Camera Settings",
+      "resolution": "Resolution",
+      "fps": "Frame Rate",
+      "quality": "Quality",
+      "motionDetection": "Motion Detection",
+      "faceRecognition": "Face Recognition",
+      "recording": "Recording"
+    },
+    "ptz": {
+      "title": "PTZ Controls",
+      "pan": "Pan",
+      "tilt": "Tilt",
+      "zoom": "Zoom",
+      "preset": "Preset",
+      "home": "Home Position"
+    },
+    "errors": {
+      "connectionFailed": "Failed to connect to camera",
+      "streamError": "Stream error occurred",
+      "notFound": "Camera not found"
+    }
+  },
+  "recordings": {
+    "title": "Recordings",
+    "search": "Search recordings",
+    "filter": {
+      "camera": "Camera",
+      "date": "Date",
+      "type": "Event Type",
+      "duration": "Duration"
+    },
+    "actions": {
+      "play": "Play",
+      "download": "Download",
+      "delete": "Delete",
+      "share": "Share"
+    },
+    "info": {
+      "duration": "Duration",
+      "size": "Size",
+      "recorded": "Recorded",
+      "camera": "Camera",
+      "trigger": "Trigger"
+    },
+    "noRecordings": "No recordings found"
+  },
+  "faces": {
+    "title": "Face Recognition",
+    "people": "Known People",
+    "addPerson": "Add Person",
+    "editPerson": "Edit Person",
+    "deletePerson": "Delete Person",
+    "train": "Train Model",
+    "training": "Training in progress...",
+    "trainingComplete": "Training complete",
+    "clusters": {
+      "title": "Face Clusters",
+      "identify": "Identify",
+      "merge": "Merge Clusters",
+      "delete": "Delete Cluster"
+    },
+    "history": {
+      "title": "Detection History",
+      "detected": "Detected",
+      "recognized": "Recognized",
+      "unknown": "Unknown Face"
+    },
+    "form": {
+      "name": "Person Name",
+      "photos": "Photos",
+      "uploadPhotos": "Upload Photos",
+      "capturePhoto": "Capture Photo"
+    }
+  },
+  "alerts": {
+    "title": "Alerts",
+    "configure": "Configure Alerts",
+    "history": "Alert History",
+    "types": {
+      "motion": "Motion Alert",
+      "face": "Face Detection Alert",
+      "person": "Person Alert",
+      "vehicle": "Vehicle Alert",
+      "offline": "Camera Offline Alert"
+    },
+    "channels": {
+      "email": "Email",
+      "push": "Push Notification",
+      "sms": "SMS",
+      "webhook": "Webhook"
+    },
+    "settings": {
+      "enabled": "Alerts Enabled",
+      "schedule": "Alert Schedule",
+      "quietHours": "Quiet Hours",
+      "cooldown": "Cooldown Period"
+    }
+  },
+  "automations": {
+    "title": "Automations",
+    "addRule": "Add Rule",
+    "editRule": "Edit Rule",
+    "triggers": {
+      "title": "Triggers",
+      "personArrives": "Person Arrives",
+      "personLeaves": "Person Leaves",
+      "motionDetected": "Motion Detected",
+      "cameraOffline": "Camera Goes Offline"
+    },
+    "actions": {
+      "title": "Actions",
+      "sendAlert": "Send Alert",
+      "startRecording": "Start Recording",
+      "triggerWebhook": "Trigger Webhook",
+      "runScript": "Run Script"
+    }
+  },
+  "timeline": {
+    "title": "Timeline",
+    "live": "Live",
+    "playback": "Playback",
+    "controls": {
+      "play": "Play",
+      "pause": "Pause",
+      "previous": "Previous Event",
+      "next": "Next Event",
+      "speed": "Playback Speed",
+      "jumpToLive": "Jump to Live"
+    },
+    "events": {
+      "motion": "Motion",
+      "face": "Face",
+      "recording": "Recording"
+    },
+    "shortcuts": {
+      "title": "Keyboard Shortcuts",
+      "space": "Play/Pause",
+      "left": "Previous Event",
+      "right": "Next Event",
+      "up": "Increase Speed",
+      "down": "Decrease Speed",
+      "l": "Jump to Live",
+      "escape": "Stop Playback"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "general": {
+      "title": "General",
+      "language": "Language",
+      "theme": "Theme",
+      "timezone": "Timezone",
+      "dateFormat": "Date Format",
+      "timeFormat": "Time Format"
+    },
+    "storage": {
+      "title": "Storage",
+      "recordingsPath": "Recordings Path",
+      "facesPath": "Faces Path",
+      "retention": "Retention Period",
+      "maxSize": "Maximum Size"
+    },
+    "performance": {
+      "title": "Performance",
+      "hardwareAcceleration": "Hardware Acceleration",
+      "gpuEncoding": "GPU Encoding",
+      "maxConcurrentStreams": "Max Concurrent Streams"
+    },
+    "security": {
+      "title": "Security",
+      "twoFactor": "Two-Factor Authentication",
+      "sessionTimeout": "Session Timeout",
+      "auditLog": "Audit Log"
+    },
+    "integrations": {
+      "title": "Integrations",
+      "homeAssistant": "Home Assistant",
+      "homeKit": "Apple HomeKit",
+      "googleNest": "Google Nest",
+      "mqtt": "MQTT"
+    },
+    "notifications": {
+      "title": "Notifications",
+      "providers": "Notification Providers",
+      "email": "Email Settings",
+      "push": "Push Notifications"
+    }
+  },
+  "users": {
+    "title": "User Management",
+    "addUser": "Add User",
+    "editUser": "Edit User",
+    "deleteUser": "Delete User",
+    "roles": {
+      "admin": "Administrator",
+      "user": "User",
+      "viewer": "Viewer"
+    },
+    "form": {
+      "username": "Username",
+      "email": "Email",
+      "password": "Password",
+      "confirmPassword": "Confirm Password",
+      "role": "Role"
+    },
+    "permissions": {
+      "title": "Permissions",
+      "cameras": "Camera Access",
+      "allCameras": "All Cameras",
+      "selectedCameras": "Selected Cameras"
+    }
+  },
+  "profile": {
+    "title": "My Profile",
+    "displayName": "Display Name",
+    "avatar": "Avatar",
+    "preferences": {
+      "title": "Preferences",
+      "theme": "Theme",
+      "notifications": "Notifications",
+      "quietHours": "Quiet Hours"
+    },
+    "security": {
+      "title": "Security",
+      "changePassword": "Change Password",
+      "twoFactor": "Two-Factor Authentication",
+      "sessions": "Active Sessions"
+    }
+  },
+  "network": {
+    "title": "Network",
+    "devices": "Devices",
+    "status": "Network Status",
+    "speedTest": "Speed Test",
+    "connectivity": "Connectivity",
+    "discovery": {
+      "title": "Device Discovery",
+      "scanning": "Scanning network...",
+      "found": "Found {count} devices",
+      "fing": "Fing Agent",
+      "available": "Available",
+      "simulated": "Simulated"
+    },
+    "device": {
+      "online": "Online",
+      "offline": "Offline",
+      "known": "Known Device",
+      "unknown": "Unknown Device",
+      "gateway": "Gateway"
+    }
+  },
+  "errors": {
+    "generic": "An error occurred",
+    "network": "Network error",
+    "unauthorized": "Unauthorized access",
+    "forbidden": "Access forbidden",
+    "notFound": "Not found",
+    "serverError": "Server error",
+    "timeout": "Request timed out",
+    "validation": "Validation error"
+  },
+  "time": {
+    "now": "Now",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "tomorrow": "Tomorrow",
+    "seconds": "{count} seconds",
+    "minutes": "{count} minutes",
+    "hours": "{count} hours",
+    "days": "{count} days",
+    "ago": "{time} ago",
+    "in": "in {time}"
+  }
+}
