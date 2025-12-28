@@ -128,7 +128,7 @@ const CameraCard = React.memo(({
 const LiveDashboard = () => {
   const [events, setEvents] = useState([]);
   const [showTimeline, setShowTimeline] = useState(true);
-  const [systemStatus, setSystemStatus] = useState('All systems nominal');
+  // systemStatus removed - now shown in MainLayout header only
   const [selectedRecording, setSelectedRecording] = useState(null);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [showEventModal, setShowEventModal] = useState(false);
@@ -468,10 +468,6 @@ const LiveDashboard = () => {
     <div className="live-dashboard">
       {/* Global Status Bar */}
       <div className="global-status-bar">
-        <div className="status-indicator">
-          <span className="status-icon">✓</span>
-          <span className="status-text">{systemStatus}</span>
-        </div>
         <Button
           variant="secondary"
           size="small"

@@ -38,8 +38,11 @@ const EventDetailModal = ({ event, onClose, onDelete }) => {
         downloadUrl = `/api/recordings/${event.recording_id}/download`;
         filename = `recording_${event.recording_id}_${event.camera_id}.mp4`;
       } else if (hasSnapshot) {
-        // Download snapshot image - use /data/snapshots/ prefix for normalized paths
-        downloadUrl = event.snapshot_path ? `/data/snapshots/${event.snapshot_path}` : `/data/snapshots/${event.camera_id}/${event.id}.jpg`;
+        // Download snapshot image - snapshot_path is stored as relative path like "data/snapshots/..."
+        // So we just need to add leading slash
+        downloadUrl = event.snapshot_path
+          ? (event.snapshot_path.startsWith('/') ? event.snapshot_path : `/${event.snapshot_path}`)
+          : `/data/snapshots/${event.camera_id}/${event.id}.jpg`;
         filename = `snapshot_${event.id}_${event.camera_id}.jpg`;
       }
 
@@ -208,7 +211,9 @@ const EventDetailModal = ({ event, onClose, onDelete }) => {
               </div>
             ) : hasSnapshot ? (
               <img
-                src={event.snapshot_path ? `/data/snapshots/${event.snapshot_path}` : `/data/snapshots/${event.camera_id}/${event.id}.jpg`}
+                src={event.snapshot_path
+                  ? (event.snapshot_path.startsWith('/') ? event.snapshot_path : `/${event.snapshot_path}`)
+                  : `/data/snapshots/${event.camera_id}/${event.id}.jpg`}
                 alt="Event snapshot"
                 className="event-snapshot"
                 onError={(e) => {

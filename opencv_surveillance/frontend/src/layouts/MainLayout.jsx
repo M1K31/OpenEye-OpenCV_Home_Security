@@ -2,7 +2,7 @@
 // This file is part of OpenEye-OpenCV_Home_Security
 
 import React, { useState, useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import KeyboardShortcuts from '../components/KeyboardShortcuts';
 import wsService from '../services/WebSocketService';
@@ -21,6 +21,7 @@ import './MainLayout.css';
 const MainLayout = ({ onLogout }) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const navigate = useNavigate();
 
   // Initialize WebSocket connection and reconnect when token changes
   useEffect(() => {
@@ -83,8 +84,21 @@ const MainLayout = ({ onLogout }) => {
             </button>
             {showUserMenu && (
               <div className="user-menu-dropdown">
+                <button
+                  onClick={() => { navigate('/system?tab=profile'); setShowUserMenu(false); }}
+                  className="user-menu-item"
+                >
+                  👤 My Profile
+                </button>
+                <button
+                  onClick={() => { navigate('/system?tab=users'); setShowUserMenu(false); }}
+                  className="user-menu-item"
+                >
+                  👥 Users
+                </button>
+                <div className="user-menu-divider" />
                 <button onClick={handleLogout} className="logout-button">
-                  Logout
+                  🚪 Logout
                 </button>
               </div>
             )}

@@ -138,6 +138,30 @@ html.aquasecurity-theme .user-menu-dropdown {
   box-shadow: 0 4px 20px rgba(0, 174, 239, 0.2);
 }
 
+/* User Menu Items */
+.user-menu-item {
+  width: 100%;
+  padding: var(--spacing-sm, 8px) var(--spacing-md, 16px);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.user-menu-item:hover {
+  background: var(--bg-main);
+}
+
+.user-menu-divider {
+  height: 1px;
+  background: var(--border-panel);
+  margin: 8px 0;
+}
+
 .logout-button {
   width: 100%;
   padding: var(--spacing-sm, 8px) var(--spacing-md, 16px); /* 8pt grid aligned */

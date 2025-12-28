@@ -19,6 +19,8 @@ const Sidebar = ({ isCollapsed }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Navigation items - User Management, Profile, 2FA, Hardware, Performance
+  // have been moved to tabs within System & Alerts
   const sections = [
     {
       id: 'dashboard',
@@ -56,20 +58,6 @@ const Sidebar = ({ isCollapsed }) => {
       priority: 'medium'
     },
     {
-      id: 'clusters',
-      icon: '🤖',
-      label: 'Face Clustering',
-      path: '/clusters',
-      priority: 'medium'
-    },
-    {
-      id: 'detections',
-      icon: '🔍',
-      label: 'All Detections',
-      path: '/detections',
-      priority: 'high'
-    },
-    {
       id: 'automations',
       icon: '⚡',
       label: 'Automations',
@@ -77,45 +65,10 @@ const Sidebar = ({ isCollapsed }) => {
       priority: 'high'
     },
     {
-      id: 'users',
-      icon: '👥',
-      label: 'User Management',
-      path: '/users',
-      priority: 'medium'
-    },
-    {
-      id: 'profile',
-      icon: '👤',
-      label: 'My Profile',
-      path: '/profile',
-      priority: 'medium'
-    },
-    {
-      id: '2fa',
-      icon: '🔐',
-      label: 'Two-Factor Auth',
-      path: '/system/2fa',
-      priority: 'medium'
-    },
-    {
       id: 'system',
       icon: '⚙️',
       label: 'System & Alerts',
       path: '/system',
-      priority: 'medium'
-    },
-    {
-      id: 'hardware',
-      icon: '💻',
-      label: 'Hardware Detection',
-      path: '/system/hardware',
-      priority: 'medium'
-    },
-    {
-      id: 'performance',
-      icon: '📊',
-      label: 'Performance Monitor',
-      path: '/system/performance',
       priority: 'medium'
     },
     {

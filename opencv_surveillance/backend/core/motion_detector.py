@@ -158,6 +158,11 @@ class MotionDetector:
         self.camera_id = None  # Camera ID for loading zones from database
         self.db_session = None  # Database session for zone updates
 
+        # Warmup period - suppress motion detection while background model initializes
+        # This prevents false positives during startup when the background model is learning
+        self.frame_count = 0
+        self.warmup_frames = 60  # ~2-4 seconds at 15-30 fps
+
     def _create_detection_mask(
             self, detection_zones_json: str) -> Optional[np.ndarray]:
         """
@@ -614,8 +619,24 @@ class MotionDetector:
             - A boolean indicating if motion was detected
             - A list of motion areas with bounding boxes and areas
         """
+        # Increment frame counter
+        self.frame_count += 1
+
         # Store original frame for drawing (we'll process a grayscale version)
         original_frame = frame.copy()
+
+        # WARMUP PERIOD: Suppress motion detection while background model initializes
+        # The MOG2 algorithm needs time to learn the "normal" background
+        if self.frame_count <= self.warmup_frames:
+            # Still apply background subtraction to train the model, but don't report motion
+            if self.use_grayscale:
+                gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                blurred_frame = cv2.GaussianBlur(gray_frame, self.blur_kernel, 0)
+            else:
+                blurred_frame = cv2.GaussianBlur(frame, self.blur_kernel, 0)
+            # Apply with higher learning rate during warmup for faster initialization
+            self.back_sub.apply(blurred_frame, learningRate=0.1)
+            return original_frame, False, []
 
         # STEP 1: PRE-PROCESSING - Convert to grayscale first for better performance
         if self.use_grayscale:

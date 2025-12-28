@@ -204,6 +204,12 @@ def patch_camera(
     # Update database
     updated_camera = crud.update_camera(db, camera_id, update_data)
 
+    # Reload settings into running camera instance (if camera is running)
+    # This ensures motion_percentage_threshold and other settings take effect immediately
+    if camera_manager.get_camera(camera_id):
+        camera_manager.reload_camera_settings(camera_id)
+        logger.info(f"Reloaded settings for running camera '{camera_id}'")
+
     return updated_camera
 
 
@@ -235,6 +241,15 @@ def update_camera(
         camera_type = update_data.get("camera_type", db_camera.camera_type)
         validate_camera_source(update_data["source"], camera_type)
 
+    # CRITICAL FIX: Recalculate min_contour_area when motion_sensitivity changes
+    # Motion sensitivity scale (1-10) maps inversely to min_contour_area
+    if "motion_sensitivity" in update_data:
+        from backend.core.motion_detector import MotionDetector
+        sensitivity_value = update_data["motion_sensitivity"]
+        min_contour_area = MotionDetector.SENSITIVITY_MAP.get(sensitivity_value, 500)
+        update_data["min_contour_area"] = min_contour_area
+        logger.info(f"Motion sensitivity changed to {sensitivity_value} -> min_contour_area set to {min_contour_area}")
+
     # If source or type changed, need to restart camera
     restart_required = "source" in update_data or "camera_type" in update_data
 
@@ -261,6 +276,12 @@ def update_camera(
     else:
         # Just update database (settings changes don't require restart)
         updated_camera = crud.update_camera(db, camera_id, update_data)
+
+        # Reload settings into running camera instance (if camera is running)
+        # This ensures motion_percentage_threshold and other settings take effect immediately
+        if camera_manager.get_camera(camera_id):
+            camera_manager.reload_camera_settings(camera_id)
+            logger.info(f"Reloaded settings for running camera '{camera_id}'")
 
     return updated_camera
 

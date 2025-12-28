@@ -28,6 +28,84 @@ header h1 {
   font-size: 2em;
 }
 
+/* Tab Navigation */
+.tab-navigation {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  padding: 0.5rem;
+  background: var(--bg-panel);
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-panel);
+}
+
+.tab-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  background: transparent;
+  border: none;
+  border-radius: 0.375rem;
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 44px; /* Apple HIG touch target */
+}
+
+.tab-button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.tab-button.active {
+  background: var(--theme-primary, var(--primary-color, #4caf50));
+  color: white;
+}
+
+.tab-icon {
+  font-size: 1.125rem;
+}
+
+.tab-label {
+  white-space: nowrap;
+}
+
+.tab-content {
+  min-height: 400px;
+}
+
+.tab-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  font-size: 1rem;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 768px) {
+  .tab-navigation {
+    flex-wrap: wrap;
+  }
+
+  .tab-button {
+    flex: 1;
+    min-width: 100px;
+    justify-content: center;
+  }
+
+  .tab-label {
+    display: none;
+  }
+
+  .tab-icon {
+    font-size: 1.5rem;
+  }
+}
+
 /* All CSS rules inherit global dark theme variables */
 .btn-primary {
   background-color: var(--text-link);
@@ -35,9 +113,18 @@ header h1 {
 }
 
 .btn-secondary {
-  background-color: var(--bg-panel);
-  border: 1px solid var(--border-panel);
-  color: var(--text-primary);
+  background-color: #2196f3;
+  border: none;
+  color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: #1976d2;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 0.875rem;
 }
 
 .btn-danger {
@@ -48,6 +135,15 @@ header h1 {
 .btn-success {
   background-color: var(--color-success);
   color: white;
+}
+
+.btn-info {
+  background-color: #17a2b8;
+  color: white;
+}
+
+.btn-info:hover:not(:disabled) {
+  background-color: #138496;
 }
 
 /* Add Person Section */
@@ -494,6 +590,19 @@ input[type="file"]::file-selector-button:hover {
 
 .person-card .actions button {
   flex: 1;
+}
+
+/* Person Actions (updated v3.11.5) */
+.person-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 15px;
+}
+
+.person-actions button {
+  flex: 1 1 auto;
+  min-width: 90px;
 }
 
 /* Range input styling */

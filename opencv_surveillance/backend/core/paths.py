@@ -30,7 +30,8 @@ DEFAULT_DATA_DIR = PROJECT_ROOT / "data"
 DEFAULT_RECORDINGS_DIR = PROJECT_ROOT / "recordings"
 DEFAULT_SNAPSHOTS_DIR = DEFAULT_DATA_DIR / "snapshots"
 DEFAULT_THUMBNAILS_DIR = DEFAULT_DATA_DIR / "thumbnails"
-DEFAULT_FACES_DIR = DEFAULT_DATA_DIR / "faces"
+# NOTE: Faces dir is at project root, not under data/ (per CLAUDE.md directory structure)
+DEFAULT_FACES_DIR = PROJECT_ROOT / "faces"
 
 
 class PathManager:

@@ -58,12 +58,14 @@ from backend.api.routes import (
     objects,  # v3.10.0: Object detection routes
     ecosystem,  # v3.11.0: Ecosystem integration (MagicMirror, mobile apps)
     network_discovery,  # v3.11.4: Network discovery with Fing integration
+    scheduled_tasks,  # v3.12.0: Scheduled tasks (retraining, retroactive search)
 )
 from backend.core.camera_manager import manager as camera_manager
 from backend.core.websocket_manager import broadcast_statistics_update
 from backend.core.face_recognition import get_face_manager
 from backend.core.statistics_broadcaster import get_broadcaster
 from backend.core.clustering_scheduler import get_clustering_scheduler
+from backend.core.scheduled_tasks import get_scheduled_tasks_manager
 from backend.middleware.rate_limiter import RateLimiter
 from backend.middleware.endpoint_rate_limiter import EndpointRateLimiter
 from backend.middleware.csrf_protection import CSRFProtection
@@ -110,7 +112,7 @@ signal.signal(signal.SIGTERM, signal_handler)
 app = FastAPI(
     title="OpenEye Surveillance System",
     description="OpenCV-powered surveillance system with face recognition, motion detection, and video recording",
-    version="3.11.1",  # Multi-User & Ecosystem Integration
+    version="3.11.4",  # Scheduled Tasks & Retroactive Face Search
     docs_url="/api/docs",
     redoc_url="/api/redoc",
 )
@@ -388,6 +390,16 @@ async def startup_event():
         f"threshold: {clustering_scheduler.min_faces_threshold} faces)"
     )
 
+    # Start scheduled tasks manager (v3.12.0)
+    logger.info("Starting scheduled tasks manager...")
+    tasks_manager = get_scheduled_tasks_manager()
+    await tasks_manager.start()
+    stats = tasks_manager.get_statistics()
+    logger.info(
+        f"Scheduled tasks manager started successfully "
+        f"({stats['enabled_tasks']} enabled tasks)"
+    )
+
     # v3.6.0: Initialize audit logging
     logger.info("Initializing audit logging...")
     audit_logger = get_audit_logger()
@@ -395,7 +407,7 @@ async def startup_event():
     audit_logger.log_event(
         AuditEventType.SYSTEM_STARTUP,
         details={
-            "version": "3.11.1",
+            "version": "3.11.4",
             "cameras_loaded": loaded_count,
             "known_faces": len(face_manager.known_face_names)
         }
@@ -455,7 +467,7 @@ async def shutdown_event():
 
     # Step 1: Stop face clustering scheduler
     try:
-        logger.info("[1/9] Stopping face clustering scheduler...")
+        logger.info("[1/10] Stopping face clustering scheduler...")
         clustering_scheduler = get_clustering_scheduler()
 
         # Set timeout for scheduler stop
@@ -467,9 +479,23 @@ async def shutdown_event():
     except Exception as e:
         logger.error(f"✗ Error stopping face clustering scheduler: {e}")
 
-    # Step 2: Stop statistics broadcaster (WebSocket updates)
+    # Step 2: Stop scheduled tasks manager
     try:
-        logger.info("[2/9] Stopping statistics broadcaster...")
+        logger.info("[2/10] Stopping scheduled tasks manager...")
+        tasks_manager = get_scheduled_tasks_manager()
+
+        # Set timeout for manager stop
+        stop_task = asyncio.create_task(tasks_manager.stop())
+        await asyncio.wait_for(stop_task, timeout=5.0)
+        logger.info("✓ Scheduled tasks manager stopped successfully")
+    except asyncio.TimeoutError:
+        logger.error("✗ Scheduled tasks manager stop timed out after 5s")
+    except Exception as e:
+        logger.error(f"✗ Error stopping scheduled tasks manager: {e}")
+
+    # Step 3: Stop statistics broadcaster (WebSocket updates)
+    try:
+        logger.info("[3/10] Stopping statistics broadcaster...")
         broadcaster = get_broadcaster()
 
         # Set timeout for broadcaster stop
@@ -673,6 +699,9 @@ app.include_router(ecosystem.router, prefix="/api", tags=["Ecosystem Integration
 # v3.11.4: Network Discovery with Fing integration
 app.include_router(network_discovery.router, prefix="/api", tags=["Network Discovery"])
 
+# v3.12.0: Scheduled Tasks - Model retraining, retroactive search, cleanup
+app.include_router(scheduled_tasks.router, prefix="/api/scheduled-tasks", tags=["Scheduled Tasks"])
+
 # First-Run Setup (with /api/setup prefix for consistency)
 app.include_router(setup.router, prefix="/api/setup", tags=["First-Run Setup"])
 
@@ -691,7 +720,7 @@ async def read_root():
         # Fallback to API info if frontend not built
         return {
             "name": "OpenEye Surveillance System",
-            "version": "3.11.1",
+            "version": "3.11.4",
             "description": "OpenCV-powered surveillance with face recognition",
             "features": [
                 "Motion Detection",
@@ -733,7 +762,7 @@ async def api_root(request: Request):
     return {
         "app_name": "OpenEye",
         "name": "OpenEye Surveillance System API",
-        "version": "3.11.1",
+        "version": "3.11.4",
         "description": "OpenCV-powered surveillance with face recognition",
         "capabilities": [
             "notifications",

@@ -45,10 +45,49 @@ const FaceClusteringPage = () => {
     recalculate: false,
   });
 
+  // Scheduler settings
+  const [schedulerSettings, setSchedulerSettings] = useState({
+    auto_cluster_enabled: true,
+    interval_minutes: 60,
+    min_faces_threshold: 10,
+    is_running: false
+  });
+  const [schedulerLoading, setSchedulerLoading] = useState(false);
+
   // Load clusters and statistics
   useEffect(() => {
     loadData();
+    loadSchedulerSettings();
   }, []);
+
+  // Load scheduler settings
+  const loadSchedulerSettings = async () => {
+    try {
+      const status = await clusteringService.getSchedulerStatus();
+      setSchedulerSettings({
+        auto_cluster_enabled: status.auto_cluster_enabled ?? true,
+        interval_minutes: status.interval_minutes ?? 60,
+        min_faces_threshold: status.min_faces_threshold ?? 10,
+        is_running: status.is_running ?? false
+      });
+    } catch (err) {
+      logger.error('Failed to load scheduler settings:', err);
+    }
+  };
+
+  // Toggle auto-clustering
+  const handleToggleAutoClustering = async (enabled) => {
+    try {
+      setSchedulerLoading(true);
+      await clusteringService.updateSchedulerSettings({ auto_enabled: enabled });
+      setSchedulerSettings(prev => ({ ...prev, auto_cluster_enabled: enabled }));
+    } catch (err) {
+      logger.error('Failed to update scheduler settings:', err);
+      alert('Failed to update auto-clustering setting');
+    } finally {
+      setSchedulerLoading(false);
+    }
+  };
 
   const loadData = async () => {
     // Ensure loading is ALWAYS set to false, even if state updates fail
@@ -355,9 +394,31 @@ const FaceClusteringPage = () => {
         </div>
       )}
 
+      {/* Auto-Clustering Toggle */}
+      <div className="clustering-toggle-section">
+        <div className="toggle-row">
+          <div className="toggle-info">
+            <h3>Auto-Clustering</h3>
+            <p>Automatically group similar faces every {schedulerSettings.interval_minutes} minutes when {schedulerSettings.min_faces_threshold}+ faces are detected</p>
+          </div>
+          <Switch
+            checked={schedulerSettings.auto_cluster_enabled}
+            onChange={handleToggleAutoClustering}
+            disabled={schedulerLoading}
+            label={schedulerSettings.auto_cluster_enabled ? 'Enabled' : 'Disabled'}
+          />
+        </div>
+        {schedulerSettings.is_running && (
+          <div className="scheduler-status">
+            <span className="status-indicator active"></span>
+            Scheduler is running
+          </div>
+        )}
+      </div>
+
       {/* Clustering Parameters */}
       <div className="clustering-params">
-        <h3>Clustering Parameters</h3>
+        <h3>Manual Clustering Parameters</h3>
         <div className="params-grid">
           <div className="param-input">
             <TextField
@@ -386,7 +447,7 @@ const FaceClusteringPage = () => {
               fullWidth
             />
           </div>
-          
+
           <div className="param-input">
             <Switch
               checked={clusteringParams.recalculate}

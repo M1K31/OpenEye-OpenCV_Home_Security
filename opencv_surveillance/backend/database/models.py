@@ -285,7 +285,10 @@ class Camera(Base):
     # Recording settings
     # CHANGED: Default to False
     recording_enabled = Column(Boolean, default=False)
-    post_motion_cooldown = Column(Integer, default=5)
+    pre_motion_seconds = Column(Integer, default=5)  # Buffer seconds before motion detected
+    post_motion_seconds = Column(Integer, default=10)  # Continue recording after motion stops
+    max_recording_duration = Column(Integer, default=300)  # Maximum recording duration (5 min)
+    post_motion_cooldown = Column(Integer, default=5)  # Legacy: cooldown between recordings
     audio_recording_enabled = Column(Boolean, default=False)  # Enable audio recording with video
     audio_device = Column(String, nullable=True)  # Audio input device (None = default)
 

@@ -1,20 +1,57 @@
 // Copyright (c) 2025 Mikel Smart
 // This file is part of OpenEye-OpenCV_Home_Security
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { logger } from '../utils/logger';
 import apiClient from '../api/apiClient';
 import AlertSettingsPage from './AlertSettingsPage';
 
-const SystemSettingsPage = ({ embedded = false }) => {
-  const [activeTab, setActiveTab] = useState('system'); // 'system' or 'alerts'
+// Lazy load additional tab content for better performance
+const UserManagementPage = lazy(() => import('./UserManagementPage'));
+const UserProfilePage = lazy(() => import('./UserProfilePage'));
+const PerformanceDashboard = lazy(() => import('./PerformanceDashboard'));
+const HardwareDetectionPage = lazy(() => import('./HardwareDetectionPage'));
+const ScheduledTasksPage = lazy(() => import('./ScheduledTasksPage'));
+const TwoFactorSettings = lazy(() => import('./TwoFactorSettings'));
+
+// Valid tab names
+const VALID_TABS = ['system', 'alerts', 'users', 'profile', '2fa', 'performance', 'hardware', 'tasks'];
+
+// Tab loading fallback
+const TabLoadingFallback = () => (
+  <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+    <div style={{ fontSize: '24px', marginBottom: '10px' }}>⏳</div>
+    Loading...
+  </div>
+);
+
+const SystemSettingsPage = ({ embedded = false, initialTab = null }) => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(
+    VALID_TABS.includes(tabFromUrl) ? tabFromUrl : (initialTab || 'system')
+  );
+
+  // Update URL when tab changes
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    if (!embedded) {
+      setSearchParams({ tab });
+    }
+  };
+
+  // Sync with URL changes
+  useEffect(() => {
+    if (tabFromUrl && VALID_TABS.includes(tabFromUrl) && tabFromUrl !== activeTab) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [tabFromUrl]);
   const [settings, setSettings] = useState({
     recordings_path: '',
     faces_path: '',
     snapshots_path: '',
     display_mode: 'grid',
     cycle_interval: 5,
-    max_recording_duration: 300,
-    motion_percentage_threshold: 1.0, // Default 1% motion threshold
     theme: 'dark',
     // Performance Settings (v3.7.1+)
     hardware_video_encoding: false,
@@ -237,22 +274,76 @@ const SystemSettingsPage = ({ embedded = false }) => {
             {/* Tab Navigation */}
             <div style={styles.tabContainer}>
               <button
-                onClick={() => setActiveTab('system')}
+                onClick={() => handleTabChange('system')}
                 style={{
                   ...styles.tab,
                   ...(activeTab === 'system' ? styles.tabActive : {})
                 }}
               >
-                ⚙️ System Settings
+                ⚙️ System
               </button>
               <button
-                onClick={() => setActiveTab('alerts')}
+                onClick={() => handleTabChange('alerts')}
                 style={{
                   ...styles.tab,
                   ...(activeTab === 'alerts' ? styles.tabActive : {})
                 }}
               >
-                🔔 Alert Settings
+                🔔 Alerts
+              </button>
+              <button
+                onClick={() => handleTabChange('users')}
+                style={{
+                  ...styles.tab,
+                  ...(activeTab === 'users' ? styles.tabActive : {})
+                }}
+              >
+                👥 Users
+              </button>
+              <button
+                onClick={() => handleTabChange('profile')}
+                style={{
+                  ...styles.tab,
+                  ...(activeTab === 'profile' ? styles.tabActive : {})
+                }}
+              >
+                👤 My Profile
+              </button>
+              <button
+                onClick={() => handleTabChange('2fa')}
+                style={{
+                  ...styles.tab,
+                  ...(activeTab === '2fa' ? styles.tabActive : {})
+                }}
+              >
+                🔐 2FA
+              </button>
+              <button
+                onClick={() => handleTabChange('performance')}
+                style={{
+                  ...styles.tab,
+                  ...(activeTab === 'performance' ? styles.tabActive : {})
+                }}
+              >
+                📊 Performance
+              </button>
+              <button
+                onClick={() => handleTabChange('hardware')}
+                style={{
+                  ...styles.tab,
+                  ...(activeTab === 'hardware' ? styles.tabActive : {})
+                }}
+              >
+                🖥️ Hardware
+              </button>
+              <button
+                onClick={() => handleTabChange('tasks')}
+                style={{
+                  ...styles.tab,
+                  ...(activeTab === 'tasks' ? styles.tabActive : {})
+                }}
+              >
+                ⏰ Tasks
               </button>
             </div>
           </>
@@ -261,6 +352,30 @@ const SystemSettingsPage = ({ embedded = false }) => {
         {/* Render active tab content */}
         {activeTab === 'alerts' ? (
           <AlertSettingsPage embedded={true} />
+        ) : activeTab === 'users' ? (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <UserManagementPage embedded={true} />
+          </Suspense>
+        ) : activeTab === 'profile' ? (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <UserProfilePage embedded={true} />
+          </Suspense>
+        ) : activeTab === '2fa' ? (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <TwoFactorSettings embedded={true} />
+          </Suspense>
+        ) : activeTab === 'performance' ? (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <PerformanceDashboard embedded={true} />
+          </Suspense>
+        ) : activeTab === 'hardware' ? (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <HardwareDetectionPage embedded={true} />
+          </Suspense>
+        ) : activeTab === 'tasks' ? (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <ScheduledTasksPage embedded={true} />
+          </Suspense>
         ) : (
           <>
             {message.text && (
@@ -422,59 +537,21 @@ const SystemSettingsPage = ({ embedded = false }) => {
           </div>
         </div>
 
-        {/* Recording Settings Section */}
+        {/* Recording & Motion Settings Note */}
         <div style={styles.section}>
-          <h2 style={styles.sectionTitle}>⏺️ Recording Settings</h2>
+          <h2 style={styles.sectionTitle}>⏺️ Recording & Motion Settings</h2>
           <p style={styles.sectionDescription}>
-            Configure recording behavior and limits.
+            Recording duration, motion detection thresholds, and sensitivity settings are now configured <strong>per-camera</strong> in the Camera Manager.
+            This allows you to fine-tune each camera based on its environment and use case.
           </p>
-
-          <div style={styles.formGroup}>
-            <label style={styles.label}>
-              <span style={styles.labelText}>Max Recording Duration (seconds)</span>
-              <span style={styles.labelHint}>Maximum length of a single recording (30-1800 seconds)</span>
-            </label>
-            <input
-              type="number"
-              min="30"
-              max="1800"
-              value={settings.max_recording_duration || 300}
-              onChange={(e) => {
-                const val = parseInt(e.target.value);
-                if (!isNaN(val) && val >= 30 && val <= 1800) {
-                  handleInputChange('max_recording_duration', val);
-                }
-              }}
-              className="form-input"
-            />
-            <div style={styles.hint}>
-              Current: {Math.floor((settings.max_recording_duration || 300) / 60)} minutes {(settings.max_recording_duration || 300) % 60} seconds
-            </div>
-          </div>
-
-          <div style={styles.formGroup}>
-            <label style={styles.label}>
-              <span style={styles.labelText}>Motion Detection Threshold (%)</span>
-              <span style={styles.labelHint}>Percentage of pixels that must change to trigger motion detection (0.1-5.0%)</span>
-            </label>
-            <input
-              type="number"
-              min="0.1"
-              max="5.0"
-              step="0.1"
-              value={settings.motion_percentage_threshold || 1.0}
-              onChange={(e) => {
-                const val = parseFloat(e.target.value);
-                if (!isNaN(val) && val >= 0.1 && val <= 5.0) {
-                  handleInputChange('motion_percentage_threshold', val);
-                }
-              }}
-              className="form-input"
-            />
-            <div style={styles.hint}>
-              Lower values = more sensitive (detects smaller movements). Higher values = less sensitive (only larger movements).
-              Recommended: 0.5-2.0% for most scenarios.
-            </div>
+          <div style={styles.infoBox}>
+            <strong>To configure recording and motion settings:</strong>
+            <ol style={{ marginTop: '8px', paddingLeft: '20px', lineHeight: '1.8' }}>
+              <li>Go to <strong>Camera Manager</strong> in the sidebar</li>
+              <li>Click the <strong>Settings</strong> button on any camera card</li>
+              <li>Adjust <strong>Motion Detection</strong> settings (Object Size, Pixel Sensitivity, Trigger Threshold)</li>
+              <li>Adjust <strong>Recording</strong> settings (Max Duration, Pre/Post Motion Buffer)</li>
+            </ol>
           </div>
         </div>
 
@@ -676,22 +753,24 @@ const styles = {
   },
   tabContainer: {
     display: 'flex',
-    gap: '10px',
+    flexWrap: 'wrap',
+    gap: '8px',
     marginBottom: '30px',
     borderBottom: '2px solid var(--border-panel)',
     paddingBottom: '5px',
   },
   tab: {
-    padding: '12px 24px',
+    padding: '10px 16px',
     background: 'transparent',
     border: 'none',
     borderBottom: '3px solid transparent',
     color: 'var(--text-secondary)',
-    fontSize: '16px',
+    fontSize: '14px',
     fontWeight: '500',
     cursor: 'pointer',
     transition: 'all 0.2s ease',
     outline: 'none',
+    whiteSpace: 'nowrap',
   },
   tabActive: {
     color: 'var(--theme-primary)',

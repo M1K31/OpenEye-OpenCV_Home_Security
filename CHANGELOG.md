@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.11.4] - 2025-12-28
+
+### Added
+- **Scheduled Tasks System**
+  - Background task scheduler for automated maintenance operations
+  - Model retraining: Automatically retrain face recognition model on schedule
+  - Retroactive face search: Re-identify faces in past events after model updates
+  - Database cleanup: Remove old motion and face detection events
+  - Snapshot cleanup: Delete old snapshot files to free disk space
+  - Cluster cleanup: Remove empty or stale face clusters
+  - Configurable schedule times and intervals per task
+
+- **Retroactive Face Search API**
+  - `/api/scheduled/retroactive-search`: Manually trigger retroactive face identification
+  - Search past events and update identifications based on current trained model
+  - Filter by person name, unknown faces only, time range, and max events
+  - `/api/scheduled/train-and-search`: Combined model training + retroactive search
+
+- **MagicMirror Face Search API**
+  - `/api/ecosystem/faces/search`: Voice command support for detection queries
+  - Natural language date parsing: "today", "yesterday", "December 24", YYYY-MM-DD
+  - Case-insensitive partial name matching for person queries
+  - Voice response generation for voice assistants (natural language summaries)
+  - Filter by person name, date, date ranges, camera, include/exclude unknown faces
+
+- **Ecosystem Statistics Endpoint**
+  - `/api/ecosystem/statistics`: Event counts for MagicMirror integration
+  - Motion events, face events, and recording counts per camera
+  - Configurable time range (1-168 hours)
+  - Per-camera breakdown with active status
+
+- **Face Cluster Training Improvements**
+  - `/api/clusters/trainable`: List clusters ready for training (minimum faces threshold)
+  - `/api/clusters/export-and-train/{cluster_id}`: One-click export cluster to known faces and trigger model training
+  - Automatic model retraining after cluster identification
+
+### Fixed
+- Fixed import error in scheduled_tasks.py (changed from users.get_current_user to auth.get_current_active_user)
+
+---
+
 ## [3.11.1] - 2025-12-14
 
 ### Added

@@ -24,7 +24,7 @@ import asyncio
 from backend.core.alert_manager import get_alert_manager
 from backend.core.automation_engine import process_face_detection
 from backend.database.session import SessionLocal
-from backend.database.models import Camera as CameraModel, MotionDetectionEvent
+from backend.database.models import Camera as CameraModel, MotionDetectionEvent, FaceDetectionEvent
 from backend.database.utils import get_db_context
 
 
@@ -55,6 +55,10 @@ class Camera(ABC):
         self.post_motion_cooldown = 5  # Default, can be overridden from DB
         self.last_faces_detected = []
         self.current_motion_event_id = None  # Track current motion event for face linking
+
+        # Recording frame rate limiter - prevents fast playback
+        # When recording, we limit frame writes to match the target FPS
+        self.last_recording_frame_time = 0
 
         # Load settings from database or use defaults
         settings = db_settings or {}
@@ -152,7 +156,7 @@ class Camera(ABC):
         self.snapshots_path = snapshots_path
 
         # Store motion percentage threshold (minimum % of frame with motion to trigger event)
-        self.motion_percentage_threshold = settings.get("motion_percentage_threshold", 1.0)
+        self.motion_percentage_threshold = settings.get("motion_percentage_threshold", 1.0) or 1.0
 
         # Overlay settings for timestamp and custom text
         self.overlay_enabled = settings.get("overlay_enabled", True)
@@ -325,8 +329,8 @@ class Camera(ABC):
                         brightness_change_threshold=getattr(db_camera, 'brightness_change_threshold', 15),
                     )
 
-                    # Update motion percentage threshold
-                    self.motion_percentage_threshold = db_camera.motion_percentage_threshold
+                    # Update motion percentage threshold (default to 1.0 if not set)
+                    self.motion_percentage_threshold = db_camera.motion_percentage_threshold if db_camera.motion_percentage_threshold is not None else 1.0
 
                     # Update image settings
                     self.update_image_settings(
@@ -701,20 +705,24 @@ class MockCamera(Camera):
         )
 
         # Check motion percentage threshold before triggering event
-        if self.motion_detected and motion_areas:
+        # If motion_areas is empty but motion_detected is True, reset motion_detected
+        # This handles edge cases like lighting compensation where motion is suppressed
+        if self.motion_detected and not motion_areas:
+            self.motion_detected = False
+        elif self.motion_detected and motion_areas:
             # Calculate motion percentage
             frame_area = processed_frame.shape[0] * processed_frame.shape[1]
             total_motion_area = sum(area.get("area", 0) for area in motion_areas)
             motion_percentage = (total_motion_area / frame_area * 100) if frame_area > 0 else 0
-            
+
             # Only trigger if motion percentage exceeds threshold
             if motion_percentage < self.motion_percentage_threshold:
                 # Motion detected but below threshold - ignore it
                 self.motion_detected = False
                 motion_areas = []
 
-        # Trigger motion alert if motion detected
-        if self.motion_detected:
+        # Trigger motion alert if motion detected (and has motion areas)
+        if self.motion_detected and motion_areas:
             # Save snapshot and create database record
             snapshot_path = self._save_motion_snapshot(
                 processed_frame, motion_areas)
@@ -784,7 +792,10 @@ class MockCamera(Camera):
         if self.motion_detected:
             self.last_motion_time = time.time()
             if not self.recorder.is_recording:
-                self.recorder.start(self.width, self.height, fps=30, camera_id=self.camera_id or "mock")
+                # Use camera's configured fps_target for accurate playback speed
+                recording_fps = self.video_processor.settings.fps_target or 15
+                self.recorder.start(self.width, self.height, fps=recording_fps, camera_id=self.camera_id or "mock")
+                self.last_recording_frame_time = 0  # Reset frame time for new recording
             
             # Link motion event to the recording (if recording is active)
             if self.recorder.is_recording and self.current_motion_event_id:
@@ -794,7 +805,16 @@ class MockCamera(Camera):
             # Add recording indicator to the processed frame for streaming
             cv2.circle(processed_frame, (self.width - 30, 30),
                        10, (0, 0, 255), -1)
-            self.recorder.write(clean_frame)  # Write clean frame to file
+
+            # Frame rate limiting for recording - prevents fast playback
+            # Only write frames at the target FPS rate
+            recording_fps = self.video_processor.settings.fps_target or 15
+            frame_interval = 1.0 / recording_fps
+            current_time = time.time()
+
+            if current_time - self.last_recording_frame_time >= frame_interval:
+                self.recorder.write(clean_frame)  # Write clean frame to file
+                self.last_recording_frame_time = current_time
 
             # Stop recording if: no motion for cooldown period OR max duration
             # exceeded
@@ -819,7 +839,7 @@ class MockCamera(Camera):
 
 
 class RTSPCamera(Camera):
-    """Enhanced RTSPCamera with granular controls"""
+    """Enhanced RTSPCamera with granular controls and background processing"""
 
     def __init__(
         self,
@@ -829,6 +849,41 @@ class RTSPCamera(Camera):
         db_settings: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(source, camera_id, enable_face_detection, db_settings)
+        self._background_thread = None
+        self._stop_background = threading.Event()
+        self._frame_lock = threading.Lock()  # Lock for thread-safe frame access
+        # Enable background processing by default for 24/7 surveillance
+        self._background_processing_enabled = db_settings.get("background_processing", True) if db_settings else True
+
+    def _background_processor(self):
+        """
+        Background thread that continuously processes frames for motion/face detection.
+        This ensures surveillance runs 24/7 regardless of stream viewers.
+        """
+        print(f"🎥 [BACKGROUND] Starting background processor for camera {self.camera_id}")
+        frame_interval = 1.0 / 10  # Process at ~10 FPS for efficiency
+
+        while not self._stop_background.is_set():
+            try:
+                if not self.is_running or not self.capture or not self.capture.isOpened():
+                    time.sleep(0.5)
+                    continue
+
+                # Process frame (motion detection, face recognition, recording)
+                frame, motion_detected = self.get_frame()
+
+                if frame is None:
+                    time.sleep(0.1)
+                    continue
+
+                # Sleep to maintain target FPS
+                time.sleep(frame_interval)
+
+            except Exception as e:
+                print(f"⚠️ [BACKGROUND] Error in background processor for {self.camera_id}: {e}")
+                time.sleep(1)  # Wait before retrying
+
+        print(f"🛑 [BACKGROUND] Background processor stopped for camera {self.camera_id}")
 
     def start(self):
         # Detect if source is a USB device index (integer or numeric string)
@@ -861,7 +916,30 @@ class RTSPCamera(Camera):
                 if db:
                     db.close()
 
+        # Start background processing thread for 24/7 surveillance
+        if self._background_processing_enabled:
+            self._stop_background.clear()
+            self._background_thread = threading.Thread(
+                target=self._background_processor,
+                daemon=True,
+                name=f"bg_processor_{self.camera_id}"
+            )
+            self._background_thread.start()
+            print(f"✅ [BACKGROUND] Background processing enabled for camera {self.camera_id}")
+        else:
+            print(f"⚠️ [BACKGROUND] Background processing disabled for camera {self.camera_id}")
+
     def stop(self):
+        # Stop background processing thread first
+        if self._background_thread and self._background_thread.is_alive():
+            print(f"🛑 [BACKGROUND] Stopping background processor for {self.camera_id}...")
+            self._stop_background.set()
+            self._background_thread.join(timeout=5.0)
+            if self._background_thread.is_alive():
+                print(f"⚠️ [BACKGROUND] Background thread did not stop cleanly for {self.camera_id}")
+            else:
+                print(f"✅ [BACKGROUND] Background processor stopped for {self.camera_id}")
+
         if self.recorder.is_recording:
             self.recorder.stop()
         if self.is_running and self.capture:
@@ -877,7 +955,9 @@ class RTSPCamera(Camera):
         if not self.video_processor.should_process_frame():
             return None, False
 
-        ret, frame = self.capture.read()
+        # Thread-safe frame capture and processing
+        with self._frame_lock:
+            ret, frame = self.capture.read()
         if not ret:
             print("Error: Failed to grab frame from RTSP stream.")
             return None, False
@@ -899,29 +979,30 @@ class RTSPCamera(Camera):
         )
 
         # Check motion percentage threshold before triggering event
-        if self.motion_detected and motion_areas:
+        # If motion_areas is empty but motion_detected is True, reset motion_detected
+        # This handles edge cases like lighting compensation where motion is suppressed
+        if self.motion_detected and not motion_areas:
+            self.motion_detected = False
+        elif self.motion_detected and motion_areas:
             # Calculate motion percentage
             frame_area = processed_frame.shape[0] * processed_frame.shape[1]
             total_motion_area = sum(area.get("area", 0) for area in motion_areas)
             motion_percentage = (total_motion_area / frame_area * 100) if frame_area > 0 else 0
-            
+
             # Only trigger if motion percentage exceeds threshold
             if motion_percentage < self.motion_percentage_threshold:
                 # Motion detected but below threshold - ignore it
                 self.motion_detected = False
                 motion_areas = []
 
-        # Trigger motion alert if motion detected
-        if self.motion_detected:
-            print(f"🔴 [RTSP] MOTION DETECTED! Camera: {self.camera_id}")
+        # Trigger motion alert if motion detected (and has motion areas)
+        if self.motion_detected and motion_areas:
             # Save snapshot and create database record
             snapshot_path = self._save_motion_snapshot(
                 processed_frame, motion_areas)
-            print(f"📸 [RTSP] Snapshot saved: {snapshot_path}")
             self.current_motion_event_id = self._create_motion_event(
                 processed_frame, motion_areas, snapshot_path
             )
-            print(f"✅ [RTSP] Motion event created: ID={self.current_motion_event_id}")
 
             try:
                 alert_manager = get_alert_manager()
@@ -986,7 +1067,10 @@ class RTSPCamera(Camera):
             self.last_motion_time = time.time()
             if not self.recorder.is_recording:
                 height, width, _ = clean_frame.shape
-                self.recorder.start(width, height, fps=30, camera_id=self.camera_id or "rtsp")
+                # Use camera's configured fps_target for consistent playback speed
+                recording_fps = self.video_processor.settings.fps_target or 15
+                self.recorder.start(width, height, fps=recording_fps, camera_id=self.camera_id or "rtsp")
+                self.last_recording_frame_time = 0  # Reset frame time for new recording
             
             # Link motion event to the recording (if recording is active)
             if self.recorder.is_recording and self.current_motion_event_id:
@@ -996,8 +1080,17 @@ class RTSPCamera(Camera):
             height, width, _ = clean_frame.shape
             # Add recording indicator to the processed frame for streaming
             cv2.circle(processed_frame, (width - 30, 30), 10, (0, 0, 255), -1)
-            # Write original clean frame to file
-            self.recorder.write(clean_frame)
+
+            # Frame rate limiting for recording - prevents fast playback
+            # Only write frames at the target FPS rate
+            recording_fps = self.video_processor.settings.fps_target or 15
+            frame_interval = 1.0 / recording_fps
+            current_time = time.time()
+
+            if current_time - self.last_recording_frame_time >= frame_interval:
+                # Write original clean frame to file
+                self.recorder.write(clean_frame)
+                self.last_recording_frame_time = current_time
 
             if not self.motion_detected and (
                 time.time() - self.last_motion_time > self.post_motion_cooldown
@@ -1080,6 +1173,7 @@ class CameraManager:
                         "min_contour_area": db_camera.min_contour_area,
                         "motion_sensitivity": db_camera.motion_sensitivity,
                         "motion_threshold": db_camera.motion_threshold,
+                        "motion_percentage_threshold": db_camera.motion_percentage_threshold,
                         "noise_reduction": db_camera.noise_reduction,
                         "detect_shadows": db_camera.detect_shadows,
                         "detection_zones": db_camera.detection_zones,

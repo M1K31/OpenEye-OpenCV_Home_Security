@@ -117,7 +117,9 @@ const CameraSettingsModal = ({ camera, onClose, onSave }) => {
     setSuccess(null);
 
     try {
-      await apiClient.put(`/cameras/${camera.camera_id}`, motionSettings);
+      console.log('Saving motion settings for camera:', camera.camera_id, motionSettings);
+      const response = await apiClient.put(`/cameras/${camera.camera_id}`, motionSettings);
+      console.log('Motion settings saved successfully:', response.data);
       setSuccess('Motion detection settings saved successfully!');
 
       // Auto-clear success message after 4 seconds
@@ -127,7 +129,9 @@ const CameraSettingsModal = ({ camera, onClose, onSave }) => {
         onSave(camera.camera_id);
       }
     } catch (err) {
-      setError(`Failed to save motion settings: ${err.message}`);
+      console.error('Failed to save motion settings:', err);
+      const errorMsg = err.response?.data?.detail || err.message || 'Unknown error';
+      setError(`Failed to save motion settings: ${errorMsg}`);
     } finally {
       setSaving(false);
     }
@@ -243,7 +247,7 @@ const CameraSettingsModal = ({ camera, onClose, onSave }) => {
 
       <div className="settings-section">
         <label className="settings-label">
-          Motion Sensitivity (1-10)
+          Object Size Filter (1-10)
           <span className="settings-value">{motionSettings.motion_sensitivity}</span>
         </label>
         <input
@@ -258,13 +262,15 @@ const CameraSettingsModal = ({ camera, onClose, onSave }) => {
           className="settings-slider"
         />
         <p className="settings-hint">
-          Higher = more sensitive (detects smaller movements)
+          <strong>Step 1 - Filter by object size:</strong> Controls the minimum size of moving objects to detect.
+          1 = only large objects (people, vehicles), 10 = detect tiny movements (insects, leaves, noise).
+          <em>Recommended: 3-5 for indoor, 1-3 for outdoor.</em>
         </p>
       </div>
 
       <div className="settings-section">
         <label className="settings-label">
-          Motion Threshold (1-100)
+          Pixel Sensitivity (1-100)
           <span className="settings-value">{motionSettings.motion_threshold}</span>
         </label>
         <input
@@ -279,13 +285,15 @@ const CameraSettingsModal = ({ camera, onClose, onSave }) => {
           className="settings-slider"
         />
         <p className="settings-hint">
-          Lower = more adaptive to lighting changes
+          <strong>Step 2 - Pixel change detection:</strong> How much a pixel must change to be considered "moving".
+          Lower = more sensitive to subtle changes, Higher = ignores shadows and minor lighting shifts.
+          <em>Recommended: 25-50 for most cameras, higher if getting false positives from lighting.</em>
         </p>
       </div>
 
       <div className="settings-section">
         <label className="settings-label">
-          Motion Percentage Threshold ({motionSettings.motion_percentage_threshold.toFixed(1)}%)
+          Trigger Threshold ({motionSettings.motion_percentage_threshold.toFixed(1)}% of frame)
         </label>
         <input
           type="range"
@@ -300,7 +308,9 @@ const CameraSettingsModal = ({ camera, onClose, onSave }) => {
           className="settings-slider"
         />
         <p className="settings-hint">
-          Minimum percentage of frame that must contain motion
+          <strong>Step 3 - Final filter:</strong> What percentage of the frame must contain detected motion to trigger an event.
+          0.5% = small hand wave triggers, 5% = requires larger movement like walking across frame.
+          <em>Recommended: 0.5-2% for most use cases.</em>
         </p>
       </div>
 
@@ -555,8 +565,8 @@ const CameraSettingsModal = ({ camera, onClose, onSave }) => {
 
       <div className="settings-section">
         <label className="settings-label">
-          Frame Rate (FPS)
-          <span className="settings-value">{imageSettings.fps_target}</span>
+          Recording Frame Rate (FPS)
+          <span className="settings-value">{imageSettings.fps_target} FPS</span>
         </label>
         <input
           type="range"
@@ -569,9 +579,18 @@ const CameraSettingsModal = ({ camera, onClose, onSave }) => {
           })}
           className="settings-slider"
         />
-        <p className="settings-hint">
-          Frames per second (1-30 FPS)
-        </p>
+        <div className="settings-hint-box">
+          <p className="settings-hint">
+            <strong>Recording FPS:</strong> This controls how many frames per second are saved in motion recordings.
+          </p>
+          <p className="settings-hint" style={{ marginTop: '8px' }}>
+            <strong>Important:</strong> For accurate playback speed, set this to match your camera's native FPS from the manufacturer specifications.
+            Common values: 15 FPS (budget cameras), 25 FPS (PAL), 30 FPS (NTSC/most IP cameras).
+          </p>
+          <p className="settings-hint" style={{ marginTop: '8px', color: 'var(--color-info, #2196F3)' }}>
+            <strong>Note:</strong> This setting only affects <em>recordings</em>. Live streaming is not affected and always displays at full camera speed.
+          </p>
+        </div>
       </div>
 
       <div className="settings-actions">

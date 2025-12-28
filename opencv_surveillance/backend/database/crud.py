@@ -84,7 +84,7 @@ def update_camera(
     for key, value in camera_data.items():
         setattr(db_camera, key, value)
 
-    db_camera.last_active = datetime.utcnow()
+    db_camera.last_active_at = datetime.utcnow()
     db.commit()
     db.refresh(db_camera)
     return db_camera

@@ -17,7 +17,7 @@ class Enable2FAResponse(BaseModel):
     backup_codes: List[str] = Field(..., description="10 backup codes for recovery")
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "secret": "JBSWY3DPEHPK3PXP",
                 "qr_code": "data:image/png;base64,iVBORw0KGgo...",
@@ -35,7 +35,7 @@ class Verify2FARequest(BaseModel):
     token: str = Field(..., min_length=6, max_length=6, description="6-digit TOTP token")
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "token": "123456"
             }
@@ -49,7 +49,7 @@ class Verify2FAResponse(BaseModel):
     two_factor_enabled: bool
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "success": True,
                 "message": "Two-factor authentication enabled successfully",
@@ -63,7 +63,7 @@ class Disable2FARequest(BaseModel):
     password: str = Field(..., description="User's password for confirmation")
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "password": "your-password"
             }
@@ -77,7 +77,7 @@ class Disable2FAResponse(BaseModel):
     two_factor_enabled: bool
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "success": True,
                 "message": "Two-factor authentication disabled",
@@ -94,7 +94,7 @@ class Login2FARequest(BaseModel):
     backup_code: Optional[str] = Field(None, description="Backup code (alternative to TOTP)")
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "username": "admin",
                 "password": "your-password",
@@ -110,7 +110,7 @@ class Login2FAResponse(BaseModel):
     requires_2fa: bool = Field(False, description="Whether 2FA token is required")
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                 "token_type": "bearer",
@@ -126,7 +126,7 @@ class TwoFactorStatus(BaseModel):
     backup_codes_remaining: Optional[int] = None
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "two_factor_enabled": True,
                 "enrolled_at": "2025-10-24T12:00:00",

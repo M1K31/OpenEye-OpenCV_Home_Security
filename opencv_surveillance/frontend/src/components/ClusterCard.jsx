@@ -49,8 +49,9 @@ const ClusterCard = ({ cluster, selected, onSelect, onView, onAssignName, onDele
     if (representative_snapshot_path.startsWith('/')) {
       return representative_snapshot_path;
     }
-    // Otherwise, prepend /data/snapshots/
-    return `/data/snapshots/${representative_snapshot_path}`;
+    // Otherwise, just prepend / to make it a valid URL path
+    // The path is already stored as data/snapshots/... in the database
+    return `/${representative_snapshot_path}`;
   };
 
   return (

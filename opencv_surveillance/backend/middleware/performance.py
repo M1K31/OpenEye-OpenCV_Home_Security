@@ -15,6 +15,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Static file extensions that should be cached
+CACHEABLE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.ico'}
+STATIC_PATHS = {'/data/snapshots', '/api/snapshots', '/faces', '/data/thumbnails', '/recordings'}
+
 
 class PerformanceMonitoringMiddleware(BaseHTTPMiddleware):
     """
@@ -63,6 +67,13 @@ class PerformanceMonitoringMiddleware(BaseHTTPMiddleware):
 
         # Add performance headers
         response.headers["X-Response-Time"] = f"{duration_ms:.2f}ms"
+
+        # Add cache headers for static image files
+        path = request.url.path.lower()
+        if any(path.startswith(static_path) for static_path in STATIC_PATHS):
+            if any(path.endswith(ext) for ext in CACHEABLE_EXTENSIONS):
+                # Cache images for 1 hour in browser, 24 hours in CDN
+                response.headers["Cache-Control"] = "public, max-age=3600, s-maxage=86400"
 
         return response
 

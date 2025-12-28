@@ -103,3 +103,7 @@ build/
 
 # Developer documentation (contains AI context)
 CLAUDE.md
+
+# Todo files
+TODO.md
+docs/TODO.md

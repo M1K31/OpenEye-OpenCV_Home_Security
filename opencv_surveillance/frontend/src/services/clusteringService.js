@@ -148,6 +148,52 @@ const clusteringService = {
     });
     return response.data;
   },
+
+  // =====================================================
+  // Face Review Workflow Methods (v3.11.5)
+  // =====================================================
+
+  /**
+   * Review a single face's association with a cluster
+   * @param {number} clusterId - Current cluster ID
+   * @param {number} faceId - Face detection event ID
+   * @param {string} action - 'confirm' or 'reject'
+   * @param {string|null} reassignTo - For rejections: person name to reassign to
+   * @returns {Promise<Object>} Review result
+   */
+  async reviewFace(clusterId, faceId, action, reassignTo = null) {
+    const response = await apiClient.post(`/clusters/${clusterId}/faces/${faceId}/review`, {
+      action,
+      reassign_to: reassignTo,
+    });
+    return response.data;
+  },
+
+  /**
+   * Bulk review multiple faces in a cluster
+   * @param {number} clusterId - Cluster ID
+   * @param {number[]} faceIds - Array of face IDs to review
+   * @param {string} action - 'confirm' or 'reject'
+   * @param {string|null} reassignTo - For rejections: person name to reassign all to
+   * @returns {Promise<Object>} Bulk review result
+   */
+  async bulkReviewFaces(clusterId, faceIds, action, reassignTo = null) {
+    const response = await apiClient.post(`/clusters/${clusterId}/faces/bulk-review`, {
+      face_ids: faceIds,
+      action,
+      reassign_to: reassignTo,
+    });
+    return response.data;
+  },
+
+  /**
+   * Clean up clusters with 0 faces
+   * @returns {Promise<Object>} Cleanup result with deleted count
+   */
+  async cleanupEmptyClusters() {
+    const response = await apiClient.delete('/clusters/cleanup-empty');
+    return response.data;
+  },
 };
 
 export default clusteringService;

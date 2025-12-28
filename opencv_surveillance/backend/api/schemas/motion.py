@@ -40,15 +40,18 @@ class MotionEventResponse(MotionEventBase):
     @field_validator('snapshot_path', mode='before')
     @classmethod
     def normalize_snapshot_path(cls, v):
-        """Strip directory prefix from snapshot path for API response"""
+        """Normalize snapshot path for API response - ensure it has the correct prefix"""
         if v is None:
             return None
-        # Remove 'data/snapshots/' prefix if present
         path_str = str(v)
+        # Return the path as-is if it already starts with data/snapshots/
+        # The frontend will add the leading / to construct the URL
         if path_str.startswith('data/snapshots/'):
-            return path_str.replace('data/snapshots/', '', 1)
-        # Also handle absolute paths
-        return Path(path_str).name
+            return path_str
+        # If it's just a filename, add the prefix
+        if '/' not in path_str:
+            return f"data/snapshots/{path_str}"
+        return path_str
 
     class Config:
         from_attributes = True

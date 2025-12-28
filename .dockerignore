@@ -30,6 +30,8 @@ docs/archived-releases/
 archives/
 *.md
 !README.md
+!CHANGELOG.md
+!DOCKER.md
 
 # IDE and system
 .vscode/

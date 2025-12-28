@@ -1,6 +1,6 @@
 # OpenEye - AI-Powered Home Security with OpenCV & Face Recognition
 
-![Version](https://img.shields.io/badge/version-3.11.1-blue.svg)
+![Version](https://img.shields.io/badge/version-3.11.4-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![OpenCV](https://img.shields.io/badge/OpenCV-4.8+-red.svg)
 ![License](https://img.shields.io/badge/license-MIT-yellow.svg)
@@ -354,45 +354,30 @@ pytest
 
 ## 📊 Project Status
 
-**Current Version**: 3.9.0 (Security Hardening & Performance)
+**Current Version**: 3.11.4 (Scheduled Tasks & MagicMirror Integration)
 
-### Recent Updates (v3.9.0)
-**Security Enhancements:**
-- 🔒 **Account Lockout System** - Auto-lock after 5 failed 2FA attempts (30-min lockout)
-- 🚦 **Enhanced Rate Limiting** - Stricter limits for password reset (5/hour) and 2FA (10/5min)
-- 📝 **Comprehensive Audit Logging** - 9 new security event types tracked in JSONL format
-- ✅ **Token Validation Fix** - Expired tokens properly cleared on page reload
+### Recent Updates (v3.11.4)
+**New Features:**
+- 📅 **Scheduled Tasks System** - Background scheduler for automated maintenance
+  - Model retraining: Automatically retrain face recognition on schedule
+  - Retroactive face search: Re-identify faces in past events
+  - Database & snapshot cleanup with configurable retention
+- 🔍 **MagicMirror Face Search API** - Voice command support for detection queries
+  - Natural language date parsing ("today", "yesterday", "December 24")
+  - `/api/ecosystem/faces/search` endpoint with voice response generation
+- 📊 **Ecosystem Statistics** - Event counts for companion apps
 
-**Performance Optimizations:**
-- 📊 **Database Query Optimization** - 11 new indexes for frequently accessed queries (recordings, face history, clusters)
-- 🚀 **Query Result Caching** - In-memory cache with TTL support reduces database load
-- ⚡ **WebSocket Optimization** - Change detection reduces bandwidth usage (only broadcasts when data changes)
-- 📊 **Standardized API Pagination** - Consistent response format across all endpoints
+### Previous Updates (v3.11.1 - Multi-User & Ecosystem)
+- 👥 **Complete Multi-User System** - Role-based access control (admin/user/viewer)
+- 🌐 **Ecosystem Integration** - MagicMirror, mobile app support with WebSocket events
+- 📱 **Multi-Device Support** - Smart notification routing with per-device preferences
 
-### Previous Updates (v3.7.1)
-- ✅ FFmpeg hardware-accelerated video recording (70-90% CPU reduction)
-- ✅ Multi-platform GPU support (NVENC, QuickSync, VideoToolbox, VAAPI)
-- ✅ Async frame buffer (300-frame queue, 0% dropped frames)
-- ✅ Performance Settings UI in System Settings
-- ✅ UI/UX improvements (contrast fixes, Apple HIG compliance)
-- ✅ Documentation consolidation (252+ files organized)
+### Previous Updates (v3.10.0 - Object Detection & Two-Way Audio)
+- 🔍 **YOLOv8 Object Detection** - Vehicles, animals, packages with named tracking
+- 🎤 **Two-Way Audio** - WebRTC bidirectional communication with cameras
+- 🔔 **Object Detection Alerts** - Class-based and entity-based notifications
 
-### Previous Major Release (v3.6.0 - Security Hardening)
-- ✅ Per-endpoint rate limiting with granular API category limits
-- ✅ CSRF protection using double-submit cookie pattern
-- ✅ Two-factor authentication (2FA) with TOTP support
-- ✅ Enhanced audit logging system (42 event types, JSONL format)
-- ✅ Face clustering for unknown faces (DBSCAN algorithm)
-
-### Roadmap
-See [TODO.md](docs/TODO.md) for complete feature roadmap.
-
-**Next Up** (v3.8.0):
-- Two-way audio support (backend complete, frontend pending)
-- License plate recognition (ALPR)
-- Object detection (YOLO integration)
-- Advanced analytics dashboard
-- Mobile app (React Native/Flutter)
+See [CHANGELOG.md](CHANGELOG.md) for full version history.
 
 ---
 
