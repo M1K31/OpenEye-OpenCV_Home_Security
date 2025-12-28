@@ -1,15 +1,29 @@
 // Copyright (c) 2025 Mikel Smart
 // This file is part of OpenEye-OpenCV_Home_Security
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import apiClient from '../api/apiClient';
 import HelpButton from '../components/HelpButton';
+import PersonDetectionsModal from '../components/PersonDetectionsModal';
 import { HELP_CONTENT } from '../utils/helpContent';
 import { logger } from '../utils/logger';
 import './FaceManagementPage.css';
 
+// Lazy load sub-pages for tab content
+const FaceClusteringPage = lazy(() => import('./FaceClusteringPage'));
+const DetectionsPage = lazy(() => import('./DetectionsPage'));
+
+// Tab definitions
+const TABS = [
+  { id: 'profiles', label: 'Profiles', icon: '👤' },
+  { id: 'clustering', label: 'Face Clustering', icon: '🔗' },
+  { id: 'detections', label: 'All Detections', icon: '🔍' },
+];
+
 const FaceManagementPage = ({ embedded = false }) => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'profiles');
   const [people, setPeople] = useState([]);
   const [statistics, setStatistics] = useState({});
   const [settings, setSettings] = useState(null); // Start with null to show loading state
@@ -21,6 +35,15 @@ const FaceManagementPage = ({ embedded = false }) => {
   const [loading, setLoading] = useState(false);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [existingPersonInfo, setExistingPersonInfo] = useState(null);
+  const [viewingDetections, setViewingDetections] = useState(null);
+  const [trainingPerson, setTrainingPerson] = useState(null); // Track which person is being trained
+
+  // Retroactive search state
+  const [searchingPerson, setSearchingPerson] = useState(null);
+  const [searchTolerance, setSearchTolerance] = useState(0.4); // Default to strict
+  const [searchHoursBack, setSearchHoursBack] = useState(168); // 1 week
+  const [searchResults, setSearchResults] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
 
   // Load data on component mount
   useEffect(() => {
@@ -327,6 +350,88 @@ const FaceManagementPage = ({ embedded = false }) => {
     }
   };
 
+  // Train a specific person only (faster than full model training)
+  const trainPerson = async (personName) => {
+    setTrainingPerson(personName);
+    showMessage(`🔄 Training ${personName}...`, 'warning');
+    try {
+      const response = await apiClient.post(`/faces/people/${encodeURIComponent(personName)}/train`);
+      const result = response.data;
+      showMessage(
+        `✅ Trained ${result.encodings_added} encoding(s) for "${personName}" in ${result.training_time?.toFixed(1) || '?'}s`,
+        'success'
+      );
+      loadStatistics();
+    } catch (error) {
+      showMessage('❌ Error training: ' + (error.response?.data?.detail || error.message), 'error');
+    } finally {
+      setTrainingPerson(null);
+    }
+  };
+
+  // Search past events for a specific person
+  const searchPastEvents = async () => {
+    if (!searchingPerson) return;
+
+    setIsSearching(true);
+    setSearchResults(null);
+    showMessage(`🔍 Searching past events for ${searchingPerson}...`, 'warning');
+
+    try {
+      const response = await apiClient.post(
+        `/scheduled/search-person/${encodeURIComponent(searchingPerson)}`,
+        {
+          tolerance: searchTolerance,
+          hours_back: searchHoursBack,
+          max_events: 5000
+        }
+      );
+
+      const result = response.data.result;
+      setSearchResults(result);
+
+      if (result.matches_found > 0) {
+        showMessage(
+          `✅ Found ${result.matches_found} match(es) for "${searchingPerson}" out of ${result.events_searched} events searched`,
+          'success'
+        );
+        loadStatistics(); // Refresh statistics
+      } else {
+        showMessage(
+          `No matches found for "${searchingPerson}" in ${result.events_searched} events`,
+          'warning'
+        );
+      }
+    } catch (error) {
+      showMessage(
+        '❌ Search failed: ' + (error.response?.data?.detail || error.message),
+        'error'
+      );
+      setSearchResults(null);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Get tolerance label for display
+  const getToleranceLabel = (value) => {
+    if (value <= 0.3) return 'Very Strict';
+    if (value <= 0.4) return 'Strict';
+    if (value <= 0.5) return 'Moderate';
+    if (value <= 0.6) return 'Normal';
+    return 'Lenient';
+  };
+
+  // Get hours back label for display
+  const getHoursLabel = (hours) => {
+    if (hours <= 24) return '24 hours';
+    if (hours <= 48) return '2 days';
+    if (hours <= 72) return '3 days';
+    if (hours <= 168) return '1 week';
+    if (hours <= 336) return '2 weeks';
+    return '1 month';
+  };
+
   const updateSettings = async () => {
     setLoading(true);
     try {
@@ -344,27 +449,35 @@ const FaceManagementPage = ({ embedded = false }) => {
     setTimeout(() => setMessage(null), 5000);
   };
 
-  return (
-    <div className="face-management-container">
-      <header className="page-header">
-        <h1>
-          Face Recognition Management
-          <HelpButton 
-            title={HELP_CONTENT.FACE_RECOGNITION.title}
-            description={HELP_CONTENT.FACE_RECOGNITION.description}
-          />
-        </h1>
-      </header>
+  // Handle tab change
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId);
+    setSearchParams({ tab: tabId });
+  };
 
-      {message && (
-        <div className={`alert alert-${message.type}`}>
-          <span className="alert-icon">
-            {message.type === 'success' ? '✓' : message.type === 'error' ? '⚠️' : 'ℹ️'}
-          </span>
-          <div className="alert-content">{message.text}</div>
-        </div>
-      )}
+  // Render tab content based on active tab
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'clustering':
+        return (
+          <Suspense fallback={<div className="tab-loading">Loading Face Clustering...</div>}>
+            <FaceClusteringPage />
+          </Suspense>
+        );
+      case 'detections':
+        return (
+          <Suspense fallback={<div className="tab-loading">Loading Detections...</div>}>
+            <DetectionsPage />
+          </Suspense>
+        );
+      default:
+        return renderProfilesTab();
+    }
+  };
 
+  // Render the profiles tab content (existing content)
+  const renderProfilesTab = () => (
+    <>
       {/* Statistics Section */}
       <section className="statistics-section">
         <h2>Statistics</h2>
@@ -475,8 +588,8 @@ const FaceManagementPage = ({ embedded = false }) => {
               <div key={person.name} className="person-card">
                 {person.preview_photo_url ? (
                   <div className="person-photo-preview">
-                    <img 
-                      src={person.preview_photo_url} 
+                    <img
+                      src={person.preview_photo_url}
                       alt={person.name}
                       onError={(e) => {
                         e.target.style.display = 'none';
@@ -504,6 +617,35 @@ const FaceManagementPage = ({ embedded = false }) => {
                     Add Photos
                   </button>
                   <button
+                    onClick={() => {
+                      logger.log('[FaceManagement] View Detections clicked for:', person.name);
+                      setViewingDetections(person.name);
+                    }}
+                    className="btn btn-secondary btn-sm"
+                    disabled={loading}
+                  >
+                    View Detections
+                  </button>
+                  <button
+                    onClick={() => trainPerson(person.name)}
+                    className="btn btn-warning btn-sm"
+                    disabled={loading || trainingPerson === person.name || person.photo_count === 0}
+                    title={person.photo_count === 0 ? 'Add photos first' : 'Train this person only'}
+                  >
+                    {trainingPerson === person.name ? '◐' : 'Train'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSearchingPerson(person.name);
+                      setSearchResults(null);
+                    }}
+                    className="btn btn-info btn-sm"
+                    disabled={loading || person.photo_count === 0}
+                    title={person.photo_count === 0 ? 'Train first to enable search' : 'Search past events for this person'}
+                  >
+                    Search
+                  </button>
+                  <button
                     onClick={() => deletePerson(person.name)}
                     className="btn btn-danger btn-sm"
                     disabled={loading}
@@ -516,6 +658,69 @@ const FaceManagementPage = ({ embedded = false }) => {
           </div>
         )}
       </section>
+
+      {/* Instructions */}
+      <section className="instructions-section">
+        <h2>Quick Guide</h2>
+        <ol>
+          <li>Add a person by entering their name</li>
+          <li>Upload 3-5 clear photos of their face from different angles</li>
+          <li>Click "Train Model" to generate face encodings</li>
+          <li>Face recognition will now work automatically on your camera streams</li>
+        </ol>
+        <div className="tips">
+          <strong>Tips:</strong>
+          <ul>
+            <li>Use high-quality, well-lit photos</li>
+            <li>Include photos with/without glasses if they wear them</li>
+            <li>Retrain the model whenever you add new photos</li>
+            <li>Use "View Detections" to review and correct face recognition results</li>
+          </ul>
+        </div>
+      </section>
+    </>
+  );
+
+  return (
+    <div className="face-management-container">
+      <header className="page-header">
+        <h1>
+          AI & Faces
+          <HelpButton
+            title={HELP_CONTENT.FACE_RECOGNITION.title}
+            description={HELP_CONTENT.FACE_RECOGNITION.description}
+          />
+        </h1>
+      </header>
+
+      {/* Tab Navigation */}
+      <nav className="tab-navigation">
+        {TABS.map(tab => (
+          <button
+            key={tab.id}
+            className={`tab-button ${activeTab === tab.id ? 'active' : ''}`}
+            onClick={() => handleTabChange(tab.id)}
+          >
+            <span className="tab-icon">{tab.icon}</span>
+            <span className="tab-label">{tab.label}</span>
+          </button>
+        ))}
+      </nav>
+
+      {/* Alert Messages (show on all tabs) */}
+      {message && (
+        <div className={`alert alert-${message.type}`}>
+          <span className="alert-icon">
+            {message.type === 'success' ? '✓' : message.type === 'error' ? '⚠️' : 'ℹ️'}
+          </span>
+          <div className="alert-content">{message.text}</div>
+        </div>
+      )}
+
+      {/* Tab Content */}
+      <div className="tab-content">
+        {renderTabContent()}
+      </div>
 
       {/* Photo Upload Modal */}
       {selectedPerson && (
@@ -676,9 +881,156 @@ const FaceManagementPage = ({ embedded = false }) => {
             <li>Use high-quality, well-lit photos</li>
             <li>Include photos with/without glasses if they wear them</li>
             <li>Retrain the model whenever you add new photos</li>
+            <li>Use "View Detections" to review and correct face recognition results</li>
+            <li>Use "Search" to find past detections that match a person</li>
           </ul>
         </div>
       </section>
+
+      {/* Search Past Events Modal */}
+      {searchingPerson && (
+        <div
+          className="modal-overlay"
+          onClick={() => {
+            if (!isSearching) {
+              setSearchingPerson(null);
+              setSearchResults(null);
+            }
+          }}
+        >
+          <div
+            className="modal-content search-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: 'var(--bg-panel)',
+              padding: '24px',
+              borderRadius: '12px',
+              maxWidth: '500px',
+              width: '90%',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+              border: '1px solid var(--border-panel)'
+            }}
+          >
+            <h2 style={{ color: 'var(--text-primary)', marginTop: 0, marginBottom: '16px' }}>
+              Search Past Events for {searchingPerson}
+            </h2>
+
+            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '20px' }}>
+              Search through past "Unknown" face detections to find matches for this person.
+              This will update matching events with the person's name.
+            </p>
+
+            {/* Tolerance Slider */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', color: 'var(--text-primary)', fontWeight: '500', marginBottom: '8px' }}>
+                Matching Strictness: <strong>{getToleranceLabel(searchTolerance)}</strong>
+              </label>
+              <input
+                type="range"
+                min="0.2"
+                max="0.7"
+                step="0.05"
+                value={searchTolerance}
+                onChange={(e) => setSearchTolerance(parseFloat(e.target.value))}
+                style={{ width: '100%', cursor: 'pointer' }}
+                disabled={isSearching}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                <span>Stricter (fewer matches)</span>
+                <span>Tolerance: {searchTolerance.toFixed(2)}</span>
+                <span>Lenient (more matches)</span>
+              </div>
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px' }}>
+                Stricter matching reduces false positives. Recommended: 0.35-0.45 for manual searches.
+              </p>
+            </div>
+
+            {/* Time Range Slider */}
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{ display: 'block', color: 'var(--text-primary)', fontWeight: '500', marginBottom: '8px' }}>
+                Search Period: <strong>{getHoursLabel(searchHoursBack)}</strong>
+              </label>
+              <input
+                type="range"
+                min="24"
+                max="720"
+                step="24"
+                value={searchHoursBack}
+                onChange={(e) => setSearchHoursBack(parseInt(e.target.value))}
+                style={{ width: '100%', cursor: 'pointer' }}
+                disabled={isSearching}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                <span>24 hours</span>
+                <span>1 week</span>
+                <span>1 month</span>
+              </div>
+            </div>
+
+            {/* Results */}
+            {searchResults && (
+              <div
+                style={{
+                  backgroundColor: searchResults.matches_found > 0 ? 'rgba(76, 175, 80, 0.1)' : 'rgba(255, 152, 0, 0.1)',
+                  border: `1px solid ${searchResults.matches_found > 0 ? 'var(--color-success)' : 'var(--color-warning)'}`,
+                  borderRadius: '8px',
+                  padding: '16px',
+                  marginBottom: '20px'
+                }}
+              >
+                <h4 style={{ margin: '0 0 8px 0', color: 'var(--text-primary)' }}>
+                  Search Results
+                </h4>
+                <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
+                  <p style={{ margin: '4px 0' }}>Events searched: <strong>{searchResults.events_searched}</strong></p>
+                  <p style={{ margin: '4px 0' }}>Matches found: <strong style={{ color: searchResults.matches_found > 0 ? 'var(--color-success)' : 'inherit' }}>{searchResults.matches_found}</strong></p>
+                  <p style={{ margin: '4px 0' }}>Events updated: <strong>{searchResults.events_updated}</strong></p>
+                  {searchResults.errors > 0 && (
+                    <p style={{ margin: '4px 0', color: 'var(--color-error)' }}>Errors: {searchResults.errors}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setSearchingPerson(null);
+                  setSearchResults(null);
+                }}
+                className="btn btn-secondary"
+                disabled={isSearching}
+              >
+                {searchResults ? 'Close' : 'Cancel'}
+              </button>
+              <button
+                onClick={searchPastEvents}
+                className="btn btn-primary"
+                disabled={isSearching}
+              >
+                {isSearching ? (
+                  <>
+                    <span className="spinner">◐</span> Searching...
+                  </>
+                ) : searchResults ? 'Search Again' : 'Start Search'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Person Detections Modal */}
+      {viewingDetections && (
+        <PersonDetectionsModal
+          personName={viewingDetections}
+          allPeople={people}
+          onClose={() => setViewingDetections(null)}
+          onUpdate={() => {
+            loadStatistics();
+          }}
+        />
+      )}
     </div>
   );
 };

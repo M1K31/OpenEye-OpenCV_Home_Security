@@ -219,6 +219,23 @@
   font-style: italic;
 }
 
+.settings-hint-box {
+  margin: 8px 0 0 0;
+  padding: 12px 16px;
+  background: var(--bg-secondary, rgba(0, 0, 0, 0.1));
+  border-radius: 8px;
+  border-left: 3px solid var(--primary-color, #4caf50);
+}
+
+.settings-hint-box .settings-hint {
+  margin: 0;
+  font-style: normal;
+}
+
+.settings-hint-box .settings-hint strong {
+  color: var(--text-primary);
+}
+
 .settings-select {
   width: 100%;
   padding: 12px;

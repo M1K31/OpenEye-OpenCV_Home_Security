@@ -24,13 +24,37 @@ from backend.api.schemas.clustering import (
     DeleteClusterRequest,
     DeleteClusterResponse,
     ClusterStatistics,
+    FaceReviewAction,
+    FaceReviewResponse,
+    BulkFaceReviewRequest,
+    BulkFaceReviewResponse,
 )
 from backend.core.face_clustering import FaceClusteringService
 from backend.core.auth import get_current_active_user
-from backend.database.models import User, FaceCluster
+from backend.database.models import User, FaceCluster, FaceDetectionEvent
 
 router = APIRouter(prefix="/clusters", tags=["face-clustering"])
 logger = logging.getLogger(__name__)
+
+
+def cleanup_empty_cluster(db: Session, cluster: FaceCluster) -> bool:
+    """
+    Check if a cluster has 0 faces and delete it if so.
+
+    Args:
+        db: Database session
+        cluster: The cluster to check
+
+    Returns:
+        True if cluster was deleted, False otherwise
+    """
+    if cluster and cluster.face_count <= 0:
+        cluster_id = cluster.id
+        cluster_label = cluster.label or f"#{cluster.id}"
+        db.delete(cluster)
+        logger.info(f"Auto-deleted empty cluster {cluster_id} ({cluster_label})")
+        return True
+    return False
 
 
 @router.post("/cluster", response_model=ClusteringResponse)
@@ -506,4 +530,534 @@ def update_scheduler_settings(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update settings: {str(e)}"
+        )
+
+
+@router.get("/trainable")
+def get_trainable_clusters(
+    min_faces: int = Query(5, ge=2, description="Minimum faces to be trainable"),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_active_user)
+):
+    """
+    Get clusters that have reached the threshold for training
+
+    Returns clusters that have enough face samples to train a new
+    face recognition model. The frontend can use this to offer
+    the user the option to train the model.
+
+    **Query Parameters:**
+    - **min_faces:** Minimum faces in cluster to be trainable (default: 5)
+
+    **Returns:**
+    - List of trainable clusters with their face counts
+    - Training offer message if any are ready
+    - Recommended action
+    """
+    try:
+        # Get clusters with at least min_faces faces that are not identified
+        trainable = db.query(FaceCluster).filter(
+            FaceCluster.face_count >= min_faces,
+            FaceCluster.is_identified == False  # Not yet identified
+        ).order_by(FaceCluster.face_count.desc()).all()
+
+        # Get clusters that have been labeled but not yet trained
+        # (labeled means they have a name, but is_identified indicates if training was done)
+        labeled_clusters = db.query(FaceCluster).filter(
+            FaceCluster.face_count >= min_faces,
+            FaceCluster.label.isnot(None),
+            FaceCluster.is_identified == False
+        ).order_by(FaceCluster.face_count.desc()).all()
+
+        clusters_data = []
+        labeled_set = {c.id for c in labeled_clusters}
+
+        for cluster in trainable:
+            if cluster.id not in labeled_set:
+                clusters_data.append({
+                    "cluster_id": cluster.id,
+                    "face_count": cluster.face_count,
+                    "representative_image": cluster.representative_snapshot_path,
+                    "first_seen": cluster.created_at.isoformat() if cluster.created_at else None,
+                    "last_seen": cluster.updated_at.isoformat() if cluster.updated_at else None,
+                    "status": "awaiting_name"
+                })
+
+        for cluster in labeled_clusters:
+            clusters_data.append({
+                "cluster_id": cluster.id,
+                "face_count": cluster.face_count,
+                "assigned_name": cluster.label,
+                "representative_image": cluster.representative_snapshot_path,
+                "first_seen": cluster.created_at.isoformat() if cluster.created_at else None,
+                "last_seen": cluster.updated_at.isoformat() if cluster.updated_at else None,
+                "status": "ready_to_export"
+            })
+
+        # Determine offer message
+        offer_message = None
+        recommended_action = None
+        unlabeled_count = len([c for c in trainable if c.id not in labeled_set])
+
+        if len(labeled_clusters) > 0:
+            offer_message = f"{len(labeled_clusters)} cluster(s) are ready to be exported and trained"
+            recommended_action = "export_and_train"
+        elif unlabeled_count > 0:
+            offer_message = f"{unlabeled_count} cluster(s) have enough faces for training"
+            recommended_action = "assign_names"
+
+        return {
+            "trainable_clusters": clusters_data,
+            "total_trainable": len(clusters_data),
+            "awaiting_names": unlabeled_count,
+            "ready_to_export": len(labeled_clusters),
+            "offer_message": offer_message,
+            "recommended_action": recommended_action,
+            "threshold": min_faces
+        }
+
+    except Exception as e:
+        logger.error(f"Error fetching trainable clusters: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch trainable clusters: {str(e)}"
+        )
+
+
+@router.delete("/cleanup-empty")
+def cleanup_empty_clusters(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user)
+):
+    """
+    Remove all clusters with 0 faces.
+
+    Clusters can end up with 0 faces when all their faces are
+    reassigned or rejected through the review workflow.
+
+    **Returns:**
+    - Number of clusters deleted
+    - List of deleted cluster IDs
+    """
+    try:
+        # Find all clusters with 0 faces
+        empty_clusters = db.query(FaceCluster).filter(
+            FaceCluster.face_count <= 0
+        ).all()
+
+        deleted_ids = []
+        for cluster in empty_clusters:
+            deleted_ids.append(cluster.id)
+            logger.info(f"Deleting empty cluster {cluster.id} ({cluster.label or 'unlabeled'})")
+            db.delete(cluster)
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"Deleted {len(deleted_ids)} empty cluster(s)",
+            "deleted_count": len(deleted_ids),
+            "deleted_ids": deleted_ids
+        }
+
+    except Exception as e:
+        logger.error(f"Error cleaning up empty clusters: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to cleanup empty clusters: {str(e)}"
+        )
+
+
+@router.post("/export-and-train/{cluster_id}")
+async def export_cluster_and_train(
+    cluster_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_active_user)
+):
+    """
+    Export a cluster's faces and trigger model retraining
+
+    This endpoint:
+    1. Exports all face images from the cluster to a person folder
+    2. Triggers face recognition model retraining
+    3. Optionally runs retroactive search to update past events
+
+    **Path Parameters:**
+    - **cluster_id:** ID of the cluster to export
+
+    **Returns:**
+    - Export status
+    - Training status
+    - Number of faces exported
+    """
+    try:
+        cluster = db.query(FaceCluster).filter(FaceCluster.id == cluster_id).first()
+
+        if not cluster:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Cluster {cluster_id} not found"
+            )
+
+        if not cluster.label:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cluster must have an assigned name (label) before exporting"
+            )
+
+        # Export cluster faces using the internal method
+        service = FaceClusteringService()
+        from backend.core.face_recognition import get_face_manager
+        face_manager = get_face_manager()
+
+        # Export faces to person folder
+        export_result = service._export_cluster_faces(
+            db=db,
+            cluster_id=cluster_id,
+            person_name=cluster.label
+        )
+
+        if not export_result.get("success", False):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=export_result.get("message", "Export failed")
+            )
+
+        exported_count = export_result.get("images_copied", 0)
+
+        # Mark cluster as identified
+        cluster.is_identified = True
+        db.commit()
+
+        # Reload face encodings to include new faces
+        face_manager.load_known_faces()
+
+        # Trigger retroactive search in background
+        from backend.core.scheduled_tasks import get_scheduled_tasks_manager, TaskType
+        tasks_manager = get_scheduled_tasks_manager()
+
+        background_tasks.add_task(
+            tasks_manager.trigger_task,
+            TaskType.RETROACTIVE_SEARCH
+        )
+
+        return {
+            "success": True,
+            "cluster_id": cluster_id,
+            "person_name": cluster.label,
+            "faces_exported": exported_count,
+            "model_retrained": True,
+            "retroactive_search_scheduled": True,
+            "message": f"Exported {exported_count} faces for '{cluster.label}'. Model retrained. Retroactive search scheduled."
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error exporting cluster and training: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to export and train: {str(e)}"
+        )
+
+
+# =====================================================
+# Face Review Workflow Endpoints (v3.11.5)
+# =====================================================
+
+@router.post("/{cluster_id}/faces/{face_id}/review", response_model=FaceReviewResponse)
+def review_face(
+    cluster_id: int,
+    face_id: int,
+    request: FaceReviewAction,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_active_user)
+):
+    """
+    Review a single face's association with a cluster
+
+    Allows users to confirm or reject a face's association with a cluster.
+    Rejected faces can be reassigned to a different person or moved to a new unknown cluster.
+
+    **Path Parameters:**
+    - **cluster_id:** Current cluster ID containing the face
+    - **face_id:** Face detection event ID to review
+
+    **Request Body:**
+    - **action:** 'confirm' or 'reject'
+    - **reassign_to:** (for rejections) Person name to reassign to, or None for new unknown cluster
+
+    **Workflow:**
+    - Confirm: Increases confidence in the association (future enhancement: track confirmed status)
+    - Reject: Moves face to different cluster or creates new unknown cluster
+    """
+    try:
+        # Get the face detection event
+        face = db.query(FaceDetectionEvent).filter(FaceDetectionEvent.id == face_id).first()
+        if not face:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Face {face_id} not found"
+            )
+
+        if face.cluster_id != cluster_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Face {face_id} is not in cluster {cluster_id}"
+            )
+
+        if request.action == "confirm":
+            # For now, confirmation is implicit - face stays in cluster
+            # Future: could track explicit confirmation status
+            logger.info(f"Face {face_id} confirmed in cluster {cluster_id}")
+            return FaceReviewResponse(
+                success=True,
+                message=f"Face {face_id} confirmed in cluster",
+                face_id=face_id,
+                action="confirm"
+            )
+
+        elif request.action == "reject":
+            service = FaceClusteringService()
+            original_cluster = db.query(FaceCluster).filter(FaceCluster.id == cluster_id).first()
+
+            if request.reassign_to:
+                # Reassign to a specific person - find or create their cluster
+                target_cluster = db.query(FaceCluster).filter(
+                    FaceCluster.label == request.reassign_to,
+                    FaceCluster.is_identified == True
+                ).first()
+
+                if target_cluster:
+                    # Move face to existing cluster
+                    face.cluster_id = target_cluster.id
+                    face.person_name = request.reassign_to
+
+                    # Update cluster face counts
+                    if original_cluster:
+                        original_cluster.face_count = max(0, original_cluster.face_count - 1)
+                    target_cluster.face_count += 1
+
+                    # Auto-delete empty cluster
+                    cluster_deleted = cleanup_empty_cluster(db, original_cluster)
+
+                    db.commit()
+
+                    logger.info(f"Face {face_id} reassigned from cluster {cluster_id} to {target_cluster.id} ({request.reassign_to})")
+                    return FaceReviewResponse(
+                        success=True,
+                        message=f"Face reassigned to {request.reassign_to}" + (" (original cluster deleted)" if cluster_deleted else ""),
+                        face_id=face_id,
+                        action="reject",
+                        new_cluster_id=target_cluster.id,
+                        new_person_name=request.reassign_to
+                    )
+                else:
+                    # Create new cluster for this person
+                    new_cluster = FaceCluster(
+                        label=request.reassign_to,
+                        is_identified=True,
+                        face_count=1,
+                        clustering_algorithm="manual",
+                        representative_snapshot_path=face.snapshot_path,
+                        representative_encoding=face.face_encoding
+                    )
+                    db.add(new_cluster)
+                    db.flush()
+
+                    face.cluster_id = new_cluster.id
+                    face.person_name = request.reassign_to
+
+                    if original_cluster:
+                        original_cluster.face_count = max(0, original_cluster.face_count - 1)
+
+                    # Auto-delete empty cluster
+                    cluster_deleted = cleanup_empty_cluster(db, original_cluster)
+
+                    db.commit()
+
+                    logger.info(f"Face {face_id} moved to new cluster {new_cluster.id} for {request.reassign_to}")
+                    return FaceReviewResponse(
+                        success=True,
+                        message=f"Face reassigned to new cluster for {request.reassign_to}" + (" (original cluster deleted)" if cluster_deleted else ""),
+                        face_id=face_id,
+                        action="reject",
+                        new_cluster_id=new_cluster.id,
+                        new_person_name=request.reassign_to
+                    )
+            else:
+                # Create new unknown cluster for the rejected face
+                new_cluster = FaceCluster(
+                    label=None,
+                    is_identified=False,
+                    face_count=1,
+                    clustering_algorithm="manual_rejection",
+                    representative_snapshot_path=face.snapshot_path,
+                    representative_encoding=face.face_encoding
+                )
+                db.add(new_cluster)
+                db.flush()
+
+                face.cluster_id = new_cluster.id
+                face.person_name = "Unknown"
+
+                if original_cluster:
+                    original_cluster.face_count = max(0, original_cluster.face_count - 1)
+
+                # Auto-delete empty cluster
+                cluster_deleted = cleanup_empty_cluster(db, original_cluster)
+
+                db.commit()
+
+                logger.info(f"Face {face_id} rejected and moved to new unknown cluster {new_cluster.id}")
+                return FaceReviewResponse(
+                    success=True,
+                    message="Face rejected and moved to new unknown cluster" + (" (original cluster deleted)" if cluster_deleted else ""),
+                    face_id=face_id,
+                    action="reject",
+                    new_cluster_id=new_cluster.id
+                )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error reviewing face {face_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to review face: {str(e)}"
+        )
+
+
+@router.post("/{cluster_id}/faces/bulk-review", response_model=BulkFaceReviewResponse)
+def bulk_review_faces(
+    cluster_id: int,
+    request: BulkFaceReviewRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_active_user)
+):
+    """
+    Bulk review multiple faces in a cluster
+
+    Allows confirming or rejecting multiple faces at once.
+
+    **Path Parameters:**
+    - **cluster_id:** Cluster ID containing the faces
+
+    **Request Body:**
+    - **face_ids:** List of face IDs to review
+    - **action:** 'confirm' or 'reject'
+    - **reassign_to:** (for rejections) Person name to reassign all to
+    """
+    try:
+        cluster = db.query(FaceCluster).filter(FaceCluster.id == cluster_id).first()
+        if not cluster:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Cluster {cluster_id} not found"
+            )
+
+        faces_confirmed = 0
+        faces_rejected = 0
+        faces_reassigned = 0
+        errors = []
+        new_cluster_id = None
+
+        # Get all faces to process
+        faces = db.query(FaceDetectionEvent).filter(
+            FaceDetectionEvent.id.in_(request.face_ids),
+            FaceDetectionEvent.cluster_id == cluster_id
+        ).all()
+
+        if len(faces) != len(request.face_ids):
+            found_ids = {f.id for f in faces}
+            missing = [fid for fid in request.face_ids if fid not in found_ids]
+            errors.append(f"Some faces not found in cluster: {missing}")
+
+        if request.action == "confirm":
+            faces_confirmed = len(faces)
+            # Future: mark faces as explicitly confirmed
+            logger.info(f"Bulk confirmed {faces_confirmed} faces in cluster {cluster_id}")
+
+        elif request.action == "reject":
+            if request.reassign_to:
+                # Find target cluster for reassignment
+                target_cluster = db.query(FaceCluster).filter(
+                    FaceCluster.label == request.reassign_to,
+                    FaceCluster.is_identified == True
+                ).first()
+
+                if not target_cluster:
+                    # Create new cluster for this person
+                    first_face = faces[0] if faces else None
+                    target_cluster = FaceCluster(
+                        label=request.reassign_to,
+                        is_identified=True,
+                        face_count=0,
+                        clustering_algorithm="manual_bulk",
+                        representative_snapshot_path=first_face.snapshot_path if first_face else None,
+                        representative_encoding=first_face.face_encoding if first_face else None
+                    )
+                    db.add(target_cluster)
+                    db.flush()
+
+                new_cluster_id = target_cluster.id
+
+                for face in faces:
+                    face.cluster_id = target_cluster.id
+                    face.person_name = request.reassign_to
+                    faces_reassigned += 1
+
+                target_cluster.face_count += len(faces)
+                cluster.face_count = max(0, cluster.face_count - len(faces))
+
+                # Auto-delete empty cluster
+                cleanup_empty_cluster(db, cluster)
+
+            else:
+                # Create new unknown cluster for rejected faces
+                first_face = faces[0] if faces else None
+                new_unknown_cluster = FaceCluster(
+                    label=None,
+                    is_identified=False,
+                    face_count=len(faces),
+                    clustering_algorithm="manual_bulk_rejection",
+                    representative_snapshot_path=first_face.snapshot_path if first_face else None,
+                    representative_encoding=first_face.face_encoding if first_face else None
+                )
+                db.add(new_unknown_cluster)
+                db.flush()
+
+                new_cluster_id = new_unknown_cluster.id
+
+                for face in faces:
+                    face.cluster_id = new_unknown_cluster.id
+                    face.person_name = "Unknown"
+                    faces_rejected += 1
+
+                cluster.face_count = max(0, cluster.face_count - len(faces))
+
+                # Auto-delete empty cluster
+                cleanup_empty_cluster(db, cluster)
+
+        db.commit()
+
+        action_msg = "confirmed" if request.action == "confirm" else "rejected"
+        return BulkFaceReviewResponse(
+            success=True,
+            message=f"Bulk {action_msg} {len(faces)} faces",
+            faces_confirmed=faces_confirmed,
+            faces_rejected=faces_rejected,
+            faces_reassigned=faces_reassigned,
+            new_cluster_id=new_cluster_id,
+            errors=errors
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error bulk reviewing faces in cluster {cluster_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to bulk review faces: {str(e)}"
         )

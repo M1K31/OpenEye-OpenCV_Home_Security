@@ -155,3 +155,41 @@ class ClusterStatistics(BaseModel):
     clustered_faces: int
     unclustered_faces: int
     clustering_rate: float  # Percentage of unknown faces that are clustered
+
+
+# =====================================================
+# Face Review Workflow Schemas (v3.11.5)
+# =====================================================
+
+class FaceReviewAction(BaseModel):
+    """Schema for reviewing a single face association"""
+    action: str = Field(..., pattern="^(confirm|reject)$", description="Action to take: 'confirm' or 'reject'")
+    reassign_to: Optional[str] = Field(None, description="For rejections: person name to reassign to, or None for new unknown cluster")
+
+
+class FaceReviewResponse(BaseModel):
+    """Schema for face review response"""
+    success: bool
+    message: str
+    face_id: int
+    action: str
+    new_cluster_id: Optional[int] = Field(None, description="New cluster ID if face was moved")
+    new_person_name: Optional[str] = Field(None, description="New person name if reassigned")
+
+
+class BulkFaceReviewRequest(BaseModel):
+    """Schema for bulk face review"""
+    face_ids: List[int] = Field(..., description="List of face IDs to review")
+    action: str = Field(..., pattern="^(confirm|reject)$", description="Action to take: 'confirm' or 'reject'")
+    reassign_to: Optional[str] = Field(None, description="For rejections: person name to reassign to")
+
+
+class BulkFaceReviewResponse(BaseModel):
+    """Schema for bulk face review response"""
+    success: bool
+    message: str
+    faces_confirmed: int = 0
+    faces_rejected: int = 0
+    faces_reassigned: int = 0
+    new_cluster_id: Optional[int] = Field(None, description="New cluster ID if faces were moved to unknown")
+    errors: List[str] = Field(default_factory=list, description="Any errors encountered")

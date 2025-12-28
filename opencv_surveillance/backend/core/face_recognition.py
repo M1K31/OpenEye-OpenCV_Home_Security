@@ -191,6 +191,109 @@ class FaceRecognitionManager:
             _training_in_progress = False
             return result
 
+    def train_person(self, person_name: str) -> Dict:
+        """
+        Train face recognition for a specific person only.
+
+        This is more efficient than full training when adding/updating a single person.
+        It removes existing encodings for the person and re-encodes from their photos.
+
+        Args:
+            person_name: Name of the person to train
+
+        Returns:
+            Dict with training statistics for this person
+        """
+        global _training_in_progress
+
+        person_path = self.faces_folder / person_name
+
+        if not person_path.exists() or not person_path.is_dir():
+            logger.warning(f"Person folder not found: {person_path}")
+            return {
+                "success": False,
+                "message": f"Person '{person_name}' not found",
+                "person_name": person_name,
+                "encodings_added": 0
+            }
+
+        logger.info(f"Training face recognition for person: {person_name}")
+        logger.info("🔒 Acquiring face recognition lock...")
+
+        with _face_recognition_lock:
+            _training_in_progress = True
+            start_time = datetime.now()
+
+            # Remove existing encodings for this person
+            indices_to_remove = [
+                i for i, name in enumerate(self.known_face_names)
+                if name == person_name
+            ]
+
+            removed_count = len(indices_to_remove)
+
+            # Remove in reverse order to maintain indices
+            for idx in reversed(indices_to_remove):
+                del self.known_face_encodings[idx]
+                del self.known_face_names[idx]
+
+            if removed_count > 0:
+                logger.info(f"Removed {removed_count} existing encodings for {person_name}")
+
+            # Encode new photos for this person
+            encodings_added = 0
+            photos_processed = 0
+            photos_failed = 0
+
+            for image_file_path in person_path.iterdir():
+                if not image_file_path.name.lower().endswith((".jpg", ".jpeg", ".png")):
+                    continue
+
+                photos_processed += 1
+
+                try:
+                    image = face_recognition.load_image_file(image_file_path)
+                    face_encodings = face_recognition.face_encodings(
+                        image, model="large"
+                    )
+
+                    if len(face_encodings) > 0:
+                        self.known_face_encodings.append(face_encodings[0])
+                        self.known_face_names.append(person_name)
+                        encodings_added += 1
+                        logger.debug(f"Encoded face from: {image_file_path}")
+                    else:
+                        photos_failed += 1
+                        logger.warning(f"No face found in: {image_file_path}")
+
+                except Exception as e:
+                    photos_failed += 1
+                    logger.error(f"Error processing {image_file_path}: {e}")
+
+            # Save updated encodings
+            self.save_encodings()
+
+            training_time = (datetime.now() - start_time).total_seconds()
+
+            # Update statistics
+            self.statistics["total_encodings"] = len(self.known_face_encodings)
+            self.statistics["total_people"] = len(set(self.known_face_names))
+
+            result = {
+                "success": True,
+                "message": f"Trained {encodings_added} encodings for '{person_name}'",
+                "person_name": person_name,
+                "encodings_added": encodings_added,
+                "encodings_removed": removed_count,
+                "photos_processed": photos_processed,
+                "photos_failed": photos_failed,
+                "training_time": training_time
+            }
+
+            logger.info(f"Person training complete: {result}")
+            _training_in_progress = False
+            return result
+
     def save_encodings(self):
         """Save face encodings to file"""
         try:

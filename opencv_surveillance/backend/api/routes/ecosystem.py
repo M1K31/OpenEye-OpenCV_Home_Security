@@ -921,6 +921,86 @@ async def get_system_status(db: Session = Depends(get_db)):
     )
 
 
+@router.get("/statistics")
+def get_ecosystem_statistics(
+    hours: int = Query(24, ge=1, le=168, description="Hours to look back"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get event statistics for MagicMirror dashboard.
+
+    Returns motion, face, and recording counts per camera for the specified time range.
+    Used by the openeye-events MagicMirror module.
+
+    Args:
+        hours: Number of hours to look back (default 24, max 168)
+
+    Returns:
+        Total event counts and per-camera breakdown
+    """
+    from datetime import timedelta
+
+    cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+
+    # Get all cameras
+    cameras = db.query(models.Camera).all()
+
+    # Get totals
+    total_motion = db.query(models.MotionDetectionEvent).filter(
+        models.MotionDetectionEvent.detected_at >= cutoff_time
+    ).count()
+
+    total_faces = db.query(models.FaceDetectionEvent).filter(
+        models.FaceDetectionEvent.detected_at >= cutoff_time
+    ).count()
+
+    total_recordings = db.query(models.RecordingEvent).filter(
+        models.RecordingEvent.start_time >= cutoff_time
+    ).count()
+
+    # Get per-camera stats
+    camera_stats = []
+    for camera in cameras:
+        motion_count = db.query(models.MotionDetectionEvent).filter(
+            models.MotionDetectionEvent.camera_id == camera.camera_id,
+            models.MotionDetectionEvent.detected_at >= cutoff_time
+        ).count()
+
+        face_count = db.query(models.FaceDetectionEvent).filter(
+            models.FaceDetectionEvent.camera_id == camera.camera_id,
+            models.FaceDetectionEvent.detected_at >= cutoff_time
+        ).count()
+
+        recording_count = db.query(models.RecordingEvent).filter(
+            models.RecordingEvent.camera_id == camera.camera_id,
+            models.RecordingEvent.start_time >= cutoff_time
+        ).count()
+
+        camera_stats.append({
+            "camera_id": camera.camera_id,
+            "camera_name": camera.name or camera.camera_id,
+            "is_active": camera.is_active,
+            "motion_events": motion_count,
+            "face_events": face_count,
+            "recordings": recording_count
+        })
+
+    # Sort by total activity
+    camera_stats.sort(
+        key=lambda x: x["motion_events"] + x["face_events"] + x["recordings"],
+        reverse=True
+    )
+
+    return {
+        "motion_events": total_motion,
+        "face_events": total_faces,
+        "recordings": total_recordings,
+        "cameras": camera_stats,
+        "hours": hours,
+        "generated_at": datetime.utcnow().isoformat()
+    }
+
+
 # ============================================================================
 # EVENT BROADCASTING (Called by other modules)
 # ============================================================================
@@ -1463,6 +1543,219 @@ async def get_events_timeline(
             has_prev=page > 1
         )
     )
+
+
+# ============================================================================
+# FACE SEARCH FOR VOICE COMMANDS (MagicMirror Integration)
+# ============================================================================
+
+
+@router.get("/faces/search")
+async def search_face_detections(
+    person_name: Optional[str] = Query(None, description="Person name to search for"),
+    date: Optional[str] = Query(None, description="Specific date (YYYY-MM-DD) or relative (today, yesterday)"),
+    start_date: Optional[datetime] = Query(None, description="Start of date range"),
+    end_date: Optional[datetime] = Query(None, description="End of date range"),
+    camera_id: Optional[str] = Query(None, description="Filter by camera"),
+    limit: int = Query(50, ge=1, le=500, description="Maximum results"),
+    include_unknown: bool = Query(False, description="Include unknown faces in results"),
+    db: Session = Depends(get_db)
+):
+    """
+    Search face detection history for MagicMirror voice commands.
+
+    Supports natural language date queries like:
+    - "search for Mikel Jr on December 24th" → person_name=Mikel Jr, date=2024-12-24
+    - "when was John seen today" → person_name=John, date=today
+    - "show faces from yesterday" → date=yesterday
+
+    **Parameters:**
+    - person_name: Name of person to search for (partial match supported)
+    - date: Single date - supports YYYY-MM-DD, "today", "yesterday"
+    - start_date / end_date: Date range for more specific queries
+    - camera_id: Filter to specific camera
+    - limit: Max number of results (default 50)
+    - include_unknown: Include "Unknown" faces (default False)
+
+    **Response includes:**
+    - List of detection events with timestamps, cameras, confidence
+    - Summary statistics (total count, cameras seen on)
+    - Natural language response for voice assistants
+    """
+    from datetime import date as date_type
+
+    # Parse date parameter
+    query_start = None
+    query_end = None
+
+    if date:
+        today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+
+        if date.lower() == "today":
+            query_start = today
+            query_end = today + timedelta(days=1)
+        elif date.lower() == "yesterday":
+            query_start = today - timedelta(days=1)
+            query_end = today
+        else:
+            # Try to parse as date
+            try:
+                parsed_date = datetime.strptime(date, "%Y-%m-%d")
+                query_start = parsed_date
+                query_end = parsed_date + timedelta(days=1)
+            except ValueError:
+                # Try other formats
+                for fmt in ["%m/%d/%Y", "%d-%m-%Y", "%B %d", "%B %d, %Y", "%b %d", "%b %d, %Y"]:
+                    try:
+                        parsed_date = datetime.strptime(date, fmt)
+                        # If no year specified, assume current year
+                        if parsed_date.year == 1900:
+                            parsed_date = parsed_date.replace(year=datetime.utcnow().year)
+                        query_start = parsed_date
+                        query_end = parsed_date + timedelta(days=1)
+                        break
+                    except ValueError:
+                        continue
+
+    # Use explicit start/end dates if provided
+    if start_date:
+        query_start = start_date
+    if end_date:
+        query_end = end_date
+
+    # Build query
+    query = db.query(models.FaceDetectionEvent)
+
+    # Filter by person name (case-insensitive partial match)
+    if person_name:
+        query = query.filter(
+            models.FaceDetectionEvent.person_name.ilike(f"%{person_name}%")
+        )
+
+    # Exclude unknown faces unless requested
+    if not include_unknown:
+        query = query.filter(models.FaceDetectionEvent.person_name != "Unknown")
+
+    # Date filters
+    if query_start:
+        query = query.filter(models.FaceDetectionEvent.detected_at >= query_start)
+    if query_end:
+        query = query.filter(models.FaceDetectionEvent.detected_at < query_end)
+
+    # Camera filter
+    if camera_id:
+        query = query.filter(models.FaceDetectionEvent.camera_id == camera_id)
+
+    # Order by most recent first
+    query = query.order_by(models.FaceDetectionEvent.detected_at.desc())
+
+    # Get total count before limiting
+    total_count = query.count()
+
+    # Apply limit
+    events = query.limit(limit).all()
+
+    # Build response
+    detections = []
+    cameras_seen = set()
+    persons_found = set()
+
+    for event in events:
+        cameras_seen.add(event.camera_id)
+        persons_found.add(event.person_name)
+
+        # Normalize snapshot path
+        snapshot_path = event.snapshot_path or ''
+        if snapshot_path.startswith('data/snapshots/'):
+            snapshot_path = snapshot_path.replace('data/snapshots/', '')
+
+        detections.append({
+            "id": event.id,
+            "person_name": event.person_name,
+            "camera_id": event.camera_id,
+            "detected_at": event.detected_at.isoformat(),
+            "confidence": event.confidence,
+            "snapshot_url": f"/data/snapshots/{snapshot_path}" if snapshot_path else None
+        })
+
+    # Generate natural language response for voice assistants
+    voice_response = _generate_voice_response(
+        person_name=person_name,
+        date=date,
+        total_count=total_count,
+        detections=detections,
+        cameras_seen=list(cameras_seen),
+        query_start=query_start,
+        query_end=query_end
+    )
+
+    return {
+        "success": True,
+        "query": {
+            "person_name": person_name,
+            "date": date,
+            "start_date": query_start.isoformat() if query_start else None,
+            "end_date": query_end.isoformat() if query_end else None,
+            "camera_id": camera_id
+        },
+        "results": {
+            "total_count": total_count,
+            "returned_count": len(detections),
+            "cameras_seen": list(cameras_seen),
+            "persons_found": list(persons_found),
+            "detections": detections
+        },
+        "voice_response": voice_response
+    }
+
+
+def _generate_voice_response(
+    person_name: Optional[str],
+    date: Optional[str],
+    total_count: int,
+    detections: list,
+    cameras_seen: list,
+    query_start: Optional[datetime],
+    query_end: Optional[datetime]
+) -> str:
+    """Generate natural language response for voice assistants."""
+    if total_count == 0:
+        if person_name and date:
+            return f"I didn't find any sightings of {person_name} on {date}."
+        elif person_name:
+            return f"I didn't find any recent sightings of {person_name}."
+        elif date:
+            return f"No face detections were recorded on {date}."
+        else:
+            return "No face detections found matching your search."
+
+    # Build response
+    if person_name:
+        if total_count == 1:
+            event = detections[0]
+            time_str = datetime.fromisoformat(event["detected_at"]).strftime("%I:%M %p")
+            return f"{person_name} was seen once on {event['camera_id']} at {time_str}."
+        else:
+            cameras_str = ", ".join(cameras_seen[:3])
+            if len(cameras_seen) > 3:
+                cameras_str += f" and {len(cameras_seen) - 3} more"
+
+            if date:
+                return f"I found {total_count} sightings of {person_name} on {date}. They were seen on {cameras_str}."
+            else:
+                # Get time range
+                first_time = datetime.fromisoformat(detections[-1]["detected_at"]).strftime("%I:%M %p")
+                last_time = datetime.fromisoformat(detections[0]["detected_at"]).strftime("%I:%M %p")
+                return f"I found {total_count} sightings of {person_name}, from {first_time} to {last_time}. They were seen on {cameras_str}."
+    else:
+        # General search
+        persons = list(set(d["person_name"] for d in detections))
+        if len(persons) == 1:
+            return f"I found {total_count} detections of {persons[0]} during that time."
+        elif len(persons) <= 3:
+            return f"I found {total_count} detections of {', '.join(persons)} during that time."
+        else:
+            return f"I found {total_count} face detections of {len(persons)} different people during that time."
 
 
 @router.get("/recordings/{recording_id}/play", response_model=eco_schema.RecordingPlaybackResponse)

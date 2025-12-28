@@ -15,9 +15,33 @@ from backend.database.session import SessionLocal
 from backend.database import crud, models
 from backend.core.performance import paginate, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from backend.api.schemas.pagination import PaginatedResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 router = APIRouter()
+
+
+# =====================================================
+# Face Review Schemas (v3.11.5)
+# =====================================================
+
+class FaceReassignRequest(BaseModel):
+    """Schema for reassigning a face detection to a different person"""
+    new_person_name: str = Field(..., description="New person name to assign, or 'Unknown' to mark as unknown")
+
+
+class FaceReassignResponse(BaseModel):
+    """Schema for face reassignment response"""
+    success: bool
+    message: str
+    face_id: int
+    old_person_name: str
+    new_person_name: str
+
+
+class BulkFaceReassignRequest(BaseModel):
+    """Schema for bulk face reassignment"""
+    face_ids: List[int] = Field(..., description="List of face detection event IDs to reassign")
+    new_person_name: str = Field(..., description="New person name to assign, or 'Unknown' to mark as unknown")
 
 
 # Pydantic Models for Responses
@@ -30,6 +54,8 @@ class FaceDetectionEventResponse(BaseModel):
     location: dict
     motion_detected: bool
     recording_path: Optional[str]
+    snapshot_path: Optional[str] = None
+    cluster_id: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -136,6 +162,8 @@ def get_detection_history(
                     },
                     motion_detected=event.motion_detected,
                     recording_path=event.recording_path,
+                    snapshot_path=event.snapshot_path,
+                    cluster_id=event.cluster_id,
                 )
             )
 
@@ -213,6 +241,8 @@ def get_person_history(
                     },
                     motion_detected=event.motion_detected,
                     recording_path=event.recording_path,
+                    snapshot_path=event.snapshot_path,
+                    cluster_id=event.cluster_id,
                 )
             )
 
@@ -329,4 +359,157 @@ def get_detection_timeline(
         return {"timeline": result, "total_hours": len(result)}
 
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =====================================================
+# Face Review Endpoints (v3.11.5)
+# =====================================================
+
+@router.post("/history/{face_id}/reassign", response_model=FaceReassignResponse)
+def reassign_face_detection(
+    face_id: int,
+    request: FaceReassignRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Reassign a face detection event to a different person.
+
+    This is used when reviewing face recognition results to correct
+    misidentifications. The face can be reassigned to any known person
+    or marked as 'Unknown'.
+
+    - **face_id**: ID of the face detection event
+    - **new_person_name**: Name of the person to reassign to, or 'Unknown'
+    """
+    try:
+        # Get the face detection event
+        face_event = db.query(models.FaceDetectionEvent).filter(
+            models.FaceDetectionEvent.id == face_id
+        ).first()
+
+        if not face_event:
+            raise HTTPException(status_code=404, detail=f"Face detection {face_id} not found")
+
+        old_person_name = face_event.person_name
+        new_person_name = request.new_person_name.strip()
+
+        if not new_person_name:
+            raise HTTPException(status_code=400, detail="Person name cannot be empty")
+
+        # Update the person_name
+        face_event.person_name = new_person_name
+
+        # If reassigning away from a cluster, clear the cluster_id
+        if new_person_name != old_person_name and face_event.cluster_id:
+            old_cluster = db.query(models.FaceCluster).filter(
+                models.FaceCluster.id == face_event.cluster_id
+            ).first()
+
+            # Remove from old cluster
+            face_event.cluster_id = None
+
+            # Update old cluster face count
+            if old_cluster:
+                remaining_faces = db.query(models.FaceDetectionEvent).filter(
+                    models.FaceDetectionEvent.cluster_id == old_cluster.id
+                ).count()
+                old_cluster.face_count = remaining_faces
+
+        db.commit()
+
+        return FaceReassignResponse(
+            success=True,
+            message=f"Face reassigned from '{old_person_name}' to '{new_person_name}'",
+            face_id=face_id,
+            old_person_name=old_person_name,
+            new_person_name=new_person_name,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/history/bulk-reassign")
+def bulk_reassign_face_detections(
+    request: BulkFaceReassignRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Bulk reassign multiple face detection events to a different person.
+
+    - **face_ids**: List of face detection event IDs to reassign
+    - **new_person_name**: Name of the person to reassign to, or 'Unknown'
+    """
+    try:
+        new_person_name = request.new_person_name.strip()
+
+        if not new_person_name:
+            raise HTTPException(status_code=400, detail="Person name cannot be empty")
+
+        if not request.face_ids:
+            raise HTTPException(status_code=400, detail="No face IDs provided")
+
+        # Get all faces in one query (much faster than individual queries)
+        face_events = db.query(models.FaceDetectionEvent).filter(
+            models.FaceDetectionEvent.id.in_(request.face_ids)
+        ).all()
+
+        if not face_events:
+            raise HTTPException(status_code=404, detail="No matching faces found")
+
+        # Track affected clusters
+        affected_clusters = set()
+        for face_event in face_events:
+            if face_event.cluster_id:
+                affected_clusters.add(face_event.cluster_id)
+
+        # Count how many we're reassigning
+        reassigned_count = len(face_events)
+        not_found_count = len(request.face_ids) - reassigned_count
+
+        # Bulk update: set person_name and clear cluster_id in single operations
+        db.query(models.FaceDetectionEvent).filter(
+            models.FaceDetectionEvent.id.in_(request.face_ids)
+        ).update(
+            {
+                models.FaceDetectionEvent.person_name: new_person_name,
+                models.FaceDetectionEvent.cluster_id: None
+            },
+            synchronize_session=False
+        )
+
+        # Update face counts for affected clusters (batch update)
+        for cluster_id in affected_clusters:
+            remaining_count = db.query(models.FaceDetectionEvent).filter(
+                models.FaceDetectionEvent.cluster_id == cluster_id
+            ).count()
+            db.query(models.FaceCluster).filter(
+                models.FaceCluster.id == cluster_id
+            ).update(
+                {models.FaceCluster.face_count: remaining_count},
+                synchronize_session=False
+            )
+
+        db.commit()
+
+        errors = []
+        if not_found_count > 0:
+            errors.append(f"{not_found_count} face(s) not found")
+
+        return {
+            "success": True,
+            "message": f"Reassigned {reassigned_count} face(s) to '{new_person_name}'",
+            "reassigned_count": reassigned_count,
+            "new_person_name": new_person_name,
+            "errors": errors,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

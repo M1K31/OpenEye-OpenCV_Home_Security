@@ -570,6 +570,45 @@ def train_face_recognition(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/faces/people/{person_name}/train")
+def train_person(
+    person_name: str,
+    current_user: user_schema.User = Depends(require_user),
+):
+    """
+    Train face recognition for a specific person only.
+
+    This is more efficient than full training when adding photos to a single person.
+
+    **Authentication Required**: Admin or User role
+
+    **Path Parameters:**
+    - **person_name**: Name of the person to train
+
+    **Returns:**
+    - Training statistics for this person
+    """
+    try:
+        face_manager = get_face_manager()
+
+        logger.info(f"Starting selective training for person: {person_name}")
+        result = face_manager.train_person(person_name)
+
+        if not result.get("success", False):
+            raise HTTPException(
+                status_code=404,
+                detail=result.get("message", f"Failed to train '{person_name}'")
+            )
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error training person {person_name}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/faces/statistics", response_model=face_schema.FaceStatistics)
 def get_face_statistics(
     current_user: user_schema.User = Depends(get_current_active_user),

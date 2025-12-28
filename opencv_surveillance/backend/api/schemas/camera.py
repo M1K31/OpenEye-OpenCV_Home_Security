@@ -71,6 +71,9 @@ class CameraBase(BaseModel):
 
     # Recording settings
     recording_enabled: Optional[bool] = True
+    pre_motion_seconds: Optional[int] = Field(5, ge=0, le=30, description="Buffer seconds before motion detected")
+    post_motion_seconds: Optional[int] = Field(10, ge=0, le=60, description="Continue recording after motion stops")
+    max_recording_duration: Optional[int] = Field(300, ge=30, le=600, description="Maximum recording duration in seconds")
     post_motion_cooldown: Optional[int] = Field(5, ge=1, le=300)
     audio_recording_enabled: Optional[bool] = Field(False, description="Enable audio recording with motion recordings (requires hardware encoding)")
     audio_device: Optional[str] = Field(None, description="Audio input device (None = default system microphone)")
@@ -129,6 +132,9 @@ class CameraUpdate(BaseModel):
 
     # Recording settings
     recording_enabled: Optional[bool] = None
+    pre_motion_seconds: Optional[int] = Field(None, ge=0, le=30)
+    post_motion_seconds: Optional[int] = Field(None, ge=0, le=60)
+    max_recording_duration: Optional[int] = Field(None, ge=30, le=600)
     post_motion_cooldown: Optional[int] = Field(None, ge=1, le=300)
 
     # Video quality settings

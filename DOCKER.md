@@ -1,6 +1,6 @@
 # OpenEye - AI-Powered Home Security System
 
-![Version](https://img.shields.io/badge/version-3.11.1-blue.svg) ![License](https://img.shields.io/badge/license-MIT-yellow.svg) ![Cost](https://img.shields.io/badge/cost-$0/month-success.svg)
+![Version](https://img.shields.io/badge/version-3.11.4-blue.svg) ![License](https://img.shields.io/badge/license-MIT-yellow.svg) ![Cost](https://img.shields.io/badge/cost-$0/month-success.svg)
 
 **100% free and open-source** AI-powered surveillance with face recognition, motion detection, and smart home integration. Your data stays on your hardware - no subscriptions, no cloud dependencies.
 
@@ -54,29 +54,27 @@
 
 ---
 
-## 🆕 What's New in v3.11.1 (December 2025)
+## 🆕 What's New in v3.11.4 (December 2025)
 
-### 👥 Multi-User System
-- ✅ **User Management** - Full CRUD for users with role-based access control
-- ✅ **Per-User Preferences** - Notification types, camera access, UI settings, face associations
-- ✅ **Face Profile Linking** - Associate user accounts with face recognition profiles
-- ✅ **User Management UI** - Admin page for managing users at `/users`
-- ✅ **User Profile UI** - Personal settings page at `/profile`
+### 📅 Scheduled Tasks System
+- ✅ **Automated Maintenance** - Background scheduler for model retraining, cleanup tasks
+- ✅ **Retroactive Face Search** - Re-identify faces in past events after model updates
+- ✅ **Database Cleanup** - Remove old detection events and snapshots with configurable retention
+- ✅ **Cluster Cleanup** - Remove empty or stale face clusters automatically
 
-### 🌐 Ecosystem Integration
-- ✅ **MagicMirror Integration** - Secure token exchange, user sync, event streaming
-- ✅ **Mobile App Support** - REST API for timeline, thumbnails, playback
-- ✅ **Multi-Device Support** - Multiple devices on same network with smart routing
-- ✅ **Smart Notifications** - Per-user routing with quiet hours, camera filters
+### 🔍 MagicMirror Face Search API
+- ✅ **Voice Command Support** - "Search for John on December 24th"
+- ✅ **Natural Language Dates** - Parses "today", "yesterday", and date formats
+- ✅ **Voice Response Generation** - Natural language summaries for voice assistants
 
-### 🔧 Dynamic Configuration
-- ✅ **Environment Variables** - `OPENEYE_HOST`, `OPENEYE_PORT`, `MAGICMIRROR_HOST`
-- ✅ **Dynamic CORS** - Ecosystem apps auto-allowed
+### 📊 Ecosystem Statistics
+- ✅ **Event Counts API** - Motion, face, recording counts per camera
+- ✅ **Configurable Time Range** - Query 1-168 hours of data
 
-### Previous: v3.10.2
-- ✅ **Face Detection Fix** - Works without known faces trained
-- ✅ **Timeline Playback** - Fixed with memoization and index-based state
-- ✅ **Object Detection** - YOLOv8-powered AI detection
+### Previous: v3.11.1 (Multi-User & Ecosystem)
+- ✅ **Complete Multi-User System** - Role-based access control (admin/user/viewer)
+- ✅ **MagicMirror Integration** - Secure token exchange, event streaming
+- ✅ **Multi-Device Support** - Smart notification routing
 
 See [CHANGELOG.md](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/blob/main/CHANGELOG.md) for full details.
 
@@ -252,14 +250,14 @@ USB cameras have limited support in Docker on macOS due to USB passthrough limit
 
 ## 📦 Available Tags
 
-- `latest` - Most recent stable release (v3.7.1)
-- `v3.7.1` - **Current version** - FFmpeg hardware encoding (70-90% CPU reduction)
-- `v3.7.0` - LiveDashboard UX improvements + EventDetailModal
-- `v3.6.2` - Motion threshold UI + documentation fixes
-- `v3.6.1` - Production-ready with performance optimizations
-- `v3.6.0` - Security hardening (2FA, per-endpoint rate limiting, CSRF protection)
-- `v3.5.6` - Timeline playback + UI improvements
-- `v3.5.3` - Process cleanup and stability fixes
+- `latest` - Most recent stable release (v3.11.4)
+- `v3.11.4` - **Current version** - Scheduled tasks, MagicMirror search API
+- `v3.11.1` - Multi-user system, ecosystem integration
+- `v3.10.2` - Face detection fix, timeline playback improvements
+- `v3.10.0` - Object detection (YOLOv8), two-way audio
+- `v3.9.0` - Security hardening, performance optimization
+- `v3.7.1` - FFmpeg hardware encoding (70-90% CPU reduction)
+- `v3.6.0` - Security hardening (2FA, rate limiting, CSRF protection)
 
 **Recommended**: Use `latest` for automatic updates or specific version tags for production stability.
 

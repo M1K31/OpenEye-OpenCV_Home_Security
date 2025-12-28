@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import twoFactorService from '../services/twoFactorService';
 import { Button, TextField } from '../components/universal';
 
-const TwoFactorSettings = () => {
+const TwoFactorSettings = ({ embedded = false }) => {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -102,7 +102,7 @@ const TwoFactorSettings = () => {
 
   if (loading) {
     return (
-      <div style={styles.container}>
+      <div style={embedded ? {} : styles.container}>
         <div style={styles.card}>
           <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>Loading...</p>
         </div>
@@ -111,9 +111,9 @@ const TwoFactorSettings = () => {
   }
 
   return (
-    <div style={styles.container}>
+    <div style={embedded ? {} : styles.container}>
       <div style={styles.card}>
-        <h1 style={styles.title}>Two-Factor Authentication</h1>
+        {!embedded && <h1 style={styles.title}>Two-Factor Authentication</h1>}
 
         {error && <div style={styles.error}>{error}</div>}
         {success && <div style={styles.success}>{success}</div>}

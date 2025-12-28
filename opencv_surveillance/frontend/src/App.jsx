@@ -193,19 +193,12 @@ function App() {
                   </Suspense>
                 </PageErrorBoundaryWithRouter>
               } />
+              {/* Redirect old standalone routes to AI & Faces tabs */}
               <Route path="clusters" element={
-                <PageErrorBoundaryWithRouter pageName="Face Clustering">
-                  <Suspense fallback={<PageLoadingFallback />}>
-                    <FaceClusteringPage />
-                  </Suspense>
-                </PageErrorBoundaryWithRouter>
+                <Navigate to="/faces?tab=clustering" replace />
               } />
               <Route path="detections" element={
-                <PageErrorBoundaryWithRouter pageName="Detections">
-                  <Suspense fallback={<PageLoadingFallback />}>
-                    <DetectionsPage />
-                  </Suspense>
-                </PageErrorBoundaryWithRouter>
+                <Navigate to="/faces?tab=detections" replace />
               } />
               <Route path="automations" element={
                 <PageErrorBoundaryWithRouter pageName="Automations">
@@ -236,11 +229,7 @@ function App() {
                 </PageErrorBoundaryWithRouter>
               } />
               <Route path="system/2fa" element={
-                <PageErrorBoundaryWithRouter pageName="Two-Factor Authentication">
-                  <Suspense fallback={<PageLoadingFallback />}>
-                    <TwoFactorSettings />
-                  </Suspense>
-                </PageErrorBoundaryWithRouter>
+                <Navigate to="/system?tab=2fa" replace />
               } />
               <Route path="themes" element={
                 <PageErrorBoundaryWithRouter pageName="Themes">
@@ -249,33 +238,18 @@ function App() {
                   </Suspense>
                 </PageErrorBoundaryWithRouter>
               } />
+              {/* Redirect old standalone routes to System & Alerts tabs */}
               <Route path="system/hardware" element={
-                <PageErrorBoundaryWithRouter pageName="Hardware Detection">
-                  <Suspense fallback={<PageLoadingFallback />}>
-                    <HardwareDetectionPage />
-                  </Suspense>
-                </PageErrorBoundaryWithRouter>
+                <Navigate to="/system?tab=hardware" replace />
               } />
               <Route path="system/performance" element={
-                <PageErrorBoundaryWithRouter pageName="Performance Dashboard">
-                  <Suspense fallback={<PageLoadingFallback />}>
-                    <PerformanceDashboard />
-                  </Suspense>
-                </PageErrorBoundaryWithRouter>
+                <Navigate to="/system?tab=performance" replace />
               } />
               <Route path="users" element={
-                <PageErrorBoundaryWithRouter pageName="User Management">
-                  <Suspense fallback={<PageLoadingFallback />}>
-                    <UserManagementPage />
-                  </Suspense>
-                </PageErrorBoundaryWithRouter>
+                <Navigate to="/system?tab=users" replace />
               } />
               <Route path="profile" element={
-                <PageErrorBoundaryWithRouter pageName="User Profile">
-                  <Suspense fallback={<PageLoadingFallback />}>
-                    <UserProfilePage />
-                  </Suspense>
-                </PageErrorBoundaryWithRouter>
+                <Navigate to="/system?tab=profile" replace />
               } />
             </Route>
           </Routes>

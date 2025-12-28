@@ -147,15 +147,23 @@ class FaceDetector:
                         camera_id = getattr(self, "camera_id", "unknown")
                         is_known = face["name"] != "Unknown"
 
-                        asyncio.create_task(
-                            alert_manager.trigger_face_recognition_alert(
-                                camera_id=camera_id,
-                                person_name=face["name"],
-                                confidence=face["confidence"],
-                                is_known=is_known,
-                                event_data=face,
-                            )
-                        )
+                        # Use run_coroutine_threadsafe since we're in a camera thread, not the main async loop
+                        try:
+                            loop = asyncio.get_event_loop()
+                            if loop.is_running():
+                                asyncio.run_coroutine_threadsafe(
+                                    alert_manager.trigger_face_recognition_alert(
+                                        camera_id=camera_id,
+                                        person_name=face["name"],
+                                        confidence=face["confidence"],
+                                        is_known=is_known,
+                                        event_data=face,
+                                    ),
+                                    loop,
+                                )
+                        except RuntimeError:
+                            # No event loop running, skip alert
+                            pass
                     except Exception as e:
                         logger.error(f"Error triggering face alert: {e}")
 
