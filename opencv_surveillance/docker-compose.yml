@@ -1,12 +1,10 @@
-version: '3.8'
-
-# OpenEye v3.1.0 - Docker Compose Configuration
-# 
+# OpenEye v3.11.4 - Docker Compose Configuration
+#
 # FIRST-RUN SETUP:
-# 1. Start the container: docker-compose up -d
-# 2. Open http://localhost:8000/
-# 3. Complete the interactive setup wizard to create your admin account
-# 4. No need to configure admin credentials in this file!
+# 1. Generate secrets: See below or run setup-production.sh
+# 2. Start the container: docker compose up -d
+# 3. Open http://localhost:8000/
+# 4. Complete the interactive setup wizard to create your admin account
 #
 # For detailed configuration, see: https://github.com/M1K31/OpenEye
 
@@ -22,62 +20,43 @@ services:
     environment:
       # Database
       - DATABASE_URL=sqlite:///./data/openeye.db
-      
-      # Security (REQUIRED)
+
+      # Security (REQUIRED - generate unique keys for production)
+      # Generate with: openssl rand -hex 32
       - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-jwt-secret-key}
-      
-      # Email notifications (optional - FREE with Gmail)
-      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
-      - SMTP_PORT=${SMTP_PORT:-587}
-      - SMTP_USERNAME=${SMTP_USERNAME:-}
-      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
-      - SMTP_FROM_ADDRESS=${SMTP_FROM_ADDRESS:-}
-      
-      # Telegram Bot (optional - FREE!)
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
-      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
-      
-      # Twilio SMS (optional - paid)
-      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-}
-      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}
-      - TWILIO_FROM_NUMBER=${TWILIO_FROM_NUMBER:-}
-      
-      # ntfy.sh push notifications (optional - FREE!)
-      - NTFY_TOPIC=${NTFY_TOPIC:-}
-      - NTFY_SERVER=${NTFY_SERVER:-https://ntfy.sh}
-      
-      # Firebase push notifications (optional)
-      - FIREBASE_CREDENTIALS_PATH=${FIREBASE_CREDENTIALS_PATH:-}
-      
-      # Google Nest integration (optional)
-      - NEST_PROJECT_ID=${NEST_PROJECT_ID:-}
-      - NEST_CLIENT_ID=${NEST_CLIENT_ID:-}
-      - NEST_CLIENT_SECRET=${NEST_CLIENT_SECRET:-}
-      
-      # AWS S3 (optional)
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
-      - AWS_S3_BUCKET=${AWS_S3_BUCKET:-}
-      - AWS_REGION=${AWS_REGION:-us-east-1}
-      
+      # Generate with: python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+      - NOTIFICATION_ENCRYPTION_KEY=${NOTIFICATION_ENCRYPTION_KEY:-}
+
+      # Server binding (optional)
+      - OPENEYE_HOST=${OPENEYE_HOST:-0.0.0.0}
+      - OPENEYE_PORT=${OPENEYE_PORT:-8000}
+
+      # MagicMirror ecosystem (optional)
+      - MAGICMIRROR_HOST=${MAGICMIRROR_HOST:-}
+      - MAGICMIRROR_PORT=${MAGICMIRROR_PORT:-}
+
+      # CORS (optional)
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8000}
+
       # Application settings
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - ENABLE_FACE_RECOGNITION=${ENABLE_FACE_RECOGNITION:-true}
       - MAX_RECORDING_DURATION=${MAX_RECORDING_DURATION:-300}
-    
+
     volumes:
       # Persistent data
       - ./data:/app/data
-      - ./config:/app/config
+      - ./recordings:/app/recordings
+      - ./faces:/app/faces
       - ./models:/app/models
-    
+
     restart: unless-stopped
-    
+
     networks:
       - openeye-network
-    
-    # Resource limits
+
+    # Resource limits (adjust based on your hardware)
     deploy:
       resources:
         limits:
@@ -86,6 +65,15 @@ services:
         reservations:
           cpus: '1'
           memory: 1G
+
+    # Uncomment for NVIDIA GPU acceleration
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
 
 networks:
   openeye-network:

@@ -1,8 +1,8 @@
-version: '3.8'
+# OpenEye Test Configuration - DO NOT USE IN PRODUCTION
 
 services:
   openeye-test:
-    image: openeye-test:v3.5.0-local
+    image: openeye-test:v3.11.4-local
     container_name: openeye-phase2-test
     ports:
       - "8001:8000"  # Using port 8001 to avoid conflicts
@@ -13,6 +13,7 @@ services:
     environment:
       - SECRET_KEY=test_secret_key_for_phase2_testing_only_do_not_use_in_production
       - JWT_SECRET_KEY=test_jwt_secret_key_for_phase2_testing_only_do_not_use
+      - NOTIFICATION_ENCRYPTION_KEY=test_notification_key_do_not_use_in_production
       - ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=30
     restart: unless-stopped
