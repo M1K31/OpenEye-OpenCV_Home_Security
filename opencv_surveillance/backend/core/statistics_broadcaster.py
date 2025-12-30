@@ -54,9 +54,7 @@ class StatisticsBroadcaster:
 
         self.is_running = True
         self.task = asyncio.create_task(self._broadcast_loop())
-        logger.info(
-            f"Statistics broadcaster started (interval: {
-                self.interval}s)")
+        logger.info(f"Statistics broadcaster started (interval: {self.interval}s)")
 
     async def stop(self):
         """Stop the broadcasting service."""

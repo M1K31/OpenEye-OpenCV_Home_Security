@@ -281,8 +281,7 @@ class SMSNotifier:
         """Send SMS notification"""
         try:
             # Twilio API endpoint
-            url = f"https://api.twilio.com/2010-04-01/Accounts/{
-                self.account_sid}/Messages.json"
+            url = f"https://api.twilio.com/2010-04-01/Accounts/{self.account_sid}/Messages.json"
 
             # Prepare SMS body (limited to 160 characters)
             sms_body = f"{notification.subject}\n{notification.body[:100]}"
@@ -478,30 +477,19 @@ class WebhookNotifier:
             # Check response status
             response.raise_for_status()
 
-            logger.info(
-                f"Webhook notification sent to {
-                    self.webhook_url} (status: {
-                    response.status_code})")
+            logger.info(f"Webhook notification sent to {self.webhook_url} (status: {response.status_code})")
             notification.delivered = True
             notification.delivery_time = datetime.now()
             return True
 
         except requests.exceptions.Timeout:
-            logger.error(
-                f"Webhook request timed out after {
-                    self.timeout}s: {
-                    self.webhook_url}")
+            logger.error(f"Webhook request timed out after {self.timeout}s: {self.webhook_url}")
             notification.error = f"Timeout after {self.timeout}s"
             return False
 
         except requests.exceptions.HTTPError as e:
-            logger.error(
-                f"Webhook HTTP error {
-                    e.response.status_code}: {
-                    self.webhook_url}")
-            notification.error = f"HTTP {
-                e.response.status_code}: {
-                e.response.text}"
+            logger.error(f"Webhook HTTP error {e.response.status_code}: {self.webhook_url}")
+            notification.error = f"HTTP {e.response.status_code}: {e.response.text}"
             return False
 
         except Exception as e:
@@ -774,9 +762,7 @@ class AlertManager:
                     notification.delivered = success
                     notification.delivery_time = datetime.now()
                 else:
-                    logger.error(
-                        f"No notifier registered for {
-                            notification.channel}")
+                    logger.error(f"No notifier registered for {notification.channel}")
                     notification.error = "No notifier registered"
 
                 # Store delivery history

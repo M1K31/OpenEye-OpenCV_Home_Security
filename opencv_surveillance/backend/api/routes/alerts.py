@@ -150,8 +150,7 @@ def create_alert_configuration(
     if existing:
         raise HTTPException(
             status_code=400,
-            detail=f"Alert configuration already exists for user {
-                config.user_id}. Use PUT to update.",
+            detail=f"Alert configuration already exists for user {config.user_id}. Use PUT to update.",
         )
 
     # Create new configuration
@@ -312,8 +311,7 @@ async def test_alert(request: TestAlertRequest, db: Session = Depends(get_db)):
                 detail="SMS not enabled or phone number not set")
 
         success, error = notification_service.send_sms(
-            to_number=config.phone_number, message=f"[OpenEye Test] {
-                request.message}")
+            to_number=config.phone_number, message=f"[OpenEye Test] {request.message}")
 
     elif request.channel == "push":
         if not config.push_enabled or not config.push_token:
@@ -354,8 +352,7 @@ async def test_alert(request: TestAlertRequest, db: Session = Depends(get_db)):
     else:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to send test {
-                request.channel}: {error}")
+            detail=f"Failed to send test {request.channel}: {error}")
 
 
 @router.get("/alerts/statistics")

@@ -71,9 +71,7 @@ class AudioCapture:
         self.audio_queue: Queue = Queue(maxsize=100)
 
         logger.info(
-            f"Audio capture initialized: {
-                config.sample_rate}Hz, {
-                config.channels}ch")
+            f"Audio capture initialized: {config.sample_rate}Hz, {config.channels}ch")
 
     def list_devices(self) -> List[Dict]:
         """List available audio input devices"""
@@ -199,9 +197,7 @@ class AudioPlayback:
         self.playback_queue: Queue = Queue(maxsize=100)
 
         logger.info(
-            f"Audio playback initialized: {
-                config.sample_rate}Hz, {
-                config.channels}ch")
+            f"Audio playback initialized: {config.sample_rate}Hz, {config.channels}ch")
 
     def list_devices(self) -> List[Dict]:
         """List available audio output devices"""

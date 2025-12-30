@@ -352,9 +352,7 @@ class Camera(ABC):
                     # Update other settings
                     self.post_motion_cooldown = db_camera.post_motion_cooldown
 
-                    print(
-                        f"Settings reloaded for camera '{
-                            self.camera_id}' from database")
+                    print(f"Settings reloaded for camera '{self.camera_id}' from database")
                 # Session automatically closed by context manager
         except Exception as e:
             print(f"Error reloading settings from database: {e}")
@@ -451,11 +449,7 @@ class Camera(ABC):
                 event_id = motion_event.id
                 # Session automatically closed by context manager
 
-                print(
-                    f"Created motion event {event_id} for camera {
-                        self.camera_id}: {
-                        motion_percentage:.1f}% motion, {
-                        len(motion_areas)} contours")
+                print(f"Created motion event {event_id} for camera {self.camera_id}: {motion_percentage:.1f}% motion, {len(motion_areas)} contours")
                 return event_id
 
         except Exception as e:

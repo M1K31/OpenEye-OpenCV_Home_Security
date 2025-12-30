@@ -77,9 +77,7 @@ class CameraDiscovery:
                 logger.debug(f"No camera at index {index}: {e}")
                 continue
 
-        logger.info(
-            f"USB camera discovery complete. Found {
-                len(usb_cameras)} cameras")
+        logger.info(f"USB camera discovery complete. Found {len(usb_cameras)} cameras")
         return usb_cameras
 
     def _get_device_path(self, index: int) -> str:
@@ -154,10 +152,7 @@ class CameraDiscovery:
                         for result in results:
                             if result and not isinstance(result, Exception):
                                 network_cameras.append(result)
-                                logger.info(
-                                    f"Found camera at {
-                                        result['ip']}:{
-                                        result['port']}")
+                                logger.info(f"Found camera at {result['ip']}:{result['port']}")
 
             except Exception as e:
                 logger.error(f"Error during network discovery: {e}")
@@ -165,13 +160,9 @@ class CameraDiscovery:
         try:
             # Run scan with timeout
             await asyncio.wait_for(_do_scan(), timeout=timeout)
-            logger.info(
-                f"Network camera discovery complete. Found {
-                    len(network_cameras)} cameras")
+            logger.info(f"Network camera discovery complete. Found {len(network_cameras)} cameras")
         except asyncio.TimeoutError:
-            logger.warning(
-                f"Network scan timed out after {timeout}s. Returning {
-                    len(network_cameras)} cameras found so far")
+            logger.warning(f"Network scan timed out after {timeout}s. Returning {len(network_cameras)} cameras found so far")
         except Exception as e:
             logger.error(f"Unexpected error during network discovery: {e}")
         finally:

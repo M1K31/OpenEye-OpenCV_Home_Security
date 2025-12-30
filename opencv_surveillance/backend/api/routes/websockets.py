@@ -182,9 +182,7 @@ async def websocket_statistics_endpoint(
                 elif message_type == "subscribe":
                     # Handle subscription (future feature)
                     event_types = message.get("event_types", [])
-                    logger.info(
-                        f"User {
-                            user.username} subscribed to: {event_types}")
+                    logger.info(f"User {user.username} subscribed to: {event_types}")
                     await ws_manager.send_personal_message(
                         {"type": "subscription_confirmed", "event_types": event_types},
                         connection_id,
@@ -193,9 +191,7 @@ async def websocket_statistics_endpoint(
                 elif message_type == "unsubscribe":
                     # Handle unsubscription (future feature)
                     event_types = message.get("event_types", [])
-                    logger.info(
-                        f"User {
-                            user.username} unsubscribed from: {event_types}")
+                    logger.info(f"User {user.username} unsubscribed from: {event_types}")
                     await ws_manager.send_personal_message(
                         {
                             "type": "unsubscription_confirmed",
@@ -205,19 +201,13 @@ async def websocket_statistics_endpoint(
                     )
 
                 else:
-                    logger.debug(
-                        f"Unknown message type from {
-                            user.username}: {message_type}")
+                    logger.debug(f"Unknown message type from {user.username}: {message_type}")
 
             except WebSocketDisconnect:
-                logger.info(
-                    f"WebSocket disconnect signal from {
-                        user.username}")
+                logger.info(f"WebSocket disconnect signal from {user.username}")
                 break
             except Exception as e:
-                logger.error(
-                    f"Error handling WebSocket message from {
-                        user.username}: {e}")
+                logger.error(f"Error handling WebSocket message from {user.username}: {e}")
                 # Don't break on message handling errors, continue listening
 
     except Exception as e:

@@ -207,9 +207,7 @@ class GoogleCloudStorage:
         self.client = gcs.Client()
         self.bucket = self.client.bucket(config.bucket_name)
 
-        logger.info(
-            f"GCS storage initialized for bucket: {
-                config.bucket_name}")
+        logger.info(f"GCS storage initialized for bucket: {config.bucket_name}")
 
     def upload_file(self, local_path: str, remote_path: str,
                     metadata: Optional[Dict] = None) -> bool:
@@ -307,9 +305,7 @@ class AzureBlobStorage:
             config.bucket_name
         )
 
-        logger.info(
-            f"Azure storage initialized for container: {
-                config.bucket_name}")
+        logger.info(f"Azure storage initialized for container: {config.bucket_name}")
 
     def upload_file(self, local_path: str, remote_path: str,
                     metadata: Optional[Dict] = None) -> bool:

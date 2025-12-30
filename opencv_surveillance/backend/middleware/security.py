@@ -55,9 +55,7 @@ class IPWhitelistMiddleware(BaseHTTPMiddleware):
 
         if self.enabled:
             logger.info(
-                f"IP whitelist enabled for: {
-                    ', '.join(
-                        self.allowed_ips)}")
+                f"IP whitelist enabled for: {', '.join( self.allowed_ips)}")
         else:
             logger.info("IP whitelist disabled - all IPs allowed")
 

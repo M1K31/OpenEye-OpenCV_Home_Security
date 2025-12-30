@@ -127,8 +127,7 @@ class NotificationService:
             )
 
             logger.info(
-                f"SMS sent successfully to {to_number}, SID: {
-                    message_obj.sid}")
+                f"SMS sent successfully to {to_number}, SID: {message_obj.sid}")
             return True, None
 
         except Exception as e:
@@ -204,8 +203,7 @@ class NotificationService:
                             f"Webhook sent successfully to {webhook_url}")
                         return True, None
                     else:
-                        error_msg = f"Webhook returned status {
-                            response.status}"
+                        error_msg = f"Webhook returned status {response.status}"
                         logger.warning(error_msg)
                         return False, error_msg
 

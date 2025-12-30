@@ -234,13 +234,11 @@ class WebSocketConnectionManager:
                     disconnected.append(connection_id)
                 else:
                     logger.error(
-                        f"Failed to broadcast to {
-                            connection.username}: {e}")
+                        f"Failed to broadcast to {connection.username}: {e}")
                     disconnected.append(connection_id)
             except Exception as e:
                 logger.error(
-                    f"Failed to broadcast to {
-                        connection.username}: {e}")
+                    f"Failed to broadcast to {connection.username}: {e}")
                 disconnected.append(connection_id)
 
         # Clean up failed connections
@@ -267,8 +265,7 @@ class WebSocketConnectionManager:
                     await connection.send_json(message)
                 except Exception as e:
                     logger.error(
-                        f"Failed to send to {
-                            connection.username}: {e}")
+                        f"Failed to send to {connection.username}: {e}")
                     disconnected.append(connection_id)
 
         # Clean up failed connections

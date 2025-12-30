@@ -366,12 +366,10 @@ async def startup_event():
                     )
                     loaded_count += 1
                     logger.info(
-                        f"Loaded camera '{
-                            db_camera.camera_id}' from database")
+                        f"Loaded camera '{db_camera.camera_id}' from database")
                 except Exception as e:
                     logger.error(
-                        f"Failed to load camera '{
-                            db_camera.camera_id}': {e}")
+                        f"Failed to load camera '{db_camera.camera_id}': {e}")
         logger.info(f"Loaded {loaded_count} camera(s) from database")
 
     # Start statistics broadcaster

@@ -116,10 +116,7 @@ class VideoPlayer:
         self.playback_speed = 1.0
 
         logger.info(
-            f"Video loaded: {
-                self.frame_count} frames, {
-                self.fps} FPS, {
-                self.duration:.2f}s")
+            f"Video loaded: {self.frame_count} frames, {self.fps} FPS, {self.duration:.2f}s")
 
     def get_frame(self,
                   frame_number: Optional[int] = None) -> Optional[np.ndarray]:

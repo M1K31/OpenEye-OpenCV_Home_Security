@@ -365,17 +365,12 @@ class WebhookManager:
                     webhook.total_deliveries += 1
                     webhook.last_triggered = datetime.now().isoformat()
                     logger.info(
-                        f"Webhook {
-                            webhook.id} delivered successfully " f"(status: {
-                            response.status}, time: {
-                            delivery.response_time:.2f}ms)")
+                        f"Webhook {webhook.id} delivered successfully " f"(status: {response.status}, time: {delivery.response_time:.2f}ms)")
                 else:
                     delivery.error = f"HTTP {response.status}"
                     webhook.failed_deliveries += 1
                     logger.warning(
-                        f"Webhook {
-                            webhook.id} failed with status {
-                            response.status}")
+                        f"Webhook {webhook.id} failed with status {response.status}")
 
         except asyncio.TimeoutError:
             delivery.error = "Request timeout"
