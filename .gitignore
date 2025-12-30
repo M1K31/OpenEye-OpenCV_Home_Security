@@ -104,6 +104,7 @@ build/
 # Documentation files (not needed in repo - reduces clutter)
 # Keep only essential docs: README.md, CHANGELOG.md, DOCKER.md
 *.md
+*.md.*
 !README.md
 !CHANGELOG.md
 !DOCKER.md
