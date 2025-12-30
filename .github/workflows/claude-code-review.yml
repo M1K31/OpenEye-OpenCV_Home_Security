@@ -47,7 +47,14 @@ jobs:
             - Security concerns
             - Test coverage
 
-            Use the repository's CLAUDE.md for guidance on style and conventions. Be constructive and helpful in your feedback.
+            Project conventions:
+            - Backend: FastAPI (Python 3.11+), SQLAlchemy, OpenCV
+            - Frontend: React 18, Vite, Material-UI preferred
+            - Use singleton pattern for managers (camera_manager, face_manager)
+            - Use CRUD functions from backend/database/crud.py
+            - Follow 8pt grid system for UI spacing
+
+            Be constructive and helpful in your feedback.
 
             Use `gh pr comment` with your Bash tool to leave your review as a comment on the PR.
 
