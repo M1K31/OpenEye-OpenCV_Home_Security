@@ -5,12 +5,12 @@
 set -e  # Exit on error
 
 echo "=================================================="
-echo "  OpenEye Deployment Script v3.10.0"
+echo "  OpenEye Deployment Script v3.11.4"
 echo "=================================================="
 echo ""
 
 # Configuration
-VERSION="v3.10.0"
+VERSION="v3.11.4"
 DOCKER_USERNAME="im1k31s"
 DOCKER_IMAGE="openeye-opencv_home_security"
 GITHUB_REPO="M1K31/OpenEye-OpenCV_Home_Security"

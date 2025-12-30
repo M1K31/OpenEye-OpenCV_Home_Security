@@ -6,7 +6,7 @@
 
 🔗 **GitHub**: https://github.com/M1K31/OpenEye-OpenCV_Home_Security
 📚 **Full Documentation**: [README.md](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/blob/main/README.md)
-🚀 **API Documentation**: [API_DOCUMENTATION.md](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/blob/main/opencv_surveillance/docs/API_DOCUMENTATION.md)
+🚀 **API Documentation**: [API_REFERENCE.md](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/blob/main/docs/API_REFERENCE.md)
 📝 **Changelog**: [CHANGELOG.md](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/blob/main/CHANGELOG.md)
 
 ---
@@ -107,8 +107,6 @@ docker run -d \
 Create `docker-compose.yml`:
 
 ```yaml
-version: '3.8'
-
 services:
   openeye:
     image: im1k31s/openeye-opencv_home_security:latest
@@ -254,6 +252,7 @@ USB cameras have limited support in Docker on macOS due to USB passthrough limit
 - `v3.11.4` - **Current version** - Scheduled tasks, MagicMirror search API
 - `v3.11.1` - Multi-user system, ecosystem integration
 - `v3.10.2` - Face detection fix, timeline playback improvements
+- `v3.10.1` - Two-way audio enhancements, test infrastructure
 - `v3.10.0` - Object detection (YOLOv8), two-way audio
 - `v3.9.0` - Security hardening, performance optimization
 - `v3.7.1` - FFmpeg hardware encoding (70-90% CPU reduction)
@@ -277,6 +276,10 @@ USB cameras have limited support in Docker on macOS due to USB passthrough limit
 | `DATABASE_URL` | No | `sqlite:///./surveillance.db` | Database connection string |
 | `CORS_ORIGINS` | No | `http://localhost:8000` | Allowed CORS origins (comma-separated) |
 | `LOG_LEVEL` | No | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR) |
+| `OPENEYE_HOST` | No | `0.0.0.0` | Server bind address |
+| `OPENEYE_PORT` | No | `8000` | Server port |
+| `MAGICMIRROR_HOST` | No | - | MagicMirror device address (for ecosystem discovery) |
+| `MAGICMIRROR_PORT` | No | - | MagicMirror device port |
 
 ### Volume Mounts
 
@@ -525,11 +528,11 @@ Then configure cameras to use GPU acceleration in settings.
 ## 🆘 Getting Help
 
 - 📖 **Full Documentation**: [GitHub README](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/blob/main/README.md)
-- 📚 **User Guide**: [USER_GUIDE.md](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/blob/main/opencv_surveillance/docs/USER_GUIDE.md)
+- 📚 **User Guide**: [USER_GUIDE.md](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/blob/main/docs/USER_GUIDE.md)
 - 🐛 **Bug Reports**: [GitHub Issues](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/issues)
 - 💬 **Discussions**: [GitHub Discussions](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/discussions)
 - 🔧 **API Documentation**: `http://localhost:8000/docs` (Swagger UI after starting)
-- ✅ **TODO Roadmap**: [TODO.md](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/blob/main/TODO.md)
+- ✅ **TODO Roadmap**: [TODO.md](https://github.com/M1K31/OpenEye-OpenCV_Home_Security/blob/main/docs/TODO.md)
 
 ---
 
