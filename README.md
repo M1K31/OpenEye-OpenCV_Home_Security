@@ -115,7 +115,6 @@ docker run -d \
 **Or use Docker Compose** (see [DOCKER.md](DOCKER.md) for full guide):
 
 ```yaml
-version: '3.8'
 services:
   openeye:
     image: im1k31s/openeye-opencv_home_security:latest
@@ -252,21 +251,19 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 ## 📖 Documentation
 
 ### User Documentation
-- 📘 **[User Guide](opencv_surveillance/docs/USER_GUIDE.md)** - Complete usage instructions
-- 🔧 **[Setup Guide](opencv_surveillance/docs/setup_guide.md)** - Smart home integrations
-- 🗑️ **[Uninstall Guide](opencv_surveillance/docs/UNINSTALL_GUIDE.md)** - Safe removal instructions
+- 📘 **[User Guide](docs/USER_GUIDE.md)** - Complete usage instructions
+- 🔧 **[Setup Guide](docs/deployment/setup_guide.md)** - Smart home integrations
+- 🗑️ **[Uninstall Guide](docs/UNINSTALL_GUIDE.md)** - Safe removal instructions
 
 ### Technical Documentation
-- 🔌 **[API Reference](opencv_surveillance/docs/API_DOCUMENTATION.md)** - Complete API documentation
-- ⚡ **[WebSocket Implementation](opencv_surveillance/docs/WEBSOCKET_IMPLEMENTATION.md)** - Real-time updates
-- 🐧 **[Systemd Service](opencv_surveillance/docs/LINUX_SYSTEMD_SERVICE.md)** - Production deployment
+- 🔌 **[API Reference](docs/API_REFERENCE.md)** - Complete API documentation
+- ⚡ **[WebSocket Implementation](docs/development/WEBSOCKET_IMPLEMENTATION.md)** - Real-time updates
+- 🐧 **[Systemd Service](docs/deployment/LINUX_SYSTEMD_SERVICE.md)** - Production deployment
 - 🔧 **[Quick Reference](docs/QUICK_REFERENCE.md)** - Common tasks
 
 ### Project Documentation
 - 📝 **[CHANGELOG.md](CHANGELOG.md)** - Version history and release notes
-- 👨‍💻 **[CLAUDE.md](CLAUDE.md)** - Developer guide and coding standards
-- 🐞 **[Fix History](docs/development/FIXES_HISTORY.md)** - Complete fix history
-- 📋 **[Project Roadmap](docs/PROJECT_AUDIT_AND_TODO_v3.5.3.md)** - Planned features and audit
+- 🐳 **[DOCKER.md](DOCKER.md)** - Docker deployment guide
 
 ---
 
@@ -415,7 +412,7 @@ npm run build
 ./setup-production.sh
 ```
 
-For more help, see [User Guide](opencv_surveillance/docs/USER_GUIDE.md) or open an issue.
+For more help, see [User Guide](docs/USER_GUIDE.md) or open an issue.
 
 ---
 
