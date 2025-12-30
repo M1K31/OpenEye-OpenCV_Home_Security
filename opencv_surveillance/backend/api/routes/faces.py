@@ -560,9 +560,7 @@ def train_face_recognition(
             total_encodings=result["total_encodings"],
             training_time=result["training_time"],
             success=True,
-            message=f"Training completed: {
-                result['total_encodings']} encodings " f"for {
-                result['total_people']} people",
+            message=f"Training completed: {result['total_encodings']} encodings for {result['total_people']} people",
         )
 
     except Exception as e:
@@ -738,12 +736,12 @@ def enable_face_detection(
 
         camera.enable_face_detection(enabled)
 
+        status_text = 'enabled' if enabled else 'disabled'
         return JSONResponse(
             content={
                 "camera_id": camera_id,
                 "face_detection_enabled": enabled,
-                "message": f"Face detection {
-                    'enabled' if enabled else 'disabled'} for camera '{camera_id}'",
+                "message": f"Face detection {status_text} for camera '{camera_id}'",
             })
 
     except HTTPException:

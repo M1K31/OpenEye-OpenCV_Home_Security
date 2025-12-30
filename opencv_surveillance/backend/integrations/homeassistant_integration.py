@@ -100,9 +100,7 @@ class HomeAssistantIntegration:
             self.client.connect(self.mqtt_host, self.mqtt_port, 60)
             self.client.loop_start()
             logger.info(
-                f"Connecting to MQTT broker at {
-                    self.mqtt_host}:{
-                    self.mqtt_port}")
+                f"Connecting to MQTT broker at {self.mqtt_host}:{self.mqtt_port}")
         except Exception as e:
             logger.error(f"Failed to connect to MQTT broker: {e}")
             raise
@@ -169,10 +167,8 @@ class HomeAssistantIntegration:
         camera_config = {
             "name": camera_name,
             "unique_id": f"opencv_surveillance_camera_{camera_id}",
-            "topic": f"{
-                self.state_prefix}/{camera_id}/image",
-            "availability_topic": f"{
-                self.state_prefix}/{camera_id}/availability",
+            "topic": f"{self.state_prefix}/{camera_id}/image",
+            "availability_topic": f"{self.state_prefix}/{camera_id}/availability",
             "device": asdict(device),
             "icon": "mdi:cctv",
         }
@@ -214,12 +210,10 @@ class HomeAssistantIntegration:
         sensor_config = {
             "name": f"{camera_name} Motion",
             "unique_id": f"opencv_surveillance_motion_{camera_id}",
-            "state_topic": f"{
-                self.state_prefix}/{camera_id}/motion",
+            "state_topic": f"{self.state_prefix}/{camera_id}/motion",
             "device_class": "motion",
             "device": asdict(device),
-            "availability_topic": f"{
-                self.state_prefix}/{camera_id}/availability",
+            "availability_topic": f"{self.state_prefix}/{camera_id}/availability",
             "payload_on": "ON",
             "payload_off": "OFF",
         }
@@ -356,8 +350,7 @@ class HomeAssistantIntegration:
             if unit:
                 sensor_config["unit_of_measurement"] = unit
 
-            discovery_topic = f"{
-                self.discovery_prefix}/sensor/{sensor_id}/config"
+            discovery_topic = f"{self.discovery_prefix}/sensor/{sensor_id}/config"
             self.client.publish(
                 discovery_topic,
                 json.dumps(sensor_config),

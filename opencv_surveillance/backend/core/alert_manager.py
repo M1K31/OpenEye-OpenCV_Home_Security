@@ -69,9 +69,7 @@ class AlertManager:
             return True
 
         # Too soon - throttle
-        logger.info(
-            f"Alert throttled: {throttle_key} (last sent {
-                time_since_last:.0f}s ago)")
+        logger.info(f"Alert throttled: {throttle_key} (last sent {time_since_last:.0f}s ago)")
         return False
 
     def _is_quiet_hours(self, config: alert_models.AlertConfiguration) -> bool:
@@ -180,8 +178,7 @@ class AlertManager:
                     .all()
                 )
                 subject = f"Known Person Detected: {person_name}"
-                message = f"{person_name} detected on camera {camera_id} (confidence: {
-                    confidence:.1%})"
+                message = f"{person_name} detected on camera {camera_id} (confidence: {confidence:.1%})"
             else:
                 event_type = "face_unknown"
                 configs = (
@@ -245,12 +242,11 @@ class AlertManager:
                 .all()
             )
 
-            event_type = (
-                "recording_started" if recording_started else "recording_stopped")
-            subject = f"Recording {
-                'Started' if recording_started else 'Stopped'}"
-            message = f"Camera {camera_id} {
-                'started' if recording_started else 'stopped'} recording"
+            event_type = "recording_started" if recording_started else "recording_stopped"
+            status_text = 'Started' if recording_started else 'Stopped'
+            action_text = 'started' if recording_started else 'stopped'
+            subject = f"Recording {status_text}"
+            message = f"Camera {camera_id} {action_text} recording"
 
             for config in configs:
                 throttle_key = f"{event_type}_{camera_id}"

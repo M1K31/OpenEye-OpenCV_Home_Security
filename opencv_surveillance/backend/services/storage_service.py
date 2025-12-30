@@ -248,9 +248,7 @@ class CloudStorageService:
                     expiry=datetime.utcnow() + timedelta(seconds=expiration),
                 )
 
-                url = f"https://{
-                    self.client.account_name}.blob.core.windows.net/{
-                    self.bucket_name}/{remote_path}?{sas_token}"
+                url = f"https://{self.client.account_name}.blob.core.windows.net/{self.bucket_name}/{remote_path}?{sas_token}"
                 return url
 
         except Exception as e:

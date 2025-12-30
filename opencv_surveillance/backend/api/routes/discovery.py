@@ -119,9 +119,7 @@ async def _run_network_discovery(subnet: Optional[str]):
     try:
         cameras = await discovery_service.discover_network_cameras(subnet)
         discovery_service.discovered_cameras = cameras
-        logger.info(
-            f"Network discovery completed. Found {
-                len(cameras)} cameras")
+        logger.info(f"Network discovery completed. Found {len(cameras)} cameras")
     except Exception as e:
         logger.error(f"Network discovery failed: {e}")
 
@@ -201,8 +199,7 @@ async def quick_add_camera(
         existing_camera = crud.get_camera_by_id(db, request.camera_id)
         if existing_camera:
             raise HTTPException(
-                status_code=400, detail=f"Camera '{
-                    request.camera_id}' already exists")
+                status_code=400, detail=f"Camera '{request.camera_id}' already exists")
 
         # Also check in-memory camera manager
         if camera_manager.get_camera(request.camera_id):
@@ -217,12 +214,10 @@ async def quick_add_camera(
         )
 
         if not test_result.get("success"):
+            error_msg = test_result.get('error', 'Unknown error')
             raise HTTPException(
                 status_code=400,
-                detail=f"Camera test failed: {
-                    test_result.get(
-                        'error',
-                        'Unknown error')}",
+                detail=f"Camera test failed: {error_msg}",
             )
 
         # Save to database FIRST for persistence
@@ -263,8 +258,7 @@ async def quick_add_camera(
 
         return {
             "success": True,
-            "message": f"Camera '{
-                request.camera_id}' added successfully and saved to database",
+            "message": f"Camera '{request.camera_id}' added successfully and saved to database",
             "camera": {
                 "camera_id": request.camera_id,
                 "type": request.camera_type,
@@ -279,8 +273,7 @@ async def quick_add_camera(
         logger.error(f"Error adding camera: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to add camera: {
-                str(e)}")
+            detail=f"Failed to add camera: {str(e)}")
 
 
 @router.get("/cameras/discover/help", status_code=200)

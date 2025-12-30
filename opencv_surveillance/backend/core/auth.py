@@ -188,10 +188,10 @@ def require_role(allowed_roles: list):
         current_user: user_schema.User = Depends(get_current_active_user),
     ) -> user_schema.User:
         if current_user.role not in allowed_roles:
+            roles_str = ', '.join(allowed_roles)
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Access denied. Required roles: {
-                    ', '.join(allowed_roles)}",
+                detail=f"Access denied. Required roles: {roles_str}",
             )
         return current_user
 

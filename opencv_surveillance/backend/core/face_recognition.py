@@ -97,9 +97,7 @@ class FaceRecognitionManager:
     def set_recognition_threshold(self, threshold: float):
         """Set recognition confidence threshold (0.0 - 1.0, lower = stricter)"""
         self.recognition_threshold = max(0.0, min(1.0, threshold))
-        logger.info(
-            f"Recognition threshold set to: {
-                self.recognition_threshold}")
+        logger.info(f"Recognition threshold set to: {self.recognition_threshold}")
         # Save settings to persist across restarts
         self.save_encodings()
 

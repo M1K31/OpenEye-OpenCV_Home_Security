@@ -92,8 +92,7 @@ class HomeKitCamera(Accessory):
         )
 
         logger.info(
-            f"Camera stream service configured for {
-                self.display_name}")
+            f"Camera stream service configured for {self.display_name}")
 
     def get_snapshot(self, width: int = 1920, height: int = 1080) -> bytes:
         """
@@ -219,8 +218,7 @@ class HomeKitBridge(Bridge):
         self.cameras[camera_id] = camera
 
         logger.info(
-            f"Added {
-                'doorbell' if is_doorbell else 'camera'} {camera_name} to bridge")
+            f"Added {'doorbell' if is_doorbell else 'camera'} {camera_name} to bridge")
 
     def remove_camera(self, camera_id: str):
         """Remove camera from bridge"""

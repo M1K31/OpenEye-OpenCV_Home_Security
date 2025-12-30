@@ -71,8 +71,7 @@ def create_camera(
             crud.delete_camera(db, camera.camera_id)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to start camera '{
-                    camera.camera_id}'. Check source URL and logs.",
+                detail=f"Failed to start camera '{camera.camera_id}'. Check source URL and logs.",
             )
     except Exception as e:
         crud.delete_camera(db, camera.camera_id)

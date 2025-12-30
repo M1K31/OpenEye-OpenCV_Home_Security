@@ -123,9 +123,7 @@ class MQTTIntegration:
         """
         try:
             logger.info(
-                f"Connecting to MQTT broker at {
-                    self.config.host}:{
-                    self.config.port}")
+                f"Connecting to MQTT broker at {self.config.host}:{self.config.port}")
             self.client.connect(
                 self.config.host, self.config.port, self.config.keepalive
             )
@@ -176,9 +174,7 @@ class MQTTIntegration:
                 5: "Connection refused - not authorized",
             }
             logger.error(
-                f"Connection failed: {
-                    error_messages.get(
-                        rc, f'Unknown error {rc}')}")
+                f"Connection failed: {error_messages.get( rc, f'Unknown error {rc}')}")
 
     def _on_disconnect(self, client, userdata, rc):
         """Callback when disconnected from broker"""

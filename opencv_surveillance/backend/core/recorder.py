@@ -82,9 +82,7 @@ class Recorder:
                 )
 
                 if self.writer.isOpened():
-                    print(
-                        f"Successfully initialized video writer with codec '{codec_name}' for {
-                            self.filename}")
+                    print(f"Successfully initialized video writer with codec '{codec_name}' for {self.filename}")
                     break
                 else:
                     # Clean up the writer object
@@ -95,9 +93,7 @@ class Recorder:
                 self.writer = None
 
         if not self.writer or not self.writer.isOpened():
-            print(
-                f"Error: Could not open video writer for {
-                    self.filename} with any available codec")
+            print(f"Error: Could not open video writer for {self.filename} with any available codec")
             return
 
         self.is_recording = True
@@ -154,9 +150,7 @@ class Recorder:
 
         duration = (datetime.now() - self.recording_start_time).total_seconds()
         if duration >= self.max_recording_duration:
-            print(
-                f"Maximum recording duration ({
-                    self.max_recording_duration}s) reached. Stopping recording.")
+            print(f"Maximum recording duration ({self.max_recording_duration}s) reached. Stopping recording.")
             return True
         return False
 
@@ -188,12 +182,7 @@ class Recorder:
             self._save_metadata(duration, file_size)
 
             print(f"Stopped recording. Video saved to {self.filename}")
-            print(
-                f"Duration: {
-                    duration:.2f}s, Frames: {
-                    self.frame_count}, Faces detected: {
-                    len(
-                        self.detected_faces)}")
+            print(f"Duration: {duration:.2f}s, Frames: {self.frame_count}, Faces detected: {len(self.detected_faces)}")
 
             # NEW: Trigger recording stopped alert
             try:
