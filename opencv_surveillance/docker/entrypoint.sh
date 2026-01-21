@@ -26,16 +26,25 @@ if [ -f "alembic.ini" ]; then
     alembic upgrade head || echo "⚠️  No migrations or alembic not configured"
 fi
 
-# Create directories
+# Create directories (may fail if volumes are mounted without correct permissions)
 echo "📁 Creating data directories..."
-mkdir -p /app/data/recordings /app/data/faces /app/data/logs
-mkdir -p /app/models /app/config
+if ! mkdir -p /app/data/recordings /app/data/faces /app/data/logs 2>/dev/null; then
+    echo "⚠️  Warning: Could not create data subdirectories"
+    echo "    This usually means the mounted volumes are owned by root."
+    echo ""
+    echo "    To fix, run on your host machine:"
+    echo "      sudo chown -R 1000:1000 ./data ./recordings ./faces ./models"
+    echo ""
+    echo "    Or use: docker compose down && docker compose up"
+    echo "    (the init-permissions service will fix this automatically)"
+fi
+mkdir -p /app/models /app/config 2>/dev/null || true
 
-# Set permissions
+# Set permissions check
 if [ -w "/app/data" ]; then
     echo "✅ Data directory is writable"
 else
-    echo "⚠️  Warning: Data directory is not writable"
+    echo "⚠️  Warning: Data directory is not writable - see instructions above"
 fi
 
 # Display configuration

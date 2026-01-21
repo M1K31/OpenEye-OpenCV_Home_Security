@@ -9,8 +9,30 @@
 # For detailed configuration, see: https://github.com/M1K31/OpenEye
 
 services:
+  # Init service to set up directories with correct permissions
+  # Fixes: https://github.com/M1K31/OpenEye-OpenCV_Home_Security/issues/6
+  init-permissions:
+    image: busybox
+    user: root
+    volumes:
+      - ./data:/app/data
+      - ./recordings:/app/recordings
+      - ./faces:/app/faces
+      - ./models:/app/models
+    command: >
+      sh -c "
+        mkdir -p /app/data/recordings /app/data/faces /app/data/logs &&
+        mkdir -p /app/recordings /app/faces /app/models &&
+        chown -R 1000:1000 /app/data /app/recordings /app/faces /app/models &&
+        echo 'Permissions configured for UID 1000'
+      "
+    restart: "no"
+
   # Main OpenEye application
   openeye:
+    depends_on:
+      init-permissions:
+        condition: service_completed_successfully
     build:
       context: .
       dockerfile: Dockerfile
