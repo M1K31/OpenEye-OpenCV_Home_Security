@@ -1,4 +1,4 @@
-# OpenEye v3.11.4 - Docker Compose Configuration
+# OpenEye v3.11.5 - Docker Compose Configuration
 #
 # FIRST-RUN SETUP:
 # 1. Generate secrets: See below or run setup-production.sh
@@ -7,6 +7,24 @@
 # 4. Complete the interactive setup wizard to create your admin account
 #
 # For detailed configuration, see: https://github.com/M1K31/OpenEye
+#
+# ============================================================================
+# PLATFORM LIMITATIONS (macOS/Windows Docker Desktop)
+# ============================================================================
+# USB CAMERAS: Docker Desktop on macOS/Windows runs containers inside a Linux
+# VM. USB devices connected to the host are NOT passed through to containers.
+# USB camera discovery will not find any cameras in this environment.
+#
+# NETWORK CAMERAS: The container uses bridge networking by default. Network
+# camera discovery scans the Docker virtual network, not your home LAN.
+# For best results with IP cameras, add them manually using their RTSP URLs.
+#
+# SOLUTIONS:
+# 1. Use RTSP/IP cameras (recommended) - add manually with RTSP URLs
+# 2. Run OpenEye natively on macOS/Windows (full USB camera support)
+# 3. Run on Linux with: devices: ["/dev/video0:/dev/video0"]
+# 4. Use network_mode: host on Linux for full network discovery
+# ============================================================================
 
 services:
   # Init service to set up directories with correct permissions
@@ -96,6 +114,20 @@ services:
     #         - driver: nvidia
     #           count: 1
     #           capabilities: [gpu]
+
+    # =========================================================================
+    # LINUX ONLY: USB Camera Support
+    # Uncomment to enable USB webcam access (not supported on macOS/Windows)
+    # =========================================================================
+    # devices:
+    #   - /dev/video0:/dev/video0
+    #   - /dev/video1:/dev/video1  # Add more as needed
+
+    # =========================================================================
+    # LINUX ONLY: Host Networking for Full Network Camera Discovery
+    # Enables scanning your LAN for IP cameras (replaces bridge networking)
+    # =========================================================================
+    # network_mode: host  # Uncomment this and comment out 'networks:' below
 
 networks:
   openeye-network:

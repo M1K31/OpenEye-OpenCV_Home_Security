@@ -1,6 +1,6 @@
 # OpenEye - AI-Powered Home Security with OpenCV & Face Recognition
 
-![Version](https://img.shields.io/badge/version-3.11.4-blue.svg)
+![Version](https://img.shields.io/badge/version-3.11.5-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![OpenCV](https://img.shields.io/badge/OpenCV-4.8+-red.svg)
 ![License](https://img.shields.io/badge/license-MIT-yellow.svg)
@@ -351,9 +351,19 @@ pytest
 
 ## 📊 Project Status
 
-**Current Version**: 3.11.4 (Scheduled Tasks & MagicMirror Integration)
+**Current Version**: 3.11.5 (Camera Discovery Fix & Docker Documentation)
 
-### Recent Updates (v3.11.4)
+### Recent Updates (v3.11.5)
+**Bug Fixes:**
+- Fixed camera discovery API error (`get_all_cameras` → `get_cameras`)
+- Fixed CameraDiscoveryPage.jsx styling (hardcoded colors → CSS theme variables)
+
+**Documentation:**
+- Added comprehensive Docker platform limitations documentation
+- Documented USB camera limitations on macOS/Windows Docker
+- Added Linux-specific device passthrough and host networking examples
+
+### Previous Updates (v3.11.4)
 **New Features:**
 - 📅 **Scheduled Tasks System** - Background scheduler for automated maintenance
   - Model retraining: Automatically retrain face recognition on schedule
@@ -411,6 +421,17 @@ npm run build
 ./uninstall.sh  # Choose "No backup" option
 ./setup-production.sh
 ```
+
+**Docker: USB cameras not discovered (macOS/Windows)**:
+Docker Desktop runs containers in a Linux VM, preventing USB device access.
+- Use RTSP/IP cameras instead (add manually with RTSP URLs)
+- Or run OpenEye natively: `pip install -r requirements.txt && python main.py`
+- See [DOCKER.md](DOCKER.md) for detailed platform limitations
+
+**Docker: Network cameras not discovered**:
+The container uses bridge networking, scanning Docker's virtual network instead of your LAN.
+- Add cameras manually using their RTSP URLs
+- On Linux, use `network_mode: host` in docker-compose.yml
 
 For more help, see [User Guide](docs/USER_GUIDE.md) or open an issue.
 
