@@ -1,6 +1,6 @@
 # OpenEye - AI-Powered Home Security System
 
-![Version](https://img.shields.io/badge/version-3.11.4-blue.svg) ![License](https://img.shields.io/badge/license-MIT-yellow.svg) ![Cost](https://img.shields.io/badge/cost-$0/month-success.svg)
+![Version](https://img.shields.io/badge/version-3.11.5-blue.svg) ![License](https://img.shields.io/badge/license-MIT-yellow.svg) ![Cost](https://img.shields.io/badge/cost-$0/month-success.svg)
 
 **100% free and open-source** AI-powered surveillance with face recognition, motion detection, and smart home integration. Your data stays on your hardware - no subscriptions, no cloud dependencies.
 
@@ -235,21 +235,63 @@ rtsp://admin:password@192.168.1.100:554/h264Preview_01_main
 rtsp://username:password@camera-ip:554/stream
 ```
 
-### ⚠️ macOS Docker Limitation
+### ⚠️ Docker Platform Limitations (macOS/Windows)
 
-USB cameras have limited support in Docker on macOS due to USB passthrough limitations.
+Docker Desktop on macOS and Windows runs containers inside a Linux virtual machine. This creates fundamental limitations for hardware access:
 
-**Solutions**:
-1. **Use Network/IP Cameras** (Recommended - works perfectly!)
-2. **Run natively** on macOS (see [README.md](https://github.com/M1K31/OpenEye-OpenCV_Home_Security#option-2-local-installation-automated-setup))
-3. **Use Linux VM** or native Linux
+#### USB Camera Discovery - Not Supported
+
+| Platform | USB Camera Support | Reason |
+|----------|-------------------|--------|
+| **Linux** | ✅ Full support | Direct device access via `--device=/dev/video0` |
+| **macOS** | ❌ Not available | Docker VM cannot access USB devices |
+| **Windows** | ❌ Not available | Docker VM cannot access USB devices |
+
+USB cameras connected to your Mac or Windows PC are **not visible** to the Docker container. The camera discovery feature will not find any USB cameras in these environments.
+
+#### Network Camera Discovery - Limited
+
+The container uses Docker's bridge network by default, which means:
+- Network scans search the Docker virtual network (172.17.x.x), not your home LAN
+- IP cameras on your local network (192.168.x.x) may not be discoverable
+- `network_mode: host` works on Linux but has limitations on macOS/Windows
+
+#### Solutions
+
+| Solution | Platform | USB Cameras | Network Cameras |
+|----------|----------|-------------|-----------------|
+| **1. Use RTSP URLs manually** | All | ❌ | ✅ Best option |
+| **2. Run OpenEye natively** | macOS/Windows | ✅ Full | ✅ Full |
+| **3. Linux with device passthrough** | Linux | ✅ Full | ✅ Full |
+| **4. Linux with host networking** | Linux | ✅ Full | ✅ Full |
+
+**Recommended for macOS/Windows Docker users**: Add IP cameras manually using their RTSP URLs instead of relying on auto-discovery.
+
+#### Linux Docker Configuration (Full Support)
+
+```yaml
+services:
+  openeye:
+    # ... other config ...
+
+    # USB camera passthrough
+    devices:
+      - /dev/video0:/dev/video0
+      - /dev/video1:/dev/video1
+
+    # Full network access for camera discovery
+    network_mode: host
+```
+
+See [README.md](https://github.com/M1K31/OpenEye-OpenCV_Home_Security#option-2-local-installation-automated-setup) for native installation instructions.
 
 ---
 
 ## 📦 Available Tags
 
-- `latest` - Most recent stable release (v3.11.4)
-- `v3.11.4` - **Current version** - Scheduled tasks, MagicMirror search API
+- `latest` - Most recent stable release (v3.11.5)
+- `v3.11.5` - **Current version** - Camera discovery fix, Docker platform documentation
+- `v3.11.4` - Scheduled tasks, MagicMirror search API
 - `v3.11.1` - Multi-user system, ecosystem integration
 - `v3.10.2` - Face detection fix, timeline playback improvements
 - `v3.10.1` - Two-way audio enhancements, test infrastructure

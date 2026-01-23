@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.11.5] - 2025-01-22
+
+### Fixed
+- **Camera Discovery API Error** - Fixed `AttributeError: module 'backend.database.crud' has no attribute 'get_all_cameras'`
+  - **Root Cause**: `discovery.py` called `crud.get_all_cameras(db)` but the function is named `get_cameras(db)`
+  - **Solution**: Changed function calls on lines 59 and 138 to use correct function name
+  - **Impact**: USB and network camera discovery now works without errors
+  - **Files Modified**: `backend/api/routes/discovery.py`
+
+- **CameraDiscoveryPage Styling** - Fixed hardcoded colors breaking theme consistency
+  - **Problem**: Page used inline styles with hardcoded hex colors (#2c3e50, #7f8c8d, #f8f9fa, etc.)
+  - **Solution**: Replaced all hardcoded colors with CSS theme variables
+  - **Changes**:
+    - `#2c3e50` → `var(--text-primary)`
+    - `#7f8c8d` → `var(--text-secondary)`
+    - `white` / `#f8f9fa` → `var(--bg-panel)` / `var(--bg-input)`
+    - `#e9ecef` → `var(--border-panel)`
+    - `#fee` / `#efe` → `var(--error-bg)` / `var(--success-bg)`
+  - **Impact**: Camera Discovery page now respects theme selection
+  - **Files Modified**: `frontend/src/pages/CameraDiscoveryPage.jsx`
+
+### Documentation
+- **Docker Platform Limitations** - Comprehensive documentation for macOS/Windows Docker users
+  - **Problem**: Users on macOS/Windows couldn't discover USB cameras and had limited network discovery
+  - **Root Cause**: Docker Desktop runs containers in a Linux VM without USB passthrough
+  - **Documentation Added**:
+    - Detailed explanation of Docker Desktop VM limitations
+    - Platform comparison table (Linux vs macOS vs Windows)
+    - Solutions matrix with recommendations
+    - Linux-specific device passthrough examples
+    - Host networking configuration for full network discovery
+  - **Files Modified**:
+    - `docker-compose.yml` - Added header comments explaining limitations
+    - `DOCKER.md` - Expanded platform limitations section with tables and examples
+    - `README.md` - Added troubleshooting entries for Docker camera discovery
+
+### Changed
+- Updated version to 3.11.5 across all documentation files
+- Added Linux USB camera and host networking examples to docker-compose.yml
+
+---
+
 ## [3.11.4] - 2025-12-28
 
 ### Added

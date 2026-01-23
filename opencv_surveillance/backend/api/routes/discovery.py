@@ -56,7 +56,7 @@ async def discover_usb_cameras(db: Session = Depends(get_db)):
 
         # Filter out cameras that are already added
         # Get all existing camera sources from database
-        existing_cameras = crud.get_all_cameras(db)
+        existing_cameras = crud.get_cameras(db)
         existing_sources = {cam.source for cam in existing_cameras}
 
         # Filter USB cameras - check if source (index as string) already exists
@@ -135,7 +135,7 @@ async def get_discovery_status(db: Session = Depends(get_db)):
     status = discovery_service.get_discovery_status()
 
     # Get existing cameras to filter out
-    existing_cameras = crud.get_all_cameras(db)
+    existing_cameras = crud.get_cameras(db)
     existing_sources = {cam.source for cam in existing_cameras}
 
     # Filter discovered network cameras
