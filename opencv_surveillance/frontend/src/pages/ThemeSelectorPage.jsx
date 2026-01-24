@@ -19,44 +19,44 @@ const ThemeSelectorPage = ({ embedded = false }) => {
       description: 'Clean and professional design',
       colors: ['#667eea', '#764ba2', '#f8f9fa'],
     },
-    [THEMES.SUPERMAN]: {
-      name: 'Sman',
-      icon: 'S',
+    [THEMES.MAN_OF_STEEL]: {
+      name: 'Man of Steel',
+      icon: '🦸',
       description: 'Classic red/blue with hope and power',
       colors: ['#0076a8', '#d32029', '#f2c700'],
     },
-    [THEMES.BATMAN]: {
-      name: 'Bman',
+    [THEMES.DARK_KNIGHT]: {
+      name: 'Dark Knight',
       icon: '🦇',
       description: 'Dark knight - brooding and mysterious',
       colors: ['#111', '#333', '#edc233'],
     },
-    [THEMES.WONDER_WOMAN]: {
-      name: 'W Woman',
+    [THEMES.AMAZONIAN_DEMIGOD]: {
+      name: 'Amazonian Demigod',
       icon: '⭐',
       description: 'Warrior gold - regal and vibrant',
       colors: ['#a41b30', '#0074fa', '#f4d975'],
     },
-    [THEMES.FLASH]: {
-      name: 'Flah',
+    [THEMES.HERMES]: {
+      name: 'Hermes',
       icon: '⚡',
       description: 'Speed red - dynamic and energetic',
       colors: ['#b90000', '#f4be00', '#fff'],
     },
-    [THEMES.AQUAMAN]: {
-      name: 'Aman',
+    [THEMES.KING_OF_ATLANTIS]: {
+      name: 'King of Atlantis',
       icon: '🔱',
       description: 'Ocean teal - deep sea depths',
       colors: ['#005642', '#d9c27f', '#7c4c2d'],
     },
     [THEMES.CYBORG]: {
-      name: 'Cy',
+      name: 'Cyborg',
       icon: '🤖',
       description: 'Tech silver - modern neon highlights',
       colors: ['#1a1a1a', '#555', '#ff00ff'],
     },
-    [THEMES.GREEN_LANTERN]: {
-      name: 'G Lantern',
+    [THEMES.LANTERN]: {
+      name: 'Lantern',
       icon: '💚',
       description: 'Willpower green - cosmic power glow',
       colors: ['#00a064', '#007447', '#222'],
@@ -89,7 +89,7 @@ const ThemeSelectorPage = ({ embedded = false }) => {
           />
         </h1>
         <p style={styles.subtitle}>
-          Choose your favorite superhero theme or stick with the classic design
+          Choose your favorite theme or stick with the classic design
         </p>
       </div>
 

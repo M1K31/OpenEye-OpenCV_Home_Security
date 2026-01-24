@@ -151,6 +151,20 @@ html.default-theme body {
   --switch-track-on: #007AFF;
   --switch-thumb: #FFFFFF;
 
+  /* Role Badge Gradients */
+  --role-admin-gradient: linear-gradient(135deg, #ff6b6b, #ee5253);
+  --role-user-gradient: linear-gradient(135deg, var(--accent-color, #4a9eff), #3b82f6);
+  --role-viewer-gradient: linear-gradient(135deg, #888, #666);
+
+  /* Error Light Theme (for error messages on dark backgrounds) */
+  --error-light-bg: rgba(220, 53, 69, 0.1);
+  --error-light-border: rgba(220, 53, 69, 0.3);
+  --error-light-text: #ff6b6b;
+
+  /* Button Hover States */
+  --danger-hover: #ff3333;
+  --secondary-hover-bg: var(--bg-hover);
+
   /* Shadow */
   --shadow: rgba(0, 0, 0, 0.5);
 
@@ -159,7 +173,7 @@ html.default-theme body {
 }
 
 /* ===================
-   SUPERMAN THEME
+   MAN OF STEEL THEME
    =================== */
 html.sman-theme,
 html.sman-theme body {
@@ -228,6 +242,20 @@ html.sman-theme body {
   --switch-track-on: #d32f2f;
   --switch-thumb: #ffd700;
 
+  /* Role Badge Gradients - Man of Steel themed */
+  --role-admin-gradient: linear-gradient(135deg, #d32f2f, #b71c1c);
+  --role-user-gradient: linear-gradient(135deg, #1565c0, #0d47a1);
+  --role-viewer-gradient: linear-gradient(135deg, #ffd700, #e6c200);
+
+  /* Error Light Theme */
+  --error-light-bg: rgba(211, 47, 47, 0.15);
+  --error-light-border: rgba(211, 47, 47, 0.4);
+  --error-light-text: #ff5252;
+
+  /* Button Hover States */
+  --danger-hover: #b71c1c;
+  --secondary-hover-bg: var(--bg-hover);
+
   --shadow: rgba(0, 0, 0, 0.6);
 
   background: linear-gradient(180deg, #0d47a1 0%, #1565c0 100%);
@@ -241,7 +269,7 @@ html.sman-theme body {
 }
 
 /* ===================
-   BATMAN THEME
+   DARK KNIGHT THEME
    =================== */
 html.bman-theme,
 html.bman-theme body {
@@ -310,6 +338,20 @@ html.bman-theme body {
   --switch-track-on: #edc233;
   --switch-thumb: #111111;
 
+  /* Role Badge Gradients - Dark Knight themed */
+  --role-admin-gradient: linear-gradient(135deg, #edc233, #d4ad20);
+  --role-user-gradient: linear-gradient(135deg, #333333, #1a1a1a);
+  --role-viewer-gradient: linear-gradient(135deg, #666666, #444444);
+
+  /* Error Light Theme */
+  --error-light-bg: rgba(239, 83, 80, 0.15);
+  --error-light-border: rgba(239, 83, 80, 0.4);
+  --error-light-text: #ef5350;
+
+  /* Button Hover States */
+  --danger-hover: #d32f2f;
+  --secondary-hover-bg: var(--bg-hover);
+
   --shadow: rgba(0, 0, 0, 0.9);
 
   background-color: var(--bg-main);
@@ -318,7 +360,7 @@ html.bman-theme body {
 }
 
 /* ===================
-   WONDER WOMAN THEME
+   AMAZONIAN DEMIGOD THEME
    =================== */
 html.wwoman-theme,
 html.wwoman-theme body {
@@ -387,6 +429,20 @@ html.wwoman-theme body {
   --switch-track-on: #c41e3a;
   --switch-thumb: #ffd700;
 
+  /* Role Badge Gradients - Amazonian Demigod themed */
+  --role-admin-gradient: linear-gradient(135deg, #c41e3a, #a01829);
+  --role-user-gradient: linear-gradient(135deg, #ffd700, #e6c200);
+  --role-viewer-gradient: linear-gradient(135deg, #1a5490, #0d3b66);
+
+  /* Error Light Theme */
+  --error-light-bg: rgba(196, 30, 58, 0.15);
+  --error-light-border: rgba(196, 30, 58, 0.4);
+  --error-light-text: #ff5252;
+
+  /* Button Hover States */
+  --danger-hover: #a01829;
+  --secondary-hover-bg: var(--bg-hover);
+
   --shadow: rgba(0, 0, 0, 0.6);
 
   background: linear-gradient(180deg, #0d3b66 0%, #1a5490 100%);
@@ -395,7 +451,7 @@ html.wwoman-theme body {
 }
 
 /* ===================
-   FLASH THEME
+   HERMES THEME
    =================== */
 html.fman-theme,
 html.fman-theme body {
@@ -460,6 +516,20 @@ html.fman-theme body {
   --switch-track-on: #FFD700;
   --switch-thumb: #DC0000;
 
+  /* Role Badge Gradients - Hermes themed */
+  --role-admin-gradient: linear-gradient(135deg, #DC0000, #8B0000);
+  --role-user-gradient: linear-gradient(135deg, #FFD700, #E6C200);
+  --role-viewer-gradient: linear-gradient(135deg, #666666, #444444);
+
+  /* Error Light Theme */
+  --error-light-bg: rgba(255, 82, 82, 0.15);
+  --error-light-border: rgba(255, 82, 82, 0.4);
+  --error-light-text: #FF5252;
+
+  /* Button Hover States */
+  --danger-hover: #cc0000;
+  --secondary-hover-bg: var(--bg-hover);
+
   background: linear-gradient(135deg, #DC0000 0%, #8B0000 100%);
   color: #FFD700;
 }
@@ -478,7 +548,7 @@ html.fman-theme body {
 }
 
 /* ===================
-   AQUAMAN THEME
+   KING OF ATLANTIS THEME
    =================== */
 html.aman-theme,
 html.aman-theme body {
@@ -526,6 +596,20 @@ html.aman-theme body {
   --switch-track-on: #00C49A;
   --card-background: rgba(0, 105, 148, 0.9);
 
+  /* Role Badge Gradients - King of Atlantis themed */
+  --role-admin-gradient: linear-gradient(135deg, #FF6B35, #E65A2E);
+  --role-user-gradient: linear-gradient(135deg, #00C49A, #00A080);
+  --role-viewer-gradient: linear-gradient(135deg, #006994, #004D6D);
+
+  /* Error Light Theme */
+  --error-light-bg: rgba(239, 83, 80, 0.15);
+  --error-light-border: rgba(239, 83, 80, 0.4);
+  --error-light-text: #EF5350;
+
+  /* Button Hover States */
+  --danger-hover: #d32f2f;
+  --secondary-hover-bg: var(--bg-hover);
+
   background: linear-gradient(180deg, #006994 0%, #004D6D 100%);
   color: #FFFFFF;
 }
@@ -543,7 +627,7 @@ html.aman-theme body {
 }
 
 /* ===================
-   GREEN LANTERN THEME
+   LANTERN THEME
    =================== */
 html.glantern-theme,
 html.glantern-theme body {
@@ -590,6 +674,20 @@ html.glantern-theme body {
   --button-primary-text: #FFFFFF;
   --switch-track-on: #00A550;
   --card-background: rgba(0, 80, 40, 0.9);
+
+  /* Role Badge Gradients - Lantern themed */
+  --role-admin-gradient: linear-gradient(135deg, #00A550, #008442);
+  --role-user-gradient: linear-gradient(135deg, #B2FF9E, #8FE67A);
+  --role-viewer-gradient: linear-gradient(135deg, #004D26, #001A0F);
+
+  /* Error Light Theme */
+  --error-light-bg: rgba(239, 83, 80, 0.15);
+  --error-light-border: rgba(239, 83, 80, 0.4);
+  --error-light-text: #EF5350;
+
+  /* Button Hover States */
+  --danger-hover: #d32f2f;
+  --secondary-hover-bg: var(--bg-hover);
 
   background: radial-gradient(circle at center, #001A0F 0%, #000000 100%);
   color: #FFFFFF;
@@ -659,6 +757,20 @@ html.cyborg-theme body {
   --switch-track-on: #FF00FF;
   --card-background: rgba(40, 40, 40, 0.95);
   --card-border: rgba(255, 0, 255, 0.2);
+
+  /* Role Badge Gradients - Cyborg themed */
+  --role-admin-gradient: linear-gradient(135deg, #FF00FF, #CC00CC);
+  --role-user-gradient: linear-gradient(135deg, #00FFFF, #00CCCC);
+  --role-viewer-gradient: linear-gradient(135deg, #555555, #333333);
+
+  /* Error Light Theme */
+  --error-light-bg: rgba(255, 0, 0, 0.15);
+  --error-light-border: rgba(255, 0, 0, 0.4);
+  --error-light-text: #FF0000;
+
+  /* Button Hover States */
+  --danger-hover: #cc0000;
+  --secondary-hover-bg: var(--bg-hover);
 
   background: linear-gradient(135deg, #1A1A1A 0%, #000000 100%);
   color: #FFFFFF;
@@ -765,6 +877,20 @@ html.aquasecurity-theme body {
   --switch-track-off: rgba(120, 120, 128, 0.32);
   --switch-track-on: #00AEEF;
   --switch-thumb: #FFFFFF;
+
+  /* Role Badge Gradients - Aqua Security themed */
+  --role-admin-gradient: linear-gradient(135deg, #00AEEF, #0088CC);
+  --role-user-gradient: linear-gradient(135deg, #10B981, #059669);
+  --role-viewer-gradient: linear-gradient(135deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.15));
+
+  /* Error Light Theme */
+  --error-light-bg: rgba(239, 68, 68, 0.15);
+  --error-light-border: rgba(239, 68, 68, 0.4);
+  --error-light-text: #EF4444;
+
+  /* Button Hover States */
+  --danger-hover: #dc2626;
+  --secondary-hover-bg: var(--bg-hover);
 
   /* Shadow */
   --shadow: 0 4px 12px rgba(0, 0, 0, 0.4);

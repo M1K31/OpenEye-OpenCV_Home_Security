@@ -331,7 +331,7 @@ test.describe('Theme Settings', () => {
     await page.goto('/settings/theme');
 
     // OpenEye has 9 themes
-    const themes = ['Default', 'Superman', 'Batman', 'Wonder Woman', 'Flash', 'Aquaman', 'Cyborg', 'Green Lantern', 'Aqua Security'];
+    const themes = ['Default', 'Man of Steel', 'Dark Knight', 'Amazonian Demigod', 'Hermes', 'King of Atlantis', 'Cyborg', 'Lantern', 'Aqua Security'];
 
     // At least some themes should be visible
     let themeCount = 0;
@@ -348,7 +348,7 @@ test.describe('Theme Settings', () => {
     await page.goto('/settings/theme');
 
     // Find theme buttons/cards
-    const themeButtons = page.locator('button:has-text("Superman"), button:has-text("Batman")');
+    const themeButtons = page.locator('button:has-text("Man of Steel"), button:has-text("Dark Knight")');
 
     if (await themeButtons.count() > 0) {
       // Click a theme
@@ -369,9 +369,9 @@ test.describe('Theme Settings', () => {
     await page.goto('/settings/theme');
 
     // Select a theme
-    const batmanTheme = page.locator('button:has-text("Batman")');
-    if (await batmanTheme.count() > 0) {
-      await batmanTheme.click();
+    const darkKnightTheme = page.locator('button:has-text("Dark Knight")');
+    if (await darkKnightTheme.count() > 0) {
+      await darkKnightTheme.click();
       await page.waitForTimeout(500);
 
       // Reload page

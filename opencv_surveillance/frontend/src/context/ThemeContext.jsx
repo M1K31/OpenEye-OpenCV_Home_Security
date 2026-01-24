@@ -15,13 +15,13 @@ export const useTheme = () => {
 
 export const THEMES = {
   DEFAULT: 'default',
-  SUPERMAN: 'sman',
-  BATMAN: 'bman',
-  WONDER_WOMAN: 'wwoman',
-  FLASH: 'fman',
-  AQUAMAN: 'aman',
+  MAN_OF_STEEL: 'sman',
+  DARK_KNIGHT: 'bman',
+  AMAZONIAN_DEMIGOD: 'wwoman',
+  HERMES: 'fman',
+  KING_OF_ATLANTIS: 'aman',
   CYBORG: 'cyborg',
-  GREEN_LANTERN: 'glantern',
+  LANTERN: 'glantern',
   AQUA_SECURITY: 'aquasecurity',
 };
 
