@@ -330,13 +330,13 @@ button:disabled {
 }
 
 .status.success {
-  background-color: #d4edda;
-  color: #155724;
+  background-color: var(--success-bg, #d4edda);
+  color: var(--success-text, #155724);
 }
 
 .status.failed {
-  background-color: #f8d7da;
-  color: #721c24;
+  background-color: var(--error-bg, #f8d7da);
+  color: var(--error-text, #721c24);
 }
 
 .loading {

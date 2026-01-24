@@ -24,7 +24,7 @@
 
 ### User Experience
 - 🔎 **Camera Discovery** - Automatic USB/network detection (ONVIF support)
-- 🎨 **9 Themes** - Superman, Batman, Wonder Woman, Flash, Aquaman, Cyborg, Green Lantern, Aqua Security, Default
+- 🎨 **9 Themes** - Man of Steel, Dark Knight, Amazonian Demigod, Hermes, King of Atlantis, Cyborg, Lantern, Aqua Security, Default
 - ❓ **Help System** - 36+ context-sensitive help entries
 - 🔐 **First-Run Wizard** - Easy admin account setup
 - 📱 **Responsive Design** - Works on desktop, tablet, mobile

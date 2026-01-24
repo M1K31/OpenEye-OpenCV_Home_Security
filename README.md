@@ -53,7 +53,7 @@ A **100% free and open-source** AI-powered surveillance system using **OpenCV** 
 - 💾 **Dual Database** - SQLite (development) or PostgreSQL (production)
 
 ### User Interface
-- 🎨 **9 Themes** - Superman, Batman, Wonder Woman, Flash, Aquaman, Cyborg, Green Lantern, Aqua Security, Default
+- 🎨 **9 Themes** - Man of Steel, Dark Knight, Amazonian Demigod, Hermes, King of Atlantis, Cyborg, Lantern, Aqua Security, Default
 - ❓ **Integrated Help System** - 36+ context-sensitive help entries
 - 🎯 **First-Run Wizard** - Easy setup for new installations
 - 📱 **Responsive Design** - Works on desktop, tablet, mobile

@@ -1496,15 +1496,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `DELETE /api/cameras/{id}` - Remove camera
 
 ### Added - Theme System
-- 8 superhero-inspired themes:
+- 8 unique themes:
   - Default (Dark Professional)
-  - Superman (Classic red/blue)
-  - Batman (Dark knight)
-  - Wonder Woman (Warrior princess)
-  - Flash (Speed force)
-  - Aquaman (Ocean depths)
+  - Man of Steel (Classic red/blue)
+  - Dark Knight (Brooding and mysterious)
+  - Amazonian Demigod (Warrior princess)
+  - Hermes (Speed force)
+  - King of Atlantis (Ocean depths)
   - Cyborg (Tech enhanced)
-  - Green Lantern (Willpower)
+  - Lantern (Willpower)
 - Custom color palettes and typography per theme
 - Animated overlays and effects
 - Persistent theme selection (localStorage)

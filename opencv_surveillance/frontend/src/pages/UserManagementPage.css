@@ -156,17 +156,17 @@
 }
 
 .role-badge.admin {
-  background: linear-gradient(135deg, #ff6b6b, #ee5253);
+  background: var(--role-admin-gradient, linear-gradient(135deg, #ff6b6b, #ee5253));
   color: white;
 }
 
 .role-badge.user {
-  background: linear-gradient(135deg, #4a9eff, #3b82f6);
+  background: var(--role-user-gradient, linear-gradient(135deg, #4a9eff, #3b82f6));
   color: white;
 }
 
 .role-badge.viewer {
-  background: linear-gradient(135deg, #888, #666);
+  background: var(--role-viewer-gradient, linear-gradient(135deg, #888, #666));
   color: white;
 }
 
@@ -259,7 +259,7 @@
 }
 
 .btn-danger:hover {
-  background: #ff3333;
+  background: var(--danger-hover, #ff3333);
 }
 
 /* Modal */
@@ -421,6 +421,7 @@
     padding: 1.5rem;
   }
 }
+
 
 
 

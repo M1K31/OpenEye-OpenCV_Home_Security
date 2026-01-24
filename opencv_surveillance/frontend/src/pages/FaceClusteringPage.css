@@ -197,21 +197,21 @@
 
 /* Error Message */
 .error-message {
-  background: #fee;
-  border: 1px solid #fcc;
+  background: var(--error-light-bg, rgba(220, 53, 69, 0.1));
+  border: 1px solid var(--error-light-border, rgba(220, 53, 69, 0.3));
   border-radius: 0.375rem;
   padding: 1rem 1.5rem;
   margin-bottom: 1.5rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  color: #c33;
+  color: var(--error-light-text, #ff6b6b);
 }
 
 .error-message button {
   background: none;
   border: none;
-  color: #c33;
+  color: var(--error-light-text, #ff6b6b);
   font-size: 1.25rem;
   cursor: pointer;
   padding: 0;
@@ -314,7 +314,7 @@
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: #1976D2;
+  background: var(--secondary-hover-bg, #1976D2);
   transform: translateY(-0.0625rem);
   box-shadow: 0 0.125rem 0.375rem rgba(33, 150, 243, 0.3);
 }
