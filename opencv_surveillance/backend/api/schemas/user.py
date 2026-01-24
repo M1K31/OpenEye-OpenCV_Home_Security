@@ -208,8 +208,6 @@ class User(UserBase):
 class UserWithPreferences(User):
     """User with full preferences"""
     preferences: Optional[UserPreferences] = None
-
-
 class UserListResponse(BaseModel):
     """Paginated user list response"""
     users: List[User]
