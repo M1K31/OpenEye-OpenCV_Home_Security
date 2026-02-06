@@ -65,6 +65,9 @@ class MotionEventListResponse(BaseModel):
     offset: int = 0
     has_more: bool = False
 
+    class Config:
+        from_attributes = True
+
 
 # =====================================================
 # Motion Zone Schemas

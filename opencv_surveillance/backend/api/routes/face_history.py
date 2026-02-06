@@ -10,6 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timedelta
+import os
+import logging
 
 from backend.database.session import SessionLocal
 from backend.database import crud, models
@@ -17,7 +19,29 @@ from backend.core.performance import paginate, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from backend.api.schemas.pagination import PaginatedResponse
 from pydantic import BaseModel, Field
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+
+def normalize_snapshot_path(path: Optional[str]) -> Optional[str]:
+    """
+    Convert snapshot path to URL-friendly format.
+    Handles both absolute paths and already-normalized URL paths.
+    """
+    if not path:
+        return None
+
+    # Already in URL format
+    if path.startswith('/data/snapshots/') or path.startswith('/api/snapshots/'):
+        return path
+
+    # Extract filename from absolute path
+    filename = os.path.basename(path)
+    if filename:
+        return f"/data/snapshots/{filename}"
+
+    return None
 
 
 # =====================================================
@@ -118,31 +142,55 @@ def get_detection_history(
 
     Returns:
         PaginatedResponse with detection events and pagination metadata
+
+    Performance:
+        Optimized COUNT queries: single query when only time filter applied (v3.11.7)
     """
     try:
-        # Build query with filters (apply filters FIRST for performance)
-        query = db.query(models.FaceDetectionEvent)
-
-        # Time filter
+        # Time filter (always applied)
         cutoff_time = datetime.utcnow() - timedelta(hours=hours)
-        query = query.filter(models.FaceDetectionEvent.detected_at >= cutoff_time)
+
+        # Build time-filtered base query (for accurate "total in time range")
+        base_query = db.query(models.FaceDetectionEvent).filter(
+            models.FaceDetectionEvent.detected_at >= cutoff_time
+        )
+        query = db.query(models.FaceDetectionEvent).filter(
+            models.FaceDetectionEvent.detected_at >= cutoff_time
+        )
+
+        # Track if additional filters are applied (beyond time)
+        has_additional_filters = False
 
         # Camera filter (uses idx_face_camera_time index)
         if camera_id:
             query = query.filter(models.FaceDetectionEvent.camera_id == camera_id)
+            has_additional_filters = True
 
         # Person filter (uses idx_face_person_time index)
         if person_name:
             query = query.filter(models.FaceDetectionEvent.person_name == person_name)
+            has_additional_filters = True
 
         # Order by most recent
         query = query.order_by(models.FaceDetectionEvent.detected_at.desc())
 
-        # Get total count (before pagination)
-        total_count = db.query(models.FaceDetectionEvent).count()
+        # Optimized count: only count once if no additional filters
+        if has_additional_filters:
+            # Two counts: total in time range vs filtered
+            total_count = base_query.count()
+            filtered_count = query.count()
+        else:
+            # Single count: no additional filters, total = filtered
+            filtered_count = query.count()
+            total_count = filtered_count
 
-        # Apply pagination (this counts the filtered results, not the entire table)
-        events, filtered_count, total_pages = paginate(query, page=page, page_size=page_size)
+        # Calculate pagination
+        total_pages = (filtered_count + page_size - 1) // page_size if filtered_count > 0 else 1
+        page = min(page, total_pages)
+        offset = (page - 1) * page_size
+
+        # Execute paginated query
+        events = query.offset(offset).limit(page_size).all()
 
         # Format response
         results = []
@@ -162,7 +210,7 @@ def get_detection_history(
                     },
                     motion_detected=event.motion_detected,
                     recording_path=event.recording_path,
-                    snapshot_path=event.snapshot_path,
+                    snapshot_path=normalize_snapshot_path(event.snapshot_path),
                     cluster_id=event.cluster_id,
                 )
             )
@@ -180,6 +228,7 @@ def get_detection_history(
         }
 
     except Exception as e:
+        logger.exception(f"Error in get_detection_history: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -241,7 +290,7 @@ def get_person_history(
                     },
                     motion_detected=event.motion_detected,
                     recording_path=event.recording_path,
-                    snapshot_path=event.snapshot_path,
+                    snapshot_path=normalize_snapshot_path(event.snapshot_path),
                     cluster_id=event.cluster_id,
                 )
             )

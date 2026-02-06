@@ -6,8 +6,19 @@ OpenEye Surveillance System - Main Application
 Complete Phase 2 implementation with face recognition
 """
 
-# Suppress pkg_resources deprecation warning from face_recognition_models (external package)
+# CRITICAL: Set environment variables BEFORE any imports to prevent OpenMP conflicts
+# Intel libiomp and LLVM libomp can be loaded simultaneously causing threadpoolctl warnings
+import os
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+
+# Suppress warnings for known issues (must be before other imports)
 import warnings
+# Suppress threadpoolctl warning about OpenMP conflict (informational only, not harmful)
+warnings.filterwarnings("ignore", message=".*Found Intel OpenMP.*LLVM OpenMP.*", category=RuntimeWarning)
+# Suppress pkg_resources deprecation warning from face_recognition_models (external package)
 warnings.filterwarnings("ignore", message="pkg_resources is deprecated", category=UserWarning)
 
 # Apply pkg_resources patch BEFORE any imports that use face_recognition
@@ -59,6 +70,7 @@ from backend.api.routes import (
     ecosystem,  # v3.11.0: Ecosystem integration (MagicMirror, mobile apps)
     network_discovery,  # v3.11.4: Network discovery with Fing integration
     scheduled_tasks,  # v3.12.0: Scheduled tasks (retraining, retroactive search)
+    license_plates,  # v3.11.7: License plate recognition (ALPR)
 )
 from backend.core.camera_manager import manager as camera_manager
 from backend.core.websocket_manager import broadcast_statistics_update
@@ -355,22 +367,50 @@ async def startup_event():
 
         db_cameras = crud.get_active_cameras(db)
         loaded_count = 0
+        failed_cameras = []  # Track failed cameras for summary
+
         for db_camera in db_cameras:
             if not camera_manager.get_camera(db_camera.camera_id):
                 try:
-                    camera_manager.add_camera(
+                    success, message = camera_manager.add_camera(
                         camera_id=db_camera.camera_id,
                         camera_type=db_camera.camera_type,
                         source=db_camera.source,
                         enable_face_detection=db_camera.face_detection_enabled,
                     )
-                    loaded_count += 1
-                    logger.info(
-                        f"Loaded camera '{db_camera.camera_id}' from database")
+                    if success:
+                        loaded_count += 1
+                        logger.info(
+                            f"✓ Loaded camera '{db_camera.camera_id}' from database")
+                    else:
+                        failed_cameras.append({
+                            "id": db_camera.camera_id,
+                            "type": db_camera.camera_type,
+                            "source": db_camera.source,
+                            "reason": message
+                        })
                 except Exception as e:
-                    logger.error(
-                        f"Failed to load camera '{db_camera.camera_id}': {e}")
-        logger.info(f"Loaded {loaded_count} camera(s) from database")
+                    failed_cameras.append({
+                        "id": db_camera.camera_id,
+                        "type": db_camera.camera_type,
+                        "source": db_camera.source,
+                        "reason": str(e)
+                    })
+
+        # Summary logging
+        total_cameras = len(db_cameras)
+        if failed_cameras:
+            logger.warning("=" * 60)
+            logger.warning(f"CAMERA STARTUP SUMMARY: {loaded_count}/{total_cameras} cameras loaded")
+            logger.warning("=" * 60)
+            for cam in failed_cameras:
+                logger.warning(f"  ✗ {cam['id']} ({cam['type']}): {cam['reason']}")
+            logger.warning("-" * 60)
+            logger.warning("Server will continue running. Unavailable cameras can be")
+            logger.warning("reconnected via the web interface when devices are ready.")
+            logger.warning("=" * 60)
+        else:
+            logger.info(f"✓ All {loaded_count} camera(s) loaded successfully")
 
     # Start statistics broadcaster
     logger.info("Starting statistics broadcaster...")
@@ -699,6 +739,9 @@ app.include_router(network_discovery.router, prefix="/api", tags=["Network Disco
 
 # v3.12.0: Scheduled Tasks - Model retraining, retroactive search, cleanup
 app.include_router(scheduled_tasks.router, prefix="/api/scheduled-tasks", tags=["Scheduled Tasks"])
+
+# v3.11.7: License Plate Recognition (ALPR)
+app.include_router(license_plates.router, prefix="/api/alpr", tags=["License Plate Recognition"])
 
 # First-Run Setup (with /api/setup prefix for consistency)
 app.include_router(setup.router, prefix="/api/setup", tags=["First-Run Setup"])

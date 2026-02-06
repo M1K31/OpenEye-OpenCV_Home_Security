@@ -15,6 +15,7 @@ from pydantic import BaseModel
 import zipfile
 import io
 import os
+import logging
 
 from backend.database.session import get_db
 from backend.database import models
@@ -25,13 +26,19 @@ from backend.api.schemas.motion import (
     MotionEventCreate
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
 @router.get("/motion-events/", response_model=MotionEventListResponse)
 def list_motion_events(
+    # Support both page-based and offset-based pagination for backward compatibility
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description="Items per page"),
+    # Legacy parameters (skip/limit) for backward compatibility
+    skip: Optional[int] = Query(None, ge=0, description="Legacy: Number of items to skip"),
+    limit: Optional[int] = Query(None, ge=1, le=MAX_PAGE_SIZE, description="Legacy: Max items to return"),
     camera_id: Optional[str] = Query(None, description="Filter by camera ID"),
     start_date: Optional[datetime] = Query(None, description="Filter events after this date"),
     end_date: Optional[datetime] = Query(None, description="Filter events before this date"),
@@ -52,50 +59,64 @@ def list_motion_events(
 
     Use this for timeline views that need to show all activity.
     """
-    query = db.query(models.MotionDetectionEvent)
+    try:
+        # Handle legacy skip/limit parameters - convert to page/page_size
+        if skip is not None or limit is not None:
+            # If legacy params provided, use them
+            actual_limit = limit if limit is not None else page_size
+            actual_skip = skip if skip is not None else 0
+            # Convert to page-based (1-indexed)
+            page = (actual_skip // actual_limit) + 1 if actual_limit > 0 else 1
+            page_size = actual_limit
 
-    # Apply filters (uses idx_motion_camera_time index)
-    if camera_id:
-        query = query.filter(models.MotionDetectionEvent.camera_id == camera_id)
+        query = db.query(models.MotionDetectionEvent)
 
-    if start_date:
-        # Ensure timezone-aware comparison (convert naive datetime to UTC if needed)
-        if start_date.tzinfo is None:
-            # Assume UTC if timezone-naive
-            from datetime import timezone
-            start_date = start_date.replace(tzinfo=timezone.utc)
-        query = query.filter(models.MotionDetectionEvent.detected_at >= start_date)
+        # Apply filters (uses idx_motion_camera_time index)
+        if camera_id:
+            query = query.filter(models.MotionDetectionEvent.camera_id == camera_id)
 
-    if end_date:
-        # Ensure timezone-aware comparison (convert naive datetime to UTC if needed)
-        if end_date.tzinfo is None:
-            # Assume UTC if timezone-naive
-            from datetime import timezone
-            end_date = end_date.replace(tzinfo=timezone.utc)
-        query = query.filter(models.MotionDetectionEvent.detected_at <= end_date)
+        if start_date:
+            # Ensure timezone-aware comparison (convert naive datetime to UTC if needed)
+            if start_date.tzinfo is None:
+                # Assume UTC if timezone-naive
+                from datetime import timezone
+                start_date = start_date.replace(tzinfo=timezone.utc)
+            query = query.filter(models.MotionDetectionEvent.detected_at >= start_date)
 
-    if has_faces is not None:
-        if has_faces:
-            query = query.filter(models.MotionDetectionEvent.faces_detected > 0)
-        else:
-            query = query.filter(models.MotionDetectionEvent.faces_detected == 0)
+        if end_date:
+            # Ensure timezone-aware comparison (convert naive datetime to UTC if needed)
+            if end_date.tzinfo is None:
+                # Assume UTC if timezone-naive
+                from datetime import timezone
+                end_date = end_date.replace(tzinfo=timezone.utc)
+            query = query.filter(models.MotionDetectionEvent.detected_at <= end_date)
 
-    # Order by most recent (uses idx_motion_detected_at index)
-    query = query.order_by(models.MotionDetectionEvent.detected_at.desc())
+        if has_faces is not None:
+            if has_faces:
+                query = query.filter(models.MotionDetectionEvent.faces_detected > 0)
+            else:
+                query = query.filter(models.MotionDetectionEvent.faces_detected == 0)
 
-    # Apply pagination
-    events, total, total_pages = paginate(query, page=page, page_size=page_size)
+        # Order by most recent (uses idx_motion_detected_at index)
+        query = query.order_by(models.MotionDetectionEvent.detected_at.desc())
 
-    # Calculate offset for backward compatibility
-    offset = (page - 1) * page_size
+        # Apply pagination
+        events, total, total_pages = paginate(query, page=page, page_size=page_size)
 
-    return MotionEventListResponse(
-        events=events,
-        total=total,
-        limit=page_size,
-        offset=offset,
-        has_more=page < total_pages
-    )
+        # Calculate offset for backward compatibility
+        offset = (page - 1) * page_size
+
+        return MotionEventListResponse(
+            events=events,
+            total=total,
+            limit=page_size,
+            offset=offset,
+            has_more=page < total_pages
+        )
+
+    except Exception as e:
+        logger.exception(f"Error in list_motion_events: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/motion-events/{event_id}", response_model=MotionEventResponse)
