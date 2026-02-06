@@ -386,7 +386,8 @@ class Camera(ABC):
             success = cv2.imwrite(str(snapshot_path), frame)
 
             if success:
-                return str(snapshot_path)
+                # Return URL path format for frontend access
+                return f"/data/snapshots/{filename}"
             else:
                 print(f"Failed to save snapshot to {snapshot_path}")
                 return None
@@ -400,6 +401,7 @@ class Camera(ABC):
         frame: np.ndarray,
         motion_areas: list,
         snapshot_path: Optional[str] = None,
+        triggered_zone_ids: Optional[list] = None,
     ) -> Optional[int]:
         """
         Create a MotionDetectionEvent in the database.
@@ -408,6 +410,7 @@ class Camera(ABC):
             frame: The frame where motion was detected
             motion_areas: List of motion area dictionaries
             snapshot_path: Path to the saved snapshot (optional)
+            triggered_zone_ids: List of zone IDs that triggered this event (optional)
 
         Returns:
             The ID of the created motion event or None if creation failed
@@ -430,6 +433,12 @@ class Camera(ABC):
                 if self.recorder.is_recording and hasattr(self.recorder, "filename"):
                     recording_path = self.recorder.filename
 
+                # Serialize triggered zones to JSON if provided
+                triggered_zones_json = None
+                if triggered_zone_ids:
+                    import json
+                    triggered_zones_json = json.dumps(triggered_zone_ids)
+
                 # Create motion event
                 motion_event = MotionDetectionEvent(
                     camera_id=self.camera_id,
@@ -440,6 +449,7 @@ class Camera(ABC):
                     frame_width=frame.shape[1],
                     frame_height=frame.shape[0],
                     recording_path=recording_path,
+                    triggered_zones=triggered_zones_json,
                 )
 
                 db.add(motion_event)
@@ -517,7 +527,8 @@ class Camera(ABC):
             success = cv2.imwrite(str(snapshot_path), face_crop)
 
             if success:
-                return str(snapshot_path)
+                # Return URL path format for frontend access
+                return f"/data/snapshots/{filename}"
             else:
                 print(f"Failed to save face snapshot to {snapshot_path}")
                 return None
@@ -694,7 +705,7 @@ class MockCamera(Camera):
 
         # Motion detection on processed frame
         # draw_boxes=False to only show face detection boxes, not motion boxes
-        processed_frame, self.motion_detected, motion_areas = (
+        processed_frame, self.motion_detected, motion_areas, triggered_zone_ids = (
             self.motion_detector.detect(processed_frame, draw_boxes=False)
         )
 
@@ -703,6 +714,7 @@ class MockCamera(Camera):
         # This handles edge cases like lighting compensation where motion is suppressed
         if self.motion_detected and not motion_areas:
             self.motion_detected = False
+            triggered_zone_ids = []
         elif self.motion_detected and motion_areas:
             # Calculate motion percentage
             frame_area = processed_frame.shape[0] * processed_frame.shape[1]
@@ -714,6 +726,7 @@ class MockCamera(Camera):
                 # Motion detected but below threshold - ignore it
                 self.motion_detected = False
                 motion_areas = []
+                triggered_zone_ids = []
 
         # Trigger motion alert if motion detected (and has motion areas)
         if self.motion_detected and motion_areas:
@@ -721,7 +734,7 @@ class MockCamera(Camera):
             snapshot_path = self._save_motion_snapshot(
                 processed_frame, motion_areas)
             self.current_motion_event_id = self._create_motion_event(
-                processed_frame, motion_areas, snapshot_path
+                processed_frame, motion_areas, snapshot_path, triggered_zone_ids
             )
 
             try:
@@ -968,7 +981,7 @@ class RTSPCamera(Camera):
 
         # Motion detection on processed frame
         # draw_boxes=False to only show face detection boxes, not motion boxes
-        processed_frame, self.motion_detected, motion_areas = (
+        processed_frame, self.motion_detected, motion_areas, triggered_zone_ids = (
             self.motion_detector.detect(processed_frame, draw_boxes=False)
         )
 
@@ -977,6 +990,7 @@ class RTSPCamera(Camera):
         # This handles edge cases like lighting compensation where motion is suppressed
         if self.motion_detected and not motion_areas:
             self.motion_detected = False
+            triggered_zone_ids = []
         elif self.motion_detected and motion_areas:
             # Calculate motion percentage
             frame_area = processed_frame.shape[0] * processed_frame.shape[1]
@@ -988,6 +1002,7 @@ class RTSPCamera(Camera):
                 # Motion detected but below threshold - ignore it
                 self.motion_detected = False
                 motion_areas = []
+                triggered_zone_ids = []
 
         # Trigger motion alert if motion detected (and has motion areas)
         if self.motion_detected and motion_areas:
@@ -995,7 +1010,7 @@ class RTSPCamera(Camera):
             snapshot_path = self._save_motion_snapshot(
                 processed_frame, motion_areas)
             self.current_motion_event_id = self._create_motion_event(
-                processed_frame, motion_areas, snapshot_path
+                processed_frame, motion_areas, snapshot_path, triggered_zone_ids
             )
 
             try:
@@ -1213,12 +1228,19 @@ class CameraManager:
         camera_type: str,
         source: str,
         enable_face_detection: bool = True,
-    ):
-        """Add a camera with settings loaded from database"""
+    ) -> "tuple[bool, str]":
+        """
+        Add a camera with settings loaded from database.
+
+        Returns:
+            tuple[bool, str]: (success, message) - success indicates if camera started,
+                              message contains error details if failed
+        """
         with self._lock:
             if camera_id in self.cameras:
-                print(f"Camera with ID '{camera_id}' already exists.")
-                return
+                msg = f"Camera with ID '{camera_id}' already exists."
+                print(msg)
+                return False, msg
 
             # Load settings from database
             db_settings = self._load_camera_settings(camera_id)
@@ -1243,18 +1265,28 @@ class CameraManager:
                     source, camera_id, enable_face_detection, db_settings
                 )
             else:
-                print(f"Unknown camera type: {camera_type}")
-                return
+                msg = f"Unknown camera type: {camera_type}"
+                print(msg)
+                return False, msg
 
             # Start camera
             camera.start()
             if camera.is_running:
                 camera.recorder.camera_id = camera_id
                 self.cameras[camera_id] = camera
-                print(
-                    f"Camera '{camera_id}' added and started (face detection: {enable_face_detection}).")
+                msg = f"Camera '{camera_id}' added and started (face detection: {enable_face_detection})."
+                print(msg)
+                return True, msg
             else:
-                print(f"Failed to start camera '{camera_id}'.")
+                # Determine failure reason based on camera type
+                if camera_type == "usb":
+                    msg = f"USB camera '{camera_id}' (device {source}) unavailable - device may be disconnected"
+                elif camera_type == "rtsp":
+                    msg = f"RTSP camera '{camera_id}' ({source}) unavailable - stream unreachable"
+                else:
+                    msg = f"Camera '{camera_id}' failed to start - source unavailable"
+                print(msg)
+                return False, msg
 
     def get_camera(self, camera_id: str):
         """Get camera instance by ID"""
