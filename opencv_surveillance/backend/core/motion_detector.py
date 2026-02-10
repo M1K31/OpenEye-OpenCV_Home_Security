@@ -304,27 +304,30 @@ class MotionDetector:
         self,
         contours: List,
         frame_width: int,
-        frame_height: int
+        frame_height: int,
+        base_min_contour_area: int
     ) -> Tuple[List, List[int]]:
         """
-        Filter motion contours based on polygon zones.
+        Filter motion contours based on polygon zones and apply zone-specific sensitivity.
 
         Logic:
         - If exclusion zones exist: remove contours in exclusion zones
         - If inclusion zones exist: keep only contours in inclusion zones
+        - Apply sensitivity_multiplier per zone to adjust min_contour_area threshold
         - If no zones: keep all contours
 
         Args:
             contours: List of motion contours
             frame_width: Frame width in pixels
             frame_height: Frame height in pixels
+            base_min_contour_area: Base minimum contour area (will be adjusted by zone sensitivity)
 
         Returns:
             Tuple of (filtered_contours, triggered_zone_ids)
         """
         if not self.polygon_zones:
-            # No zones configured, keep all contours
-            return contours, []
+            # No zones configured, keep all contours that meet base threshold
+            return [c for c in contours if cv2.contourArea(c) >= base_min_contour_area], []
 
         # Separate inclusion and exclusion zones
         inclusion_zones = [z for z in self.polygon_zones if not z['is_exclusion_zone']]
@@ -334,6 +337,8 @@ class MotionDetector:
         triggered_zone_ids = []
 
         for contour in contours:
+            contour_area = cv2.contourArea(contour)
+
             # Check exclusion zones first
             in_exclusion_zone = False
             for zone in exclusion_zones:
@@ -346,19 +351,23 @@ class MotionDetector:
 
             # Check inclusion zones
             if inclusion_zones:
-                # Only keep contours in inclusion zones
-                in_inclusion_zone = False
+                # Only keep contours in inclusion zones that meet zone-adjusted threshold
                 for zone in inclusion_zones:
                     if self._check_contour_in_zone(contour, zone, frame_width, frame_height):
-                        in_inclusion_zone = True
-                        triggered_zone_ids.append(zone['id'])
-                        break
+                        # Apply zone's sensitivity multiplier to threshold
+                        # Lower multiplier = more sensitive (lower threshold)
+                        # Higher multiplier = less sensitive (higher threshold)
+                        zone_multiplier = zone.get('sensitivity_multiplier', 1.0)
+                        adjusted_threshold = base_min_contour_area * zone_multiplier
 
-                if in_inclusion_zone:
-                    filtered_contours.append(contour)
+                        if contour_area >= adjusted_threshold:
+                            filtered_contours.append(contour)
+                            triggered_zone_ids.append(zone['id'])
+                        break  # Only match first zone
             else:
-                # No inclusion zones, just exclude from exclusion zones
-                filtered_contours.append(contour)
+                # No inclusion zones, apply base threshold
+                if contour_area >= base_min_contour_area:
+                    filtered_contours.append(contour)
 
         # Remove duplicate zone IDs
         triggered_zone_ids = list(set(triggered_zone_ids))
@@ -599,7 +608,7 @@ class MotionDetector:
         if brightness_change_threshold is not None:
             self.brightness_change_threshold = max(1, min(50, brightness_change_threshold))
 
-    def detect(self, frame: np.ndarray, draw_boxes: bool = True) -> Tuple[np.ndarray, bool, List[Dict]]:
+    def detect(self, frame: np.ndarray, draw_boxes: bool = True) -> Tuple[np.ndarray, bool, List[Dict], List[int]]:
         """
         Detects motion in a given frame with lighting change compensation.
 
@@ -608,6 +617,10 @@ class MotionDetector:
         - Dual shadow removal (binary + HSV)
         - Separate erosion/dilation controls
         - Motion persistence/cooldown
+
+        v3.11.7 Enhancements:
+        - Zone-specific sensitivity multiplier applied
+        - Returns triggered zone IDs for motion event tracking
 
         Args:
             frame: The video frame to process (numpy array)
@@ -618,6 +631,7 @@ class MotionDetector:
             - The frame with motion contours drawn on it (if draw_boxes=True)
             - A boolean indicating if motion was detected
             - A list of motion areas with bounding boxes and areas
+            - A list of triggered zone IDs (empty if no zones configured)
         """
         # Increment frame counter
         self.frame_count += 1
@@ -636,7 +650,7 @@ class MotionDetector:
                 blurred_frame = cv2.GaussianBlur(frame, self.blur_kernel, 0)
             # Apply with higher learning rate during warmup for faster initialization
             self.back_sub.apply(blurred_frame, learningRate=0.1)
-            return original_frame, False, []
+            return original_frame, False, [], []
 
         # STEP 1: PRE-PROCESSING - Convert to grayscale first for better performance
         if self.use_grayscale:
@@ -695,13 +709,14 @@ class MotionDetector:
 
         # STEP 5.5: ZONE-BASED FILTERING (v3.6.2+)
         # Filter contours based on polygon zones if configured
+        # Zone filtering now also applies sensitivity_multiplier and area threshold
         frame_height, frame_width = original_frame.shape[:2]
         triggered_zone_ids = []
 
-        if self.polygon_zones:
-            contours, triggered_zone_ids = self._filter_motion_by_zones(
-                contours, frame_width, frame_height
-            )
+        # Filter by zones (applies zone-specific sensitivity) or by base threshold
+        contours, triggered_zone_ids = self._filter_motion_by_zones(
+            contours, frame_width, frame_height, self.min_contour_area
+        )
 
         motion_detected = False
         motion_areas = []
@@ -709,10 +724,7 @@ class MotionDetector:
         for contour in contours:
             area = cv2.contourArea(contour)
 
-            # Ignore small contours based on sensitivity
-            if area < self.min_contour_area:
-                continue
-
+            # Contours have already been filtered by area threshold in _filter_motion_by_zones
             motion_detected = True
 
             # Get bounding box
@@ -748,6 +760,7 @@ class MotionDetector:
             # Suppress motion detection during lighting change
             motion_detected = False
             motion_areas = []
+            triggered_zone_ids = []
 
         # STEP 7: MOTION PERSISTENCE - Implement cooldown to prevent rapid on/off flickering
         if motion_detected:
@@ -763,7 +776,7 @@ class MotionDetector:
         if motion_detected and triggered_zone_ids:
             self._update_zone_statistics(triggered_zone_ids)
 
-        return original_frame, motion_detected, motion_areas
+        return original_frame, motion_detected, motion_areas, triggered_zone_ids
 
     def get_settings(self) -> Dict:
         """

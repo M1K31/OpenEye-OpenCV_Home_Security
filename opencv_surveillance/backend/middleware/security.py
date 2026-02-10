@@ -30,14 +30,26 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Strict-Transport-Security"] = (
             "max-age=31536000; includeSubDomains"
         )
-        # Updated CSP to allow data URIs for images (used by inline SVGs and
-        # base64 images)
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "img-src 'self' data:; "
-            "style-src 'self' 'unsafe-inline'; "
-            "script-src 'self'"
-        )
+
+        # Skip strict CSP for API documentation pages (Swagger UI needs CDN resources)
+        path = request.url.path
+        if path in ("/api/docs", "/api/redoc", "/api/openapi.json"):
+            # Relaxed CSP for docs - allows Swagger UI CDN resources
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; "
+                "img-src 'self' data: https://fastapi.tiangolo.com; "
+                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                "font-src 'self' https://cdn.jsdelivr.net"
+            )
+        else:
+            # Strict CSP for all other endpoints
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; "
+                "img-src 'self' data:; "
+                "style-src 'self' 'unsafe-inline'; "
+                "script-src 'self'"
+            )
 
         return response
 

@@ -51,7 +51,8 @@ def paginate(
     query,
     page: int = 1,
     page_size: int = DEFAULT_PAGE_SIZE,
-    max_page_size: int = MAX_PAGE_SIZE
+    max_page_size: int = MAX_PAGE_SIZE,
+    precomputed_count: Optional[int] = None
 ) -> tuple:
     """
     Paginate a SQLAlchemy query
@@ -61,12 +62,18 @@ def paginate(
         page: Page number (1-indexed)
         page_size: Items per page
         max_page_size: Maximum allowed page size
+        precomputed_count: Optional pre-computed count to avoid extra COUNT query
 
     Returns:
         tuple: (items, total_count, total_pages)
 
     Example:
         items, total, pages = paginate(db.query(Model), page=1, page_size=50)
+
+    Performance tip:
+        If you already know the count (e.g., unfiltered query), pass it to avoid
+        an extra COUNT query:
+        items, total, pages = paginate(query, page=1, precomputed_count=known_count)
     """
     # Validate and clamp page size
     page_size = max(MIN_PAGE_SIZE, min(page_size, max_page_size))
@@ -74,8 +81,11 @@ def paginate(
     # Ensure page is at least 1
     page = max(1, page)
 
-    # Get total count (efficient count query)
-    total = query.count()
+    # Use precomputed count if provided, otherwise query for count
+    if precomputed_count is not None:
+        total = precomputed_count
+    else:
+        total = query.count()
 
     # Calculate total pages
     total_pages = (total + page_size - 1) // page_size if total > 0 else 1
@@ -90,6 +100,84 @@ def paginate(
     items = query.offset(offset).limit(page_size).all()
 
     return items, total, total_pages
+
+
+def paginate_with_metadata(
+    query,
+    base_query,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+    max_page_size: int = MAX_PAGE_SIZE,
+    has_filters: bool = False
+) -> dict:
+    """
+    Paginate a query and return full pagination metadata.
+
+    Optimized to avoid double COUNT queries:
+    - When has_filters=False, filtered count equals total count (one query)
+    - When has_filters=True, runs both counts (two queries)
+
+    Args:
+        query: Filtered SQLAlchemy query object
+        base_query: Unfiltered base query (for total count)
+        page: Page number (1-indexed)
+        page_size: Items per page
+        max_page_size: Maximum allowed page size
+        has_filters: Whether any filters were applied to the query
+
+    Returns:
+        dict with 'data' and 'pagination' keys
+
+    Example:
+        # Without filters - single COUNT query
+        result = paginate_with_metadata(
+            query=db.query(Model).order_by(Model.created_at.desc()),
+            base_query=db.query(Model),
+            page=1,
+            has_filters=False
+        )
+
+        # With filters - two COUNT queries
+        filtered_query = db.query(Model).filter(Model.status == 'active')
+        result = paginate_with_metadata(
+            query=filtered_query.order_by(Model.created_at.desc()),
+            base_query=db.query(Model),
+            page=1,
+            has_filters=True
+        )
+    """
+    # Validate and clamp page size
+    page_size = max(MIN_PAGE_SIZE, min(page_size, max_page_size))
+    page = max(1, page)
+
+    # Get filtered count (always needed for pagination)
+    filtered_count = query.count()
+
+    # Get total count - skip if no filters (same as filtered)
+    if has_filters:
+        total_count = base_query.count()
+    else:
+        total_count = filtered_count
+
+    # Calculate pagination values
+    total_pages = (filtered_count + page_size - 1) // page_size if filtered_count > 0 else 1
+    page = min(page, total_pages)
+    offset = (page - 1) * page_size
+
+    # Execute paginated query
+    items = query.offset(offset).limit(page_size).all()
+
+    return {
+        "data": items,
+        "pagination": {
+            "total": total_count,
+            "filtered": filtered_count,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+            "has_more": page < total_pages
+        }
+    }
 
 
 def timed_lru_cache(seconds: int = 60, maxsize: int = 128):

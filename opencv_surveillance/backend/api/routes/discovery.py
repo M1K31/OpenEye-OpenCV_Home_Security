@@ -100,9 +100,19 @@ async def discover_network_cameras(
     Returns:
         Confirmation that discovery has started
     """
+    # Check if scan is stuck (over 2 minutes old) and auto-reset
+    import time
     if discovery_service.scanning:
-        raise HTTPException(status_code=409,
-                            detail="Network scan already in progress")
+        scan_start = getattr(discovery_service, '_scan_start_time', 0)
+        if time.time() - scan_start > 120:  # 2 minute timeout
+            logger.warning("Network scan appears stuck, auto-resetting...")
+            discovery_service.scanning = False
+        else:
+            raise HTTPException(status_code=409,
+                                detail="Network scan already in progress")
+
+    # Record scan start time
+    discovery_service._scan_start_time = time.time()
 
     # Start discovery in background
     background_tasks.add_task(_run_network_discovery, request.subnet)
@@ -114,6 +124,24 @@ async def discover_network_cameras(
     }
 
 
+@router.post("/cameras/discover/network/cancel", status_code=200)
+async def cancel_network_discovery():
+    """
+    Cancel an ongoing network discovery scan.
+
+    Use this if a scan appears stuck or you want to start a new scan.
+    """
+    was_scanning = discovery_service.scanning
+    discovery_service.scanning = False
+    discovery_service._scan_start_time = 0
+
+    return {
+        "success": True,
+        "was_scanning": was_scanning,
+        "message": "Network scan cancelled" if was_scanning else "No scan was in progress"
+    }
+
+
 async def _run_network_discovery(subnet: Optional[str]):
     """Background task for network discovery"""
     try:
@@ -122,6 +150,10 @@ async def _run_network_discovery(subnet: Optional[str]):
         logger.info(f"Network discovery completed. Found {len(cameras)} cameras")
     except Exception as e:
         logger.error(f"Network discovery failed: {e}")
+    finally:
+        # Always reset scanning flag when task completes
+        discovery_service.scanning = False
+        discovery_service._scan_start_time = 0
 
 
 @router.get("/cameras/discover/status", status_code=200)

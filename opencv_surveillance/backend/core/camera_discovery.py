@@ -214,13 +214,19 @@ class CameraDiscovery:
             Camera info dict if RTSP service found, None otherwise
         """
         try:
-            # Try to connect to the port
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(timeout)
-            result = sock.connect_ex((ip, port))
-            sock.close()
+            # Use asyncio for non-blocking connection check
+            try:
+                _, writer = await asyncio.wait_for(
+                    asyncio.open_connection(ip, port),
+                    timeout=timeout
+                )
+                writer.close()
+                await writer.wait_closed()
+                port_open = True
+            except (asyncio.TimeoutError, ConnectionRefusedError, OSError):
+                port_open = False
 
-            if result == 0:
+            if port_open:
                 # Port is open, try common RTSP URLs
                 common_urls = [
                     f"rtsp://{ip}:{port}/stream",
@@ -230,27 +236,26 @@ class CameraDiscovery:
                     f"rtsp://{ip}:{port}/cam/realmonitor?channel=1&subtype=0",
                 ]
 
-                # Test first URL to verify it's actually RTSP
-                test_url = common_urls[0]
-                if await self._test_rtsp_stream(test_url):
-                    camera_info = {
-                        "type": "rtsp",
-                        "ip": ip,
-                        "port": port,
-                        "name": f"IP Camera at {ip}",
-                        "urls": common_urls,
-                        "status": "available",
-                        "requires_auth": True,  # Most cameras require auth
-                        "auto_config": {
-                            "camera_id": f'rtsp_camera_{ip.replace(".", "_")}',
-                            "camera_type": "rtsp",
-                            "source": test_url,
-                            "enabled": True,
-                        },
-                        "discovered_at": datetime.now().isoformat(),
-                        "note": "May require username/password. Try common credentials: admin/admin, admin/12345",
-                    }
-                    return camera_info
+                # Skip RTSP stream test to avoid blocking - just return if port is open
+                # The user can test the connection when adding the camera
+                camera_info = {
+                    "type": "rtsp",
+                    "ip": ip,
+                    "port": port,
+                    "name": f"IP Camera at {ip}",
+                    "urls": common_urls,
+                    "status": "available",
+                    "requires_auth": True,  # Most cameras require auth
+                    "auto_config": {
+                        "camera_id": f'rtsp_camera_{ip.replace(".", "_")}',
+                        "camera_type": "rtsp",
+                        "source": common_urls[0],
+                        "enabled": True,
+                    },
+                    "discovered_at": datetime.now().isoformat(),
+                    "note": "May require username/password. Try common credentials: admin/admin, admin/12345",
+                }
+                return camera_info
 
         except Exception as e:
             logger.debug(f"Error checking {ip}:{port}: {e}")
@@ -260,6 +265,7 @@ class CameraDiscovery:
     async def _test_rtsp_stream(self, url: str, timeout: float = 2.0) -> bool:
         """
         Test if an RTSP URL is valid by attempting to open it with OpenCV.
+        Runs in a thread pool to avoid blocking the event loop.
 
         Args:
             url: RTSP URL to test
@@ -268,15 +274,27 @@ class CameraDiscovery:
         Returns:
             True if stream is accessible, False otherwise
         """
+        def _blocking_test():
+            try:
+                cap = cv2.VideoCapture(url)
+                cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, int(timeout * 1000))
+                is_opened = cap.isOpened()
+                cap.release()
+                return is_opened
+            except Exception as e:
+                logger.debug(f"Error testing RTSP stream {url}: {e}")
+                return False
+
         try:
-            cap = cv2.VideoCapture(url)
-            cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, int(timeout * 1000))
-
-            is_opened = cap.isOpened()
-            cap.release()
-
-            return is_opened
-
+            # Run blocking OpenCV operation in thread pool
+            loop = asyncio.get_event_loop()
+            return await asyncio.wait_for(
+                loop.run_in_executor(None, _blocking_test),
+                timeout=timeout + 1.0  # Extra second for executor overhead
+            )
+        except asyncio.TimeoutError:
+            logger.debug(f"RTSP stream test timed out: {url}")
+            return False
         except Exception as e:
             logger.debug(f"Error testing RTSP stream {url}: {e}")
             return False

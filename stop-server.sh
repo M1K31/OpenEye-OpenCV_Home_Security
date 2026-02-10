@@ -30,7 +30,12 @@ process_exists() {
 
 # Function to find uvicorn processes
 find_uvicorn_pids() {
-    ps aux | grep -E "(uvicorn.*backend\.main:app|python.*backend/main\.py)" | grep -v grep | awk '{print $2}'
+    # Find by command pattern
+    PIDS=$(ps aux | grep -E "(uvicorn.*backend\.main:app|python.*backend/main\.py)" | grep -v grep | awk '{print $2}')
+    # Also find by port
+    PORT_PIDS=$(lsof -ti :8000 2>/dev/null || true)
+    # Combine and deduplicate
+    echo "$PIDS $PORT_PIDS" | tr ' ' '\n' | sort -u | tr '\n' ' '
 }
 
 # Find all uvicorn processes
@@ -132,14 +137,21 @@ else
     echo -e "${GREEN}✓ No orphaned processes found${NC}"
 fi
 
+# Use pkill as a fallback to catch any remaining processes
+echo ""
+echo -e "${BLUE}Running pkill cleanup...${NC}"
+pkill -9 -f "uvicorn backend.main:app" 2>/dev/null && echo "  ✓ Killed uvicorn processes via pkill" || echo "  ✓ No additional uvicorn processes found"
+
 # Verify port 8000 is free
 echo ""
 echo -e "${BLUE}Verifying port 8000 is available...${NC}"
+sleep 1  # Brief pause to let OS release the port
 PORT_CHECK=$(lsof -ti:8000 || true)
 if [ -n "$PORT_CHECK" ]; then
     echo -e "${YELLOW}⚠ Port 8000 still in use by PID: $PORT_CHECK${NC}"
     echo "  Killing process on port 8000..."
     kill -9 $PORT_CHECK 2>/dev/null || true
+    sleep 1
     echo -e "${GREEN}  ✓ Port 8000 freed${NC}"
 else
     echo -e "${GREEN}✓ Port 8000 is available${NC}"

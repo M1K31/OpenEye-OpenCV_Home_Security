@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.11.7] - 2025-01-26
+
+### Fixed
+- **Motion Zones - Sensitivity Multiplier Applied** - Zone-specific sensitivity now works correctly
+  - **Root Cause**: `sensitivity_multiplier` was stored in zone data but never applied to area threshold
+  - **Solution**: Apply multiplier during contour filtering in `_filter_motion_by_zones()`
+  - **Impact**: Zones with lower multiplier are now more sensitive, higher multiplier less sensitive
+  - **Files Modified**: `backend/core/motion_detector.py`
+
+- **Motion Zones - Triggered Zones Tracked** - Motion events now record which zones triggered them
+  - **Root Cause**: `triggered_zone_ids` calculated but not returned or stored
+  - **Solution**: Return triggered zone IDs from `detect()` and store in `MotionDetectionEvent.triggered_zones`
+  - **Impact**: Motion timeline and events API now show which zones triggered each event
+  - **Files Modified**: `backend/core/motion_detector.py`, `backend/core/camera_manager.py`
+
+### Added
+- **License Plate Recognition (ALPR)** - Vehicle plate detection with hardware-aware acceleration
+  - **EasyOCR Integration**: GPU-accelerated OCR for better accuracy and speed
+  - **Tesseract Fallback**: CPU-only mode when GPU unavailable or EasyOCR not installed
+  - **Hardware Detection**: Automatic GPU/CPU mode selection based on available hardware
+  - **Known Plates Watchlist**: Label plates as "allowed", "alert", or "neutral" with arrival/departure alerts
+  - **Database Models**: `LicensePlateEvent` and `KnownLicensePlate` for tracking
+  - **API Endpoints**: Full CRUD at `/api/alpr/plates/` with pagination and filtering
+  - **Default Disabled**: Feature is off by default, can be enabled via API when hardware supports it
+  - **Files Added**: `backend/api/routes/license_plates.py`
+  - **Files Modified**: `backend/core/advanced_detection.py`, `backend/database/models.py`, `backend/main.py`
+
+### Performance
+- **Optimized Pagination COUNT Queries** - Eliminated redundant database queries
+  - **Problem**: Pagination endpoints ran two COUNT queries (total + filtered) even when no filters applied
+  - **Solution**: Added `paginate_with_metadata()` helper that skips unfiltered count when not needed
+  - **Impact**: 50% reduction in database queries for unfiltered pagination requests
+  - **Endpoints Optimized**: `/recordings`, `/alerts/notifications`, `/faces/history`
+  - **Files Modified**: `backend/core/performance.py`, `backend/api/routes/recordings.py`, `alerts.py`, `face_history.py`
+
+### Changed
+- `MotionDetector.detect()` now returns 4-tuple: `(frame, motion_detected, motion_areas, triggered_zone_ids)`
+- Updated `test_motion_zones.py` to handle new return value
+- `paginate()` function now accepts optional `precomputed_count` parameter
+
+---
+
+## [3.11.6] - 2025-01-26
+
+### Changed
+- **Theme Names Updated** - Renamed superhero-themed names to avoid trademark concerns
+  - Superman → Man of Steel
+  - Batman → Dark Knight
+  - Wonder Woman → Amazonian Demigod
+  - Flash → Hermes
+  - Aquaman → King of Atlantis
+  - Green Lantern → Lantern
+  - Cyborg and Aqua Security remain unchanged
+- **Files Modified**: `ThemeContext.jsx`, `ThemeSelectorPage.jsx`, `themes.css`, `PageErrorBoundary.css`, E2E tests, documentation
+
+---
+
 ## [3.11.5] - 2025-01-22
 
 ### Fixed

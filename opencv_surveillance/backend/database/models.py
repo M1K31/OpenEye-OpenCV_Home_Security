@@ -405,6 +405,78 @@ class MotionDetectionEvent(Base):
         return f"<MotionDetection(camera={self.camera_id}, area={self.motion_area}, time={self.detected_at})>"
 
 
+class LicensePlateEvent(Base):
+    """
+    License plate detection event model (v3.11.7)
+    Tracks detected license plates from vehicle monitoring
+    """
+
+    __tablename__ = "license_plate_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    camera_id = Column(String, index=True)
+    detected_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # Plate information
+    plate_text = Column(String, index=True)  # Detected plate text (e.g., "ABC1234")
+    plate_region = Column(String, nullable=True)  # State/country if detectable
+    confidence = Column(Float, nullable=True)  # OCR confidence 0.0-1.0
+
+    # Location in frame
+    location_x = Column(Integer, nullable=True)  # Bounding box top-left X
+    location_y = Column(Integer, nullable=True)  # Bounding box top-left Y
+    location_width = Column(Integer, nullable=True)  # Bounding box width
+    location_height = Column(Integer, nullable=True)  # Bounding box height
+
+    # Frame metadata
+    frame_width = Column(Integer, nullable=True)
+    frame_height = Column(Integer, nullable=True)
+
+    # Snapshot and recording links
+    snapshot_path = Column(String, nullable=True)
+    recording_id = Column(Integer, ForeignKey('recording_events.id'), nullable=True, index=True)
+    recording_path = Column(String, nullable=True)
+
+    # Known plate matching (for watchlists)
+    is_known_plate = Column(Boolean, default=False)
+    known_plate_name = Column(String, nullable=True)  # e.g., "Family", "Delivery", "Suspicious"
+
+    # Processing metadata
+    processing_time_ms = Column(Float, nullable=True)  # Time to detect/read plate
+    ocr_engine = Column(String, nullable=True)  # "tesseract", "easyocr", etc.
+
+    def __repr__(self):
+        return f"<LicensePlate(plate={self.plate_text}, camera={self.camera_id}, time={self.detected_at})>"
+
+
+class KnownLicensePlate(Base):
+    """
+    Known/Watchlist license plates for matching (v3.11.7)
+    Allows users to label plates for alerts and automation
+    """
+
+    __tablename__ = "known_license_plates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    plate_text = Column(String, unique=True, index=True)  # Plate text to match
+    label = Column(String)  # User label (e.g., "Family", "Neighbor", "Suspicious")
+    category = Column(String, default="neutral")  # "allowed", "alert", "neutral"
+    notes = Column(String, nullable=True)  # Additional notes
+
+    # Alert settings
+    alert_on_arrival = Column(Boolean, default=False)
+    alert_on_departure = Column(Boolean, default=False)
+
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_seen_at = Column(DateTime, nullable=True)
+    times_seen = Column(Integer, default=0)
+
+    def __repr__(self):
+        return f"<KnownPlate(plate={self.plate_text}, label={self.label})>"
+
+
 class SystemLog(Base):
     """
     NEW: Model for system-level logging

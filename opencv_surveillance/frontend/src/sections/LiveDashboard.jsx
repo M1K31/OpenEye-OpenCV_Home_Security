@@ -197,7 +197,7 @@ const LiveDashboard = () => {
 
     // Merge and create unified timeline events
     const allEvents = [
-      // Video recordings
+      // Video recordings (highest priority - most useful for review)
       ...recordings.map(r => ({
         id: r.recording_id || r.id,  // API now returns recording_id
         recording_id: r.recording_id || r.id,
@@ -208,6 +208,7 @@ const LiveDashboard = () => {
         faces_detected: r.faces_detected || 0,
         known_faces_detected: r.known_faces_detected || 0,
         hasRecording: true,
+        priority: 1, // Highest priority
       })),
       // Motion snapshots (may or may not have recording)
       ...motionEvents.map(m => ({
@@ -223,6 +224,7 @@ const LiveDashboard = () => {
         known_faces_detected: 0,
         hasRecording: !!m.recording_id,  // Has recording if recording_id exists
         hasSnapshot: true,
+        priority: 2, // Medium priority
       })),
       // Face detections
       ...detections.map(d => ({
@@ -235,14 +237,46 @@ const LiveDashboard = () => {
         person_name: d.person_name || 'Unknown',
         confidence: d.confidence || 0,
         hasSnapshot: !!d.snapshot_path,
+        priority: 3, // Lower priority (often duplicates motion)
       }))
     ];
 
     // Sort by timestamp (most recent first)
     allEvents.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-    // Take top 15
-    return allEvents.slice(0, 15);
+    // Deduplicate events: remove events from same camera within 5 seconds of each other
+    // Keep the highest priority event (recordings > motion snapshots > face detections)
+    const DEDUP_WINDOW_MS = 5000; // 5 seconds
+    const deduplicatedEvents = [];
+
+    for (const event of allEvents) {
+      const eventTime = new Date(event.timestamp).getTime();
+
+      // Check if there's already a similar event in the deduplicated list
+      const isDuplicate = deduplicatedEvents.some(existing => {
+        // Must be same camera
+        if (existing.camera_id !== event.camera_id) return false;
+
+        // Check time window
+        const existingTime = new Date(existing.timestamp).getTime();
+        const timeDiff = Math.abs(eventTime - existingTime);
+
+        if (timeDiff <= DEDUP_WINDOW_MS) {
+          // Within time window - this is a potential duplicate
+          // Keep if existing has higher priority (lower number)
+          return existing.priority <= event.priority;
+        }
+
+        return false;
+      });
+
+      if (!isDuplicate) {
+        deduplicatedEvents.push(event);
+      }
+    }
+
+    // Take top 15 after deduplication
+    return deduplicatedEvents.slice(0, 15);
   }, [eventsData]);
 
   // Update events state only when processed events change

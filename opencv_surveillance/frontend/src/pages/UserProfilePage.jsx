@@ -16,6 +16,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../api/apiClient';
 import { logger } from '../utils/logger';
+import ThemeSelectorPage from './ThemeSelectorPage';
 import './UserProfilePage.css';
 
 const UserProfilePage = () => {
@@ -451,19 +452,17 @@ const UserProfilePage = () => {
         <div className="tab-content">
           <section className="settings-section">
             <h2>Appearance</h2>
-            
-            <div className="form-group">
-              <label>Theme</label>
-              <select
-                value={uiPrefs.theme}
-                onChange={(e) => setUiPrefs({...uiPrefs, theme: e.target.value})}
-              >
-                <option value="dark">Dark</option>
-                <option value="light">Light</option>
-                <option value="system">System Default</option>
-              </select>
-            </div>
-            
+            <p className="section-description">
+              Choose your preferred theme for the interface.
+            </p>
+
+            {/* Embedded Theme Selector */}
+            <ThemeSelectorPage embedded={true} />
+          </section>
+
+          <section className="settings-section">
+            <h2>Display Options</h2>
+
             <div className="form-group">
               <label>Default Camera View</label>
               <select

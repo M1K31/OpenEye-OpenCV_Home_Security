@@ -234,39 +234,43 @@ def get_notification_logs(
 
     Returns:
         PaginatedResponse with notification logs and pagination metadata
-    """
-    # Get total count before filtering
-    total_count = db.query(alert_models.NotificationLog).count()
 
+    Performance:
+        Optimized COUNT queries: single query when no filters applied (v3.11.7)
+    """
+    from backend.core.performance import paginate_with_metadata
+
+    # Build base and filtered queries
+    base_query = db.query(alert_models.NotificationLog)
     query = db.query(alert_models.NotificationLog)
+
+    # Track if any filters are applied
+    has_filters = False
 
     # Apply filters
     if event_type:
         query = query.filter(alert_models.NotificationLog.event_type == event_type)
+        has_filters = True
 
     if camera_id:
         query = query.filter(alert_models.NotificationLog.camera_id == camera_id)
+        has_filters = True
 
     if channel:
         query = query.filter(alert_models.NotificationLog.channel == channel)
+        has_filters = True
 
     # Order by most recent
     query = query.order_by(alert_models.NotificationLog.created_at.desc())
 
-    # Apply pagination
-    logs, filtered_count, total_pages = paginate(query, page=page, page_size=page_size)
-
-    return {
-        "data": logs,
-        "pagination": {
-            "total": total_count,
-            "filtered": filtered_count,
-            "page": page,
-            "page_size": page_size,
-            "total_pages": total_pages,
-            "has_more": page < total_pages
-        }
-    }
+    # Apply optimized pagination (single COUNT when no filters)
+    return paginate_with_metadata(
+        query=query,
+        base_query=base_query,
+        page=page,
+        page_size=page_size,
+        has_filters=has_filters
+    )
 
 
 @router.post("/alerts/test", status_code=200)

@@ -27,6 +27,8 @@ from backend.api.schemas.automation import (
     AutomationTestRequest,
     AutomationTestResponse,
 )
+from backend.core.auth import get_current_active_user
+from backend.api.schemas import user as user_schema
 
 router = APIRouter(prefix="/automations", tags=["Automations"])
 
@@ -69,7 +71,8 @@ def list_automation_rules(
     enabled: Optional[bool] = Query(None, description="Filter by enabled status"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum records to return"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(get_current_active_user),
 ):
     """
     List automation rules with optional filtering.
@@ -100,7 +103,8 @@ def list_automation_rules(
 @router.post("/", response_model=AutomationRuleResponse, status_code=201)
 def create_automation_rule(
     rule: AutomationRuleCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(get_current_active_user),
 ):
     """
     Create a new automation rule.
@@ -128,7 +132,8 @@ def create_automation_rule(
 @router.get("/{rule_id}", response_model=AutomationRuleResponse)
 def get_automation_rule(
     rule_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(get_current_active_user),
 ):
     """Get a specific automation rule by ID"""
     rule = db.query(models.AutomationRule).filter(
@@ -145,7 +150,8 @@ def get_automation_rule(
 def update_automation_rule(
     rule_id: int,
     rule_update: AutomationRuleUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(get_current_active_user),
 ):
     """
     Update an automation rule.
@@ -183,7 +189,8 @@ def update_automation_rule(
 @router.delete("/{rule_id}", status_code=204)
 def delete_automation_rule(
     rule_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(get_current_active_user),
 ):
     """Delete an automation rule"""
     rule = db.query(models.AutomationRule).filter(
@@ -202,7 +209,8 @@ def delete_automation_rule(
 @router.patch("/{rule_id}/toggle", response_model=AutomationRuleResponse)
 def toggle_automation_rule(
     rule_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(get_current_active_user),
 ):
     """Toggle an automation rule enabled/disabled state"""
     rule = db.query(models.AutomationRule).filter(
@@ -227,7 +235,10 @@ def toggle_automation_rule(
 # ============================================================
 
 @router.get("/stats/summary", response_model=AutomationRuleStats)
-def get_automation_stats(db: Session = Depends(get_db)):
+def get_automation_stats(
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(get_current_active_user),
+):
     """
     Get automation rule statistics.
     
@@ -268,7 +279,8 @@ def get_automation_stats(db: Session = Depends(get_db)):
 @router.post("/{rule_id}/reset-cooldown", response_model=AutomationRuleResponse)
 def reset_rule_cooldown(
     rule_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(get_current_active_user),
 ):
     """
     Reset the cooldown period for a rule.
@@ -300,7 +312,8 @@ def reset_rule_cooldown(
 def test_automation_rule(
     rule_id: int,
     test_request: AutomationTestRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(get_current_active_user),
 ):
     """
     Test an automation rule without executing actions.

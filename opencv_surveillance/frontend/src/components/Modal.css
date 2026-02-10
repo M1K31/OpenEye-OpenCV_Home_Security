@@ -235,12 +235,35 @@ html.bman-theme .modal-backdrop {
   background: var(--text-tertiary);
 }
 
+/* Form hint text */
+.form-hint {
+  margin-top: var(--spacing-xs, 4px);
+  font-size: 12px;
+  color: var(--text-tertiary);
+  line-height: 1.4;
+}
+
+/* Loading text */
+.loading-text {
+  padding: var(--spacing-md, 16px);
+  text-align: center;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* Modal description */
+.modal-description {
+  margin-bottom: var(--spacing-lg, 24px);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
 /* Mobile responsiveness */
 @media (max-width: 768px) {
   .modal-backdrop {
     padding: var(--spacing-sm, 8px);
   }
-  
+
   .modal-sm,
   .modal-md,
   .modal-lg,
@@ -248,7 +271,7 @@ html.bman-theme .modal-backdrop {
     max-width: 100%;
     padding: var(--spacing-lg, 24px);
   }
-  
+
   .modal-title {
     font-size: 20px; /* Title 3 on mobile */
   }
