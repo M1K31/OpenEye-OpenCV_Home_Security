@@ -151,18 +151,24 @@ def list_recordings(
     - Uses indexed queries on camera_id and started_at
     - Paginated results (default 50, max 1000)
     - Efficient sorting
+    - Optimized COUNT queries: single query when no filters applied (v3.11.7)
 
     Returns:
         PaginatedResponse with recordings data and pagination metadata
     """
-    # Get total count before filtering
-    total_count = db.query(models.RecordingEvent).count()
+    from backend.core.performance import paginate_with_metadata
 
+    # Build base query (unfiltered)
+    base_query = db.query(models.RecordingEvent)
     query = db.query(models.RecordingEvent)
+
+    # Track if any filters are applied
+    has_filters = False
 
     # Apply filters (uses idx_recording_camera_time index)
     if camera_id:
         query = query.filter(models.RecordingEvent.camera_id == camera_id)
+        has_filters = True
 
     if start_date:
         # Parse ISO format date string (handles timezone-aware strings)
@@ -172,6 +178,7 @@ def list_recordings(
             from datetime import timezone
             start_dt = start_dt.replace(tzinfo=timezone.utc)
         query = query.filter(models.RecordingEvent.started_at >= start_dt)
+        has_filters = True
 
     if end_date:
         # Parse ISO format date string (handles timezone-aware strings)
@@ -181,30 +188,26 @@ def list_recordings(
             from datetime import timezone
             end_dt = end_dt.replace(tzinfo=timezone.utc)
         query = query.filter(models.RecordingEvent.started_at <= end_dt)
+        has_filters = True
 
     if has_faces is not None:
         if has_faces:
             query = query.filter(models.RecordingEvent.faces_detected > 0)
         else:
             query = query.filter(models.RecordingEvent.faces_detected == 0)
+        has_filters = True
 
     # Order by most recent (uses idx_recording_started_at index)
     query = query.order_by(models.RecordingEvent.started_at.desc())
 
-    # Apply pagination
-    recordings, filtered_count, total_pages = paginate(query, page=page, page_size=page_size)
-
-    return {
-        "data": recordings,
-        "pagination": {
-            "total": total_count,
-            "filtered": filtered_count,
-            "page": page,
-            "page_size": page_size,
-            "total_pages": total_pages,
-            "has_more": page < total_pages
-        }
-    }
+    # Apply optimized pagination (single COUNT when no filters)
+    return paginate_with_metadata(
+        query=query,
+        base_query=base_query,
+        page=page,
+        page_size=page_size,
+        has_filters=has_filters
+    )
 
 
 @router.get("/recordings/{recording_id}")

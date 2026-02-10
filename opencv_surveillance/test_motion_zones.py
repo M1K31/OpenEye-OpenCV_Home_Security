@@ -192,14 +192,14 @@ def test_motion_in_inclusion_zone():
         frame1, frame2 = create_test_frame_with_motion(motion_region="center")
 
         # Train background model with first frame
-        for _ in range(20):
-            detector.detect(frame1)
+        for _ in range(65):  # Need 60+ frames for warmup period
+            detector.detect(frame1)[:3]  # Ignore triggered_zone_ids during warmup
 
         # Detect motion with second frame multiple times (for temporal filter)
         motion_detected = False
         motion_areas = []
         for i in range(5):
-            _, detected, areas = detector.detect(frame2)
+            _, detected, areas, triggered_zones = detector.detect(frame2)
             if detected:
                 motion_detected = True
                 motion_areas = areas
@@ -245,11 +245,16 @@ def test_motion_in_exclusion_zone():
         frame1, frame2 = create_test_frame_with_motion(motion_region="corner")
 
         # Train background model
-        for _ in range(20):
-            detector.detect(frame1)
+        for _ in range(65):  # Need 60+ frames for warmup period
+            detector.detect(frame1)[:3]  # Ignore triggered_zone_ids during warmup
 
-        # Detect motion
-        _, motion_detected, motion_areas = detector.detect(frame2)
+        # Detect motion multiple times (for temporal filter)
+        motion_detected = False
+        motion_areas = []
+        for _ in range(5):
+            _, detected, areas, _ = detector.detect(frame2)
+            motion_detected = detected
+            motion_areas = areas
 
         # Motion should be filtered out by exclusion zone
         assert not motion_detected or len(motion_areas) == 0, "Motion in exclusion zone should be filtered"
@@ -299,13 +304,13 @@ def test_zone_statistics_update():
         frame1, frame2 = create_test_frame_with_motion(motion_region="center")
 
         # Train background model
-        for _ in range(20):
-            detector.detect(frame1)
+        for _ in range(65):  # Need 60+ frames for warmup period
+            detector.detect(frame1)[:3]  # Ignore triggered_zone_ids during warmup
 
         # Detect motion multiple times (for temporal filter + statistics update)
         motion_detected = False
         for i in range(5):
-            _, detected, areas = detector.detect(frame2)
+            _, detected, areas, triggered_zones = detector.detect(frame2)
             if detected:
                 motion_detected = True
                 print(f"   - Motion detected on attempt {i+1}")

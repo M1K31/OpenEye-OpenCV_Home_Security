@@ -26,71 +26,204 @@ logger = logging.getLogger(__name__)
 
 class LicensePlateDetector:
     """
-    License plate detection and recognition with preprocessing
+    License plate detection and recognition with preprocessing.
+
+    v3.11.7 Enhancements:
+    - EasyOCR support with GPU acceleration
+    - Hardware-aware mode selection (GPU/CPU)
+    - Cooldown to prevent duplicate detections
+    - Configurable confidence thresholds
+    - Integration with hardware detector
     """
 
-    def __init__(self, enable_preprocessing: bool = True):
+    def __init__(
+        self,
+        enable_preprocessing: bool = True,
+        use_gpu: bool = None,  # None = auto-detect
+        cooldown_seconds: float = 3.0,
+        min_confidence: float = 0.6
+    ):
         """
         Initialize license plate detector
 
         Args:
             enable_preprocessing: Enable image preprocessing for better accuracy
+            use_gpu: Force GPU (True) or CPU (False). None = auto-detect
+            cooldown_seconds: Minimum time between processing same camera
+            min_confidence: Minimum OCR confidence to accept (0.0-1.0)
         """
         self.enable_preprocessing = enable_preprocessing
         self.preprocessor = get_preprocessor() if enable_preprocessing else None
         self.ocr_available = False
         self.ocr_engine = None
+        self.ocr_engine_name = None
+        self.cooldown_seconds = cooldown_seconds
+        self.min_confidence = min_confidence
+        self.last_detection_time = {}  # camera_id -> timestamp
+        self.enabled = False  # Disabled by default until explicitly enabled
 
-        # Try to import OCR library
+        # Auto-detect GPU availability if not specified
+        if use_gpu is None:
+            use_gpu = self._detect_gpu_available()
+
+        self.use_gpu = use_gpu
+
+        # Try EasyOCR first (better accuracy, GPU support)
         try:
-            import pytesseract
-            self.ocr_engine = pytesseract
-            self.ocr_available = True
-            logger.info("License plate detector initialized with Tesseract OCR")
-        except ImportError:
-            logger.warning(
-                "pytesseract not installed. License plate recognition will be limited. "
-                "Install with: pip install pytesseract"
+            import easyocr
+            self.ocr_engine = easyocr.Reader(
+                ['en'],
+                gpu=self.use_gpu,
+                verbose=False
             )
+            self.ocr_available = True
+            self.ocr_engine_name = "easyocr"
+            mode = "GPU" if self.use_gpu else "CPU"
+            logger.info(f"License plate detector initialized with EasyOCR ({mode} mode)")
+        except ImportError:
+            # Fallback to pytesseract (CPU only)
+            try:
+                import pytesseract
+                self.ocr_engine = pytesseract
+                self.ocr_available = True
+                self.ocr_engine_name = "tesseract"
+                logger.info("License plate detector initialized with Tesseract OCR (CPU fallback)")
+            except ImportError:
+                logger.warning(
+                    "No OCR library available for license plate recognition. "
+                    "Install easyocr (recommended) or pytesseract"
+                )
 
-    def detect_license_plates(self, frame: np.ndarray) -> List[Dict]:
+    def _detect_gpu_available(self) -> bool:
+        """Check if GPU is available for OCR acceleration"""
+        try:
+            import torch
+            if torch.cuda.is_available():
+                logger.info(f"GPU detected for ALPR: {torch.cuda.get_device_name(0)}")
+                return True
+        except ImportError:
+            pass
+        return False
+
+    def set_enabled(self, enabled: bool):
+        """Enable or disable the license plate detector"""
+        self.enabled = enabled
+        logger.info(f"License plate detector {'enabled' if enabled else 'disabled'}")
+
+    def should_process_frame(self, camera_id: str) -> bool:
+        """Check if enough time has passed since last detection for this camera"""
+        if not self.enabled or not self.ocr_available:
+            return False
+
+        import time
+        current_time = time.time()
+        last_time = self.last_detection_time.get(camera_id, 0)
+
+        if current_time - last_time >= self.cooldown_seconds:
+            return True
+        return False
+
+    def _update_cooldown(self, camera_id: str):
+        """Update the last detection time for a camera"""
+        import time
+        self.last_detection_time[camera_id] = time.time()
+
+    def detect_license_plates(
+        self,
+        frame: np.ndarray,
+        camera_id: str = "unknown"
+    ) -> List[Dict]:
         """
         Detect and read license plates in frame
 
         Args:
             frame: Input frame (BGR)
+            camera_id: Camera identifier for cooldown tracking
 
         Returns:
-            List of detected plates with text and location
+            List of detected plates with text, location, and confidence
         """
         if not self.ocr_available:
             logger.debug("OCR not available for license plate detection")
             return []
 
+        if not self.should_process_frame(camera_id):
+            return []
+
+        import time
+        start_time = time.time()
+
         try:
-            # Apply preprocessing
+            # Apply preprocessing if available
             processed = frame
             if self.enable_preprocessing and self.preprocessor:
-                processed = self.preprocessor.preprocess_for_license_plate(frame)
+                try:
+                    processed = self.preprocessor.preprocess_for_license_plate(frame)
+                except Exception:
+                    # Fall back to original frame if preprocessing fails
+                    processed = frame
 
-            # Detect plate regions (using contours as a simple approach)
-            plate_regions = self._detect_plate_regions(processed)
-
-            # Perform OCR on each region
             plates = []
-            for region in plate_regions:
-                x, y, w, h = region
-                plate_roi = processed[y:y+h, x:x+w]
 
-                # OCR to read text
-                text = self._read_plate_text(plate_roi)
+            # Method 1: Direct OCR on full frame with EasyOCR (better for GPU)
+            if self.ocr_engine_name == "easyocr":
+                results = self.ocr_engine.readtext(
+                    frame,
+                    allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+                    paragraph=False
+                )
 
-                if text:
-                    plates.append({
-                        'text': text,
-                        'location': (x, y, w, h),
-                        'confidence': 0.8  # Placeholder confidence
-                    })
+                for (bbox, text, confidence) in results:
+                    # Clean up the detected text
+                    text = text.strip().upper().replace(' ', '').replace('-', '')
+
+                    # Filter: license plates are typically 5-8 characters
+                    if len(text) >= 5 and len(text) <= 8 and confidence >= self.min_confidence:
+                        # Extract bounding box
+                        x_coords = [int(p[0]) for p in bbox]
+                        y_coords = [int(p[1]) for p in bbox]
+                        x, y = min(x_coords), min(y_coords)
+                        w, h = max(x_coords) - x, max(y_coords) - y
+
+                        # Check aspect ratio (plates are wider than tall)
+                        aspect_ratio = w / h if h > 0 else 0
+                        if aspect_ratio > 1.5:  # Typical plate aspect ratio
+                            plates.append({
+                                'text': text,
+                                'location': (x, y, w, h),
+                                'confidence': float(confidence),
+                                'ocr_engine': 'easyocr'
+                            })
+
+            # Method 2: Contour-based detection + Tesseract (CPU fallback)
+            else:
+                # Detect plate regions using contours
+                plate_regions = self._detect_plate_regions(processed)
+
+                for region in plate_regions:
+                    x, y, w, h = region
+                    # Extract plate ROI from original frame for better OCR
+                    plate_roi = frame[y:y+h, x:x+w]
+
+                    # OCR to read text
+                    text, confidence = self._read_plate_text(plate_roi)
+
+                    if text and confidence >= self.min_confidence:
+                        plates.append({
+                            'text': text,
+                            'location': (x, y, w, h),
+                            'confidence': confidence,
+                            'ocr_engine': 'tesseract'
+                        })
+
+            # Update cooldown
+            if plates:
+                self._update_cooldown(camera_id)
+
+            # Add processing time to results
+            processing_time = (time.time() - start_time) * 1000
+            for plate in plates:
+                plate['processing_time_ms'] = processing_time
 
             return plates
 
@@ -131,7 +264,7 @@ class LicensePlateDetector:
             logger.error(f"Error detecting plate regions: {e}")
             return []
 
-    def _read_plate_text(self, plate_roi: np.ndarray) -> Optional[str]:
+    def _read_plate_text(self, plate_roi: np.ndarray) -> Tuple[Optional[str], float]:
         """
         Read text from license plate ROI using OCR
 
@@ -139,10 +272,10 @@ class LicensePlateDetector:
             plate_roi: Preprocessed plate region
 
         Returns:
-            Detected text or None
+            Tuple of (detected_text, confidence) or (None, 0.0)
         """
         if not self.ocr_available:
-            return None
+            return None, 0.0
 
         try:
             # OCR configuration for license plates
@@ -150,17 +283,20 @@ class LicensePlateDetector:
             config = '--psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
 
             text = self.ocr_engine.image_to_string(plate_roi, config=config)
-            text = text.strip().replace(' ', '').replace('\n', '')
+            text = text.strip().upper().replace(' ', '').replace('\n', '').replace('-', '')
 
             # Filter out noise (minimum 5 characters for valid plate)
-            if len(text) >= 5:
-                return text
+            if len(text) >= 5 and len(text) <= 8:
+                # Tesseract doesn't provide confidence per-string easily,
+                # so estimate based on text quality
+                confidence = 0.7 if text.isalnum() else 0.5
+                return text, confidence
 
-            return None
+            return None, 0.0
 
         except Exception as e:
             logger.error(f"Error reading plate text: {e}")
-            return None
+            return None, 0.0
 
 
 class BarcodeDetector:

@@ -27,9 +27,9 @@ const ScheduledTasksPage = ({ embedded = false }) => {
   const loadData = async () => {
     try {
       const [tasksRes, typesRes, statsRes] = await Promise.all([
-        apiClient.get('/scheduled/tasks'),
-        apiClient.get('/scheduled/task-types'),
-        apiClient.get('/scheduled/statistics')
+        apiClient.get('/scheduled-tasks/tasks'),
+        apiClient.get('/scheduled-tasks/task-types'),
+        apiClient.get('/scheduled-tasks/statistics')
       ]);
       setTasks(tasksRes.data);
       setTaskTypes(typesRes.data.task_types);
@@ -44,7 +44,7 @@ const ScheduledTasksPage = ({ embedded = false }) => {
 
   const handleToggleTask = async (taskType, enabled) => {
     try {
-      await apiClient.put(`/scheduled/tasks/${taskType}`, { enabled });
+      await apiClient.put(`/scheduled-tasks/tasks/${taskType}`, { enabled });
       setTasks(prev => prev.map(t =>
         t.task_type === taskType ? { ...t, enabled } : t
       ));
@@ -64,7 +64,7 @@ const ScheduledTasksPage = ({ embedded = false }) => {
     setMessage({ type: '', text: '' });
 
     try {
-      const response = await apiClient.post(`/scheduled/tasks/${taskType}/run`);
+      const response = await apiClient.post(`/scheduled-tasks/tasks/${taskType}/run`);
       setMessage({
         type: 'success',
         text: `Task completed: ${JSON.stringify(response.data.result)}`
@@ -86,7 +86,7 @@ const ScheduledTasksPage = ({ embedded = false }) => {
     setMessage({ type: '', text: '' });
 
     try {
-      const response = await apiClient.post('/scheduled/train-and-search');
+      const response = await apiClient.post('/scheduled-tasks/train-and-search');
       setMessage({
         type: 'success',
         text: `Model trained and retroactive search completed`

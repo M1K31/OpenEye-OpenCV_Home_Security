@@ -79,19 +79,21 @@ const ThemeSelectorPage = ({ embedded = false }) => {
   const currentThemeData = themeInfo[safeCurrentTheme];
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <h1 style={styles.title}>
-          🎨 Theme Selector
-          <HelpButton 
-            title={HELP_CONTENT.THEMES.title}
-            description={HELP_CONTENT.THEMES.description}
-          />
-        </h1>
-        <p style={styles.subtitle}>
-          Choose your favorite theme or stick with the classic design
-        </p>
-      </div>
+    <div style={embedded ? styles.embeddedContainer : styles.container}>
+      {!embedded && (
+        <div style={styles.header}>
+          <h1 style={styles.title}>
+            🎨 Theme Selector
+            <HelpButton
+              title={HELP_CONTENT.THEMES.title}
+              description={HELP_CONTENT.THEMES.description}
+            />
+          </h1>
+          <p style={styles.subtitle}>
+            Choose your favorite theme or stick with the classic design
+          </p>
+        </div>
+      )}
 
       <div style={styles.currentTheme}>
         <span style={styles.label}>Current Theme:</span>
@@ -158,23 +160,25 @@ const ThemeSelectorPage = ({ embedded = false }) => {
         })}
       </div>
 
-      <div style={styles.infoSection}>
-        <h3 style={styles.infoTitle}>💡 About Themes</h3>
-        <div style={styles.infoGrid}>
-          <div style={styles.infoCard}>
-            <h4>🎭 Personalization</h4>
-            <p>Each theme transforms the entire interface with unique colors, fonts, and animations</p>
-          </div>
-          <div style={styles.infoCard}>
-            <h4>💾 Persistent</h4>
-            <p>Your theme choice is saved locally and persists across sessions</p>
-          </div>
-          <div style={styles.infoCard}>
-            <h4>⚡ Performance</h4>
-            <p>Themes use CSS for smooth animations without impacting performance</p>
+      {!embedded && (
+        <div style={styles.infoSection}>
+          <h3 style={styles.infoTitle}>💡 About Themes</h3>
+          <div style={styles.infoGrid}>
+            <div style={styles.infoCard}>
+              <h4>🎭 Personalization</h4>
+              <p>Each theme transforms the entire interface with unique colors, fonts, and animations</p>
+            </div>
+            <div style={styles.infoCard}>
+              <h4>💾 Persistent</h4>
+              <p>Your theme choice is saved locally and persists across sessions</p>
+            </div>
+            <div style={styles.infoCard}>
+              <h4>⚡ Performance</h4>
+              <p>Themes use CSS for smooth animations without impacting performance</p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
@@ -187,6 +191,12 @@ const styles = {
     fontFamily: 'Arial, sans-serif',
     backgroundColor: 'var(--bg-main)',
     minHeight: '100vh',
+    color: 'var(--text-primary)',
+  },
+  embeddedContainer: {
+    padding: '0',
+    margin: '0',
+    fontFamily: 'Arial, sans-serif',
     color: 'var(--text-primary)',
   },
   header: {
