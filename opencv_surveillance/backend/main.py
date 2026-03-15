@@ -489,6 +489,21 @@ async def startup_event():
         "Hardware-Aware Auto-Configuration (v3.7.0)"
     )
 
+    # Ecosystem integration (standalone no-op when registry unavailable)
+    try:
+        from ecosystem_client import EcosystemClient
+        eco = EcosystemClient(
+            service_name="openeye",
+            service_port=int(os.environ.get("PORT", "8200")),
+            health_endpoint="/api/ecosystem/health",
+        )
+        await eco.start()
+        app.state.ecosystem = eco
+        logger.info(f"Ecosystem client started in {eco.mode.value} mode")
+    except Exception as e:
+        logger.debug(f"Ecosystem client not available: {e}")
+        app.state.ecosystem = None
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -498,10 +513,17 @@ async def shutdown_event():
     """
     global shutdown_in_progress
     shutdown_in_progress = True
-    
+
     logger.info("=" * 60)
     logger.info("Shutting down OpenEye Surveillance System...")
     logger.info("=" * 60)
+
+    # Ecosystem cleanup
+    if getattr(app.state, "ecosystem", None):
+        try:
+            await app.state.ecosystem.stop()
+        except Exception:
+            pass
 
     # Step 1: Stop face clustering scheduler
     try:
@@ -852,6 +874,15 @@ async def health_check():
         "face_recognition": "available",
         "database": "connected",
     }
+
+
+@app.post("/ecosystem/events")
+async def ecosystem_webhook(request: Request):
+    """Receive ecosystem events via webhook."""
+    if getattr(app.state, "ecosystem", None):
+        body = await request.json()
+        await app.state.ecosystem.handle_webhook(body)
+    return {"status": "ok"}
 
 
 @app.get("/api/system/info")
