@@ -14,6 +14,12 @@ from backend.services.notification_service import get_notification_service
 from backend.database import alert_models
 from backend.database.session import SessionLocal
 from backend.database.utils import get_db_context
+from backend.core.ecosystem_events import (
+    build_motion_event,
+    build_face_event,
+    build_intrusion_event,
+    publish_ecosystem_event,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +32,14 @@ class AlertManager:
     def __init__(self):
         self.notification_service = get_notification_service()
         logger.info("AlertManager initialized")
+
+    def _get_ecosystem_client(self):
+        """Get the ecosystem client from the FastAPI app state, if available."""
+        try:
+            from backend.main import app
+            return getattr(app.state, "ecosystem", None)
+        except Exception:
+            return None
 
     def _should_send_alert(
         self, db: Session, throttle_key: str, min_seconds: int = 300
@@ -146,6 +160,17 @@ class AlertManager:
                     event_data=event_data,
                 )
 
+            # Publish to ecosystem (once per alert, outside config loop)
+            eco = self._get_ecosystem_client()
+            if eco and event_data:
+                event = build_motion_event(
+                    camera_id=camera_id,
+                    motion_areas=event_data.get("motion_areas", []),
+                    snapshot_path=event_data.get("snapshot_path"),
+                    zone_ids=event_data.get("triggered_zone_ids", []),
+                )
+                await publish_ecosystem_event(eco, event["event_type"], event["data"])
+
     async def trigger_face_recognition_alert(
         self,
         camera_id: str,
@@ -214,6 +239,17 @@ class AlertManager:
                     message=message,
                     event_data=event_data or {},
                 )
+
+            # Publish to ecosystem (once per alert, outside config loop)
+            eco = self._get_ecosystem_client()
+            if eco:
+                event = build_face_event(
+                    camera_id=camera_id,
+                    person_name=person_name,
+                    confidence=confidence,
+                    is_known=is_known,
+                )
+                await publish_ecosystem_event(eco, event["event_type"], event["data"])
 
         finally:
             db.close()
