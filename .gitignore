@@ -141,3 +141,6 @@ opencv_surveillance/docs/
 CLAUDE.md
 CLAUDE.md.*
 claude.md
+
+# Worktrees
+.worktrees/
