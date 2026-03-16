@@ -878,10 +878,17 @@ async def health_check():
 
 @app.post("/ecosystem/events")
 async def ecosystem_webhook(request: Request):
-    """Receive ecosystem events via webhook."""
+    """Receive ecosystem events via webhook and broadcast to connected clients."""
     if getattr(app.state, "ecosystem", None):
         body = await request.json()
         await app.state.ecosystem.handle_webhook(body)
+        # Also broadcast to OpenEye's WebSocket clients
+        try:
+            from backend.core.websocket_manager import broadcast_alert
+            event_type = body.get("type", "ecosystem_event")
+            await broadcast_alert(event_type, body.get("data", {}))
+        except Exception:
+            pass
     return {"status": "ok"}
 
 
