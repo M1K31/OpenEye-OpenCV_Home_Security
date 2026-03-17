@@ -1,3 +1,6 @@
+# Build tools (pin setuptools < 82 — face_recognition_models uses pkg_resources)
+setuptools>=68.0,<82
+
 # Core FastAPI dependencies
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
