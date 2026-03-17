@@ -74,8 +74,8 @@ torch>=2.0.0  # PyTorch framework (required by YOLO)
 torchvision>=0.15.0  # Computer vision models and datasets
 scipy>=1.10.0  # Scientific computing for YOLO operations
 
-# Ecosystem integration (optional — standalone without it)
-ecosystem-client @ file:///Volumes/Locker2/GitHub/appEcosystem/packages/ecosystem-client
+# Ecosystem integration — ecosystem_client is bundled in opencv_surveillance/ecosystem_client/
+# No pip install needed; it's importable from the project directory
 
 # PostgreSQL (Phase 6 - Production Database) - FREE & OPEN SOURCE
 psycopg2-binary>=2.9.9  # PostgreSQL adapter

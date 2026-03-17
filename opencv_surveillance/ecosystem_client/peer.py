@@ -1,4 +1,5 @@
 """Peer wrapper for direct API calls with HMAC authentication."""
+from __future__ import annotations
 
 import json
 import logging
