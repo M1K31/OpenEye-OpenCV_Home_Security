@@ -495,7 +495,7 @@ async def startup_event():
         eco = EcosystemClient(
             service_name="openeye",
             service_port=int(os.environ.get("PORT", "8200")),
-            health_endpoint="/api/ecosystem/health",
+            health_endpoint="/api/health",
         )
         await eco.start()
         app.state.ecosystem = eco
