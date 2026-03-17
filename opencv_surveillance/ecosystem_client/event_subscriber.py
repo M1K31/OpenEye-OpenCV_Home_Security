@@ -1,4 +1,5 @@
 """Event subscriber that receives webhooks and dispatches to registered handlers."""
+from __future__ import annotations
 
 import logging
 from collections import defaultdict

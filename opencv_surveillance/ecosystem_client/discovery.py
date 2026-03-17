@@ -1,4 +1,5 @@
 """Service discovery with three-mode cascade: registry -> mDNS -> static -> standalone."""
+from __future__ import annotations
 
 import logging
 from enum import Enum

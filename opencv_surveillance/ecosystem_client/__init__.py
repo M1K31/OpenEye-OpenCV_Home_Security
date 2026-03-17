@@ -1,4 +1,5 @@
 """Ecosystem client library for inter-service communication."""
+from __future__ import annotations
 
 import asyncio
 import logging

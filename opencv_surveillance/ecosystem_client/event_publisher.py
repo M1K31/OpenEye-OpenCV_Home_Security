@@ -1,4 +1,5 @@
 """Publish events to the ecosystem via bus (Mode 1) or direct webhooks (Mode 2)."""
+from __future__ import annotations
 
 import asyncio
 import logging
