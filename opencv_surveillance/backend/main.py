@@ -496,6 +496,7 @@ async def startup_event():
             service_name="openeye",
             service_port=int(os.environ.get("PORT", "8200")),
             health_endpoint="/api/health",
+            priority=50,  # Fallback ecosystem manager
         )
         await eco.start()
         app.state.ecosystem = eco

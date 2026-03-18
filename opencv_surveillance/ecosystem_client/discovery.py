@@ -113,19 +113,23 @@ class DiscoveryManager:
             return []
 
     async def _fetch_registry_services(self) -> list[dict]:
-        """Fetch all services from the registry."""
+        """Fetch all services from the registry, sorted by priority (highest first)."""
         try:
             async with httpx.AsyncClient(timeout=self.config.request_timeout) as client:
                 resp = await client.get(f"{self.config.registry_url}/services")
                 resp.raise_for_status()
-                return resp.json()
+                services = resp.json()
+                # Sort by priority descending so highest-priority peers are first
+                services.sort(key=lambda s: s.get("priority", 0), reverse=True)
+                return services
         except Exception as e:
             logger.warning(f"Failed to fetch services from registry: {e}")
             return []
 
     async def register_self(self, name: str, host: str, port: int,
                             health_endpoint: str, webhook_url: str | None = None,
-                            subscriptions: list[str] | None = None) -> bool:
+                            subscriptions: list[str] | None = None,
+                            priority: int = 0) -> bool:
         """Register this service with the registry (Mode 1 only)."""
         if self._mode != DiscoveryMode.REGISTRY:
             return False
@@ -137,6 +141,7 @@ class DiscoveryManager:
                 "health_endpoint": health_endpoint,
                 "webhook_url": webhook_url,
                 "subscriptions": subscriptions or [],
+                "priority": priority,
             }
             async with httpx.AsyncClient(timeout=self.config.request_timeout) as client:
                 resp = await client.post(f"{self.config.registry_url}/register", json=payload)

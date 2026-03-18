@@ -37,11 +37,14 @@ class EcosystemClient:
         health_endpoint: str = "/health",
         subscriptions: list[str] | None = None,
         config: EcosystemConfig | None = None,
+        priority: int = 0,
     ):
         self._config = config or EcosystemConfig.from_env()
         self._config.service_name = service_name
         self._config.service_port = service_port
         self._config.health_endpoint = health_endpoint
+        if priority:
+            self._config.priority = priority
 
         self._service_name = service_name
         self._service_port = service_port
@@ -82,6 +85,7 @@ class EcosystemClient:
                 health_endpoint=self._health_endpoint,
                 webhook_url=webhook_url,
                 subscriptions=all_subs,
+                priority=self._config.priority,
             )
 
         # Discover peers
