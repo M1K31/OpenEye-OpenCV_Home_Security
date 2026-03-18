@@ -20,6 +20,7 @@ class EcosystemConfig:
     request_timeout: float = 5.0
     event_retry_attempts: int = 3
     event_retry_delay: float = 5.0
+    priority: int = 0
     peers: dict[str, str] = field(default_factory=dict)
 
     @classmethod
@@ -54,6 +55,7 @@ class EcosystemConfig:
             discovery_interval=int(
                 os.environ.get("ECOSYSTEM_DISCOVERY_INTERVAL", cls.discovery_interval)
             ),
+            priority=int(os.environ.get("ECOSYSTEM_PRIORITY", "0")),
             peers=peers,
         )
 
