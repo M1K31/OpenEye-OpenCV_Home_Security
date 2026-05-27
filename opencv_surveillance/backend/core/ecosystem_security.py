@@ -11,15 +11,22 @@ Provides enhanced security features for ecosystem integration:
 - Secure token storage recommendations
 """
 
-import secrets
 import hashlib
 import hmac
-import json
 import logging
-import time
+import secrets
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Tuple
 from functools import wraps
+from typing import Dict, Optional, Tuple
+
+# Single source of truth for crypto helpers (C-4 fix: consolidated)
+from ecosystem_auth.tokens import (
+    generate_secure_token,
+    hash_token,
+    sign_payload,
+    verify_signature,
+    verify_token_hash,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,49 +43,6 @@ AUTH_WINDOW_SECONDS = 300  # 5 minute window for rate limiting
 BLOCK_DURATION_SECONDS = 900  # 15 minute block duration
 TOKEN_ROTATION_INTERVAL_HOURS = 12  # Rotate tokens every 12 hours
 TOKEN_VALIDITY_HOURS = 24  # Tokens valid for 24 hours
-
-
-def generate_secure_token(length: int = 32) -> str:
-    """
-    Generate a cryptographically secure token.
-    
-    Uses secrets.token_hex which is designed for security-sensitive applications.
-    """
-    return secrets.token_hex(length)
-
-
-def hash_token(token: str) -> str:
-    """
-    Create a one-way hash of a token for secure storage.
-    
-    Never store raw tokens - always store hashed versions.
-    """
-    return hashlib.sha256(token.encode()).hexdigest()
-
-
-def verify_token_hash(token: str, token_hash: str) -> bool:
-    """Verify a token against its stored hash."""
-    return hmac.compare_digest(hash_token(token), token_hash)
-
-
-def sign_payload(payload: dict, secret: str) -> str:
-    """
-    Sign a payload with HMAC-SHA256.
-    
-    This prevents tampering with webhook payloads.
-    """
-    message = json.dumps(payload, sort_keys=True, default=str).encode()
-    return hmac.new(secret.encode(), message, hashlib.sha256).hexdigest()
-
-
-def verify_signature(payload: dict, signature: str, secret: str) -> bool:
-    """
-    Verify the signature of a payload.
-    
-    Uses constant-time comparison to prevent timing attacks.
-    """
-    expected = sign_payload(payload, secret)
-    return hmac.compare_digest(expected, signature)
 
 
 def generate_device_fingerprint(
@@ -208,17 +172,25 @@ def validate_ip_for_device(
     return False, "IP address does not match registered device"
 
 
-def generate_challenge() -> Tuple[str, str]:
+def generate_challenge(device_token: str) -> Tuple[str, str]:
     """
     Generate a challenge-response pair for device verification.
-    
+
+    The device must HMAC-sign the challenge with its token.  The
+    expected_response is pre-computed here so the caller can compare
+    without needing the token again.
+
+    Args:
+        device_token: The device's shared secret / token.
+
     Returns:
         Tuple of (challenge, expected_response)
     """
     challenge = secrets.token_hex(16)
-    # The expected response is the challenge signed with a known secret
-    # In practice, the device would sign with its token
-    return challenge, challenge
+    expected = hmac.new(
+        device_token.encode(), challenge.encode(), hashlib.sha256
+    ).hexdigest()
+    return challenge, expected
 
 
 def verify_challenge_response(

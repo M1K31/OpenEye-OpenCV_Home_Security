@@ -5,6 +5,9 @@ Ecosystem Integration API Routes
 Enables integration with MagicMirror, mobile apps, and other ecosystem participants
 """
 
+from ipaddress import ip_address as parse_ip, ip_network
+from urllib.parse import urlparse
+
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -12,12 +15,14 @@ from typing import Optional, List, Dict
 from datetime import datetime, timedelta
 import secrets
 import hashlib
-import hmac
 import json
 import logging
 import os
 import asyncio
-import aiohttp
+import httpx
+
+from ecosystem_auth.tokens import sign_payload
+from ecosystem_auth.middleware import require_ecosystem_auth
 
 from backend.database.session import get_db, engine
 from backend.database import models
@@ -50,16 +55,35 @@ def generate_ecosystem_token() -> str:
     return secrets.token_hex(32)
 
 
-def sign_payload(payload: dict, secret: str) -> str:
-    """Sign payload with HMAC-SHA256"""
-    message = json.dumps(payload, sort_keys=True, default=str).encode()
-    return hmac.new(secret.encode(), message, hashlib.sha256).hexdigest()
-
-
 def generate_dedupe_key(notification: dict) -> str:
     """Generate deduplication key from notification content"""
     content = f"{notification.get('type')}:{notification.get('source')}:{notification.get('title')}"
-    return hashlib.md5(content.encode()).hexdigest()
+    return hashlib.sha256(content.encode()).hexdigest()
+
+
+_BLOCKED_NETWORKS = [
+    ip_network("10.0.0.0/8"),
+    ip_network("172.16.0.0/12"),
+    ip_network("192.168.0.0/16"),
+    ip_network("169.254.0.0/16"),
+    ip_network("127.0.0.0/8"),
+    ip_network("0.0.0.0/8"),
+]
+
+
+def _is_safe_url(url: str) -> bool:
+    """Return False if *url* resolves to a private/loopback address (SSRF guard)."""
+    try:
+        parsed = urlparse(url)
+        host = parsed.hostname
+        if not host:
+            return False
+        addr = parse_ip(host)
+        return not any(addr in net for net in _BLOCKED_NETWORKS)
+    except (ValueError, TypeError):
+        # If hostname is not an IP literal, allow it (DNS resolution would
+        # need async check; this covers the most common SSRF vectors).
+        return True
 
 
 async def broadcast_to_ecosystem(event: dict):
@@ -86,22 +110,17 @@ async def send_webhook(connection: models.EcosystemConnection, event: dict, db: 
         # Sign the payload
         signature = sign_payload(event, connection.local_token)
         event["signature"] = signature
-        
-        async with aiohttp.ClientSession() as session:
-            headers = {"Content-Type": "application/json"}
-            if connection.remote_token:
-                headers["Authorization"] = f"Bearer {connection.remote_token}"
-            
-            async with session.post(
-                connection.webhook_url,
-                json=event,
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=10)
-            ) as response:
-                if response.status == 200:
-                    logger.debug(f"Webhook sent to {connection.app_name}")
-                else:
-                    logger.warning(f"Webhook to {connection.app_name} returned {response.status}")
+
+        headers = {"Content-Type": "application/json"}
+        if connection.remote_token:
+            headers["Authorization"] = f"Bearer {connection.remote_token}"
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(connection.webhook_url, json=event, headers=headers)
+            if resp.status_code == 200:
+                logger.debug(f"Webhook sent to {connection.app_name}")
+            else:
+                logger.warning(f"Webhook to {connection.app_name} returned {resp.status_code}")
     except Exception as e:
         logger.warning(f"Failed to send webhook to {connection.app_name}: {e}")
 
@@ -155,6 +174,13 @@ async def connect_ecosystem_app(
             headers={"Retry-After": str(wait_time)}
         )
     
+    # SSRF guard: reject private/loopback callback hosts (C-3 fix)
+    if request.host and not _is_safe_url(request.host):
+        raise HTTPException(
+            status_code=400,
+            detail="Callback host resolves to a private or loopback address",
+        )
+
     device_name = request.device_name or f"{request.app} at {request.host}"
     logger.info(f"Ecosystem connect request from {device_name} ({request.app} v{request.version}) IP: {client_ip}")
     
@@ -250,7 +276,7 @@ async def get_ecosystem_status(
     for conn in connections:
         try:
             capabilities = json.loads(conn.capabilities) if conn.capabilities else []
-        except:
+        except (json.JSONDecodeError, TypeError, ValueError):
             capabilities = []
         
         connection_infos.append(eco_schema.EcosystemConnectionInfo(
@@ -343,7 +369,7 @@ async def update_device_subscriptions(
         if connection.notification_preferences:
             try:
                 existing = json.loads(connection.notification_preferences)
-            except:
+            except (json.JSONDecodeError, TypeError, ValueError):
                 pass
         existing.update(notification_preferences)
         connection.notification_preferences = json.dumps(existing)
@@ -403,7 +429,9 @@ async def list_ecosystem_devices(
 
 
 @router.get("/ecosystem/security")
-async def get_ecosystem_security_status():
+async def get_ecosystem_security_status(
+    _auth: dict = Depends(require_ecosystem_auth),
+):
     """
     Get ecosystem security status.
     
@@ -427,7 +455,8 @@ async def get_ecosystem_security_status():
 @router.post("/ecosystem/security/unblock")
 async def unblock_ip(
     ip_address: str,
-    db: Session = Depends(get_db)
+    _auth: dict = Depends(require_ecosystem_auth),
+    db: Session = Depends(get_db),
 ):
     """
     Manually unblock an IP address.
@@ -455,64 +484,87 @@ async def unblock_ip(
 
 
 @router.websocket("/ecosystem/events")
-async def ecosystem_events_websocket(
-    websocket: WebSocket,
-    token: str = Query(...)
-):
+async def ecosystem_events_websocket(websocket: WebSocket):
     """
     WebSocket for real-time event streaming to ecosystem apps.
-    
-    Connect with: ws://openeye:8000/api/ecosystem/events?token=<ecosystem-token>
-    
-    Events are sent as JSON:
-    {
-        "event": "motion_detected",
-        "camera_id": "front_door",
-        "timestamp": "2025-12-13T14:30:00Z",
-        "data": {...}
-    }
+
+    **Authentication (H-1 fix):** Token is sent in the *first message*
+    after the connection is accepted, not in the query string.  This
+    prevents token leakage via server access-logs, Referer headers, and
+    browser history.
+
+    Handshake protocol::
+
+        1. Client connects: ``ws://openeye:8000/api/ecosystem/events``
+        2. Server accepts the raw WebSocket.
+        3. Client sends: ``{"type": "auth", "token": "<ecosystem-token>"}``
+        4. Server validates within 10 s or closes with 4001.
+        5. Server replies: ``{"type": "auth_ok"}``
+        6. Normal event streaming begins.
+
+    Events are sent as JSON::
+
+        {"event": "motion_detected", "camera_id": "front_door",
+         "timestamp": "2025-12-13T14:30:00Z", "data": {...}}
     """
-    # Verify token
     from backend.database.session import SessionLocal
+
+    await websocket.accept()
+
+    # ── Phase 1: first-message authentication ──────────────────────────
     db = SessionLocal()
-    
+    connection = None
     try:
+        try:
+            auth_msg = await asyncio.wait_for(websocket.receive_json(), timeout=10)
+        except (asyncio.TimeoutError, Exception):
+            await websocket.close(code=4001, reason="Auth timeout")
+            return
+
+        if auth_msg.get("type") != "auth" or not auth_msg.get("token"):
+            await websocket.close(code=4001, reason="Expected auth message")
+            return
+
+        token = auth_msg["token"]
         connection = db.query(models.EcosystemConnection).filter(
             models.EcosystemConnection.local_token == token,
             models.EcosystemConnection.is_active == True
         ).first()
-        
+
         if not connection:
-            await websocket.close(code=4001)
+            await websocket.close(code=4001, reason="Invalid token")
             return
-        
-        # Update last seen
+
         connection.last_seen = datetime.utcnow()
         db.commit()
-        
-        await websocket.accept()
+
+        await websocket.send_json({"type": "auth_ok"})
         _ecosystem_websockets.append(websocket)
         logger.info(f"Ecosystem WebSocket connected: {connection.app_name}")
-        
+
+        # ── Phase 2: normal event loop ─────────────────────────────────
         try:
-            # Keep connection alive and handle incoming messages
             while True:
                 try:
                     data = await asyncio.wait_for(websocket.receive_json(), timeout=60)
-                    
-                    # Handle incoming events from companion app
+
                     if data.get("event") == "user_present":
                         logger.info(f"User presence detected from {connection.app_name}")
-                    
+
                 except asyncio.TimeoutError:
-                    # Send ping to keep connection alive
                     await websocket.send_json({"type": "ping"})
-                    
+
         except WebSocketDisconnect:
             logger.info(f"Ecosystem WebSocket disconnected: {connection.app_name}")
+        except Exception as e:
+            logger.warning(f"Ecosystem WebSocket error ({connection.app_name}): {e}")
         finally:
             if websocket in _ecosystem_websockets:
                 _ecosystem_websockets.remove(websocket)
+            try:
+                await websocket.close()
+            except Exception:
+                pass
     finally:
         db.close()
 
@@ -588,16 +640,19 @@ async def get_notification_settings():
 @router.post("/ecosystem/webhook")
 async def receive_webhook(
     request: Request,
-    db: Session = Depends(get_db)
+    auth: dict = Depends(require_ecosystem_auth),
+    db: Session = Depends(get_db),
 ):
     """
     Receive webhook events from companion apps.
-    
+
     Companion apps can send events to this endpoint for processing by OpenEye.
+    Requires HMAC signature or Bearer token authentication.
     """
     try:
-        payload = await request.json()
-        
+        # Use the already-parsed payload from HMAC auth when available
+        payload = auth.get("payload") if auth.get("auth_method") == "hmac" else await request.json()
+
         source = payload.get("source", "unknown")
         event_type = payload.get("event_type", "unknown")
         
@@ -621,23 +676,22 @@ async def receive_webhook(
 
 @router.get("/ecosystem/cameras")
 async def list_cameras_for_ecosystem(
-    token: str = Query(None),
+    token: str = Query(...),
     db: Session = Depends(get_db)
 ):
     """
     List available cameras for ecosystem apps.
-    
+
     Returns camera information suitable for MagicMirror or mobile app display.
     Includes stream URLs and current status.
     """
-    # Verify ecosystem token if provided
-    if token:
-        connection = db.query(models.EcosystemConnection).filter(
-            models.EcosystemConnection.token == token,
-            models.EcosystemConnection.is_active == True
-        ).first()
-        if not connection:
-            raise HTTPException(status_code=401, detail="Invalid ecosystem token")
+    # Verify ecosystem token (required)
+    connection = db.query(models.EcosystemConnection).filter(
+        models.EcosystemConnection.local_token == token,
+        models.EcosystemConnection.is_active == True
+    ).first()
+    if not connection:
+        raise HTTPException(status_code=401, detail="Invalid ecosystem token")
     
     from backend.core.camera_manager import manager as camera_manager
     
@@ -670,36 +724,35 @@ async def list_cameras_for_ecosystem(
 @router.get("/ecosystem/stream/{camera_id}")
 async def ecosystem_camera_stream(
     camera_id: str,
-    token: str = Query(None),
+    token: str = Query(...),
     quality: str = Query("medium"),  # low, medium, high
     fps: int = Query(15),  # Target FPS
     db: Session = Depends(get_db)
 ):
     """
     Stream camera video for ecosystem apps with quality options.
-    
+
     Designed for MagicMirror and mobile app integration with bandwidth-conscious options.
-    
+
     **Quality Options:**
     - low: 320x240, JPEG quality 60 (for slow connections)
     - medium: 640x480, JPEG quality 75 (default, balanced)
     - high: Full resolution, JPEG quality 85 (for local network)
-    
+
     **FPS:** Target frames per second (5-30, default 15)
     """
     import cv2
     from fastapi.responses import StreamingResponse
-    
-    # Verify ecosystem token if provided
-    if token:
-        connection = db.query(models.EcosystemConnection).filter(
-            models.EcosystemConnection.token == token,
-            models.EcosystemConnection.is_active == True
-        ).first()
-        if connection:
-            # Update last seen
-            connection.last_seen = datetime.utcnow()
-            db.commit()
+
+    # Verify ecosystem token (required)
+    connection = db.query(models.EcosystemConnection).filter(
+        models.EcosystemConnection.local_token == token,
+        models.EcosystemConnection.is_active == True
+    ).first()
+    if not connection:
+        raise HTTPException(status_code=401, detail="Invalid ecosystem token")
+    connection.last_seen = datetime.utcnow()
+    db.commit()
     
     from backend.core.camera_manager import manager as camera_manager
     
@@ -767,27 +820,27 @@ async def ecosystem_camera_stream(
 @router.get("/ecosystem/snapshot/{camera_id}")
 async def ecosystem_camera_snapshot(
     camera_id: str,
-    token: str = Query(None),
+    token: str = Query(...),
     quality: str = Query("medium"),
     db: Session = Depends(get_db)
 ):
     """
     Get a single snapshot from a camera for ecosystem apps.
-    
+
     Returns a JPEG image with configurable quality.
     """
     import cv2
     from fastapi.responses import Response
-    
-    # Verify ecosystem token if provided
-    if token:
-        connection = db.query(models.EcosystemConnection).filter(
-            models.EcosystemConnection.token == token,
-            models.EcosystemConnection.is_active == True
-        ).first()
-        if connection:
-            connection.last_seen = datetime.utcnow()
-            db.commit()
+
+    # Verify ecosystem token (required)
+    connection = db.query(models.EcosystemConnection).filter(
+        models.EcosystemConnection.local_token == token,
+        models.EcosystemConnection.is_active == True
+    ).first()
+    if not connection:
+        raise HTTPException(status_code=401, detail="Invalid ecosystem token")
+    connection.last_seen = datetime.utcnow()
+    db.commit()
     
     from backend.core.camera_manager import manager as camera_manager
     
@@ -939,56 +992,66 @@ def get_ecosystem_statistics(
         Total event counts and per-camera breakdown
     """
     from datetime import timedelta
+    from sqlalchemy import func
 
     cutoff_time = datetime.utcnow() - timedelta(hours=hours)
 
     # Get all cameras
     cameras = db.query(models.Camera).all()
 
-    # Get totals
-    total_motion = db.query(models.MotionDetectionEvent).filter(
-        models.MotionDetectionEvent.detected_at >= cutoff_time
-    ).count()
+    # Grouped counts in 3 queries instead of 3×N (M-2 fix)
+    motion_counts = dict(
+        db.query(
+            models.MotionDetectionEvent.camera_id,
+            func.count(models.MotionDetectionEvent.id),
+        )
+        .filter(models.MotionDetectionEvent.detected_at >= cutoff_time)
+        .group_by(models.MotionDetectionEvent.camera_id)
+        .all()
+    )
 
-    total_faces = db.query(models.FaceDetectionEvent).filter(
-        models.FaceDetectionEvent.detected_at >= cutoff_time
-    ).count()
+    face_counts = dict(
+        db.query(
+            models.FaceDetectionEvent.camera_id,
+            func.count(models.FaceDetectionEvent.id),
+        )
+        .filter(models.FaceDetectionEvent.detected_at >= cutoff_time)
+        .group_by(models.FaceDetectionEvent.camera_id)
+        .all()
+    )
 
-    total_recordings = db.query(models.RecordingEvent).filter(
-        models.RecordingEvent.start_time >= cutoff_time
-    ).count()
+    recording_counts = dict(
+        db.query(
+            models.RecordingEvent.camera_id,
+            func.count(models.RecordingEvent.id),
+        )
+        .filter(models.RecordingEvent.started_at >= cutoff_time)
+        .group_by(models.RecordingEvent.camera_id)
+        .all()
+    )
 
-    # Get per-camera stats
+    total_motion = sum(motion_counts.values())
+    total_faces = sum(face_counts.values())
+    total_recordings = sum(recording_counts.values())
+
     camera_stats = []
     for camera in cameras:
-        motion_count = db.query(models.MotionDetectionEvent).filter(
-            models.MotionDetectionEvent.camera_id == camera.camera_id,
-            models.MotionDetectionEvent.detected_at >= cutoff_time
-        ).count()
-
-        face_count = db.query(models.FaceDetectionEvent).filter(
-            models.FaceDetectionEvent.camera_id == camera.camera_id,
-            models.FaceDetectionEvent.detected_at >= cutoff_time
-        ).count()
-
-        recording_count = db.query(models.RecordingEvent).filter(
-            models.RecordingEvent.camera_id == camera.camera_id,
-            models.RecordingEvent.start_time >= cutoff_time
-        ).count()
-
+        mc = motion_counts.get(camera.camera_id, 0)
+        fc = face_counts.get(camera.camera_id, 0)
+        rc = recording_counts.get(camera.camera_id, 0)
         camera_stats.append({
             "camera_id": camera.camera_id,
-            "camera_name": camera.name or camera.camera_id,
+            "camera_name": getattr(camera, "name", None) or camera.camera_id,
             "is_active": camera.is_active,
-            "motion_events": motion_count,
-            "face_events": face_count,
-            "recordings": recording_count
+            "motion_events": mc,
+            "face_events": fc,
+            "recordings": rc,
         })
 
     # Sort by total activity
     camera_stats.sort(
         key=lambda x: x["motion_events"] + x["face_events"] + x["recordings"],
-        reverse=True
+        reverse=True,
     )
 
     return {
@@ -997,7 +1060,7 @@ def get_ecosystem_statistics(
         "recordings": total_recordings,
         "cameras": camera_stats,
         "hours": hours,
-        "generated_at": datetime.utcnow().isoformat()
+        "generated_at": datetime.utcnow().isoformat(),
     }
 
 
@@ -1028,7 +1091,7 @@ def should_route_event_to_device(connection, event_type: str, data: dict) -> boo
             if subscribed and camera_id not in subscribed:
                 logger.debug(f"Event filtered: camera {camera_id} not in {connection.device_name}'s subscriptions")
                 return False
-        except:
+        except (json.JSONDecodeError, TypeError, ValueError):
             pass
     
     # Check user association for face recognition events
@@ -1042,7 +1105,7 @@ def should_route_event_to_device(connection, event_type: str, data: dict) -> boo
                 if associated and person_name != "Unknown" and person_name.lower() not in [u.lower() for u in associated]:
                     logger.debug(f"Event filtered: person {person_name} not associated with {connection.device_name}")
                     return False
-            except:
+            except (json.JSONDecodeError, TypeError, ValueError):
                 pass
     
     # Check notification preferences
@@ -1066,7 +1129,7 @@ def should_route_event_to_device(connection, event_type: str, data: dict) -> boo
             if pref_key in prefs and not prefs[pref_key]:
                 logger.debug(f"Event filtered: {event_type} disabled in {connection.device_name}'s preferences")
                 return False
-        except:
+        except (json.JSONDecodeError, TypeError, ValueError):
             pass
     
     return True
@@ -1208,7 +1271,7 @@ def _should_notify_user(user, prefs, event_type: str, data: dict) -> bool:
             pref_key = type_map.get(event_type, event_type)
             if pref_key in types and not types[pref_key]:
                 return False
-        except:
+        except (json.JSONDecodeError, TypeError, ValueError):
             pass
     
     # Check camera access
@@ -1218,7 +1281,7 @@ def _should_notify_user(user, prefs, event_type: str, data: dict) -> bool:
             allowed_cameras = json.loads(prefs.camera_access)
             if allowed_cameras and camera_id not in allowed_cameras:
                 return False
-        except:
+        except (json.JSONDecodeError, TypeError, ValueError):
             pass
     
     # Check face associations for face events
@@ -1230,7 +1293,7 @@ def _should_notify_user(user, prefs, event_type: str, data: dict) -> bool:
                 # If user has face associations, only notify for those faces
                 if associations and person_name.lower() not in [f.lower() for f in associations]:
                     return False
-            except:
+            except (json.JSONDecodeError, TypeError, ValueError):
                 pass
     
     # Check quiet hours
@@ -1253,7 +1316,7 @@ def _should_notify_user(user, prefs, event_type: str, data: dict) -> bool:
                     # Same day quiet hours
                     if start <= current_time < end:
                         return False
-        except:
+        except (json.JSONDecodeError, TypeError, ValueError):
             pass
     
     return True
@@ -1628,8 +1691,10 @@ async def search_face_detections(
 
     # Filter by person name (case-insensitive partial match)
     if person_name:
+        # Escape SQL LIKE wildcards to prevent injection (M-4 fix)
+        safe_name = person_name.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         query = query.filter(
-            models.FaceDetectionEvent.person_name.ilike(f"%{person_name}%")
+            models.FaceDetectionEvent.person_name.ilike(f"%{safe_name}%")
         )
 
     # Exclude unknown faces unless requested

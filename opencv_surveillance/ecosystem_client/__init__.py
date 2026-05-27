@@ -3,8 +3,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import socket
 from typing import Any, Callable, Coroutine
+
+import httpx
 
 from .config import EcosystemConfig
 from .discovery import DiscoveryManager, DiscoveryMode
@@ -51,9 +54,16 @@ class EcosystemClient:
         self._health_endpoint = health_endpoint
         self._subscriptions = subscriptions or []
 
-        self._discovery = DiscoveryManager(self._config)
+        # Shared HTTP client for connection pooling (H-8 fix)
+        self._http_client = httpx.AsyncClient(
+            timeout=self._config.request_timeout,
+            limits=httpx.Limits(max_connections=20, max_keepalive_connections=5),
+        )
+
+        self._discovery = DiscoveryManager(self._config, http_client=self._http_client)
         self._publisher = EventPublisher(
             self._config, mode=DiscoveryMode.STANDALONE, service_name=service_name,
+            http_client=self._http_client,
         )
         self._subscriber = EventSubscriber(hmac_secret=self._config.hmac_secret)
 
@@ -111,6 +121,7 @@ class EcosystemClient:
         if self._discovery.mode == DiscoveryMode.REGISTRY:
             await self._discovery.deregister_self(self._service_name)
 
+        await self._http_client.aclose()
         self._started = False
         logger.info(f"Ecosystem client stopped: {self._service_name}")
 
@@ -130,6 +141,7 @@ class EcosystemClient:
                     base_url=base_url,
                     hmac_secret=self._config.hmac_secret,
                     timeout=self._config.request_timeout,
+                    http_client=self._http_client,
                 )
                 self._peer_objects[service_name] = peer
                 return peer
@@ -186,8 +198,11 @@ class EcosystemClient:
             except Exception as e:
                 logger.debug(f"Periodic refresh error: {e}")
 
-    @staticmethod
-    def _get_local_ip() -> str:
+    def _get_local_ip(self) -> str:
+        """Resolve local IP: prefer OPENEYE_HOST env, then UDP probe, then loopback."""
+        env_host = os.environ.get("OPENEYE_HOST")
+        if env_host:
+            return env_host
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.connect(("8.8.8.8", 80))

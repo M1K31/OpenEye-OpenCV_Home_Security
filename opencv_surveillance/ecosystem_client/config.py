@@ -1,8 +1,14 @@
 """Configuration for the ecosystem client."""
 from __future__ import annotations
 
+import logging
 import os
+import warnings
 from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
+
+_INSECURE_DEFAULT_SECRET = "dev-ecosystem-secret-change-in-production"
 
 
 @dataclass
@@ -10,7 +16,7 @@ class EcosystemConfig:
     """Ecosystem client configuration loaded from env vars, files, or defaults."""
 
     registry_url: str = "http://localhost:8500"
-    hmac_secret: str = "dev-ecosystem-secret-change-in-production"
+    hmac_secret: str = _INSECURE_DEFAULT_SECRET
     service_name: str | None = None
     service_port: int | None = None
     health_endpoint: str = "/health"
@@ -43,9 +49,7 @@ class EcosystemConfig:
 
         return cls(
             registry_url=os.environ.get("ECOSYSTEM_REGISTRY_URL", cls.registry_url),
-            hmac_secret=os.environ.get(
-                "ECOSYSTEM_HMAC_SECRET", cls.hmac_secret
-            ),
+            hmac_secret=cls._resolve_hmac_secret(),
             service_name=os.environ.get("ECOSYSTEM_SERVICE_NAME"),
             service_port=port,
             health_endpoint=os.environ.get(
@@ -58,6 +62,22 @@ class EcosystemConfig:
             priority=int(os.environ.get("ECOSYSTEM_PRIORITY", "0")),
             peers=peers,
         )
+
+    @classmethod
+    def _resolve_hmac_secret(cls) -> str:
+        """Resolve HMAC secret from env, warning if using the insecure default."""
+        secret = os.environ.get("ECOSYSTEM_HMAC_SECRET")
+        if not secret:
+            warnings.warn(
+                "ECOSYSTEM_HMAC_SECRET not set — using insecure default. "
+                "Set this variable before deploying to production!",
+                stacklevel=3,
+            )
+            logger.warning(
+                "ECOSYSTEM_HMAC_SECRET not set — using insecure default."
+            )
+            return _INSECURE_DEFAULT_SECRET
+        return secret
 
     @classmethod
     def from_peers_file(cls, path: str) -> "EcosystemConfig":

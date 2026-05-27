@@ -1,5 +1,6 @@
 """FastAPI middleware/dependency for ecosystem authentication."""
 
+import logging
 import os
 from typing import Optional
 
@@ -8,12 +9,27 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from .tokens import verify_signature
 
+logger = logging.getLogger(__name__)
+
 security_scheme = HTTPBearer(auto_error=False)
+
+_INSECURE_DEFAULT_SECRET = "dev-ecosystem-secret-change-in-production"
 
 
 def get_ecosystem_secret() -> str:
-    """Get the shared HMAC secret from environment."""
-    secret = os.environ.get("ECOSYSTEM_HMAC_SECRET", "dev-ecosystem-secret-change-in-production")
+    """Get the shared HMAC secret from environment.
+
+    Falls back to an insecure default and logs a warning so that
+    development environments keep working while production deployments
+    are prompted to set ECOSYSTEM_HMAC_SECRET.
+    """
+    secret = os.environ.get("ECOSYSTEM_HMAC_SECRET")
+    if not secret:
+        logger.warning(
+            "ECOSYSTEM_HMAC_SECRET not set — using insecure default. "
+            "Set this environment variable before deploying to production!"
+        )
+        return _INSECURE_DEFAULT_SECRET
     return secret
 
 

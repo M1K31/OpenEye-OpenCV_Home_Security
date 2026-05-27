@@ -19,10 +19,12 @@ logger = logging.getLogger(__name__)
 class EventPublisher:
     """Publishes events with mode-appropriate delivery."""
 
-    def __init__(self, config: EcosystemConfig, mode: DiscoveryMode, service_name: str):
+    def __init__(self, config: EcosystemConfig, mode: DiscoveryMode, service_name: str,
+                 http_client: httpx.AsyncClient | None = None):
         self.config = config
         self._mode = mode
         self._service_name = service_name
+        self._http_client = http_client
         self._peer_webhooks: dict[str, dict[str, Any]] = {}
 
     def set_peer_webhooks(self, webhooks: dict[str, dict[str, Any]]) -> None:
@@ -62,24 +64,33 @@ class EventPublisher:
         envelope["signature"] = sign_payload(signable, self.config.hmac_secret)
         return envelope
 
+    def _get_client(self) -> httpx.AsyncClient:
+        """Return shared client or create a one-shot client."""
+        if self._http_client is not None:
+            return self._http_client
+        return httpx.AsyncClient(timeout=self.config.request_timeout)
+
     async def _publish_via_registry(self, envelope: dict) -> dict:
         """Publish by POSTing to the registry's event bus endpoint."""
+        client = self._get_client()
         try:
-            async with httpx.AsyncClient(timeout=self.config.request_timeout) as client:
-                resp = await client.post(
-                    f"{self.config.registry_url}/events/publish",
-                    json=envelope,
-                    headers={
-                        "X-Ecosystem-Signature": envelope.get("signature", ""),
-                        "X-Ecosystem-Event": envelope["type"],
-                        "X-Ecosystem-Source": envelope["source"],
-                    },
-                )
-                resp.raise_for_status()
-                return resp.json()
+            resp = await client.post(
+                f"{self.config.registry_url}/events/publish",
+                json=envelope,
+                headers={
+                    "X-Ecosystem-Signature": envelope.get("signature", ""),
+                    "X-Ecosystem-Event": envelope["type"],
+                    "X-Ecosystem-Source": envelope["source"],
+                },
+            )
+            resp.raise_for_status()
+            return resp.json()
         except Exception as e:
             logger.warning(f"Failed to publish via registry: {e}")
             return {"delivered": 0, "failed": 1, "error": str(e)}
+        finally:
+            if client is not self._http_client:
+                await client.aclose()
 
     async def _publish_direct(self, envelope: dict) -> dict:
         """Publish directly to matching peer webhooks (Mode 2)."""
@@ -109,19 +120,23 @@ class EventPublisher:
             "X-Ecosystem-Event": envelope["type"],
             "X-Ecosystem-Source": envelope["source"],
         }
-        for attempt in range(1, self.config.event_retry_attempts + 1):
-            try:
-                async with httpx.AsyncClient(timeout=self.config.request_timeout) as client:
+        client = self._get_client()
+        try:
+            for attempt in range(1, self.config.event_retry_attempts + 1):
+                try:
                     resp = await client.post(webhook_url, json=envelope, headers=headers)
-                if resp.status_code < 400:
-                    return True
-            except Exception:
-                pass
-            if attempt < self.config.event_retry_attempts:
-                await asyncio.sleep(self.config.event_retry_delay)
+                    if resp.status_code < 400:
+                        return True
+                except Exception:
+                    pass
+                if attempt < self.config.event_retry_attempts:
+                    await asyncio.sleep(self.config.event_retry_delay)
 
-        logger.warning(f"Failed to deliver event to {name} after {self.config.event_retry_attempts} attempts")
-        return False
+            logger.warning(f"Failed to deliver event to {name} after {self.config.event_retry_attempts} attempts")
+            return False
+        finally:
+            if client is not self._http_client:
+                await client.aclose()
 
     def _get_matching_peers(self, event_type: str) -> dict[str, dict]:
         """Filter peers whose subscriptions match the event type."""
