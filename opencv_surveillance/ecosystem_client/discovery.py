@@ -21,8 +21,9 @@ class DiscoveryMode(str, Enum):
 class DiscoveryManager:
     """Detects operating mode and resolves peer locations."""
 
-    def __init__(self, config: EcosystemConfig):
+    def __init__(self, config: EcosystemConfig, http_client: httpx.AsyncClient | None = None):
         self.config = config
+        self._http_client = http_client
         self._mode: DiscoveryMode | None = None
         self._peers: dict[str, dict[str, Any]] = {}
         self._mdns_peers: list[dict] = []
@@ -89,14 +90,23 @@ class DiscoveryManager:
         # STANDALONE
         return {}
 
+    def _get_client(self) -> httpx.AsyncClient:
+        """Return shared client or create a one-shot client."""
+        if self._http_client is not None:
+            return self._http_client
+        return httpx.AsyncClient(timeout=self.config.request_timeout)
+
     async def _check_registry(self) -> bool:
         """Check if the ecosystem registry is reachable."""
+        client = self._get_client()
         try:
-            async with httpx.AsyncClient(timeout=self.config.request_timeout) as client:
-                resp = await client.get(f"{self.config.registry_url}/health")
-                return resp.status_code == 200
+            resp = await client.get(f"{self.config.registry_url}/health")
+            return resp.status_code == 200
         except Exception:
             return False
+        finally:
+            if client is not self._http_client:
+                await client.aclose()
 
     def _check_mdns(self) -> list[dict]:
         """Scan for ecosystem services via mDNS. Returns list of peer dicts."""
@@ -114,17 +124,20 @@ class DiscoveryManager:
 
     async def _fetch_registry_services(self) -> list[dict]:
         """Fetch all services from the registry, sorted by priority (highest first)."""
+        client = self._get_client()
         try:
-            async with httpx.AsyncClient(timeout=self.config.request_timeout) as client:
-                resp = await client.get(f"{self.config.registry_url}/services")
-                resp.raise_for_status()
-                services = resp.json()
-                # Sort by priority descending so highest-priority peers are first
-                services.sort(key=lambda s: s.get("priority", 0), reverse=True)
-                return services
+            resp = await client.get(f"{self.config.registry_url}/services")
+            resp.raise_for_status()
+            services = resp.json()
+            # Sort by priority descending so highest-priority peers are first
+            services.sort(key=lambda s: s.get("priority", 0), reverse=True)
+            return services
         except Exception as e:
             logger.warning(f"Failed to fetch services from registry: {e}")
             return []
+        finally:
+            if client is not self._http_client:
+                await client.aclose()
 
     async def register_self(self, name: str, host: str, port: int,
                             health_endpoint: str, webhook_url: str | None = None,
@@ -133,6 +146,7 @@ class DiscoveryManager:
         """Register this service with the registry (Mode 1 only)."""
         if self._mode != DiscoveryMode.REGISTRY:
             return False
+        client = self._get_client()
         try:
             payload = {
                 "name": name,
@@ -143,22 +157,27 @@ class DiscoveryManager:
                 "subscriptions": subscriptions or [],
                 "priority": priority,
             }
-            async with httpx.AsyncClient(timeout=self.config.request_timeout) as client:
-                resp = await client.post(f"{self.config.registry_url}/register", json=payload)
-                resp.raise_for_status()
-                logger.info(f"Registered with ecosystem registry as '{name}'")
-                return True
+            resp = await client.post(f"{self.config.registry_url}/register", json=payload)
+            resp.raise_for_status()
+            logger.info(f"Registered with ecosystem registry as '{name}'")
+            return True
         except Exception as e:
             logger.warning(f"Failed to register with registry: {e}")
             return False
+        finally:
+            if client is not self._http_client:
+                await client.aclose()
 
     async def deregister_self(self, name: str) -> bool:
         """Deregister this service from the registry (Mode 1 only)."""
         if self._mode != DiscoveryMode.REGISTRY:
             return False
+        client = self._get_client()
         try:
-            async with httpx.AsyncClient(timeout=self.config.request_timeout) as client:
-                resp = await client.delete(f"{self.config.registry_url}/deregister/{name}")
-                return resp.status_code < 400
+            resp = await client.delete(f"{self.config.registry_url}/deregister/{name}")
+            return resp.status_code < 400
         except Exception:
             return False
+        finally:
+            if client is not self._http_client:
+                await client.aclose()

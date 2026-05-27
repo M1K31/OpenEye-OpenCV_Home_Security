@@ -15,11 +15,12 @@ class Peer:
     """Represents a discovered ecosystem peer service."""
 
     def __init__(self, name: str, base_url: str, hmac_secret: str,
-                 timeout: float = 5.0):
+                 timeout: float = 5.0, http_client: httpx.AsyncClient | None = None):
         self.name = name
         self.base_url = base_url.rstrip("/")
         self._hmac_secret = hmac_secret
         self._timeout = timeout
+        self._http_client = http_client
         self._degraded = False
         self._cached_token = None
         self._token_refresh_at = 0
@@ -69,13 +70,19 @@ class Peer:
         headers = kwargs.pop("headers", {})
         headers.update(self._auth_headers())
 
+        client = self._http_client
+        owns_client = client is None
+        if owns_client:
+            client = httpx.AsyncClient(timeout=self._timeout)
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
-                resp = await client.request(method, url, headers=headers, **kwargs)
-                resp.raise_for_status()
-                self.mark_healthy()
-                return resp.json()
+            resp = await client.request(method, url, headers=headers, **kwargs)
+            resp.raise_for_status()
+            self.mark_healthy()
+            return resp.json()
         except Exception as e:
             self.mark_degraded()
             logger.warning(f"Request to {self.name} ({method} {url}) failed: {e}")
             return None
+        finally:
+            if owns_client:
+                await client.aclose()
