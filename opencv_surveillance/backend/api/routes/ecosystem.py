@@ -484,57 +484,74 @@ async def unblock_ip(
 
 
 @router.websocket("/ecosystem/events")
-async def ecosystem_events_websocket(
-    websocket: WebSocket,
-    token: str = Query(...)
-):
+async def ecosystem_events_websocket(websocket: WebSocket):
     """
     WebSocket for real-time event streaming to ecosystem apps.
-    
-    Connect with: ws://openeye:8000/api/ecosystem/events?token=<ecosystem-token>
-    
-    Events are sent as JSON:
-    {
-        "event": "motion_detected",
-        "camera_id": "front_door",
-        "timestamp": "2025-12-13T14:30:00Z",
-        "data": {...}
-    }
+
+    **Authentication (H-1 fix):** Token is sent in the *first message*
+    after the connection is accepted, not in the query string.  This
+    prevents token leakage via server access-logs, Referer headers, and
+    browser history.
+
+    Handshake protocol::
+
+        1. Client connects: ``ws://openeye:8000/api/ecosystem/events``
+        2. Server accepts the raw WebSocket.
+        3. Client sends: ``{"type": "auth", "token": "<ecosystem-token>"}``
+        4. Server validates within 10 s or closes with 4001.
+        5. Server replies: ``{"type": "auth_ok"}``
+        6. Normal event streaming begins.
+
+    Events are sent as JSON::
+
+        {"event": "motion_detected", "camera_id": "front_door",
+         "timestamp": "2025-12-13T14:30:00Z", "data": {...}}
     """
-    # Verify token
     from backend.database.session import SessionLocal
+
+    await websocket.accept()
+
+    # ── Phase 1: first-message authentication ──────────────────────────
     db = SessionLocal()
-    
+    connection = None
     try:
+        try:
+            auth_msg = await asyncio.wait_for(websocket.receive_json(), timeout=10)
+        except (asyncio.TimeoutError, Exception):
+            await websocket.close(code=4001, reason="Auth timeout")
+            return
+
+        if auth_msg.get("type") != "auth" or not auth_msg.get("token"):
+            await websocket.close(code=4001, reason="Expected auth message")
+            return
+
+        token = auth_msg["token"]
         connection = db.query(models.EcosystemConnection).filter(
             models.EcosystemConnection.local_token == token,
             models.EcosystemConnection.is_active == True
         ).first()
-        
+
         if not connection:
-            await websocket.close(code=4001)
+            await websocket.close(code=4001, reason="Invalid token")
             return
-        
-        # Update last seen
+
         connection.last_seen = datetime.utcnow()
         db.commit()
-        
-        await websocket.accept()
+
+        await websocket.send_json({"type": "auth_ok"})
         _ecosystem_websockets.append(websocket)
         logger.info(f"Ecosystem WebSocket connected: {connection.app_name}")
 
+        # ── Phase 2: normal event loop ─────────────────────────────────
         try:
-            # Keep connection alive and handle incoming messages
             while True:
                 try:
                     data = await asyncio.wait_for(websocket.receive_json(), timeout=60)
 
-                    # Handle incoming events from companion app
                     if data.get("event") == "user_present":
                         logger.info(f"User presence detected from {connection.app_name}")
 
                 except asyncio.TimeoutError:
-                    # Send ping to keep connection alive
                     await websocket.send_json({"type": "ping"})
 
         except WebSocketDisconnect:
@@ -544,7 +561,6 @@ async def ecosystem_events_websocket(
         finally:
             if websocket in _ecosystem_websockets:
                 _ecosystem_websockets.remove(websocket)
-            # Ensure socket is closed even on unexpected errors (M-6 fix)
             try:
                 await websocket.close()
             except Exception:
@@ -976,56 +992,66 @@ def get_ecosystem_statistics(
         Total event counts and per-camera breakdown
     """
     from datetime import timedelta
+    from sqlalchemy import func
 
     cutoff_time = datetime.utcnow() - timedelta(hours=hours)
 
     # Get all cameras
     cameras = db.query(models.Camera).all()
 
-    # Get totals
-    total_motion = db.query(models.MotionDetectionEvent).filter(
-        models.MotionDetectionEvent.detected_at >= cutoff_time
-    ).count()
+    # Grouped counts in 3 queries instead of 3×N (M-2 fix)
+    motion_counts = dict(
+        db.query(
+            models.MotionDetectionEvent.camera_id,
+            func.count(models.MotionDetectionEvent.id),
+        )
+        .filter(models.MotionDetectionEvent.detected_at >= cutoff_time)
+        .group_by(models.MotionDetectionEvent.camera_id)
+        .all()
+    )
 
-    total_faces = db.query(models.FaceDetectionEvent).filter(
-        models.FaceDetectionEvent.detected_at >= cutoff_time
-    ).count()
+    face_counts = dict(
+        db.query(
+            models.FaceDetectionEvent.camera_id,
+            func.count(models.FaceDetectionEvent.id),
+        )
+        .filter(models.FaceDetectionEvent.detected_at >= cutoff_time)
+        .group_by(models.FaceDetectionEvent.camera_id)
+        .all()
+    )
 
-    total_recordings = db.query(models.RecordingEvent).filter(
-        models.RecordingEvent.start_time >= cutoff_time
-    ).count()
+    recording_counts = dict(
+        db.query(
+            models.RecordingEvent.camera_id,
+            func.count(models.RecordingEvent.id),
+        )
+        .filter(models.RecordingEvent.start_time >= cutoff_time)
+        .group_by(models.RecordingEvent.camera_id)
+        .all()
+    )
 
-    # Get per-camera stats
+    total_motion = sum(motion_counts.values())
+    total_faces = sum(face_counts.values())
+    total_recordings = sum(recording_counts.values())
+
     camera_stats = []
     for camera in cameras:
-        motion_count = db.query(models.MotionDetectionEvent).filter(
-            models.MotionDetectionEvent.camera_id == camera.camera_id,
-            models.MotionDetectionEvent.detected_at >= cutoff_time
-        ).count()
-
-        face_count = db.query(models.FaceDetectionEvent).filter(
-            models.FaceDetectionEvent.camera_id == camera.camera_id,
-            models.FaceDetectionEvent.detected_at >= cutoff_time
-        ).count()
-
-        recording_count = db.query(models.RecordingEvent).filter(
-            models.RecordingEvent.camera_id == camera.camera_id,
-            models.RecordingEvent.start_time >= cutoff_time
-        ).count()
-
+        mc = motion_counts.get(camera.camera_id, 0)
+        fc = face_counts.get(camera.camera_id, 0)
+        rc = recording_counts.get(camera.camera_id, 0)
         camera_stats.append({
             "camera_id": camera.camera_id,
             "camera_name": camera.name or camera.camera_id,
             "is_active": camera.is_active,
-            "motion_events": motion_count,
-            "face_events": face_count,
-            "recordings": recording_count
+            "motion_events": mc,
+            "face_events": fc,
+            "recordings": rc,
         })
 
     # Sort by total activity
     camera_stats.sort(
         key=lambda x: x["motion_events"] + x["face_events"] + x["recordings"],
-        reverse=True
+        reverse=True,
     )
 
     return {
@@ -1034,7 +1060,7 @@ def get_ecosystem_statistics(
         "recordings": total_recordings,
         "cameras": camera_stats,
         "hours": hours,
-        "generated_at": datetime.utcnow().isoformat()
+        "generated_at": datetime.utcnow().isoformat(),
     }
 
 
