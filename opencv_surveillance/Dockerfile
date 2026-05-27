@@ -86,6 +86,8 @@ WORKDIR /app
 
 # Copy application code (exclude frontend source)
 COPY --chown=openeye:openeye backend/ ./backend/
+COPY --chown=openeye:openeye ecosystem_client/ ./ecosystem_client/
+COPY --chown=openeye:openeye ecosystem_auth/ ./ecosystem_auth/
 COPY --chown=openeye:openeye docker/ ./docker/
 COPY --chown=openeye:openeye requirements.txt ./
 

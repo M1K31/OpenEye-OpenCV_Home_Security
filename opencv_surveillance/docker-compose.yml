@@ -67,6 +67,9 @@ services:
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-jwt-secret-key}
       # Generate with: python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
       - NOTIFICATION_ENCRYPTION_KEY=${NOTIFICATION_ENCRYPTION_KEY:-}
+      # Ecosystem HMAC signing (required for ecosystem/peer integration)
+      # Generate with: openssl rand -hex 32
+      - ECOSYSTEM_HMAC_SECRET=${ECOSYSTEM_HMAC_SECRET:-}
 
       # Server binding (optional)
       - OPENEYE_HOST=${OPENEYE_HOST:-0.0.0.0}
