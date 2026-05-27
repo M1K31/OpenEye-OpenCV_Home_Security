@@ -1,7 +1,8 @@
 """Map OpenEye alert types to ecosystem event types and publish."""
+from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 

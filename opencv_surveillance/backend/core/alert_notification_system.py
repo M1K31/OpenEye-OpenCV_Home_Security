@@ -18,6 +18,7 @@ from email.mime.image import MIMEImage
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Dict, List, Optional
 import json
 from enum import Enum
 from jinja2 import Template

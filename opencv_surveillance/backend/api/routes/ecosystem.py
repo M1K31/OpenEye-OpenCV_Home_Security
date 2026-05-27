@@ -1025,7 +1025,7 @@ def get_ecosystem_statistics(
             models.RecordingEvent.camera_id,
             func.count(models.RecordingEvent.id),
         )
-        .filter(models.RecordingEvent.start_time >= cutoff_time)
+        .filter(models.RecordingEvent.started_at >= cutoff_time)
         .group_by(models.RecordingEvent.camera_id)
         .all()
     )
@@ -1041,7 +1041,7 @@ def get_ecosystem_statistics(
         rc = recording_counts.get(camera.camera_id, 0)
         camera_stats.append({
             "camera_id": camera.camera_id,
-            "camera_name": camera.name or camera.camera_id,
+            "camera_name": getattr(camera, "name", None) or camera.camera_id,
             "is_active": camera.is_active,
             "motion_events": mc,
             "face_events": fc,
