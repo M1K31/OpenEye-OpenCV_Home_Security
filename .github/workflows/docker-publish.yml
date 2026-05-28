@@ -63,3 +63,12 @@ jobs:
       run: |
         echo "Pushed to DockerHub: ${DOCKERHUB_REPO}"
         echo "Tags: ${IMAGE_TAGS}"
+
+    - name: Update DockerHub description
+      uses: peter-evans/dockerhub-description@v4
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        repository: ${{ env.DOCKERHUB_REPO }}
+        readme-filepath: ./DOCKER.md
+        short-description: "AI-powered home security with face recognition, motion detection & smart home integration. 100% free."

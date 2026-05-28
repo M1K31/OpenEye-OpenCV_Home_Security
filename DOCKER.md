@@ -1,6 +1,6 @@
 # OpenEye - AI-Powered Home Security System
 
-![Version](https://img.shields.io/badge/version-3.11.5-blue.svg) ![License](https://img.shields.io/badge/license-MIT-yellow.svg) ![Cost](https://img.shields.io/badge/cost-$0/month-success.svg)
+![Version](https://img.shields.io/badge/version-3.11.6-blue.svg) ![License](https://img.shields.io/badge/license-MIT-yellow.svg) ![Cost](https://img.shields.io/badge/cost-$0/month-success.svg)
 
 **100% free and open-source** AI-powered surveillance with face recognition, motion detection, and smart home integration. Your data stays on your hardware - no subscriptions, no cloud dependencies.
 
@@ -54,24 +54,40 @@
 
 ---
 
-## 🆕 What's New in v3.11.4 (December 2025)
+## 🆕 What's New in v3.11.6 (May 2026)
 
-### 📅 Scheduled Tasks System
+### 🔒 Ecosystem Security Audit
+- ✅ **HMAC-SHA256 Payload Signing** - All inter-service messages cryptographically signed and verified
+- ✅ **SSRF Protection** - Private/loopback IP blocking on all outbound ecosystem requests
+- ✅ **SQL Injection Prevention** - LIKE wildcard escaping on all user-supplied search parameters
+- ✅ **WebSocket Authentication** - First-message token verification protocol for real-time streams
+- ✅ **Connection Pooling** - Shared `httpx.AsyncClient` across ecosystem client (eliminates per-request overhead)
+- ✅ **N+1 Query Elimination** - Statistics endpoints use `GROUP BY` aggregation instead of per-row queries
+- ✅ **Three-Mode Discovery** - Registry → mDNS → Static Peers → Standalone fallback cascade
+
+### 🐳 Docker & CI/CD
+- ✅ **Automated DockerHub Builds** - GitHub Actions CI/CD with Buildx and GHA caching
+- ✅ **Ecosystem Modules in Image** - `ecosystem_client/` and `ecosystem_auth/` included in Docker build
+- ✅ **Automated Overview Sync** - DockerHub README auto-updated from repository DOCKER.md
+
+### Previous: v3.11.5 (December 2025)
+
+#### 📅 Scheduled Tasks System
 - ✅ **Automated Maintenance** - Background scheduler for model retraining, cleanup tasks
 - ✅ **Retroactive Face Search** - Re-identify faces in past events after model updates
 - ✅ **Database Cleanup** - Remove old detection events and snapshots with configurable retention
 - ✅ **Cluster Cleanup** - Remove empty or stale face clusters automatically
 
-### 🔍 MagicMirror Face Search API
+#### 🔍 MagicMirror Face Search API
 - ✅ **Voice Command Support** - "Search for John on December 24th"
 - ✅ **Natural Language Dates** - Parses "today", "yesterday", and date formats
 - ✅ **Voice Response Generation** - Natural language summaries for voice assistants
 
-### 📊 Ecosystem Statistics
+#### 📊 Ecosystem Statistics
 - ✅ **Event Counts API** - Motion, face, recording counts per camera
 - ✅ **Configurable Time Range** - Query 1-168 hours of data
 
-### Previous: v3.11.1 (Multi-User & Ecosystem)
+#### Multi-User & Ecosystem (v3.11.1)
 - ✅ **Complete Multi-User System** - Role-based access control (admin/user/viewer)
 - ✅ **MagicMirror Integration** - Secure token exchange, event streaming
 - ✅ **Multi-Device Support** - Smart notification routing
@@ -93,6 +109,7 @@ docker run -d \
   -e SECRET_KEY=$(openssl rand -hex 32) \
   -e JWT_SECRET_KEY=$(openssl rand -hex 32) \
   -e NOTIFICATION_ENCRYPTION_KEY=$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())") \
+  -e ECOSYSTEM_HMAC_SECRET=$(openssl rand -hex 32) \
   --restart unless-stopped \
   --name openeye \
   im1k31s/openeye-opencv_home_security:latest
@@ -122,6 +139,7 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - NOTIFICATION_ENCRYPTION_KEY=${NOTIFICATION_ENCRYPTION_KEY}
+      - ECOSYSTEM_HMAC_SECRET=${ECOSYSTEM_HMAC_SECRET}
 
       # Authentication Settings
       - ALGORITHM=HS256
@@ -169,6 +187,7 @@ cat > .env << EOF
 SECRET_KEY=$(openssl rand -hex 32)
 JWT_SECRET_KEY=$(openssl rand -hex 32)
 NOTIFICATION_ENCRYPTION_KEY=$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+ECOSYSTEM_HMAC_SECRET=$(openssl rand -hex 32)
 EOF
 ```
 
@@ -289,8 +308,9 @@ See [README.md](https://github.com/M1K31/OpenEye-OpenCV_Home_Security#option-2-l
 
 ## 📦 Available Tags
 
-- `latest` - Most recent stable release (v3.11.5)
-- `v3.11.5` - **Current version** - Camera discovery fix, Docker platform documentation
+- `latest` - Most recent stable release (v3.11.6)
+- `v3.11.6` - **Current version** - Ecosystem security audit, HMAC signing, SSRF protection, CI/CD automation
+- `v3.11.5` - Camera discovery fix, Docker platform documentation
 - `v3.11.4` - Scheduled tasks, MagicMirror search API
 - `v3.11.1` - Multi-user system, ecosystem integration
 - `v3.10.2` - Face detection fix, timeline playback improvements
@@ -313,6 +333,7 @@ See [README.md](https://github.com/M1K31/OpenEye-OpenCV_Home_Security#option-2-l
 | `SECRET_KEY` | **Yes** | - | Application secret key (32+ hex chars) |
 | `JWT_SECRET_KEY` | **Yes** | - | JWT signing key (32+ hex chars) |
 | `NOTIFICATION_ENCRYPTION_KEY` | **Yes** | - | Fernet key for encrypting notification credentials |
+| `ECOSYSTEM_HMAC_SECRET` | **Yes** | - | HMAC-SHA256 key for signing inter-service messages (32+ hex chars) |
 | `ALGORITHM` | No | `HS256` | JWT algorithm |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | No | `30` | Token expiration time |
 | `DATABASE_URL` | No | `sqlite:///./surveillance.db` | Database connection string |
@@ -428,6 +449,7 @@ automation:
 
 - [ ] Unique `SECRET_KEY` and `JWT_SECRET_KEY` generated
 - [ ] `NOTIFICATION_ENCRYPTION_KEY` generated
+- [ ] `ECOSYSTEM_HMAC_SECRET` generated (required for inter-service security)
 - [ ] HTTPS enabled (reverse proxy)
 - [ ] CORS_ORIGINS restricted to your domain
 - [ ] Firewall rules configured (only allow port 443/8000)
