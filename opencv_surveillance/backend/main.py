@@ -492,9 +492,10 @@ async def startup_event():
     # Ecosystem integration (standalone no-op when registry unavailable)
     try:
         from ecosystem_client import EcosystemClient
+        from backend.core.config import resolve_service_port
         eco = EcosystemClient(
             service_name="openeye",
-            service_port=int(os.environ.get("PORT", "8200")),
+            service_port=resolve_service_port(),  # same value the server binds
             health_endpoint="/api/health",
             priority=50,  # Fallback ecosystem manager
         )
@@ -815,9 +816,10 @@ async def api_root(request: Request):
     # Calculate uptime
     from backend.api.routes.ecosystem import get_uptime_seconds
     
-    # Get configured port
-    openeye_port = os.getenv("OPENEYE_PORT", "8000")
-    
+    # Get configured port (canonical resolver: bind == register)
+    from backend.core.config import resolve_service_port
+    openeye_port = str(resolve_service_port())
+
     # Build host URL from request or environment
     host_header = request.headers.get("host", f"localhost:{openeye_port}")
     scheme = request.url.scheme or "http"
@@ -952,10 +954,11 @@ if frontend_path.exists():
 
 
 if __name__ == "__main__":
-    # Read port from environment variable for deployment flexibility
-    port = int(os.getenv("OPENEYE_PORT", "8000"))
-    host = os.getenv("OPENEYE_BIND_HOST", "0.0.0.0")
-    
+    # Single resolved port used for both bind and ecosystem registration.
+    from backend.core.config import resolve_service_port, SERVICE_BIND_HOST
+    port = resolve_service_port()
+    host = SERVICE_BIND_HOST
+
     uvicorn.run(
         "backend.main:app",
         host=host,

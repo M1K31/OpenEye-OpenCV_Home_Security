@@ -194,7 +194,8 @@ async def connect_ecosystem_app(
         device_id = f"{request.app}_{uuid.uuid4().hex[:8]}"
     
     # Get server host for webhook URL - dynamically determine from request
-    openeye_port = os.getenv("OPENEYE_PORT", "8000")
+    from backend.core.config import resolve_service_port
+    openeye_port = str(resolve_service_port())
     server_host = os.getenv("OPENEYE_HOST", f"http://{http_request.headers.get('host', f'{http_request.client.host}:{openeye_port}')}")
     
     # Check if this device is already connected (by device_id or app+host)
@@ -1470,7 +1471,8 @@ async def get_mobile_stream(
         raise HTTPException(status_code=404, detail=f"Camera '{camera_id}' not found")
     
     # Generate stream URL - use configured host or detect from request context
-    openeye_port = os.getenv("OPENEYE_PORT", "8000")
+    from backend.core.config import resolve_service_port
+    openeye_port = str(resolve_service_port())
     server_host = os.getenv("OPENEYE_HOST", f"http://localhost:{openeye_port}")
     stream_url = f"{server_host}/api/cameras/{camera_id}/stream"
     
@@ -1840,7 +1842,8 @@ async def get_recording_playback(
     if not recording:
         raise HTTPException(status_code=404, detail="Recording not found")
     
-    openeye_port = os.getenv("OPENEYE_PORT", "8000")
+    from backend.core.config import resolve_service_port
+    openeye_port = str(resolve_service_port())
     server_host = os.getenv("OPENEYE_HOST", f"http://localhost:{openeye_port}")
     
     # Calculate resolution from first few frames if not stored

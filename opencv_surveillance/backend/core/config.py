@@ -197,7 +197,7 @@ STATISTICS_BROADCAST_INTERVAL_SECONDS = int(os.getenv("STATISTICS_BROADCAST_INTE
 # ============================================================================
 
 # CORS Origins
-CORS_ORIGINS_STR = os.getenv("CORS_ORIGINS", "http://localhost:8000,http://localhost:3000,http://localhost:5173")
+CORS_ORIGINS_STR = os.getenv("CORS_ORIGINS", "http://localhost:8200,http://localhost:8000,http://localhost:3000,http://localhost:5173")
 CORS_ORIGINS: List[str] = [origin.strip() for origin in CORS_ORIGINS_STR.split(",")]
 CORS_ALLOW_CREDENTIALS = os.getenv("CORS_ALLOW_CREDENTIALS", "true").lower() == "true"
 CORS_ALLOW_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
@@ -258,6 +258,33 @@ RELOAD_ON_CHANGE = os.getenv("RELOAD_ON_CHANGE", "true").lower() == "true"
 CSRF_PROTECTION_ENABLED = os.getenv("CSRF_PROTECTION_ENABLED", "false").lower() == "true"
 IP_WHITELIST_ENABLED = os.getenv("IP_WHITELIST_ENABLED", "false").lower() == "true"
 IP_WHITELIST = os.getenv("IP_WHITELIST", "").split(",") if os.getenv("IP_WHITELIST") else []
+
+# ============================================================================
+# SERVICE / ECOSYSTEM NETWORKING
+# ============================================================================
+
+# Canonical service port. A SINGLE resolved value is used for both the server
+# bind and the ecosystem registration, so the registry never advertises a port
+# the server is not actually listening on. ECOSYSTEM_SERVICE_PORT always wins so
+# the facilitator/user can relocate the service without breaking comms.
+DEFAULT_SERVICE_PORT = 8200
+SERVICE_BIND_HOST = os.getenv("OPENEYE_BIND_HOST", "0.0.0.0")
+
+
+def resolve_service_port() -> int:
+    """Resolve the canonical OpenEye service port (bind == register).
+
+    Precedence: ECOSYSTEM_SERVICE_PORT -> OPENEYE_PORT -> PORT -> default.
+    """
+    for var in ("ECOSYSTEM_SERVICE_PORT", "OPENEYE_PORT", "PORT"):
+        val = os.getenv(var)
+        if val:
+            try:
+                return int(val)
+            except ValueError:
+                continue
+    return DEFAULT_SERVICE_PORT
+
 
 # ============================================================================
 # HELPER FUNCTIONS
