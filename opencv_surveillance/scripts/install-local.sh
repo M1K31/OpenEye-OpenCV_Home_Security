@@ -175,7 +175,21 @@ install_python_deps() {
     # Install requirements
     log_info "Installing required packages..."
     pip install -r requirements.txt
-    
+
+    # Shared ecosystem packages — enable inter-service auth + AI-profile sync.
+    # Guarded imports mean a missing/failed install just runs standalone.
+    ECO_ROOT="${ECOSYSTEM_BASE_PATH:-$PROJECT_DIR/../..}/appEcosystem"
+    if [ -d "$ECO_ROOT/auth/python" ]; then
+        log_info "Installing shared ecosystem packages from $ECO_ROOT..."
+        pip install "$ECO_ROOT/auth/python" \
+                    "$ECO_ROOT/packages/ecosystem-client" \
+                    "$ECO_ROOT/packages/ecosystem-ai" \
+            && log_success "Shared ecosystem packages installed" \
+            || log_info "Shared-package install failed; running standalone (ecosystem sync disabled)"
+    else
+        log_info "appEcosystem not found at $ECO_ROOT — standalone (set ECOSYSTEM_BASE_PATH to enable sync)"
+    fi
+
     log_success "Python dependencies installed"
 }
 
