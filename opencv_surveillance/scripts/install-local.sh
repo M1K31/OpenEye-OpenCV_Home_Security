@@ -290,21 +290,51 @@ build_frontend() {
     log_success "Frontend built successfully"
 }
 
-# Create systemd service (Linux only)
+# Create an auto-start service: macOS launchd OR Linux systemd.
 create_systemd_service() {
-    if [ "$OS" != "linux" ]; then
-        return
-    fi
-    
-    log_info "Creating systemd service..."
-    
-    read -p "Do you want to create a systemd service for auto-start? (y/N): " -n 1 -r
+    read -p "Do you want to create an auto-start service? (y/N): " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         return
     fi
-    
-    sudo tee /etc/systemd/system/openeye.service > /dev/null << EOF
+
+    local PORT="${ECOSYSTEM_SERVICE_PORT:-8200}"
+    local UNAME; UNAME="$(uname -s)"
+
+    if [ "$UNAME" = "Darwin" ]; then
+        log_info "Creating launchd agent..."
+        local LABEL="com.smartindustries.openeye"
+        local PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+        local LOGDIR="$HOME/Library/Logs/OpenEye"
+        mkdir -p "$LOGDIR" "$HOME/Library/LaunchAgents"
+        cat > "$PLIST" << PLIST_EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>$LABEL</string>
+  <key>ProgramArguments</key><array>
+    <string>$PROJECT_DIR/venv/bin/python3</string>
+    <string>-m</string><string>uvicorn</string><string>backend.main:app</string>
+    <string>--host</string><string>0.0.0.0</string>
+    <string>--port</string><string>$PORT</string>
+  </array>
+  <key>WorkingDirectory</key><string>$PROJECT_DIR</string>
+  <key>EnvironmentVariables</key><dict>
+    <key>ECOSYSTEM_SERVICE_PORT</key><string>$PORT</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>$LOGDIR/stdout.log</string>
+  <key>StandardErrorPath</key><string>$LOGDIR/stderr.log</string>
+</dict></plist>
+PLIST_EOF
+        launchctl unload "$PLIST" 2>/dev/null || true
+        launchctl load "$PLIST"
+        log_success "launchd agent $LABEL loaded (port $PORT)"
+        log_info "Logs: $LOGDIR/{stdout,stderr}.log"
+    else
+        log_info "Creating systemd service..."
+        sudo tee /etc/systemd/system/openeye.service > /dev/null << EOF
 [Unit]
 Description=OpenEye Surveillance System
 After=network.target
@@ -314,20 +344,19 @@ Type=simple
 User=$USER
 WorkingDirectory=$PROJECT_DIR
 Environment="PATH=$PROJECT_DIR/venv/bin"
-ExecStart=$PROJECT_DIR/venv/bin/python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 8000
+Environment="ECOSYSTEM_SERVICE_PORT=$PORT"
+ExecStart=$PROJECT_DIR/venv/bin/python3 -m uvicorn backend.main:app --host 0.0.0.0 --port $PORT
 Restart=always
 RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
 EOF
-    
-    sudo systemctl daemon-reload
-    sudo systemctl enable openeye.service
-    
-    log_success "Systemd service created and enabled"
-    log_info "Start the service with: sudo systemctl start openeye"
-    log_info "Check status with: sudo systemctl status openeye"
+        sudo systemctl daemon-reload
+        sudo systemctl enable openeye.service
+        log_success "Systemd service created and enabled (port $PORT)"
+        log_info "Start with: sudo systemctl start openeye"
+    fi
 }
 
 # Create launch script

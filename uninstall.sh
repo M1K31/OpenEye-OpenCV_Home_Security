@@ -225,6 +225,15 @@ echo ""
 # Clean up systemd (if installed)
 echo -e "${BLUE}[6/6] Cleaning up system services...${NC}"
 
+# macOS launchd agent
+OPENEYE_PLIST="$HOME/Library/LaunchAgents/com.smartindustries.openeye.plist"
+if [ -f "$OPENEYE_PLIST" ]; then
+    echo "  Found launchd agent"
+    launchctl unload "$OPENEYE_PLIST" 2>/dev/null || true
+    rm -f "$OPENEYE_PLIST"
+    echo -e "${GREEN}    ✓ launchd agent removed${NC}"
+fi
+
 if [ -f "/etc/systemd/system/openeye.service" ]; then
     echo "  Found systemd service"
     read -p "  Remove systemd service? (y/N): " -n 1 -r
@@ -236,8 +245,8 @@ if [ -f "/etc/systemd/system/openeye.service" ]; then
         sudo systemctl daemon-reload
         echo -e "${GREEN}    ✓ Systemd service removed${NC}"
     fi
-else
-    echo "  No systemd service found"
+elif [ ! -f "$OPENEYE_PLIST" ]; then
+    echo "  No system service found"
 fi
 
 echo ""
