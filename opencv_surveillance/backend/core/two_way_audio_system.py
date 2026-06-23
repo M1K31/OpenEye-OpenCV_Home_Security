@@ -15,10 +15,9 @@ from fastapi import FastAPI, WebSocket
 import asyncio
 import logging
 import numpy as np
-import pyaudio
 import wave
 from typing import Optional, Callable, List, Dict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 import json
@@ -26,17 +25,50 @@ import threading
 from queue import Queue
 import struct
 
-from aiortc import (
-    RTCPeerConnection,
-    RTCSessionDescription,
-    MediaStreamTrack,
-    RTCConfiguration,
-    RTCIceServer,
-)
-from aiortc.contrib.media import MediaRecorder, MediaPlayer
-from av import AudioFrame
-
 logger = logging.getLogger(__name__)
+
+# Optional heavy dependencies — graceful degradation when unavailable
+try:
+    import pyaudio
+    PYAUDIO_AVAILABLE = True
+except ImportError:
+    pyaudio = None
+    PYAUDIO_AVAILABLE = False
+    logger.warning(
+        "pyaudio not installed — audio capture/playback disabled. "
+        "Install with: pip install pyaudio (requires portaudio). "
+        "Run install-deps.sh for guided installation."
+    )
+
+try:
+    from aiortc import (
+        RTCPeerConnection,
+        RTCSessionDescription,
+        MediaStreamTrack,
+        RTCConfiguration,
+        RTCIceServer,
+    )
+    from aiortc.contrib.media import MediaRecorder, MediaPlayer
+    from av import AudioFrame
+    WEBRTC_AVAILABLE = True
+except ImportError:
+    RTCPeerConnection = None
+    RTCSessionDescription = None
+    MediaStreamTrack = None
+    RTCConfiguration = None
+    RTCIceServer = None
+    MediaRecorder = None
+    MediaPlayer = None
+    AudioFrame = None
+    WEBRTC_AVAILABLE = False
+    logger.warning(
+        "aiortc/av not installed — WebRTC audio streaming disabled. "
+        "Install with: pip install aiortc av. "
+        "Run install-deps.sh for guided installation."
+    )
+
+# Numeric value of pyaudio.paInt16 — used as fallback when pyaudio is unavailable
+PYAUDIO_INT16 = 8
 
 
 @dataclass
@@ -46,7 +78,7 @@ class AudioConfig:
     sample_rate: int = 16000  # Hz
     channels: int = 1  # Mono
     chunk_size: int = 1024  # Frames per buffer
-    format: int = pyaudio.paInt16
+    format: int = pyaudio.paInt16 if PYAUDIO_AVAILABLE else PYAUDIO_INT16
     input_device: Optional[int] = None
     output_device: Optional[int] = None
     enable_echo_cancellation: bool = True
@@ -535,12 +567,24 @@ class TwoWayAudioManager:
         """Initialize audio manager"""
         self.audio_config = audio_config or AudioConfig()
         self.sessions: Dict[str, WebRTCAudioSession] = {}
+        self.available = PYAUDIO_AVAILABLE and WEBRTC_AVAILABLE
 
-        logger.info("Two-way audio manager initialized")
+        if not self.available:
+            missing = []
+            if not PYAUDIO_AVAILABLE:
+                missing.append("pyaudio")
+            if not WEBRTC_AVAILABLE:
+                missing.append("aiortc/av")
+            logger.warning(
+                f"Two-way audio manager initialized in DEGRADED mode — "
+                f"missing: {', '.join(missing)}"
+            )
+        else:
+            logger.info("Two-way audio manager initialized")
 
     async def create_session(
         self, camera_id: str, ice_servers: Optional[List[str]] = None
-    ) -> WebRTCAudioSession:
+    ) -> "WebRTCAudioSession":
         """
         Create new audio session
 
@@ -551,6 +595,12 @@ class TwoWayAudioManager:
         Returns:
             WebRTCAudioSession object
         """
+        if not self.available:
+            raise RuntimeError(
+                "Two-way audio unavailable — pyaudio and/or aiortc not installed. "
+                "Run install-deps.sh for guided installation."
+            )
+
         if camera_id in self.sessions:
             logger.warning(f"Session already exists for {camera_id}")
             return self.sessions[camera_id]
@@ -581,6 +631,9 @@ class TwoWayAudioManager:
 
     def list_audio_devices(self) -> Dict:
         """List available audio devices"""
+        if not PYAUDIO_AVAILABLE:
+            return {"input_devices": [], "output_devices": [], "error": "pyaudio not installed"}
+
         capture = AudioCapture(self.audio_config)
         playback = AudioPlayback(self.audio_config)
 

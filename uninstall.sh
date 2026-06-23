@@ -136,10 +136,15 @@ fi
 # Remove virtual environment
 echo -e "${BLUE}[3/6] Removing virtual environment...${NC}"
 
-if [ -d "$OPENCV_DIR/venv" ]; then
-    rm -rf "$OPENCV_DIR/venv"
-    echo -e "${GREEN}  ✓ Virtual environment removed${NC}"
-else
+REMOVED_VENV=false
+for vdir in "$OPENCV_DIR/.venv" "$OPENCV_DIR/venv"; do
+    if [ -d "$vdir" ]; then
+        rm -rf "$vdir"
+        echo -e "${GREEN}  ✓ Virtual environment removed ($vdir)${NC}"
+        REMOVED_VENV=true
+    fi
+done
+if [ "$REMOVED_VENV" = false ]; then
     echo "  No virtual environment found"
 fi
 

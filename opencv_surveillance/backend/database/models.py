@@ -182,6 +182,9 @@ class FaceDetectionEvent(Base):
     # Motion detection context
     motion_detected = Column(Boolean, default=False)
 
+    # Event type: "face_detected" or "motion_only"
+    event_type = Column(String(20), default="face_detected", nullable=False, index=True)
+
     # Additional metadata
     frame_width = Column(Integer, nullable=True)
     frame_height = Column(Integer, nullable=True)

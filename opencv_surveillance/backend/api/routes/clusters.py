@@ -731,7 +731,7 @@ async def export_cluster_and_train(
         db.commit()
 
         # Reload face encodings to include new faces
-        face_manager.load_known_faces()
+        face_manager.load_encodings()
 
         # Trigger retroactive search in background
         from backend.core.scheduled_tasks import get_scheduled_tasks_manager, TaskType

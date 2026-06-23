@@ -80,6 +80,7 @@ class FaceDetectionEventResponse(BaseModel):
     recording_path: Optional[str]
     snapshot_path: Optional[str] = None
     cluster_id: Optional[int] = None
+    event_type: str = "face_detected"
 
     class Config:
         from_attributes = True
@@ -120,6 +121,7 @@ def get_db():
 def get_detection_history(
     camera_id: Optional[str] = Query(None, description="Filter by camera ID"),
     person_name: Optional[str] = Query(None, description="Filter by person name"),
+    event_type: Optional[str] = Query(None, description="Filter by event type: 'face_detected', 'motion_only'"),
     hours: int = Query(24, description="Number of hours to look back"),
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description="Items per page"),
@@ -171,6 +173,11 @@ def get_detection_history(
             query = query.filter(models.FaceDetectionEvent.person_name == person_name)
             has_additional_filters = True
 
+        # Event type filter (uses idx_face_event_type index)
+        if event_type:
+            query = query.filter(models.FaceDetectionEvent.event_type == event_type)
+            has_additional_filters = True
+
         # Order by most recent
         query = query.order_by(models.FaceDetectionEvent.detected_at.desc())
 
@@ -212,6 +219,7 @@ def get_detection_history(
                     recording_path=event.recording_path,
                     snapshot_path=normalize_snapshot_path(event.snapshot_path),
                     cluster_id=event.cluster_id,
+                    event_type=getattr(event, "event_type", "face_detected"),
                 )
             )
 

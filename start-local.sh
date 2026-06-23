@@ -58,19 +58,23 @@ echo ""
 # Navigate to opencv_surveillance
 cd "$(dirname "$0")/opencv_surveillance"
 
-# Check if venv exists
-if [ ! -d "venv" ]; then
+# Check if venv exists (.venv is preferred, fall back to legacy venv/)
+if [ -d ".venv" ]; then
+    VENV_DIR=".venv"
+elif [ -d "venv" ]; then
+    VENV_DIR="venv"
+else
     echo "❌ Error: Virtual environment not found!"
-    echo "   Run: ./fix-native-install.sh"
+    echo "   Run: ./setup-production.sh"
     exit 1
 fi
 
 # Activate venv
-echo "🔌 Activating virtual environment..."
-source venv/bin/activate
+echo "🔌 Activating virtual environment ($VENV_DIR)..."
+source "$VENV_DIR/bin/activate"
 
 # Use the venv's python explicitly
-PYTHON_CMD="./venv/bin/python3"
+PYTHON_CMD="./$VENV_DIR/bin/python3"
 
 # Check Python version
 PYTHON_VERSION=$($PYTHON_CMD --version)

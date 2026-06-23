@@ -243,7 +243,7 @@ async def search_for_person(
 
     # Get face manager and check if person exists
     face_manager = get_face_manager()
-    face_manager.load_known_faces()
+    face_manager.load_encodings()
 
     # Find encodings for this specific person
     person_indices = [

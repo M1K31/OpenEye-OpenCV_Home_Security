@@ -2,9 +2,15 @@
 # This file is part of OpenEye-OpenCV_Home_Security
 
 from fastapi import APIRouter, WebSocket
-from fastapi.responses import HTMLResponse
-from backend.core.two_way_audio_system import audio_manager  # Use singleton from core module
+from fastapi.responses import HTMLResponse, JSONResponse
 import logging
+
+try:
+    from backend.core.two_way_audio_system import audio_manager
+    AUDIO_AVAILABLE = True
+except ImportError:
+    audio_manager = None
+    AUDIO_AVAILABLE = False
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -56,6 +62,11 @@ async def index():
 @router.get("/devices")
 def list_audio_devices():
     """List available audio input/output devices"""
+    if not AUDIO_AVAILABLE:
+        return JSONResponse(
+            status_code=503,
+            content={"error": "Two-way audio unavailable — pyaudio/aiortc not installed"},
+        )
     return audio_manager.list_audio_devices()
 
 @router.websocket("/ws/{camera_id}")
@@ -74,6 +85,10 @@ async def websocket_audio_stream(websocket: WebSocket, camera_id: str):
         4. Audio stream established
     """
     await websocket.accept()
+    if not AUDIO_AVAILABLE:
+        await websocket.send_json({"error": "Two-way audio unavailable — pyaudio/aiortc not installed"})
+        await websocket.close(code=1011, reason="Audio dependencies not installed")
+        return
     session = await audio_manager.create_session(camera_id)
     try:
         while True:

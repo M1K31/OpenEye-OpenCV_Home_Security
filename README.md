@@ -154,8 +154,11 @@ Then run: `docker-compose up -d`
 git clone https://github.com/M1K31/OpenEye-OpenCV_Home_Security.git
 cd OpenEye-OpenCV_Home_Security
 
-# Run automated setup (creates venv, installs deps, generates keys, builds frontend)
+# Run automated setup (creates .venv, installs deps, generates keys, builds frontend)
 ./setup-production.sh
+
+# (Optional) Install heavy dependencies (face recognition, YOLO, two-way audio)
+./install-deps.sh
 
 # Start the server
 ./start-local.sh
@@ -169,6 +172,8 @@ cd OpenEye-OpenCV_Home_Security
 - ✅ Builds frontend production bundle
 - ✅ Creates required directories
 - ✅ Verifies installation
+
+> **Graceful Degradation**: OpenEye automatically disables features when optional dependencies aren't installed. Core surveillance (motion detection, recording, notifications) works without face recognition, YOLO, or two-way audio packages.
 
 **Access**: http://localhost:8000
 
@@ -213,8 +218,8 @@ git clone https://github.com/M1K31/OpenEye-OpenCV_Home_Security.git
 cd OpenEye-OpenCV_Home_Security/opencv_surveillance
 
 # Create virtual environment
-python3 -m venv venv
-source venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 
 # Install dependencies
 pip install --upgrade pip setuptools wheel
@@ -468,3 +473,29 @@ UI Design Inspiration:
 ---
 
 **Made with ❤️ by Mikel Smart** | **100% Free Forever** | **No Subscriptions**
+
+## Cyber Claude Harness Integration
+
+OpenEye optionally forwards security camera events (person detected, motion detected) to the [cyber-claude-harness](../CybersecurityTeam/cyber-claude-agents/) daemon for cross-correlation with network threats. The `harness_bridge.py` module silently fails when the daemon is unavailable.
+
+### Raspberry Pi Deployment
+
+`requirements-pi.txt` installs a lightweight subset of dependencies suitable for ARM Linux (Raspberry Pi 4+), omitting heavy optional packages like face recognition and YOLO that cannot build on ARM.
+
+```bash
+# Lightweight install — core surveillance only (motion detection, recording, notifications)
+pip install -r opencv_surveillance/requirements-pi.txt
+
+# Alternatively, use install-deps.sh for selective installation on supported platforms
+# (installs only the packages whose system prerequisites are available)
+./install-deps.sh
+```
+
+### Platform Support
+| Platform | Status | Notes |
+|----------|--------|-------|
+| Intel macOS | Fully supported | All features including face recognition, YOLO, two-way audio |
+| ARM Linux (Pi 4+) | Partial | Use `requirements-pi.txt` or `install-deps.sh`; face recognition and YOLO unavailable |
+| Intel Linux | Fully supported | All features; use `install-deps.sh` to add heavy optional packages |
+
+Minimum Python version: 3.10 (recommended 3.11+)

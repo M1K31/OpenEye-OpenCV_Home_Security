@@ -5,7 +5,7 @@ Pydantic schemas for face recognition API
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 
@@ -140,3 +140,36 @@ class DeleteResponse(BaseModel):
 
     success: bool
     message: str
+
+
+class PhotoValidationResult(BaseModel):
+    """Per-photo validation result returned during upload"""
+
+    filename: str
+    has_face: bool
+    face_count: int = 0
+    match_result: Optional[str] = Field(
+        None,
+        description=(
+            "'existing_match' if face matches target person, "
+            "'cross_match' if face matches a different person, "
+            "'new_face' if face found but no match, "
+            "'no_face' if no face detected"
+        ),
+    )
+    matched_person: Optional[str] = None
+    match_confidence: Optional[float] = None
+    saved: bool = False
+    warning: Optional[str] = None
+
+
+class ValidatedUploadResponse(BaseModel):
+    """Enhanced upload response with per-photo face validation"""
+
+    uploaded_count: int
+    rejected_count: int
+    person_name: str
+    message: str
+    success: bool = True
+    photo_results: List[PhotoValidationResult] = []
+    warnings: List[str] = []

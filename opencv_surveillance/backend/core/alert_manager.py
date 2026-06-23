@@ -20,6 +20,7 @@ from backend.core.ecosystem_events import (
     build_intrusion_event,
     publish_ecosystem_event,
 )
+from backend.harness_bridge import forward_security_event
 
 logger = logging.getLogger(__name__)
 
@@ -171,6 +172,62 @@ class AlertManager:
                 )
                 await publish_ecosystem_event(eco, event["event_type"], event["data"])
 
+            # Forward to harness daemon for cross-correlation with network threats
+            if event_data:
+                await forward_security_event("motion_detected", {
+                    "camera_id": camera_id,
+                    "motion_areas": event_data.get("motion_areas", []),
+                    "zone_ids": event_data.get("triggered_zone_ids", []),
+                    "timestamp": event_data.get("timestamp"),
+                })
+
+    async def trigger_motion_without_face_alert(
+        self,
+        camera_id: str,
+        event_data: Optional[Dict[str, Any]] = None,
+    ):
+        """
+        Trigger alert when motion is detected but no face is visible.
+        Allows users to differentiate person-motion from animal/vehicle motion.
+        """
+        with get_db_context() as db:
+            configs = (
+                db.query(alert_models.AlertConfiguration)
+                .filter(alert_models.AlertConfiguration.motion_alerts_enabled)
+                .all()
+            )
+
+            for config in configs:
+                throttle_key = f"motion_no_face_{camera_id}"
+                if not self._should_send_alert(
+                    db, throttle_key, config.min_seconds_between_alerts
+                ):
+                    continue
+
+                if self._is_quiet_hours(config):
+                    continue
+
+                await self._send_notifications(
+                    db=db,
+                    config=config,
+                    event_type="motion_no_face",
+                    camera_id=camera_id,
+                    subject="Motion Detected (No Person)",
+                    message=f"Motion detected on camera {camera_id} — no face visible",
+                    event_data=event_data or {},
+                )
+
+        eco = self._get_ecosystem_client()
+        if eco and event_data:
+            event = build_motion_event(
+                camera_id=camera_id,
+                motion_areas=event_data.get("motion_areas", []),
+                snapshot_path=event_data.get("snapshot_path"),
+                zone_ids=event_data.get("triggered_zone_ids", []),
+            )
+            event["data"]["faces_detected"] = 0
+            await publish_ecosystem_event(eco, "motion.no_face", event["data"])
+
     async def trigger_face_recognition_alert(
         self,
         camera_id: str,
@@ -250,6 +307,15 @@ class AlertManager:
                     is_known=is_known,
                 )
                 await publish_ecosystem_event(eco, event["event_type"], event["data"])
+
+            # Forward to harness daemon for cross-correlation with network threats
+            await forward_security_event("person_detected", {
+                "camera_id": camera_id,
+                "person_name": person_name,
+                "confidence": confidence,
+                "is_known": is_known,
+                "timestamp": (event_data or {}).get("timestamp"),
+            })
 
         finally:
             db.close()

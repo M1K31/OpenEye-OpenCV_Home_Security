@@ -16,13 +16,26 @@ import threading
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime
 from pathlib import Path
-import face_recognition
 import numpy as np
 import cv2
 from backend.core.paths import paths
 from backend.core.image_preprocessing import get_preprocessor
 
 logger = logging.getLogger(__name__)
+
+# Graceful degradation: face_recognition requires dlib which may not be available
+# (especially on Raspberry Pi or lightweight installs)
+try:
+    import face_recognition as _face_recognition
+    FACE_RECOGNITION_AVAILABLE = True
+except ImportError:
+    _face_recognition = None  # type: ignore[assignment]
+    FACE_RECOGNITION_AVAILABLE = False
+    logger.warning(
+        "face_recognition not installed — face detection/recognition disabled. "
+        "Install with: pip install face_recognition (requires dlib). "
+        "Run install-deps.sh for guided installation."
+    )
 
 # Global lock to prevent concurrent dlib/OpenCV operations that cause memory corruption
 # This is necessary because dlib (used by face_recognition) and OpenCV's MOG2
@@ -113,6 +126,10 @@ class FaceRecognitionManager:
         """
         global _training_in_progress
 
+        if not FACE_RECOGNITION_AVAILABLE:
+            logger.warning("face_recognition library not installed — training unavailable")
+            return {"total_people": 0, "total_encodings": 0, "training_time": 0.0}
+
         logger.info("Starting face recognition training...")
         logger.info("🔒 Acquiring face recognition lock to prevent memory corruption...")
 
@@ -153,8 +170,8 @@ class FaceRecognitionManager:
 
                     try:
                         # Load image and get face encodings
-                        image = face_recognition.load_image_file(image_path)
-                        face_encodings = face_recognition.face_encodings(
+                        image = _face_recognition.load_image_file(image_path)
+                        face_encodings = _face_recognition.face_encodings(
                             image, model="large"  # Use large model for better accuracy
                         )
 
@@ -204,6 +221,15 @@ class FaceRecognitionManager:
         """
         global _training_in_progress
 
+        if not FACE_RECOGNITION_AVAILABLE:
+            logger.warning("face_recognition library not installed — training unavailable")
+            return {
+                "success": False,
+                "message": "face_recognition library not installed",
+                "person_name": person_name,
+                "encodings_added": 0,
+            }
+
         person_path = self.faces_folder / person_name
 
         if not person_path.exists() or not person_path.is_dir():
@@ -250,8 +276,8 @@ class FaceRecognitionManager:
                 photos_processed += 1
 
                 try:
-                    image = face_recognition.load_image_file(image_file_path)
-                    face_encodings = face_recognition.face_encodings(
+                    image = _face_recognition.load_image_file(image_file_path)
+                    face_encodings = _face_recognition.face_encodings(
                         image, model="large"
                     )
 
@@ -290,6 +316,78 @@ class FaceRecognitionManager:
 
             logger.info(f"Person training complete: {result}")
             _training_in_progress = False
+            return result
+
+    def train_from_cluster_export(
+        self, person_name: str, new_photo_paths: list
+    ) -> Dict:
+        """
+        Incremental training for cluster-exported photos only.
+
+        Unlike train_face_recognition() (full retrain) or train_person()
+        (per-person retrain), this method ONLY encodes the new photos and
+        appends them to existing encodings.  O(new_photos) not O(all_photos).
+        """
+        global _training_in_progress
+
+        if not FACE_RECOGNITION_AVAILABLE:
+            return {"success": False, "message": "face_recognition not available"}
+
+        if not new_photo_paths:
+            return {
+                "success": True,
+                "source": "cluster_export",
+                "person_name": person_name,
+                "encodings_added": 0,
+                "photos_failed": 0,
+                "training_time": 0.0,
+            }
+
+        logger.info(
+            f"Incremental cluster training for '{person_name}': "
+            f"{len(new_photo_paths)} new photos"
+        )
+
+        with _face_recognition_lock:
+            _training_in_progress = True
+            start_time = datetime.now()
+            encodings_added = 0
+            photos_failed = 0
+
+            for photo_path in new_photo_paths:
+                try:
+                    image = _face_recognition.load_image_file(photo_path)
+                    face_encodings = _face_recognition.face_encodings(
+                        image, model="large"
+                    )
+
+                    if face_encodings:
+                        self.known_face_encodings.append(face_encodings[0])
+                        self.known_face_names.append(person_name)
+                        encodings_added += 1
+                    else:
+                        photos_failed += 1
+                        logger.warning(f"No face in cluster export: {photo_path}")
+                except Exception as e:
+                    photos_failed += 1
+                    logger.error(f"Error encoding cluster photo {photo_path}: {e}")
+
+            self.save_encodings()
+            self.statistics["total_encodings"] = len(self.known_face_encodings)
+            self.statistics["total_people"] = len(set(self.known_face_names))
+
+            training_time = (datetime.now() - start_time).total_seconds()
+            _training_in_progress = False
+
+            result = {
+                "success": True,
+                "source": "cluster_export",
+                "person_name": person_name,
+                "encodings_added": encodings_added,
+                "photos_failed": photos_failed,
+                "training_time": training_time,
+            }
+            logger.info(f"Cluster training complete: {result}")
             return result
 
     def save_encodings(self):
@@ -357,6 +455,9 @@ class FaceRecognitionManager:
         Returns:
             Tuple of (annotated_frame, list of detected faces with metadata)
         """
+        if not FACE_RECOGNITION_AVAILABLE:
+            return frame, []
+
         # Try to acquire lock without blocking - skip frame if training is in progress
         # This prevents SIGSEGV crashes from concurrent dlib operations
         if not _face_recognition_lock.acquire(blocking=False):
@@ -414,14 +515,14 @@ class FaceRecognitionManager:
 
             # Detect faces using face_recognition library
             # number_of_times_to_upsample helps find smaller faces at cost of speed
-            face_locations = face_recognition.face_locations(
+            face_locations = _face_recognition.face_locations(
                 small_frame,
                 model=self.detection_method,
                 number_of_times_to_upsample=upsample_times
             )
 
             # Get face encodings
-            face_encodings = face_recognition.face_encodings(
+            face_encodings = _face_recognition.face_encodings(
                 small_frame, face_locations)
 
             detected_faces = []
@@ -452,14 +553,14 @@ class FaceRecognitionManager:
                 # Only compare with known faces if we have any
                 if has_known_faces:
                     # Compare with known faces
-                    matches = face_recognition.compare_faces(
+                    matches = _face_recognition.compare_faces(
                         self.known_face_encodings,
                         face_encoding,
                         tolerance=self.recognition_threshold,
                     )
 
                     # Calculate face distances
-                    face_distances = face_recognition.face_distance(
+                    face_distances = _face_recognition.face_distance(
                         self.known_face_encodings, face_encoding
                     )
 
@@ -652,17 +753,12 @@ class FaceRecognitionManager:
     def is_available(self) -> bool:
         """
         Check if face recognition is available and ready.
-        
+
         Returns True if face_recognition library is available, regardless of
         whether known faces are loaded. This allows the system to detect
         unknown faces for clustering.
         """
-        # Face detection should always work - unknown faces can be clustered
-        try:
-            import face_recognition
-            return True
-        except ImportError:
-            return False
+        return FACE_RECOGNITION_AVAILABLE
 
 
 # Global instance

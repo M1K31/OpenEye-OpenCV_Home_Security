@@ -336,43 +336,64 @@ class FaceClusteringService:
         # to prevent indefinite hangs. Training can be triggered manually if needed.
         if self.auto_train_enabled:
             try:
+                import os
                 import threading
+                from backend.core.paths import paths
+
                 face_manager = get_face_manager()
-                
-                # Use a timeout to prevent indefinite blocking
+
+                # Collect paths of newly exported photos for incremental training
+                person_dir = paths.faces_dir / person_name
+                images_copied = export_result.get("images_copied", 0)
+
+                if images_copied > 0 and person_dir.exists():
+                    all_photos = sorted(
+                        [
+                            str(person_dir / f)
+                            for f in os.listdir(person_dir)
+                            if f.lower().endswith((".jpg", ".jpeg", ".png"))
+                        ],
+                        key=os.path.getmtime,
+                    )
+                    new_photo_paths = all_photos[-images_copied:]
+                else:
+                    new_photo_paths = []
+
                 training_result = None
                 training_error = None
-                
+
                 def train_with_timeout():
                     nonlocal training_result, training_error
                     try:
-                        training_result = face_manager.train_face_recognition()
+                        training_result = face_manager.train_from_cluster_export(
+                            person_name, new_photo_paths
+                        )
                     except Exception as e:
                         training_error = str(e)
-                
+
                 train_thread = threading.Thread(target=train_with_timeout)
                 train_thread.start()
-                train_thread.join(timeout=120)  # 2 minute timeout
-                
+                train_thread.join(timeout=120)
+
                 if train_thread.is_alive():
-                    logger.warning(f"Auto-training timed out for '{person_name}', will continue without training")
+                    logger.warning(f"Cluster training timed out for '{person_name}'")
                     export_result["training_success"] = False
-                    export_result["training_error"] = "Training timed out - please train manually"
+                    export_result["training_error"] = "Training timed out"
                 elif training_error:
-                    logger.error(f"Failed to auto-train face recognition: {training_error}")
+                    logger.error(f"Failed cluster incremental training: {training_error}")
                     export_result["training_success"] = False
                     export_result["training_error"] = training_error
                 else:
                     logger.info(
-                        f"Auto-trained face recognition for '{person_name}': "
-                        f"{training_result.get('total_encodings', 0)} encodings, "
-                        f"{training_result.get('total_people', 0)} people"
+                        f"Incremental cluster training for '{person_name}': "
+                        f"{training_result.get('encodings_added', 0)} new encodings"
                     )
                     export_result["training_result"] = training_result
                     export_result["training_success"] = True
+                    export_result["training_source"] = "cluster_incremental"
                     self.statistics["auto_trains"] += 1
             except Exception as e:
-                logger.error(f"Failed to auto-train face recognition: {e}")
+                logger.error(f"Failed cluster training: {e}")
                 export_result["training_success"] = False
                 export_result["training_error"] = str(e)
 

@@ -139,15 +139,15 @@ class FaceDetector:
             if detected_faces:
                 for face in detected_faces:
                     face["motion_detected"] = motion_detected
+                    face["event_type"] = "face_detected"
                     self.detections_buffer.append(face)
 
-                    # NEW: Trigger face recognition alert
+                    # Trigger face recognition alert
                     try:
                         alert_manager = get_alert_manager()
                         camera_id = getattr(self, "camera_id", "unknown")
                         is_known = face["name"] != "Unknown"
 
-                        # Use run_coroutine_threadsafe since we're in a camera thread, not the main async loop
                         try:
                             loop = asyncio.get_event_loop()
                             if loop.is_running():
@@ -162,21 +162,51 @@ class FaceDetector:
                                     loop,
                                 )
                         except RuntimeError:
-                            # No event loop running, skip alert
                             pass
                     except Exception as e:
                         logger.error(f"Error triggering face alert: {e}")
-
-                # Trim buffer to max size
-                if len(self.detections_buffer) > self.max_buffer_size:
-                    self.detections_buffer = self.detections_buffer[
-                        -self.max_buffer_size:
-                    ]
 
                 logger.info(
                     f"Detected {len(detected_faces)} face(s): "
                     f"{[f['name'] for f in detected_faces]}"
                 )
+
+            elif motion_detected:
+                # Record motion-without-face event so the history API can
+                # differentiate "motion + face" from "motion only".
+                motion_event = {
+                    "name": None,
+                    "confidence": 0.0,
+                    "location": None,
+                    "timestamp": datetime.now().isoformat(),
+                    "motion_detected": True,
+                    "event_type": "motion_only",
+                }
+                self.detections_buffer.append(motion_event)
+
+                try:
+                    alert_manager = get_alert_manager()
+                    camera_id = getattr(self, "camera_id", "unknown")
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            asyncio.run_coroutine_threadsafe(
+                                alert_manager.trigger_motion_without_face_alert(
+                                    camera_id=camera_id,
+                                    event_data=motion_event,
+                                ),
+                                loop,
+                            )
+                    except RuntimeError:
+                        pass
+                except Exception as e:
+                    logger.error(f"Error triggering motion-only alert: {e}")
+
+            # Trim buffer to max size
+            if len(self.detections_buffer) > self.max_buffer_size:
+                self.detections_buffer = self.detections_buffer[
+                    -self.max_buffer_size:
+                ]
 
             return annotated_frame, detected_faces
 

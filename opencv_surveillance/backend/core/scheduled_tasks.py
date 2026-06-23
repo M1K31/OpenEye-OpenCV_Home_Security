@@ -315,14 +315,14 @@ class ScheduledTasksManager:
             current_encodings = len(face_manager.known_face_encodings)
 
             # Reload to check for new faces
-            face_manager.load_known_faces()
+            face_manager.load_encodings()
             new_encodings = len(face_manager.known_face_encodings)
             new_faces_count = new_encodings - current_encodings
 
             result["new_faces_added"] = new_faces_count
 
             if new_faces_count >= min_new_faces or new_faces_count > 0:
-                # Training happens during load_known_faces
+                # Training happens during load_encodings
                 result["model_trained"] = True
                 logger.info(f"Model retrained with {new_faces_count} new face(s)")
 
@@ -357,7 +357,7 @@ class ScheduledTasksManager:
             face_manager = get_face_manager()
 
             # Reload known faces to get latest
-            face_manager.load_known_faces()
+            face_manager.load_encodings()
 
             if not face_manager.known_face_encodings:
                 result["message"] = "No known faces to search for"
@@ -381,6 +381,13 @@ class ScheduledTasksManager:
             events = query.order_by(FaceDetectionEvent.timestamp.desc()).limit(max_events).all()
             result["events_searched"] = len(events)
 
+            # Check face_recognition availability before entering the loop
+            from backend.core.face_recognition import FACE_RECOGNITION_AVAILABLE
+            if not FACE_RECOGNITION_AVAILABLE:
+                result["message"] = "face_recognition library not installed"
+                return result
+            import face_recognition as _fr
+
             # Process each event
             for event in events:
                 try:
@@ -393,9 +400,7 @@ class ScheduledTasksManager:
                     if len(encoding) != 128:
                         continue
 
-                    # Compare with known faces
-                    import face_recognition
-                    matches = face_recognition.compare_faces(
+                    matches = _fr.compare_faces(
                         face_manager.known_face_encodings,
                         encoding,
                         tolerance=0.6
@@ -403,7 +408,7 @@ class ScheduledTasksManager:
 
                     if True in matches:
                         # Find best match
-                        face_distances = face_recognition.face_distance(
+                        face_distances = _fr.face_distance(
                             face_manager.known_face_encodings,
                             encoding
                         )

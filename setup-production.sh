@@ -69,21 +69,27 @@ create_venv() {
 
     cd "$OPENCV_DIR"
 
-    if [ -d "venv" ]; then
+    if [ -d ".venv" ]; then
         echo -e "${YELLOW}  ⚠ Virtual environment already exists${NC}"
         read -p "  Remove and recreate? (y/N): " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            rm -rf venv
+            rm -rf .venv
         else
             echo "  Skipping venv creation"
             cd "$PROJECT_ROOT"
             echo ""
             return
         fi
+    # Migrate old venv/ to .venv/
+    elif [ -d "venv" ]; then
+        echo -e "${YELLOW}  ⚠ Found legacy venv/ — migrating to .venv/${NC}"
+        mv venv .venv
     fi
 
-    python3 -m venv venv
+    if [ ! -d ".venv" ]; then
+        python3 -m venv .venv
+    fi
     echo -e "${GREEN}  ✓ Virtual environment created${NC}"
 
     cd "$PROJECT_ROOT"
@@ -95,7 +101,7 @@ install_dependencies() {
     echo -e "${BLUE}[3/9] Installing Python dependencies...${NC}"
 
     cd "$OPENCV_DIR"
-    source venv/bin/activate
+    source .venv/bin/activate
 
     echo "  Upgrading pip..."
     pip install --upgrade pip > /dev/null 2>&1
@@ -129,7 +135,7 @@ generate_secrets() {
     fi
 
     cd "$OPENCV_DIR"
-    source venv/bin/activate
+    source .venv/bin/activate
 
     # Generate keys
     SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
@@ -177,7 +183,7 @@ init_database() {
     echo -e "${BLUE}[5/9] Initializing database...${NC}"
 
     cd "$OPENCV_DIR"
-    source venv/bin/activate
+    source .venv/bin/activate
 
     # Check if database exists
     if [ -f "surveillance.db" ]; then
@@ -199,7 +205,7 @@ run_migrations() {
     echo -e "${BLUE}[6/9] Running database migrations...${NC}"
 
     cd "$OPENCV_DIR"
-    source venv/bin/activate
+    source .venv/bin/activate
 
     # Check for migration scripts
     MIGRATIONS=$(find scripts -name "migrate_*.py" 2>/dev/null | sort -V)
@@ -276,7 +282,7 @@ verify_installation() {
     echo -e "${BLUE}[9/9] Verifying installation...${NC}"
 
     cd "$OPENCV_DIR"
-    source venv/bin/activate
+    source .venv/bin/activate
 
     # Check critical imports
     echo "  Testing Python imports..."

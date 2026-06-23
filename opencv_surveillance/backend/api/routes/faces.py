@@ -381,14 +381,27 @@ def list_person_photos(
 
 
 @router.post("/faces/people/{person_name}/photos",
-             response_model=face_schema.UploadResponse)
+             response_model=face_schema.ValidatedUploadResponse)
 async def upload_photos(
     person_name: str,
+    background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(...),
+    auto_train: bool = Form(False),
+    skip_validation: bool = Form(False),
     current_user: user_schema.User = Depends(require_user),
 ):
     """
-    Upload one or more photos for a person
+    Upload one or more photos for a person with face validation.
+
+    Each photo is checked for face presence before saving:
+    - **existing_match**: Face matches the target person (good)
+    - **cross_match**: Face matches a *different* known person (warning)
+    - **new_face**: Face found but no match in database (OK for new person)
+    - **no_face**: No face detected — photo is rejected
+
+    **Parameters:**
+    - **auto_train**: If true, trigger training for this person after upload
+    - **skip_validation**: If true, save all photos without face checks
 
     **Authentication Required**: Admin or User role
     """
@@ -396,62 +409,178 @@ async def upload_photos(
         face_manager = get_face_manager()
         person_path = paths.faces_dir / person_name
 
-        # Check if person exists
         if not os.path.exists(person_path):
             raise HTTPException(
                 status_code=404, detail=f"Person '{person_name}' not found"
             )
 
+        photo_results = []
+        warnings = []
         uploaded_count = 0
-        MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB per file
-        MAX_TOTAL_SIZE = 100 * 1024 * 1024  # 100MB total
+        rejected_count = 0
+        MAX_FILE_SIZE = 10 * 1024 * 1024
+        MAX_TOTAL_SIZE = 100 * 1024 * 1024
         total_size = 0
 
         for file in files:
-            # Validate file type
             if not file.filename.lower().endswith((".jpg", ".jpeg", ".png")):
-                logger.warning(f"Skipping invalid file type: {file.filename}")
+                photo_results.append(face_schema.PhotoValidationResult(
+                    filename=file.filename, has_face=False,
+                    match_result="invalid_format",
+                    warning="Invalid file type (must be .jpg, .jpeg, or .png)",
+                ))
+                rejected_count += 1
                 continue
 
-            # Read file content
             content = await file.read()
             file_size = len(content)
 
-            # Validate file size
             if file_size > MAX_FILE_SIZE:
-                logger.warning(f"File {file.filename} exceeds size limit ({file_size} bytes)")
+                photo_results.append(face_schema.PhotoValidationResult(
+                    filename=file.filename, has_face=False,
+                    warning=f"File exceeds {MAX_FILE_SIZE // (1024*1024)}MB limit",
+                ))
+                rejected_count += 1
                 continue
 
             total_size += file_size
             if total_size > MAX_TOTAL_SIZE:
-                logger.warning(f"Total upload size exceeds limit ({total_size} bytes)")
+                photo_results.append(face_schema.PhotoValidationResult(
+                    filename=file.filename, has_face=False,
+                    warning="Total upload size limit exceeded",
+                ))
+                rejected_count += 1
                 break
 
-            # Generate unique filename if file already exists
-            file_path = os.path.join(person_path, file.filename)
-            if os.path.exists(file_path):
-                # Add timestamp to filename
-                name, ext = os.path.splitext(file.filename)
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                file_path = os.path.join(person_path, f"{name}_{timestamp}{ext}")
+            if not skip_validation:
+                import numpy as np
+                import cv2
 
-            # Save file
-            with open(file_path, "wb") as f:
-                f.write(content)
+                nparr = np.frombuffer(content, np.uint8)
+                img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                if img is None:
+                    photo_results.append(face_schema.PhotoValidationResult(
+                        filename=file.filename, has_face=False,
+                        match_result="invalid_image",
+                        warning="Could not decode image",
+                    ))
+                    rejected_count += 1
+                    continue
 
-            uploaded_count += 1
-            logger.info(f"Uploaded photo: {os.path.basename(file_path)} ({file_size} bytes) for {person_name}")
+                rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-        if uploaded_count == 0:
+                try:
+                    import face_recognition as fr
+                    face_locations = fr.face_locations(rgb_img)
+                except Exception as e:
+                    logger.error(f"Face detection failed for {file.filename}: {e}")
+                    face_locations = []
+
+                face_count = len(face_locations)
+
+                if face_count == 0:
+                    photo_results.append(face_schema.PhotoValidationResult(
+                        filename=file.filename, has_face=False,
+                        match_result="no_face",
+                        warning="No face detected — photo was NOT saved",
+                    ))
+                    warnings.append(f"{file.filename}: No face detected")
+                    rejected_count += 1
+                    continue
+
+                # Face found — check against known encodings
+                match_result = "new_face"
+                matched_person = None
+                match_confidence = None
+
+                try:
+                    face_encodings = fr.face_encodings(rgb_img, face_locations)
+                    if face_encodings and face_manager.known_face_encodings:
+                        encoding = face_encodings[0]
+                        distances = fr.face_distance(
+                            face_manager.known_face_encodings, encoding
+                        )
+                        best_idx = int(np.argmin(distances))
+                        best_distance = float(distances[best_idx])
+
+                        if best_distance < face_manager.recognition_threshold:
+                            matched_name = face_manager.known_face_names[best_idx]
+                            match_confidence = round(1.0 - best_distance, 4)
+
+                            if matched_name == person_name:
+                                match_result = "existing_match"
+                                matched_person = matched_name
+                            else:
+                                match_result = "cross_match"
+                                matched_person = matched_name
+                                warnings.append(
+                                    f"{file.filename}: Face matches '{matched_name}' "
+                                    f"({match_confidence:.1%}), not '{person_name}'"
+                                )
+                except Exception as e:
+                    logger.error(f"Face matching failed for {file.filename}: {e}")
+
+                # Save the photo (face was detected)
+                file_path = os.path.join(person_path, file.filename)
+                if os.path.exists(file_path):
+                    name, ext = os.path.splitext(file.filename)
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    file_path = os.path.join(
+                        person_path, f"{name}_{timestamp}{ext}"
+                    )
+
+                with open(file_path, "wb") as f:
+                    f.write(content)
+
+                uploaded_count += 1
+                photo_results.append(face_schema.PhotoValidationResult(
+                    filename=file.filename, has_face=True,
+                    face_count=face_count, match_result=match_result,
+                    matched_person=matched_person,
+                    match_confidence=match_confidence, saved=True,
+                ))
+                logger.info(
+                    f"Uploaded {os.path.basename(file_path)} for {person_name} "
+                    f"({match_result}, {file_size} bytes)"
+                )
+            else:
+                # Skip validation — save directly
+                file_path = os.path.join(person_path, file.filename)
+                if os.path.exists(file_path):
+                    name, ext = os.path.splitext(file.filename)
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    file_path = os.path.join(
+                        person_path, f"{name}_{timestamp}{ext}"
+                    )
+
+                with open(file_path, "wb") as f:
+                    f.write(content)
+
+                uploaded_count += 1
+                photo_results.append(face_schema.PhotoValidationResult(
+                    filename=file.filename, has_face=True, saved=True,
+                    warning="Validation skipped",
+                ))
+
+        if uploaded_count == 0 and rejected_count == 0:
             raise HTTPException(
                 status_code=400,
                 detail="No valid image files uploaded (must be .jpg, .jpeg, or .png)",
             )
 
-        return face_schema.UploadResponse(
+        msg = f"Uploaded {uploaded_count}, rejected {rejected_count} photo(s)"
+
+        if auto_train and uploaded_count > 0:
+            background_tasks.add_task(face_manager.train_person, person_name)
+            msg += " — training started in background"
+
+        return face_schema.ValidatedUploadResponse(
             uploaded_count=uploaded_count,
+            rejected_count=rejected_count,
             person_name=person_name,
-            message=f"Successfully uploaded {uploaded_count} photo(s)",
+            message=msg,
+            photo_results=photo_results,
+            warnings=warnings,
         )
 
     except HTTPException:
@@ -1001,9 +1130,9 @@ def identify_face_in_frame(
         
         # Run face recognition
         face_manager = get_face_manager()
-        results = face_manager.recognize_faces_in_frame(frame)
-        
-        if not results:
+        _, detected_faces = face_manager.recognize_faces_in_frame(frame)
+
+        if not detected_faces:
             return eco_schema.FaceIdentifyResponse(
                 success=True,
                 identified=False,
@@ -1014,7 +1143,7 @@ def identify_face_in_frame(
             )
         
         # Return the first (highest confidence) result
-        best_match = results[0]
+        best_match = detected_faces[0]
         
         is_known = best_match['name'] != 'Unknown'
         

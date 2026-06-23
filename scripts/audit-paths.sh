@@ -115,7 +115,7 @@ cd opencv_surveillance
 if [ -f "surveillance.db" ]; then
     echo ""
     echo "Sample snapshot paths:"
-    ../venv/bin/python3 -c "
+    python3 -c "
 import sqlite3
 conn = sqlite3.connect('surveillance.db')
 cursor = conn.cursor()
@@ -135,7 +135,7 @@ finally:
 
     echo ""
     echo "Sample recording paths:"
-    ../venv/bin/python3 -c "
+    python3 -c "
 import sqlite3
 conn = sqlite3.connect('surveillance.db')
 cursor = conn.cursor()
