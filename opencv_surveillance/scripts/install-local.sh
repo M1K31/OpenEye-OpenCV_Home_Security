@@ -171,10 +171,30 @@ install_python_deps() {
     # Upgrade pip
     log_info "Upgrading pip..."
     pip install --upgrade pip setuptools wheel
-    
-    # Install requirements
+
+    # Ensure ffmpeg BEFORE pip: aiortc->av (WebRTC two-way audio) builds against
+    # it. Without ffmpeg the av wheel fails and aborts the whole install.
+    if ! command -v ffmpeg >/dev/null 2>&1; then
+        log_warn "ffmpeg not found — required to build the WebRTC stack (av/aiortc)."
+        if [ "$(uname -s)" = "Darwin" ] && command -v brew >/dev/null 2>&1; then
+            log_info "Installing ffmpeg via Homebrew..."; brew install ffmpeg || log_warn "brew install ffmpeg failed"
+        elif command -v apt-get >/dev/null 2>&1; then
+            log_info "Installing ffmpeg via apt..."; sudo apt-get install -y ffmpeg || log_warn "apt install ffmpeg failed"
+        else
+            log_warn "Install ffmpeg manually for two-way audio; continuing (feature will be disabled)."
+        fi
+    fi
+
+    # Install requirements. If a native build (e.g. av without ffmpeg) fails,
+    # retry without the WebRTC stack so the rest of the app still installs —
+    # the backend degrades gracefully (WEBRTC_AVAILABLE=False).
     log_info "Installing required packages..."
-    pip install -r requirements.txt
+    if ! pip install -r requirements.txt; then
+        log_warn "Full install failed (likely the WebRTC/av native build)."
+        log_warn "Retrying without av/aiortc — two-way audio will be disabled."
+        grep -viE "^(av|aiortc|pyav)([=<>~! ]|\[|$)" requirements.txt > /tmp/oe_req_core.txt
+        pip install -r /tmp/oe_req_core.txt
+    fi
 
     # Shared ecosystem packages — enable inter-service auth + AI-profile sync.
     # Guarded imports mean a missing/failed install just runs standalone.
