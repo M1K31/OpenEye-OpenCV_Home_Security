@@ -54,7 +54,10 @@ try:
 except ImportError:
     RTCPeerConnection = None
     RTCSessionDescription = None
-    MediaStreamTrack = None
+    # `object` (not None) so the module-level `class AudioTrack(MediaStreamTrack)`
+    # still defines when WebRTC is unavailable. The class is never instantiated
+    # in that state — all usage is gated by WEBRTC_AVAILABLE.
+    MediaStreamTrack = object
     RTCConfiguration = None
     RTCIceServer = None
     MediaRecorder = None
