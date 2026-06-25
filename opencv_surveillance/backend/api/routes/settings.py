@@ -257,6 +257,59 @@ async def validate_path(
 
 
 # ============================================================================
+# ECOSYSTEM SHARED-SECRET SETUP
+# Browser path beside the `ecosystem secret` CLI: provision the shared HMAC
+# secret so this device authenticates with the other ecosystem apps. Logic
+# lives in ecosystem_auth.setup; these endpoints require an authenticated user.
+# ============================================================================
+
+
+class EcosystemSecretApply(BaseModel):
+    secret: str = Field(..., description="Shared HMAC secret (32–128 hex chars)")
+    overwrite: bool = Field(False, description="Replace an already-configured secret")
+
+
+@router.get("/ecosystem/secret")
+async def get_ecosystem_secret_status(
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    """Status of the shared secret — configured?, source, path, masked. Never the value."""
+    try:
+        from ecosystem_auth.setup import secret_status
+    except Exception:
+        raise HTTPException(status_code=501, detail="ecosystem_auth not installed")
+    return secret_status()
+
+
+@router.post("/ecosystem/secret")
+async def apply_ecosystem_secret(
+    request: EcosystemSecretApply,
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    """Persist a pasted shared secret (hex-validated, overwrite-protected)."""
+    try:
+        from ecosystem_auth.setup import apply_secret
+    except Exception:
+        raise HTTPException(status_code=501, detail="ecosystem_auth not installed")
+    try:
+        return apply_secret(request.secret, allow_overwrite=request.overwrite)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/ecosystem/secret/generate")
+async def generate_ecosystem_secret(
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    """Primary-device only: mint + persist a new secret, returned once to copy."""
+    try:
+        from ecosystem_auth.setup import generate_secret
+    except Exception:
+        raise HTTPException(status_code=501, detail="ecosystem_auth not installed")
+    return generate_secret()
+
+
+# ============================================================================
 # GENERIC SETTINGS ENDPOINTS (WITH PATH PARAMETERS)
 # ============================================================================
 # NOTE: These must come AFTER specific routes like /validate-path!

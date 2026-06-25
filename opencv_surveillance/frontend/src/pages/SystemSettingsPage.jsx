@@ -65,6 +65,10 @@ const SystemSettingsPage = ({ embedded = false, initialTab = null }) => {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [pathValidation, setPathValidation] = useState({});
+  // Ecosystem shared-secret setup
+  const [ecoSecretStatus, setEcoSecretStatus] = useState('Checking…');
+  const [ecoSecretInput, setEcoSecretInput] = useState('');
+  const [ecoSecretGenerated, setEcoSecretGenerated] = useState('');
 
   // Load settings
   useEffect(() => {
@@ -203,6 +207,65 @@ const SystemSettingsPage = ({ embedded = false, initialTab = null }) => {
       });
       setSaving(false);
     }
+  };
+
+  // --- Ecosystem shared-secret setup ---
+  const refreshEcoSecretStatus = useCallback(async () => {
+    try {
+      const { data } = await apiClient.get('/ecosystem/secret');
+      if (data.configured) {
+        setEcoSecretStatus(`Configured (${data.masked}, from ${data.source}). Stored at ${data.path}.`);
+      } else {
+        setEcoSecretStatus(`Not configured. Generate one here (primary device) or paste the shared secret. File: ${data.path}.`);
+      }
+    } catch (error) {
+      setEcoSecretStatus(error.response?.data?.detail || 'Could not load secret status.');
+    }
+  }, []);
+
+  useEffect(() => { refreshEcoSecretStatus(); }, [refreshEcoSecretStatus]);
+
+  const applyEcoSecret = async (overwrite) => {
+    const value = ecoSecretInput.trim();
+    if (!value) {
+      setMessage({ type: 'error', text: 'Paste the shared secret first.' });
+      return;
+    }
+    try {
+      await apiClient.post('/ecosystem/secret', { secret: value, overwrite: !!overwrite });
+      setMessage({ type: 'success', text: '✓ Shared secret saved. Restart apps to apply.' });
+      setEcoSecretInput('');
+      refreshEcoSecretStatus();
+    } catch (error) {
+      const detail = error.response?.data?.detail || 'Failed to save secret';
+      if (/already configured/i.test(detail) && !overwrite) {
+        if (window.confirm('A different shared secret is already configured. Replace it? This breaks auth with peers still using the old secret.')) {
+          applyEcoSecret(true);
+        }
+      } else {
+        setMessage({ type: 'error', text: detail });
+      }
+    }
+  };
+
+  const generateEcoSecret = async () => {
+    if (!window.confirm('Generate a NEW shared secret on this (primary) device? Other devices must be updated with the new value.')) return;
+    try {
+      const { data } = await apiClient.post('/ecosystem/secret/generate');
+      setEcoSecretGenerated(data.secret || '');
+      setMessage({ type: 'success', text: '✓ New shared secret generated. Copy it to your other devices.' });
+      refreshEcoSecretStatus();
+    } catch (error) {
+      setMessage({ type: 'error', text: error.response?.data?.detail || 'Failed to generate secret' });
+    }
+  };
+
+  const copyEcoSecret = () => {
+    if (!ecoSecretGenerated) return;
+    navigator.clipboard?.writeText(ecoSecretGenerated).then(
+      () => setMessage({ type: 'success', text: '✓ Copied to clipboard.' }),
+      () => setMessage({ type: 'error', text: 'Press Cmd/Ctrl+C to copy.' })
+    );
   };
 
   // Camera feature toggle and value getter functions removed -
@@ -710,6 +773,55 @@ const SystemSettingsPage = ({ embedded = false, initialTab = null }) => {
             Per-camera settings (motion detection, recording, image quality, zones, etc.) have been moved to the Camera Manager.
             Please use the ⚙️ Settings button on each camera card in the Camera Management page to configure individual camera settings.
           </p>
+        </div>
+
+        {/* Ecosystem Setup Section */}
+        <div style={styles.section}>
+          <h2 style={styles.sectionTitle}>🔗 Ecosystem Setup</h2>
+          <p style={styles.sectionDescription}>
+            The shared secret authenticates this device with the other ecosystem apps
+            (registry, AI-for-Survival, AegisSIEM, MagicMirror). On the <strong>first/primary</strong> device,
+            generate one. On <strong>additional devices</strong>, paste the same value so they can talk to each other securely.
+          </p>
+
+          <div style={styles.formGroup}>
+            <label style={styles.label}>
+              <span style={styles.labelText}>Shared secret</span>
+              <span style={styles.labelHint}>{ecoSecretStatus}</span>
+            </label>
+            <div style={styles.pathInputContainer}>
+              <input
+                type="password"
+                value={ecoSecretInput}
+                onChange={(e) => setEcoSecretInput(e.target.value)}
+                className="form-input"
+                placeholder="Paste shared secret (64 hex chars)"
+                autoComplete="off"
+                spellCheck="false"
+              />
+              <button onClick={() => applyEcoSecret(false)} className="btn btn-secondary" type="button">
+                Save
+              </button>
+              <button onClick={generateEcoSecret} className="btn btn-secondary" type="button"
+                      title="Primary device only — creates a new secret">
+                Generate
+              </button>
+            </div>
+          </div>
+
+          {ecoSecretGenerated && (
+            <div style={styles.formGroup}>
+              <label style={styles.label}>
+                <span style={styles.labelText}>New secret — copy to other devices</span>
+                <span style={styles.labelHint}>Shown once. Paste it into the Ecosystem Setup panel on each other device.</span>
+              </label>
+              <div style={styles.pathInputContainer}>
+                <input type="text" readOnly value={ecoSecretGenerated} className="form-input"
+                       onClick={(e) => e.target.select()} />
+                <button onClick={copyEcoSecret} className="btn btn-secondary" type="button">Copy</button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Save Button */}
