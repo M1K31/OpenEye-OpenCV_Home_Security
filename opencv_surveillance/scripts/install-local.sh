@@ -33,6 +33,23 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Non-interactive mode: set ECOSYSTEM_NONINTERACTIVE=1, OPENEYE_NONINTERACTIVE=1,
+# CI=true, or pass --yes/-y so unattended installs (e.g. the ecosystem smoke
+# test) never block on a prompt.
+NONINTERACTIVE="${ECOSYSTEM_NONINTERACTIVE:-${OPENEYE_NONINTERACTIVE:-${CI:-}}}"
+
+# confirm "<prompt>" "<default-when-noninteractive: Y|N>" -> exit 0 for yes.
+confirm() {
+    local prompt="$1" default="${2:-N}"
+    if [ -n "$NONINTERACTIVE" ]; then
+        log_info "$prompt -> ${default} (non-interactive)"
+        [[ "$default" =~ ^[Yy] ]]
+        return
+    fi
+    read -p "$prompt " -n 1 -r; echo
+    [[ $REPLY =~ ^[Yy]$ ]]
+}
+
 # Print banner
 print_banner() {
     echo -e "${BLUE}"
@@ -142,9 +159,8 @@ setup_venv() {
     
     if [ -d "venv" ]; then
         log_warn "Virtual environment already exists"
-        read -p "Do you want to recreate it? (y/N): " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
+        # Idempotent default: keep the existing venv unless asked to recreate.
+        if confirm "Do you want to recreate it? (y/N):" N; then
             log_info "Removing existing virtual environment..."
             rm -rf venv
         else
@@ -312,9 +328,10 @@ build_frontend() {
 
 # Create an auto-start service: macOS launchd OR Linux systemd.
 create_systemd_service() {
-    read -p "Do you want to create an auto-start service? (y/N): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    # Non-interactive default: only create the service when explicitly requested
+    # via OPENEYE_INSTALL_SERVICE=1, matching the interactive "N" default.
+    local svc_default="N"; [ -n "${OPENEYE_INSTALL_SERVICE:-}" ] && svc_default="Y"
+    if ! confirm "Do you want to create an auto-start service? (y/N):" "$svc_default"; then
         return
     fi
 
@@ -464,6 +481,11 @@ print_completion() {
 
 # Main installation flow
 main() {
+    for arg in "$@"; do
+        case "$arg" in
+            -y|--yes|--non-interactive) NONINTERACTIVE=1 ;;
+        esac
+    done
     print_banner
     check_root
     detect_os
