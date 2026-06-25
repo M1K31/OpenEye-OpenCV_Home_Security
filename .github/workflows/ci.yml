@@ -51,6 +51,9 @@ jobs:
         python -m pip install --upgrade pip
         # Use lightweight CI requirements to avoid disk space issues
         pip install -r requirements-ci.txt
+        # ecosystem_auth (public appEcosystem repo) is imported unguarded by the
+        # ecosystem router + tests; install from source until published.
+        pip install "ecosystem-auth @ git+https://github.com/M1K31/appEcosystem.git#subdirectory=auth/python"
     
     - name: Run linting
       run: |

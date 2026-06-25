@@ -44,7 +44,9 @@ WORKDIR /build
 # Copy and install Python dependencies
 COPY requirements.txt .
 RUN pip install --user --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --user --no-cache-dir -r requirements.txt
+    pip install --user --no-cache-dir -r requirements.txt && \
+    pip install --user --no-cache-dir \
+      "ecosystem-auth @ git+https://github.com/M1K31/appEcosystem.git#subdirectory=auth/python"
 
 # ============================================
 # Stage 3: Runtime - Minimal production image
@@ -84,10 +86,11 @@ ENV PATH=/home/openeye/.local/bin:$PATH \
 # Create app directory
 WORKDIR /app
 
-# Copy application code (exclude frontend source)
+# Copy application code (exclude frontend source).
+# ecosystem_auth is pip-installed in the builder stage (above) and carried over in
+# /home/openeye/.local; ecosystem_client is optional (guarded at runtime) — so the
+# previously-broken COPY of those (never-committed) vendored dirs is removed.
 COPY --chown=openeye:openeye backend/ ./backend/
-COPY --chown=openeye:openeye ecosystem_client/ ./ecosystem_client/
-COPY --chown=openeye:openeye ecosystem_auth/ ./ecosystem_auth/
 COPY --chown=openeye:openeye docker/ ./docker/
 COPY --chown=openeye:openeye requirements.txt ./
 
