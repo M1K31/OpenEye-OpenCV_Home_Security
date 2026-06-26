@@ -66,6 +66,9 @@ jobs:
       continue-on-error: true
     
     - name: Run tests
+      env:
+        # ecosystem auth is fail-closed; throwaway secret so auth paths run in CI.
+        ECOSYSTEM_HMAC_SECRET: "ci-test-secret-not-for-production-0123456789abcdef"
       run: |
         cd opencv_surveillance
         # Run tests, allow failure if tests need work
