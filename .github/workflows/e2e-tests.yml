@@ -78,8 +78,10 @@ jobs:
       - name: Setup test database
         run: |
           cd opencv_surveillance
-          # Create test database and run migrations
-          python -c "from backend.database.session import Base, engine; Base.metadata.create_all(bind=engine)"
+          # Create test database schema. Import the models package FIRST so all
+          # model classes register on Base.metadata — otherwise create_all sees an
+          # empty metadata and creates zero tables ("no such table: users").
+          python -c "import backend.database.models; from backend.database.session import Base, engine; Base.metadata.create_all(bind=engine)"
 
           # Create test admin user using project's auth module
           python -c "
