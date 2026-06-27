@@ -53,8 +53,11 @@ jobs:
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
+        # Best-effort GitHub Actions layer cache. ignore-error keeps an evicted
+        # blob / cache-export "Forbidden" from failing the publish (the cache is
+        # an optimization, not a build requirement).
         cache-from: type=gha
-        cache-to: type=gha,mode=max
+        cache-to: type=gha,mode=max,ignore-error=true
         platforms: linux/amd64
 
     - name: Verify push
