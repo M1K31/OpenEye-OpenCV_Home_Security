@@ -6,9 +6,12 @@ from typing import List, Optional
 
 from backend.database import models
 from backend.api.schemas import user as user_schema
-from backend.core.auth import (
-    hash_password,
-)  # FIXED: Use consistent hash_password from auth
+# NOTE: hash_password is imported lazily inside create_user (see below), not at
+# module level. auth.py imports crud, so a module-level `from backend.core.auth
+# import hash_password` created a circular import (auth → crud → auth, "partially
+# initialized module") that broke the full-app import in E2E. We keep using
+# auth.hash_password (it truncates to bcrypt's 72-byte limit, unlike
+# security.get_password_hash) but defer the import to call time.
 
 
 # ============================================================================
@@ -23,9 +26,9 @@ def get_user_by_username(db: Session, username: str):
 
 
 def create_user(db: Session, user: user_schema.UserCreate):
-    hashed_password = hash_password(
-        user.password
-    )  # FIXED: Changed from get_password_hash
+    # Lazy import to avoid the auth ↔ crud circular import at module load.
+    from backend.core.auth import hash_password
+    hashed_password = hash_password(user.password)
     db_user = models.User(
         username=user.username,
         email=user.email,
