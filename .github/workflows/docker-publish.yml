@@ -68,6 +68,11 @@ jobs:
         echo "Tags: ${IMAGE_TAGS}"
 
     - name: Update DockerHub description
+      # Cosmetic: syncs the repo README to Docker Hub. The Docker Hub description
+      # API needs password-based (JWT) auth, which a push *access token* can't do
+      # (401), so don't fail the publish over it. To enable, set DOCKERHUB_TOKEN
+      # to an account password or a token with description permissions.
+      continue-on-error: true
       uses: peter-evans/dockerhub-description@v4
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
