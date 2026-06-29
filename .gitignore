@@ -108,6 +108,8 @@ build/
 !/README.md
 !/CHANGELOG.md
 !/DOCKER.md
+!/usage.md
+!/todos_changelog.md
 
 # Essential docs directory structure
 !/docs/
