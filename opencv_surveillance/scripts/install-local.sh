@@ -189,12 +189,33 @@ install_python_deps() {
     pip install --upgrade pip setuptools wheel
 
     # Ensure ffmpeg BEFORE pip: aiortc->av (WebRTC two-way audio) builds against
-    # it. Without ffmpeg the av wheel fails and aborts the whole install.
-    if ! command -v ffmpeg >/dev/null 2>&1; then
+    # it. Without a usable ffmpeg the av wheel fails and would abort the install.
+    #
+    # PyAV's native build does NOT support ffmpeg 8 yet — it needs ffmpeg 7. On
+    # macOS `brew install ffmpeg` installs v8, so a plain `command -v ffmpeg` may
+    # "find" ffmpeg yet still break the av build. Prefer the versioned ffmpeg@7
+    # formula and expose it to the build via PKG_CONFIG_PATH/PATH.
+    if [ "$(uname -s)" = "Darwin" ]; then
+        if command -v brew >/dev/null 2>&1; then
+            if ! brew list ffmpeg@7 >/dev/null 2>&1; then
+                log_info "Installing ffmpeg@7 (PyAV/WebRTC needs ffmpeg 7, not 8)..."
+                brew install ffmpeg@7 || log_warn "brew install ffmpeg@7 failed"
+            fi
+            FFMPEG7_PREFIX="$(brew --prefix ffmpeg@7 2>/dev/null)"
+            if [ -n "$FFMPEG7_PREFIX" ] && [ -d "$FFMPEG7_PREFIX" ]; then
+                # ffmpeg@7 is keg-only — surface it for the av build and at runtime.
+                export PKG_CONFIG_PATH="$FFMPEG7_PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+                export PATH="$FFMPEG7_PREFIX/bin:$PATH"
+                log_info "Using ffmpeg@7 at $FFMPEG7_PREFIX for the av/WebRTC build"
+            else
+                log_warn "ffmpeg@7 unavailable; two-way audio (WebRTC) may be disabled."
+            fi
+        else
+            log_warn "Homebrew not found — install ffmpeg@7 manually for two-way audio; continuing (feature will be disabled)."
+        fi
+    elif ! command -v ffmpeg >/dev/null 2>&1; then
         log_warn "ffmpeg not found — required to build the WebRTC stack (av/aiortc)."
-        if [ "$(uname -s)" = "Darwin" ] && command -v brew >/dev/null 2>&1; then
-            log_info "Installing ffmpeg via Homebrew..."; brew install ffmpeg || log_warn "brew install ffmpeg failed"
-        elif command -v apt-get >/dev/null 2>&1; then
+        if command -v apt-get >/dev/null 2>&1; then
             log_info "Installing ffmpeg via apt..."; sudo apt-get install -y ffmpeg || log_warn "apt install ffmpeg failed"
         else
             log_warn "Install ffmpeg manually for two-way audio; continuing (feature will be disabled)."
