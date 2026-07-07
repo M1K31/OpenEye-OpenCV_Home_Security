@@ -20,6 +20,7 @@ class EmailProviderConfig(BaseModel):
     password: str = Field(..., description="SMTP password")
     from_email: Optional[str] = Field(None, description="From email address (defaults to username)")
     use_tls: bool = Field(True, description="Use TLS encryption")
+    to_email: Optional[str] = Field(None, description="Notification recipient (defaults to from_email/username)")
 
     @validator('smtp_port')
     def validate_port(cls, v):
@@ -55,6 +56,7 @@ class PushProviderConfig(BaseModel):
 class TelegramProviderConfig(BaseModel):
     """Telegram Bot provider configuration"""
     bot_token: str = Field(..., description="Telegram Bot Token")
+    chat_id: Optional[str] = Field(None, description="Telegram chat id to deliver notifications to")
 
     @validator('bot_token')
     def validate_token(cls, v):

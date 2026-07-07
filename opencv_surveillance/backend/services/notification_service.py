@@ -56,7 +56,8 @@ class NotificationService:
         logger.info("NotificationService initialized")
 
     async def send_email(
-        self, to_address: str, subject: str, body: str, html_body: Optional[str] = None
+        self, to_address: str, subject: str, body: str,
+        html_body: Optional[str] = None, smtp: Optional[dict] = None
     ) -> tuple[bool, Optional[str]]:
         """
         Send an email notification
@@ -66,17 +67,26 @@ class NotificationService:
             subject: Email subject
             body: Plain text email body
             html_body: Optional HTML version of the email
+            smtp: Optional per-provider SMTP config overriding env defaults
+                  (keys: smtp_host, smtp_port, username, password, from_email)
 
         Returns:
             Tuple of (success: bool, error_message: Optional[str])
         """
-        if not self.smtp_username or not self.smtp_password:
+        smtp = smtp or {}
+        host = smtp.get("smtp_host", self.smtp_host)
+        port = int(smtp.get("smtp_port", self.smtp_port))
+        username = smtp.get("username", self.smtp_username)
+        password = smtp.get("password", self.smtp_password)
+        from_address = smtp.get("from_email") or username or self.smtp_from_address
+
+        if not username or not password:
             return False, "SMTP credentials not configured"
 
         try:
             # Create message
             message = MIMEMultipart("alternative")
-            message["From"] = self.smtp_from_address
+            message["From"] = from_address
             message["To"] = to_address
             message["Subject"] = subject
 
@@ -89,12 +99,12 @@ class NotificationService:
 
             # Send email
             async with aiosmtplib.SMTP(
-                hostname=self.smtp_host, port=self.smtp_port, use_tls=False
-            ) as smtp:
-                await smtp.connect()
-                await smtp.starttls()
-                await smtp.login(self.smtp_username, self.smtp_password)
-                await smtp.send_message(message)
+                hostname=host, port=port, use_tls=False
+            ) as smtp_conn:
+                await smtp_conn.connect()
+                await smtp_conn.starttls()
+                await smtp_conn.login(username, password)
+                await smtp_conn.send_message(message)
 
             logger.info(f"Email sent successfully to {to_address}")
             return True, None
