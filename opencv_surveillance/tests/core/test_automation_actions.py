@@ -36,3 +36,36 @@ def test_notification_action_no_loop_reports_failure():
                return_value=False):
         result = ae.execute_notification_action({}, "Jane", "cam2")
     assert result["success"] is False and result["queued"] is False
+
+
+import time as _time
+
+
+def test_record_action_requests_recording_on_running_camera():
+    fake_cam = MagicMock()
+    fake_mgr = MagicMock()
+    fake_mgr.get_camera.return_value = fake_cam
+    with patch("backend.core.camera_manager.CameraManager", return_value=fake_mgr):
+        result = ae.execute_record_action({"duration": 45}, "John", "front_door")
+    fake_mgr.get_camera.assert_called_once_with("front_door")
+    fake_cam.request_recording.assert_called_once_with(45)
+    assert result == {"type": "record", "success": True, "camera_id": "front_door",
+                      "duration": 45, "recording_requested": True}
+
+
+def test_record_action_camera_not_running():
+    fake_mgr = MagicMock()
+    fake_mgr.get_camera.return_value = None
+    with patch("backend.core.camera_manager.CameraManager", return_value=fake_mgr):
+        result = ae.execute_record_action({}, "John", "ghost_cam")
+    assert result["success"] is False
+    assert "not running" in result["error"]
+
+
+def test_camera_request_recording_sets_window():
+    from backend.core.camera_manager import MockCamera
+    cam = MockCamera.__new__(MockCamera)   # skip heavy __init__
+    cam.manual_record_until = 0.0
+    from backend.core.camera_manager import Camera
+    Camera.request_recording(cam, 30)
+    assert cam.manual_record_until > _time.time() + 25

@@ -144,22 +144,25 @@ def execute_record_action(
     person_name: str,
     camera_id: str
 ) -> Dict[str, Any]:
-    """Execute a recording action"""
-    duration = action_config.get('duration', 30)
-    pre_buffer = action_config.get('pre_buffer', 0)
-    
-    logger.info(f"📹 RECORD: Starting {duration}s recording on {camera_id} for {person_name}")
-    
-    # TODO: Integrate with camera recording system
-    # This would trigger the camera to start recording
-    
-    return {
-        "type": "record",
-        "success": True,
-        "camera_id": camera_id,
-        "duration": duration,
-        "pre_buffer": pre_buffer
-    }
+    """Request a recording on the detecting camera.
+
+    Opens a manual-record window on the running camera; the existing recorder
+    pipeline produces the file + DB metadata when the window closes. Not
+    subject to notification cooldown — footage is never dropped.
+    """
+    duration = int(action_config.get('duration', 30) or 30)
+
+    from backend.core.camera_manager import CameraManager
+    camera = CameraManager().get_camera(camera_id)
+    if camera is None:
+        logger.warning(f"Record action: camera '{camera_id}' is not running")
+        return {"type": "record", "success": False,
+                "error": f"camera '{camera_id}' not running"}
+
+    camera.request_recording(duration)
+    logger.info(f"RECORD {duration}s on {camera_id} (person: {person_name})")
+    return {"type": "record", "success": True, "camera_id": camera_id,
+            "duration": duration, "recording_requested": True}
 
 
 def execute_webhook_action(

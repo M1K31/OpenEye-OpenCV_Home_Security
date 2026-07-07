@@ -52,6 +52,7 @@ class Camera(ABC):
         self.is_running = False
         self.motion_detected = False
         self.last_motion_time = 0
+        self.manual_record_until = 0.0  # automation-requested recording window (epoch seconds)
         self.post_motion_cooldown = 5  # Default, can be overridden from DB
         self.last_faces_detected = []
         self.current_motion_event_id = None  # Track current motion event for face linking
@@ -172,6 +173,17 @@ class Camera(ABC):
         # Override post_motion_cooldown if provided in settings
         if "post_motion_cooldown" in settings:
             self.post_motion_cooldown = settings["post_motion_cooldown"]
+
+    def request_recording(self, duration_seconds: int) -> None:
+        """Ask the processing loop to record for the next N seconds.
+
+        Called from the automation engine (possibly another thread); a single
+        float assignment is atomic enough. The loop starts recording on the
+        next frame and won't stop while the window is open.
+        """
+        until = time.time() + max(1, int(duration_seconds))
+        # extend, never shorten, an already-open window
+        self.manual_record_until = max(self.manual_record_until, until)
 
     @abstractmethod
     def start(self):
@@ -796,14 +808,16 @@ class MockCamera(Camera):
                     self.recorder.add_face_detection(face)
 
         # Recording logic
-        if self.motion_detected:
-            self.last_motion_time = time.time()
+        manual_record = time.time() < self.manual_record_until
+        if self.motion_detected or manual_record:
+            if self.motion_detected:
+                self.last_motion_time = time.time()
             if not self.recorder.is_recording:
                 # Use camera's configured fps_target for accurate playback speed
                 recording_fps = self.video_processor.settings.fps_target or 15
                 self.recorder.start(self.width, self.height, fps=recording_fps, camera_id=self.camera_id or "mock")
                 self.last_recording_frame_time = 0  # Reset frame time for new recording
-            
+
             # Link motion event to the recording (if recording is active)
             if self.recorder.is_recording and self.current_motion_event_id:
                 self.recorder.add_motion_event_id(self.current_motion_event_id)
@@ -826,8 +840,11 @@ class MockCamera(Camera):
             # Stop recording if: no motion for cooldown period OR max duration
             # exceeded
             if (
-                not self.motion_detected
-                and (time.time() - self.last_motion_time > self.post_motion_cooldown)
+                not manual_record
+                and (
+                    not self.motion_detected
+                    and (time.time() - self.last_motion_time > self.post_motion_cooldown)
+                )
             ) or self.recorder.should_stop_recording():
                 self.recorder.stop()
 
