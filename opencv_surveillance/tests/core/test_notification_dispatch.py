@@ -82,3 +82,12 @@ async def test_telegram_without_chat_id_skipped(db_session, mock_service):
     db_session.add(p); db_session.commit()
     result = await nd.dispatch_notification(db_session, message="hi")
     assert result["delivered_via"] == []
+
+
+def test_redact_url_hides_path_secrets():
+    from backend.services.notification_service import _redact_url
+    assert _redact_url("https://api.telegram.org/bot123:SECRET/sendMessage") == "https://api.telegram.org/..."
+    assert "SECRET" not in _redact_url("https://discord.com/api/webhooks/1/SECRET")
+    # Invalid URL should not raise exception
+    result = _redact_url("not a url")
+    assert isinstance(result, str) and len(result) > 0

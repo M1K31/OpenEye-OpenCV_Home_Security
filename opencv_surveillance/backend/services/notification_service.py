@@ -17,6 +17,16 @@ import aiohttp
 logger = logging.getLogger(__name__)
 
 
+def _redact_url(url: str) -> str:
+    """Log-safe form of a webhook URL: scheme + host only (path/query may embed tokens)."""
+    try:
+        from urllib.parse import urlsplit
+        parts = urlsplit(url)
+        return f"{parts.scheme}://{parts.netloc}/..."
+    except Exception:
+        return "<unparseable-url>"
+
+
 class NotificationService:
     """
     Central service for sending notifications via email, SMS, push, and webhooks
@@ -210,7 +220,7 @@ class NotificationService:
                 ) as response:
                     if response.status in [200, 201, 202, 204]:
                         logger.info(
-                            f"Webhook sent successfully to {webhook_url}")
+                            f"Webhook sent successfully to {_redact_url(webhook_url)}")
                         return True, None
                     else:
                         error_msg = f"Webhook returned status {response.status}"
@@ -219,7 +229,7 @@ class NotificationService:
 
         except Exception as e:
             error_msg = f"Failed to send webhook: {str(e)}"
-            logger.error(error_msg)
+            logger.error(f"Failed to send webhook to {_redact_url(webhook_url)}: {str(e)}")
             return False, error_msg
 
 
