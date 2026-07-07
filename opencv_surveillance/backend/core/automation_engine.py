@@ -102,22 +102,40 @@ def evaluate_rule_conditions(
 def execute_notification_action(
     action_config: Dict[str, Any],
     person_name: str,
-    camera_id: str
+    camera_id: str,
+    rule_id: Optional[int] = None
 ) -> Dict[str, Any]:
-    """Execute a notification action"""
+    """Send a real notification through the user's configured providers.
+
+    Optional action_config keys:
+      providers: list of provider type/name/id strings (None = all enabled)
+      cooldown_seconds: throttle repeats of THIS notification (0 = off).
+        Distinct from the whole-rule cooldown — recordings/alerts still run.
+    """
     message = action_config.get('message', f'{person_name} detected')
     priority = action_config.get('priority', 'normal')
-    
-    logger.info(f"🔔 NOTIFICATION: {message} (priority: {priority})")
-    
-    # TODO: Integrate with actual notification system
-    # For now, just log it
-    
+    providers = action_config.get('providers')
+    cooldown = int(action_config.get('cooldown_seconds', 0) or 0)
+
+    from backend.core import notification_dispatch
+    queued = notification_dispatch.dispatch_from_thread(
+        message=message,
+        title=f"OpenEye: {person_name} detected",
+        priority=priority,
+        event_type="automation",
+        camera_id=camera_id,
+        person_name=person_name,
+        target_providers=providers,
+        cooldown_key=("rule", rule_id, camera_id, person_name),
+        cooldown_seconds=cooldown,
+    )
+    logger.info(f"NOTIFICATION [{priority}] {message} (queued={queued})")
     return {
         "type": "notification",
-        "success": True,
+        "success": bool(queued),
+        "queued": bool(queued),
         "message": message,
-        "priority": priority
+        "priority": priority,
     }
 
 
@@ -252,26 +270,28 @@ def execute_action(
     action: Dict[str, Any],
     person_name: str,
     camera_id: str,
-    db: Any
+    db: Any,
+    rule_id: Optional[int] = None
 ) -> Dict[str, Any]:
     """
     Execute a single action.
-    
+
     Args:
         action: Action configuration dict with 'type' and 'config'
         person_name: Name of detected person
         camera_id: Camera that detected the person
         db: Database session
-    
+        rule_id: ID of the automation rule (optional)
+
     Returns:
         Dictionary with execution results
     """
     action_type = action.get('type')
     action_config = action.get('config', {})
-    
+
     try:
         if action_type == 'notification':
-            return execute_notification_action(action_config, person_name, camera_id)
+            return execute_notification_action(action_config, person_name, camera_id, rule_id)
         
         elif action_type == 'record':
             return execute_record_action(action_config, person_name, camera_id)
@@ -375,7 +395,7 @@ def process_face_detection(
                 results = []
 
                 for action in actions:
-                    result = execute_action(action, person_name, camera_id, db)
+                    result = execute_action(action, person_name, camera_id, db, rule_id=rule.id)
                     results.append(result)
 
                 # Update rule statistics
