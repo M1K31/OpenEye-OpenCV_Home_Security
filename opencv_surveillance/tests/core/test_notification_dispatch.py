@@ -91,3 +91,66 @@ def test_redact_url_hides_path_secrets():
     # Invalid URL should not raise exception
     result = _redact_url("not a url")
     assert isinstance(result, str) and len(result) > 0
+
+
+@pytest.mark.asyncio
+async def test_cooldown_suppresses_then_annotates(providers_db, mock_service, monkeypatch):
+    t = {"now": 1000.0}
+    monkeypatch.setattr(nd.time, "monotonic", lambda: t["now"])
+    key = ("rule", 1, "cam1", "John")
+
+    r1 = await nd.dispatch_notification(providers_db, message="seen",
+                                        cooldown_key=key, cooldown_seconds=60)
+    assert r1["suppressed"] is False and len(r1["delivered_via"]) == 2
+
+    r2 = await nd.dispatch_notification(providers_db, message="seen",
+                                        cooldown_key=key, cooldown_seconds=60)
+    assert r2 == {"delivered_via": [], "suppressed": True, "suppressed_count": 0}
+
+    t["now"] += 61  # window expires
+    r3 = await nd.dispatch_notification(providers_db, message="seen",
+                                        cooldown_key=key, cooldown_seconds=60)
+    assert r3["suppressed"] is False and r3["suppressed_count"] == 1
+    # the delivered message carries the suppressed annotation
+    sent_texts = [c.args[1] for c in mock_service.send_webhook.await_args_list]
+    assert any("(+1 earlier events suppressed)" in str(p) for p in sent_texts)
+
+
+@pytest.mark.asyncio
+async def test_cooldown_zero_never_suppresses(providers_db, mock_service):
+    key = ("rule", 2, "cam1", "John")
+    for _ in range(3):
+        r = await nd.dispatch_notification(providers_db, message="x",
+                                           cooldown_key=key, cooldown_seconds=0)
+        assert r["suppressed"] is False
+
+
+def test_dispatch_from_thread_schedules_on_loop(monkeypatch):
+    """dispatch_from_thread returns True when a running loop is registered,
+    False (never raises) when no loop is available."""
+    import asyncio, threading
+
+    calls = []
+    async def fake_dispatch(**kwargs):
+        calls.append(kwargs)
+    monkeypatch.setattr(nd, "_dispatch_with_own_session", fake_dispatch)
+
+    loop = asyncio.new_event_loop()
+    thread = threading.Thread(target=loop.run_forever, daemon=True)
+    thread.start()
+    try:
+        nd.set_app_loop(loop)
+        assert nd.dispatch_from_thread(message="hi") is True
+        import time as _t
+        for _ in range(50):
+            if calls:
+                break
+            _t.sleep(0.05)
+        assert calls and calls[0]["message"] == "hi"
+
+        nd.set_app_loop(None)
+        assert nd.dispatch_from_thread(message="hi") is False
+    finally:
+        loop.call_soon_threadsafe(loop.stop)
+        thread.join(timeout=2)
+        loop.close()

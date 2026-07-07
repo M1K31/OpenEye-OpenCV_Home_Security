@@ -489,6 +489,11 @@ async def startup_event():
         "Hardware-Aware Auto-Configuration (v3.7.0)"
     )
 
+    # Register the app event loop so camera threads can dispatch notifications
+    import asyncio as _asyncio
+    from backend.core import notification_dispatch
+    notification_dispatch.set_app_loop(_asyncio.get_running_loop())
+
     # Ecosystem integration (standalone no-op when registry unavailable)
     try:
         from ecosystem_client import EcosystemClient

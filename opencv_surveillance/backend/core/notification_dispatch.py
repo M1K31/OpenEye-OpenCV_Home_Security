@@ -34,7 +34,7 @@ _suppressed: Dict[Any, int] = {}
 _app_loop: Optional[asyncio.AbstractEventLoop] = None
 
 
-def set_app_loop(loop: asyncio.AbstractEventLoop) -> None:
+def set_app_loop(loop: Optional[asyncio.AbstractEventLoop]) -> None:
     """Called once from FastAPI startup so threads can reach the loop."""
     global _app_loop
     _app_loop = loop
@@ -161,3 +161,40 @@ async def dispatch_notification(
 
     return {"delivered_via": delivered, "suppressed": False,
             "suppressed_count": prior_suppressed}
+
+
+async def _dispatch_with_own_session(**kwargs) -> None:
+    """Run dispatch_notification with a fresh DB session (thread-origin path).
+
+    Sessions must not cross threads, so the camera-thread entry point never
+    passes one; we open our own on the loop side.
+    """
+    from backend.database.utils import get_db_context
+    try:
+        with get_db_context() as db:
+            result = await dispatch_notification(db, **kwargs)
+            if result["delivered_via"]:
+                logger.info("Automation notification delivered via %s",
+                            ", ".join(result["delivered_via"]))
+    except Exception:
+        logger.exception("Background notification dispatch failed")
+
+
+def dispatch_from_thread(**kwargs) -> bool:
+    """Fire-and-forget dispatch from a non-async thread (camera loop).
+
+    Returns True if the coroutine was scheduled, False otherwise. Never
+    raises and never blocks on delivery — the detection loop's timing is
+    unaffected (spec success criterion 5). Do NOT pass `db`.
+    """
+    loop = _app_loop
+    if loop is None or loop.is_closed() or not loop.is_running():
+        logger.warning("No running app loop; notification dropped "
+                       "(is the API up?)")
+        return False
+    try:
+        asyncio.run_coroutine_threadsafe(_dispatch_with_own_session(**kwargs), loop)
+        return True
+    except Exception:
+        logger.exception("Failed to schedule notification dispatch")
+        return False
