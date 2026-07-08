@@ -1089,15 +1089,17 @@ class RTSPCamera(Camera):
                     self.recorder.add_face_detection(face)
 
         # Recording logic
-        if self.motion_detected:
-            self.last_motion_time = time.time()
+        manual_record = time.time() < self.manual_record_until
+        if self.motion_detected or manual_record:
+            if self.motion_detected:
+                self.last_motion_time = time.time()
             if not self.recorder.is_recording:
                 height, width, _ = clean_frame.shape
                 # Use camera's configured fps_target for consistent playback speed
                 recording_fps = self.video_processor.settings.fps_target or 15
                 self.recorder.start(width, height, fps=recording_fps, camera_id=self.camera_id or "rtsp")
                 self.last_recording_frame_time = 0  # Reset frame time for new recording
-            
+
             # Link motion event to the recording (if recording is active)
             if self.recorder.is_recording and self.current_motion_event_id:
                 self.recorder.add_motion_event_id(self.current_motion_event_id)
@@ -1118,8 +1120,10 @@ class RTSPCamera(Camera):
                 self.recorder.write(clean_frame)
                 self.last_recording_frame_time = current_time
 
-            if not self.motion_detected and (
-                time.time() - self.last_motion_time > self.post_motion_cooldown
+            if not manual_record and (
+                not self.motion_detected and (
+                    time.time() - self.last_motion_time > self.post_motion_cooldown
+                )
             ):
                 self.recorder.stop()
 
