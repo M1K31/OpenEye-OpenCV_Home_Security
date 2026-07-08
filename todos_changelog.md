@@ -36,6 +36,15 @@ changes. See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 - [ ] **RTSPCamera stop condition lacks `should_stop_recording()` max-duration cap**
   (pre-existing asymmetry) — MockCamera enforces a max recording duration on its
   manual-record window; the RTSP block does not.
+- [ ] **RTSPCamera frame loop has no direct manual-record tests** — the 7 loop tests
+  in `tests/core/test_manual_record_window.py` drive `MockCamera.get_frame()`; the
+  RTSP block (`camera_manager.py:~1093-1124`) carries identical, line-reviewed edits
+  but its duplicated logic can drift without coverage.
+- [ ] **Dispatcher test gaps** — DB-commit failure/rollback path and
+  target-by-`str(id)` matching in `notification_dispatch.py` are untested.
+- [ ] **Two virtualenvs (`venv` prod, `.venv` dev)** — `venv` (used by `start.sh`)
+  ships without pytest; tests only run from `.venv`. Consolidate or document
+  (e.g. a `requirements-dev.txt` installable into `venv`).
 
 ## Recent changes (2026-07-07)
 - Automation notifications are now live end to end: rule actions of type

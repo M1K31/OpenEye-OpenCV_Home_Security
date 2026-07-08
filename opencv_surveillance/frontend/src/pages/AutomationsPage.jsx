@@ -320,17 +320,6 @@ const AutomationsPage = () => {
                 className="form-input"
               />
             </label>
-            <label>
-              Pre-buffer (seconds):
-              <input
-                type="number"
-                min="0"
-                max="30"
-                value={action.config.pre_buffer || 0}
-                onChange={(e) => handleUpdateAction(index, 'pre_buffer', parseInt(e.target.value))}
-                className="form-input"
-              />
-            </label>
           </div>
         );
 
