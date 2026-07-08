@@ -255,3 +255,13 @@ class NotificationProvider(Base):
             Configuration dictionary
         """
         return self.decrypt_config()
+
+
+class EcosystemNotificationSettings(Base):
+    """Single-row store for ecosystem notification preferences (JSON blob)."""
+
+    __tablename__ = "ecosystem_notification_settings"
+
+    id = Column(Integer, primary_key=True, default=1)
+    settings_json = Column(Text, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

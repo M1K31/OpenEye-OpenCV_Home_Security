@@ -612,10 +612,17 @@ async def receive_notification(
     db.add(dedup)
     db.commit()
     
-    # TODO: Route notification to configured delivery methods
-    # For now, just log it
-    delivered_via = []
-    
+    # Deliver through the user's configured providers (shared dispatch layer)
+    from backend.core.notification_dispatch import dispatch_notification
+    result = await dispatch_notification(
+        db,
+        message=notification.message,
+        title=notification.title,
+        priority=notification.priority,
+        event_type=notification.type,
+    )
+    delivered_via = result["delivered_via"]
+
     notification_id = f"notif_{secrets.token_hex(8)}"
     
     return eco_schema.NotificationResponse(
@@ -627,10 +634,30 @@ async def receive_notification(
 
 
 @router.get("/notifications/settings", response_model=eco_schema.NotificationSettings)
-async def get_notification_settings():
-    """Get notification preferences for ecosystem"""
-    # TODO: Load from database
+async def get_notification_settings(db: Session = Depends(get_db)):
+    """Get notification preferences for ecosystem (persisted)."""
+    from backend.database.alert_models import EcosystemNotificationSettings
+    row = db.query(EcosystemNotificationSettings).filter_by(id=1).first()
+    if row:
+        return eco_schema.NotificationSettings(**json.loads(row.settings_json))
     return eco_schema.NotificationSettings()
+
+
+@router.put("/notifications/settings", response_model=eco_schema.NotificationSettings)
+async def update_notification_settings(
+    settings: eco_schema.NotificationSettings,
+    db: Session = Depends(get_db),
+):
+    """Persist notification preferences for ecosystem."""
+    from backend.database.alert_models import EcosystemNotificationSettings
+    row = db.query(EcosystemNotificationSettings).filter_by(id=1).first()
+    payload = settings.model_dump_json()
+    if row:
+        row.settings_json = payload
+    else:
+        db.add(EcosystemNotificationSettings(id=1, settings_json=payload))
+    db.commit()
+    return settings
 
 
 # ============================================================================
@@ -1373,28 +1400,18 @@ async def _send_push_notification(
     - FCM for Android (firebase-admin)
     """
     logger.info(f"Push notification ({platform}): {title} - {body}")
-    
-    # TODO: Implement actual push notification sending
-    # For iOS: Use APNs with token
-    # For Android: Use FCM with device token
-    
-    # Example FCM implementation (requires firebase-admin):
-    # if platform == "android":
-    #     import firebase_admin
-    #     from firebase_admin import messaging
-    #     message = messaging.Message(
-    #         notification=messaging.Notification(title=title, body=body),
-    #         data={"event_data": json.dumps(data)},
-    #         token=token
-    #     )
-    #     messaging.send(message)
-    
-    # Example APNs implementation (requires aioapns):
-    # if platform == "ios":
-    #     from aioapns import APNs, NotificationRequest
-    #     apns = APNs(...)
-    #     request = NotificationRequest(device_token=token, message={"aps": {"alert": {"title": title, "body": body}}})
-    #     await apns.send(request)
+
+    if platform == "android":
+        from backend.services.notification_service import get_notification_service
+        ok, err = await get_notification_service().send_push_notification(
+            token, title, body, data)
+        if not ok:
+            logger.warning(f"FCM push failed: {err}")
+        return ok
+    logger.warning(
+        f"Push platform '{platform}' not supported yet (APNs pending); "
+        f"dropping: {title}")
+    return False
 
 
 # ============================================================================
