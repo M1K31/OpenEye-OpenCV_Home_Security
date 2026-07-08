@@ -86,6 +86,10 @@ Sidebar:
   quality, zones via the ⚙ button on each card).
 - **AI & Faces** — face library, training, recognition history.
 - **Automations** — rules that trigger actions when specific people are detected.
+  Notification actions deliver via the providers configured under notification
+  settings, optionally scoped per rule to a subset of those providers. A
+  per-action notification cooldown suppresses repeat pings in high-traffic
+  areas while recordings continue uninterrupted.
 - **System & Alerts** — storage paths, display/recording/performance/accessibility
   settings, and the **Ecosystem Setup** card (shared-secret status / paste / generate).
 - **Themes** — UI theming.
