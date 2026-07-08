@@ -30,6 +30,7 @@ const AutomationsPage = () => {
   const [editingRule, setEditingRule] = useState(null);
   const [knownPeople, setKnownPeople] = useState([]);
   const [cameras, setCameras] = useState([]);
+  const [availableProviders, setAvailableProviders] = useState([]);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -69,6 +70,9 @@ const AutomationsPage = () => {
     loadStats();
     loadKnownPeople();
     loadCameras();
+    apiClient.get('/notification-providers/')
+      .then((res) => setAvailableProviders((res.data.providers || []).filter(p => p.enabled)))
+      .catch(() => setAvailableProviders([]));
   }, []);
 
   const loadRules = async () => {
@@ -268,6 +272,37 @@ const AutomationsPage = () => {
               <option value="normal">Normal Priority</option>
               <option value="high">High Priority</option>
             </select>
+            <label className="form-label">
+              Send via
+              <select
+                multiple
+                value={action.config.providers || []}
+                onChange={(e) => {
+                  const chosen = Array.from(e.target.selectedOptions).map(o => o.value);
+                  handleUpdateAction(index, 'providers', chosen.length ? chosen : undefined);
+                }}
+                className="form-select"
+              >
+                {availableProviders.map((p) => (
+                  <option key={p.id} value={p.provider_name}>
+                    {p.provider_name} ({p.provider_type})
+                  </option>
+                ))}
+              </select>
+              <small>None selected = all enabled providers</small>
+            </label>
+            <label className="form-label">
+              Notification cooldown (seconds)
+              <input
+                type="number"
+                min="0"
+                max="3600"
+                value={action.config.cooldown_seconds || 0}
+                onChange={(e) => handleUpdateAction(index, 'cooldown_seconds', parseInt(e.target.value) || 0)}
+                className="form-input"
+              />
+              <small>High-traffic areas: suppress repeat pings for N seconds (0 = notify every event). Recordings still run.</small>
+            </label>
           </div>
         );
 
