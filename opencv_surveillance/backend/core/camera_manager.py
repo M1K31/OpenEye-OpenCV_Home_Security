@@ -177,9 +177,10 @@ class Camera(ABC):
     def request_recording(self, duration_seconds: int) -> None:
         """Ask the processing loop to record for the next N seconds.
 
-        Called from the automation engine (possibly another thread); a single
-        float assignment is atomic enough. The loop starts recording on the
-        next frame and won't stop while the window is open.
+        Called from the automation engine (possibly another thread); this is a
+        GIL-protected read-then-max-write on a float; races only extend the
+        window, never corrupt it. The loop starts recording on the next frame
+        and won't stop while the window is open.
         """
         until = time.time() + max(1, int(duration_seconds))
         # extend, never shorten, an already-open window

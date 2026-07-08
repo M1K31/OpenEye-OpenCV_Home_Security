@@ -44,7 +44,11 @@ def check_cooldown(key: Any, seconds: int) -> tuple[bool, int]:
     """Return (allowed, suppressed_count_to_report).
 
     seconds <= 0 or key None disables cooldown. When allowed after a window,
-    returns how many sends were suppressed since the last delivery.
+    returns how many sends were suppressed since the last delivery (without
+    clearing that count — it is only cleared once a send actually succeeds,
+    via mark_sent()). Does NOT stamp _last_sent: the window is only opened
+    once a delivery actually succeeds, so an all-providers-failed event never
+    silently suppresses the next real attempt.
     """
     if key is None or seconds <= 0:
         return True, 0
@@ -54,9 +58,19 @@ def check_cooldown(key: Any, seconds: int) -> tuple[bool, int]:
         if last is not None and (now - last) < seconds:
             _suppressed[key] = _suppressed.get(key, 0) + 1
             return False, 0
-        count = _suppressed.pop(key, 0)
-        _last_sent[key] = now
-        return True, count
+        return True, _suppressed.get(key, 0)
+
+
+def mark_sent(key: Any) -> None:
+    """Record that a delivery actually succeeded for `key`.
+
+    Opens the cooldown window (stamps _last_sent) and clears the pending
+    suppressed-count, since it has now been reported to the user via the
+    delivered message's annotation.
+    """
+    with _cooldown_lock:
+        _last_sent[key] = time.monotonic()
+        _suppressed.pop(key, None)
 
 
 async def _send_via_provider(provider: NotificationProvider, config: dict,
@@ -159,6 +173,9 @@ async def dispatch_notification(
     except Exception:
         logger.exception("dispatch_notification failed")
 
+    if delivered and cooldown_key is not None and cooldown_seconds > 0:
+        mark_sent(cooldown_key)
+
     return {"delivered_via": delivered, "suppressed": False,
             "suppressed_count": prior_suppressed}
 
@@ -188,6 +205,10 @@ def dispatch_from_thread(**kwargs) -> bool:
     unaffected (spec success criterion 5). Do NOT pass `db`.
     """
     loop = _app_loop
+    # TOCTOU: the loop can close/stop between this check and the
+    # schedule call below (shutdown racing a camera-thread event). Accepted:
+    # worst case the notification is dropped with a logged warning, never a
+    # crash or a hang.
     if loop is None or loop.is_closed() or not loop.is_running():
         logger.warning("No running app loop; notification dropped "
                        "(is the API up?)")

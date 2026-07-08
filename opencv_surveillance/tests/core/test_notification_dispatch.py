@@ -125,6 +125,31 @@ async def test_cooldown_zero_never_suppresses(providers_db, mock_service):
         assert r["suppressed"] is False
 
 
+@pytest.mark.asyncio
+async def test_cooldown_not_stamped_when_all_providers_fail(providers_db, mock_service, monkeypatch):
+    """If every provider fails, the cooldown window must never open — a
+    subsequent event with the same key must not be suppressed, since nothing
+    was ever actually delivered."""
+    t = {"now": 2000.0}
+    monkeypatch.setattr(nd.time, "monotonic", lambda: t["now"])
+    key = ("rule", 3, "cam1", "Jane")
+
+    mock_service.send_webhook = AsyncMock(return_value=(False, "err"))
+
+    r1 = await nd.dispatch_notification(providers_db, message="fail",
+                                        cooldown_key=key, cooldown_seconds=60)
+    assert r1["delivered_via"] == []
+    assert r1["suppressed"] is False
+
+    # Cooldown window was never opened (mark_sent not called) -> immediately
+    # following dispatch with the same key is NOT suppressed.
+    t["now"] += 1  # well within the 60s window if it had been (wrongly) opened
+    r2 = await nd.dispatch_notification(providers_db, message="fail again",
+                                        cooldown_key=key, cooldown_seconds=60)
+    assert r2["suppressed"] is False
+    assert r2["delivered_via"] == []
+
+
 def test_dispatch_from_thread_schedules_on_loop(monkeypatch):
     """dispatch_from_thread returns True when a running loop is registered,
     False (never raises) when no loop is available."""

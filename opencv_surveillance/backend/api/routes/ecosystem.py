@@ -578,7 +578,8 @@ async def ecosystem_events_websocket(websocket: WebSocket):
 @router.post("/notifications/", response_model=eco_schema.NotificationResponse)
 async def receive_notification(
     notification: eco_schema.NotificationRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: dict = Depends(require_ecosystem_auth),
 ):
     """
     Receive notification from a companion app.
@@ -647,16 +648,22 @@ async def get_notification_settings(db: Session = Depends(get_db)):
 async def update_notification_settings(
     settings: eco_schema.NotificationSettings,
     db: Session = Depends(get_db),
+    _auth: dict = Depends(require_ecosystem_auth),
 ):
     """Persist notification preferences for ecosystem."""
     from backend.database.alert_models import EcosystemNotificationSettings
     row = db.query(EcosystemNotificationSettings).filter_by(id=1).first()
     payload = settings.model_dump_json()
-    if row:
-        row.settings_json = payload
-    else:
-        db.add(EcosystemNotificationSettings(id=1, settings_json=payload))
-    db.commit()
+    try:
+        if row:
+            row.settings_json = payload
+        else:
+            db.add(EcosystemNotificationSettings(id=1, settings_json=payload))
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to persist notification settings")
+        raise HTTPException(status_code=500, detail="Failed to persist notification settings")
     return settings
 
 
