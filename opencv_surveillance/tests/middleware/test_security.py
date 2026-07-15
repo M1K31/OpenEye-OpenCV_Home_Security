@@ -321,12 +321,10 @@ class TestSQLInjectionProtection:
         # Mock call_next
         call_next = AsyncMock()
 
-        # Should raise HTTPException
-        with pytest.raises(HTTPException) as exc_info:
-            await self.middleware.dispatch(mock_request, call_next)
+        # Returns a 400 response (raising inside BaseHTTPMiddleware would 500)
+        response = await self.middleware.dispatch(mock_request, call_next)
+        assert response.status_code == 400
 
-        assert exc_info.value.status_code == 400
-        assert "Invalid input detected" in exc_info.value.detail
 
         # call_next should NOT be called
         call_next.assert_not_called()
@@ -345,11 +343,10 @@ class TestSQLInjectionProtection:
         # Mock call_next
         call_next = AsyncMock()
 
-        # Should raise HTTPException
-        with pytest.raises(HTTPException) as exc_info:
-            await self.middleware.dispatch(mock_request, call_next)
+        # Returns a 400 response (raising inside BaseHTTPMiddleware would 500)
+        response = await self.middleware.dispatch(mock_request, call_next)
+        assert response.status_code == 400
 
-        assert exc_info.value.status_code == 400
         call_next.assert_not_called()
 
     @pytest.mark.asyncio
@@ -381,12 +378,10 @@ class TestSQLInjectionProtection:
         # Mock call_next
         call_next = AsyncMock()
 
-        # Should raise HTTPException
-        with pytest.raises(HTTPException) as exc_info:
-            await self.middleware.dispatch(mock_request, call_next)
+        # Returns a 400 response (raising inside BaseHTTPMiddleware would 500)
+        response = await self.middleware.dispatch(mock_request, call_next)
+        assert response.status_code == 400
 
-        assert exc_info.value.status_code == 400
-        assert "Invalid request" in exc_info.value.detail
 
         # call_next should NOT be called
         call_next.assert_not_called()
@@ -402,9 +397,46 @@ class TestSQLInjectionProtection:
         # Mock call_next
         call_next = AsyncMock()
 
-        # Should raise HTTPException
-        with pytest.raises(HTTPException) as exc_info:
-            await self.middleware.dispatch(mock_request, call_next)
+        # Returns a 400 response (raising inside BaseHTTPMiddleware would 500)
+        response = await self.middleware.dispatch(mock_request, call_next)
+        assert response.status_code == 400
 
-        assert exc_info.value.status_code == 400
         call_next.assert_not_called()
+
+
+class TestSQLInjectionStaticAssets:
+    """Hashed build artifacts (Vite chunks like 'TwoFactorSettings--CHBeorH.js')
+    contain SQL comment tokens; the path heuristic must not block static mounts,
+    and rejections must be real 400s (not HTTPException-in-middleware 500s)."""
+
+    def _app(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        app = FastAPI()
+        app.add_middleware(SQLInjectionProtection)
+
+        @app.get("/assets/{name}")
+        async def asset(name: str):
+            return {"served": name}
+
+        @app.get("/api/echo")
+        async def echo(q: str = ""):
+            return {"q": q}
+
+        return TestClient(app, raise_server_exceptions=False)
+
+    def test_double_dash_asset_is_served(self):
+        client = self._app()
+        r = client.get("/assets/TwoFactorSettings--CHBeorH.js")
+        assert r.status_code == 200
+        assert r.json()["served"] == "TwoFactorSettings--CHBeorH.js"
+
+    def test_query_param_injection_still_rejected_as_400(self):
+        client = self._app()
+        r = client.get("/api/echo", params={"q": "1 UNION SELECT * FROM users"})
+        assert r.status_code == 400  # not 500
+
+    def test_non_static_path_injection_still_rejected_as_400(self):
+        client = self._app()
+        r = client.get("/api/thing--comment")
+        assert r.status_code == 400  # heuristics still apply off the static mounts

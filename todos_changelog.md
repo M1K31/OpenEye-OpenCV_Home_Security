@@ -26,6 +26,28 @@ changes. See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 - [ ] Replace `alert()` with a proper notification component —
   `frontend/src/pages/HardwareDetectionPage.jsx:109`
 
+## Open findings (clean-install test, 2026-07-14)
+- [ ] **Run the prod venv from the internal disk** — OpenEye's `venv/` lives on the
+  external volume (`/Volumes/Locker2`); a force-unmount while mmap'd C-extensions
+  (opencv/av/portaudio) are resident kills the backend with an unrecoverable SIGBUS
+  (`KERN_MEMORY_ERROR`, "backing vnode was force unmounted" — observed 2026-07-14).
+  Same crash class AegisSIEM/AFS/registry already fixed: build the venv at
+  `~/.local/share/openeye/venv` and point the launcher at it.
+- [ ] **No launchd service by default** — after the SIGBUS crash nothing restarted
+  OpenEye (no KeepAlive). Pair the internal-venv move with `OPENEYE_INSTALL_SERVICE=1`
+  as the recommended install.
+
+## Recent changes (2026-07-14)
+- **Installer's generated `start.sh` used port 8000 (AFS's port) + `--reload`** —
+  every fresh install produced a launcher that collided with AI-for-Survival
+  (`EADDRINUSE`) or silently ran on the wrong port. Template now uses OpenEye's
+  documented **8200** without the dev reload flag.
+- **SQL-injection middleware 500'd hashed frontend chunks** — Vite emits names like
+  `TwoFactorSettings--CHBeorH.js`; the `(--|#|/*)` heuristic flagged the path, and
+  raising `HTTPException` inside `BaseHTTPMiddleware` surfaced as a 500 (breaking the
+  2FA settings page). Static mounts are now exempt from the path heuristic (query
+  params still checked everywhere) and rejections return real 400s. 3 new tests.
+
 ## Open findings (install / test, 2026-06-28)
 - [ ] **WebRTC silently disabled on macOS** — installer pulls **ffmpeg 8** but PyAV
   (`av`, via aiortc) needs **ffmpeg 7**, so `av` never builds and two-way audio is

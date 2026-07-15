@@ -7,6 +7,7 @@ All security features are free and open source
 """
 
 from fastapi import Request, HTTPException
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 import re
 import logging
@@ -118,21 +119,37 @@ class SQLInjectionProtection(BaseHTTPMiddleware):
                 return True
         return False
 
+    # Static mounts serve hashed build artifacts (e.g. Vite chunks like
+    # "TwoFactorSettings--CHBeorH.js") whose filenames legitimately contain
+    # SQL comment tokens ("--"). The path heuristic must not apply there —
+    # StaticFiles already confines requests to the mount directory. Query
+    # parameters are still checked on every route.
+    STATIC_PATH_PREFIXES = (
+        "/assets/", "/static/", "/recordings/", "/faces/",
+        "/snapshots/", "/thumbnails/",
+    )
+
     async def dispatch(self, request: Request, call_next):
+        # NOTE: raising HTTPException inside BaseHTTPMiddleware bypasses
+        # FastAPI's exception handlers and surfaces as a 500 — return the
+        # response directly so clients see the intended 400.
         # Check query parameters
         for key, value in request.query_params.items():
             if self.check_sql_injection(str(value)):
                 logger.warning(
                     f"SQL injection attempt detected in query param: {key}")
-                raise HTTPException(
+                return JSONResponse(
                     status_code=400,
-                    detail="Invalid input detected")
+                    content={"detail": "Invalid input detected"})
 
-        # Check path parameters
-        if self.check_sql_injection(str(request.url.path)):
+        # Check the path (skip static asset mounts — see note above)
+        path = str(request.url.path)
+        if not path.startswith(self.STATIC_PATH_PREFIXES) and \
+                self.check_sql_injection(path):
             logger.warning(
-                f"SQL injection attempt detected in path: {request.url.path}"
+                f"SQL injection attempt detected in path: {path}"
             )
-            raise HTTPException(status_code=400, detail="Invalid request")
+            return JSONResponse(
+                status_code=400, content={"detail": "Invalid request"})
 
         return await call_next(request)

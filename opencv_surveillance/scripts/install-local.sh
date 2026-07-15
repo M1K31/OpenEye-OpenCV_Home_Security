@@ -436,8 +436,8 @@ echo "Starting OpenEye Surveillance System..."
 # Activate virtual environment
 source venv/bin/activate
 
-# Start server
-python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+# Start server (OpenEye's documented port is 8200; 8000 belongs to AI-for-Survival)
+python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 8200
 EOF
     
     # Stop script
