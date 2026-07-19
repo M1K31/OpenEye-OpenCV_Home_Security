@@ -257,18 +257,24 @@ generate_secrets() {
     cd "$PROJECT_DIR"
     source venv/bin/activate
     
-    # Generate JWT secret key
-    JWT_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
-    
+    # Generate the primary app secret (used for sessions and, by default, JWTs).
+    SECRET_KEY_VAL=$(python3 -c "import secrets; print(secrets.token_urlsafe(48))")
+
+    # Generate a SEPARATE JWT secret (security isolation from SECRET_KEY).
+    JWT_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(48))")
+
     # Generate admin token
     ADMIN_TOKEN=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
-    
+
     # Create .env file
     cat > .env << EOF
 # OpenEye Surveillance System Configuration
 # Generated on $(date)
 
 # Security Keys - KEEP THESE SECRET!
+# SECRET_KEY is the primary app secret; auth.py reads it at import, so start.sh
+# exports this file into the environment before launching uvicorn.
+SECRET_KEY=$SECRET_KEY_VAL
 JWT_SECRET_KEY=$JWT_SECRET
 ADMIN_TOKEN=$ADMIN_TOKEN
 
@@ -277,10 +283,10 @@ DATABASE_URL=sqlite:///./surveillance.db
 
 # Server Configuration
 HOST=0.0.0.0
-PORT=8000
+PORT=8200
 
 # CORS Settings (adjust for production)
-CORS_ORIGINS=http://localhost:8000,http://localhost:3000
+CORS_ORIGINS=http://localhost:8200,http://localhost:3000
 
 # Feature Flags
 ENABLE_MOTION_DETECTION=true
@@ -436,8 +442,16 @@ echo "Starting OpenEye Surveillance System..."
 # Activate virtual environment
 source venv/bin/activate
 
+# Load .env into the environment BEFORE importing the app. backend/core/auth.py
+# reads SECRET_KEY / JWT_SECRET_KEY at import time, which happens before main.py
+# calls load_dotenv(); exporting here guarantees os.getenv() sees them regardless
+# of import order (otherwise the app silently falls back to a weak dev secret).
+set -a
+[ -f .env ] && . ./.env
+set +a
+
 # Start server (OpenEye's documented port is 8200; 8000 belongs to AI-for-Survival)
-python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 8200
+python3 -m uvicorn backend.main:app --host 0.0.0.0 --port "${PORT:-8200}"
 EOF
     
     # Stop script
