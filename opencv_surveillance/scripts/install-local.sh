@@ -456,7 +456,11 @@ set +a
 # Start server (OpenEye's documented port is 8200; 8000 belongs to AI-for-Survival)
 python3 -m uvicorn backend.main:app --host 0.0.0.0 --port "${PORT:-8200}"
 EOF
-    /usr/bin/sed -i '' "s|@@VENV@@|$VENV|g" start.sh
+    # Portable placeholder substitution. Do NOT use `sed -i`: BSD/macOS requires a
+    # detached backup suffix (-i '') while GNU/Linux forbids it, and this installer
+    # supports both. Redirect-and-move works identically everywhere.
+    sed "s|@@VENV@@|$VENV|g" start.sh > start.sh.tmp && mv start.sh.tmp start.sh
+    chmod +x start.sh
 
     # Stop script
     cat > stop.sh << 'EOF'
