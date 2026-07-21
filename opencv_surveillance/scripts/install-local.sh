@@ -444,7 +444,7 @@ After=network.target
 [Service]
 Type=simple
 User=$USER
-WorkingDirectory=$PROJECT_DIR
+WorkingDirectory=$APP_DIR
 Environment="PATH=$VENV/bin"
 Environment="ECOSYSTEM_SERVICE_PORT=$PORT"
 ExecStart=$VENV/bin/python3 -m uvicorn backend.main:app --host 0.0.0.0 --port $PORT

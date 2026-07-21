@@ -80,7 +80,6 @@ for vdir in "$OPENCV_DIR/venv" "$OPENCV_DIR/.venv" "${OPENEYE_VENV:-$HOME/.local
 done
 run "rm -rf \"${OPENEYE_DATA_ROOT:-$HOME/.local/share/openeye}/app\""
 echo "  ✓ app snapshot removed ($APP_DIR)"
-run "rmdir \"$HOME/.local/share/openeye\" 2>/dev/null || true"
 run "rm -rf \"$OPENCV_DIR/frontend/dist\" \"$OPENCV_DIR/frontend/node_modules\""
 run "find \"$OPENCV_DIR\" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true"
 run "rm -f \"$OPENCV_DIR/start.sh\" \"$OPENCV_DIR/stop.sh\""
@@ -102,6 +101,10 @@ else
     done
     echo "  ✓ database, .env, and media removed"
 fi
+
+# Clean up the now-empty prefix (bare rmdir is a no-op if anything remains,
+# e.g. --keep-data left the db/media behind — that's intentional).
+run "rmdir \"$HOME/.local/share/openeye\" 2>/dev/null || true"
 
 echo -e "${BLUE}[5/5] Done.${NC}"
 echo -e "${GREEN}OpenEye uninstalled.${NC} Reinstall with: ./opencv_surveillance/scripts/install-local.sh"
