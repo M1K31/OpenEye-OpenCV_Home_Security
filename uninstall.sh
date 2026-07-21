@@ -73,9 +73,10 @@ fi
 
 # 3. Remove the venv + generated build artifacts + caches.
 echo -e "${BLUE}[3/5] Removing runtime + build artifacts...${NC}"
-for vdir in "$OPENCV_DIR/venv" "$OPENCV_DIR/.venv"; do
-    [ -d "$vdir" ] && run "rm -rf \"$vdir\"" && echo "  ✓ venv removed ($(basename "$vdir"))"
+for vdir in "$OPENCV_DIR/venv" "$OPENCV_DIR/.venv" "${OPENEYE_VENV:-$HOME/.local/share/openeye/venv}"; do
+    [ -d "$vdir" ] && run "rm -rf \"$vdir\"" && echo "  ✓ venv removed ($vdir)"
 done
+run "rmdir \"$HOME/.local/share/openeye\" 2>/dev/null || true"
 run "rm -rf \"$OPENCV_DIR/frontend/dist\" \"$OPENCV_DIR/frontend/node_modules\""
 run "find \"$OPENCV_DIR\" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true"
 run "rm -f \"$OPENCV_DIR/start.sh\" \"$OPENCV_DIR/stop.sh\""

@@ -16,6 +16,11 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
+# Runtime venv lives on the INTERNAL disk. The repo may sit on an external
+# volume (/Volumes/...); a force-unmount there makes mmap'd C-extensions
+# (opencv, av, face_recognition) fault with SIGBUS and kills the daemon.
+VENV="${OPENEYE_VENV:-$HOME/.local/share/openeye/venv}"
+
 # Logging functions
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
@@ -153,26 +158,23 @@ install_system_deps() {
 
 # Create virtual environment
 setup_venv() {
-    log_info "Setting up Python virtual environment..."
-    
-    cd "$PROJECT_DIR"
-    
-    if [ -d "venv" ]; then
-        log_warn "Virtual environment already exists"
+    log_info "Creating virtual environment at $VENV (internal disk)..."
+    mkdir -p "$(dirname "$VENV")"
+    if [ -d "$VENV" ]; then
         # Idempotent default: keep the existing venv unless asked to recreate.
-        if confirm "Do you want to recreate it? (y/N):" N; then
+        if [ -n "${OPENEYE_RECREATE_VENV:-}" ]; then
             log_info "Removing existing virtual environment..."
-            rm -rf venv
+            rm -rf "$VENV"
+            $PYTHON_CMD -m venv "$VENV"
         else
             log_info "Using existing virtual environment"
-            return
         fi
+    else
+        $PYTHON_CMD -m venv "$VENV"
     fi
-    
-    log_info "Creating virtual environment..."
-    $PYTHON_CMD -m venv venv
-    
-    log_success "Virtual environment created"
+    source "$VENV/bin/activate"
+
+    log_success "Virtual environment ready"
 }
 
 # Install Python dependencies
@@ -182,7 +184,7 @@ install_python_deps() {
     cd "$PROJECT_DIR"
     
     # Activate virtual environment
-    source venv/bin/activate
+    source "$VENV/bin/activate"
     
     # Upgrade pip
     log_info "Upgrading pip..."
@@ -255,7 +257,7 @@ generate_secrets() {
     log_info "Generating secret keys..."
     
     cd "$PROJECT_DIR"
-    source venv/bin/activate
+    source "$VENV/bin/activate"
     
     # Generate the primary app secret (used for sessions and, by default, JWTs).
     SECRET_KEY_VAL=$(python3 -c "import secrets; print(secrets.token_urlsafe(48))")
@@ -306,7 +308,7 @@ setup_database() {
     log_info "Setting up database..."
     
     cd "$PROJECT_DIR"
-    source venv/bin/activate
+    source "$VENV/bin/activate"
     
     # Database will be created automatically on first run
     # We just need to ensure the directory exists
@@ -377,7 +379,7 @@ create_systemd_service() {
 <plist version="1.0"><dict>
   <key>Label</key><string>$LABEL</string>
   <key>ProgramArguments</key><array>
-    <string>$PROJECT_DIR/venv/bin/python3</string>
+    <string>$VENV/bin/python3</string>
     <string>-m</string><string>uvicorn</string><string>backend.main:app</string>
     <string>--host</string><string>0.0.0.0</string>
     <string>--port</string><string>$PORT</string>
@@ -407,9 +409,9 @@ After=network.target
 Type=simple
 User=$USER
 WorkingDirectory=$PROJECT_DIR
-Environment="PATH=$PROJECT_DIR/venv/bin"
+Environment="PATH=$VENV/bin"
 Environment="ECOSYSTEM_SERVICE_PORT=$PORT"
-ExecStart=$PROJECT_DIR/venv/bin/python3 -m uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+ExecStart=$VENV/bin/python3 -m uvicorn backend.main:app --host 0.0.0.0 --port $PORT
 Restart=always
 RestartSec=10
 
@@ -439,8 +441,9 @@ cd "$SCRIPT_DIR"
 
 echo "Starting OpenEye Surveillance System..."
 
-# Activate virtual environment
-source venv/bin/activate
+# Activate virtual environment (runtime venv lives on the internal disk —
+# see opencv_surveillance/scripts/install-local.sh for why).
+source "@@VENV@@/bin/activate"
 
 # Load .env into the environment BEFORE importing the app. backend/core/auth.py
 # reads SECRET_KEY / JWT_SECRET_KEY at import time, which happens before main.py
@@ -453,7 +456,8 @@ set +a
 # Start server (OpenEye's documented port is 8200; 8000 belongs to AI-for-Survival)
 python3 -m uvicorn backend.main:app --host 0.0.0.0 --port "${PORT:-8200}"
 EOF
-    
+    /usr/bin/sed -i '' "s|@@VENV@@|$VENV|g" start.sh
+
     # Stop script
     cat > stop.sh << 'EOF'
 #!/bin/bash
