@@ -102,9 +102,17 @@ else
     echo "  ✓ database, .env, and media removed"
 fi
 
-# Clean up the now-empty prefix (bare rmdir is a no-op if anything remains,
-# e.g. --keep-data left the db/media behind — that's intentional).
-run "rmdir \"$HOME/.local/share/openeye\" 2>/dev/null || true"
+# Remove the prefix itself. On a FULL purge take the whole directory: OpenEye
+# owns it exclusively, and removing its contents piecemeal then rmdir'ing left
+# the prefix behind whenever anything unexpected was inside — a stray macOS
+# .DS_Store was enough, since a bare rmdir is a no-op on a non-empty directory.
+# Under --keep-data the surgical path is correct: the db/media must survive, so
+# only try the rmdir, which harmlessly does nothing while they are there.
+if $KEEP_DATA; then
+    run "rmdir \"$DATA_ROOT\" 2>/dev/null || true"
+else
+    run "rm -rf \"$DATA_ROOT\""
+fi
 
 echo -e "${BLUE}[5/5] Done.${NC}"
 echo -e "${GREEN}OpenEye uninstalled.${NC} Reinstall with: ./opencv_surveillance/scripts/install-local.sh"
