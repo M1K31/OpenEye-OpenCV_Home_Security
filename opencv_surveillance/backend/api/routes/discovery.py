@@ -52,7 +52,8 @@ async def discover_usb_cameras(db: Session = Depends(get_db)):
         (excludes already-added cameras)
     """
     try:
-        cameras = await discovery_service.discover_usb_cameras()
+        result = await discovery_service.discover_usb_cameras_detailed()
+        cameras = result["cameras"]
 
         # Filter out cameras that are already added
         # Get all existing camera sources from database
@@ -70,11 +71,21 @@ async def discover_usb_cameras(db: Session = Depends(get_db)):
         if filtered_count > 0:
             message += f" ({filtered_count} already added)"
 
+        # A denial looks identical to an empty result unless we say so.
+        if result["permission_denied"]:
+            message = (
+                "No cameras could be opened, but the system reports "
+                f"{len(result['platform_cameras'])} attached. "
+                "Camera permission appears to be denied."
+            )
+
         return {
             "success": True,
             "count": len(filtered_cameras),
             "cameras": filtered_cameras,
             "message": message,
+            "warnings": result["warnings"],
+            "permission_denied": result["permission_denied"],
         }
 
     except Exception as e:

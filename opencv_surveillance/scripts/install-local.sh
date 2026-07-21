@@ -261,6 +261,33 @@ install_python_deps() {
 # Copy the runnable application to the internal disk. This is a snapshot: changes in
 # the repo require re-running this installer, the same non-editable tradeoff the
 # ecosystem registry already makes.
+# A launchd agent has no application bundle, so macOS denies it camera access
+# and never shows a permission prompt. USB discovery therefore returns nothing
+# until the user grants access to a process that CAN prompt. Nothing in this
+# installer can grant it, so say so plainly instead of shipping a service that
+# silently finds no cameras.
+warn_macos_camera_permission() {
+    [ "$(uname -s)" = "Darwin" ] || return 0
+
+    local CAMERAS
+    CAMERAS=$(system_profiler SPCameraDataType 2>/dev/null | grep -c ":" || echo 0)
+    [ "$CAMERAS" -gt 0 ] || return 0
+
+    echo ""
+    log_warn "macOS camera permission is required for USB cameras"
+    echo "  The background service cannot display a permission prompt, so USB"
+    echo "  camera discovery will find nothing until access is granted."
+    echo ""
+    echo "  To grant it, run the server once from Terminal:"
+    echo "    launchctl unload \"\$HOME/Library/LaunchAgents/$LABEL.plist\""
+    echo "    cd \"$APP_DIR\" && \"$VENV/bin/python3\" -m uvicorn backend.main:app --port $PORT"
+    echo ""
+    echo "  Scan for USB cameras in the UI, approve the macOS prompt, then"
+    echo "  reload the service. If no prompt appears, enable your terminal"
+    echo "  under System Settings > Privacy & Security > Camera."
+    echo ""
+}
+
 sync_app_to_internal() {
     log_info "Syncing application code to $APP_DIR (internal disk)..."
     mkdir -p "$APP_DIR"
@@ -434,6 +461,7 @@ PLIST_EOF
         launchctl load "$PLIST"
         log_success "launchd agent $LABEL loaded (port $PORT)"
         log_info "Logs: $LOGDIR/{stdout,stderr}.log"
+        warn_macos_camera_permission
     else
         log_info "Creating systemd service..."
         sudo tee /etc/systemd/system/openeye.service > /dev/null << EOF

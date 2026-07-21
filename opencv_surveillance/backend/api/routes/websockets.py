@@ -5,6 +5,7 @@ Copyright (c) 2025 M1K31
 WebSocket endpoints for real-time statistics and event streaming.
 """
 
+import json
 import uuid
 import logging
 from typing import Optional
@@ -20,6 +21,23 @@ from backend.database.models import User
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ws", tags=["websockets"])
+
+
+def parse_client_message(data: str) -> dict:
+    """
+    Parse an inbound WebSocket frame.
+
+    Frames arrive from the network and are never trusted as code. Anything
+    that is not a well-formed JSON object is treated as plain text.
+    """
+    if data.startswith("{"):
+        try:
+            parsed = json.loads(data)
+            if isinstance(parsed, dict):
+                return parsed
+        except (ValueError, TypeError):
+            pass
+    return {"type": "text", "content": data}
 
 
 def verify_token(token: str, db: Session) -> Optional[User]:
@@ -159,14 +177,7 @@ async def websocket_statistics_endpoint(
                 data = await websocket.receive_text()
 
                 # Parse message
-                try:
-                    message = (
-                        eval(data)
-                        if data.startswith("{")
-                        else {"type": "text", "content": data}
-                    )
-                except Exception:
-                    message = {"type": "text", "content": data}
+                message = parse_client_message(data)
 
                 # Handle different message types
                 message_type = message.get("type", "unknown")

@@ -5,10 +5,13 @@ Camera Discovery Service
 Discovers RTSP/IP cameras on network and USB cameras connected to the system.
 """
 import cv2
+import glob
+import json
 import socket
 import platform
 import logging
 import asyncio
+import subprocess
 from typing import List, Dict, Optional
 from datetime import datetime
 import netifaces
@@ -22,63 +25,226 @@ class CameraDiscovery:
     Service for discovering cameras on the network and connected hardware.
     """
 
+    # Highest camera index probed during USB discovery (0..N-1)
+    MAX_CAMERA_INDEX = 11
+
     def __init__(self):
         self.discovered_cameras = []
         self.scanning = False
+        self._authorization_primed = False
 
-    async def discover_usb_cameras(self) -> List[Dict]:
+    def _enumerate_platform_cameras(self) -> List[Dict]:
         """
-        Discover USB and built-in cameras connected to the system.
+        Ask the operating system which video devices are attached.
+
+        This is deliberately independent of OpenCV. The OS will list a device
+        even when it refuses to let this process open it, which is what lets
+        discovery tell "nothing plugged in" apart from "access denied".
 
         Returns:
-            List of discovered USB cameras with their properties
+            List of {"name", "index"} dicts; empty if enumeration is
+            unavailable on this platform.
+        """
+        system = platform.system()
+
+        try:
+            if system == "Darwin":
+                output = subprocess.run(
+                    ["system_profiler", "-json", "SPCameraDataType"],
+                    capture_output=True, text=True, timeout=15,
+                ).stdout
+                entries = json.loads(output).get("SPCameraDataType", [])
+                return [
+                    {"name": e.get("_name", f"Camera {i}"), "index": i}
+                    for i, e in enumerate(entries)
+                ]
+
+            if system == "Linux":
+                nodes = sorted(glob.glob("/dev/video*"))
+                return [
+                    {"name": f"Video device {node}",
+                     "index": int(node.rsplit("video", 1)[-1])}
+                    for node in nodes
+                    if node.rsplit("video", 1)[-1].isdigit()
+                ]
+
+        except Exception as e:
+            logger.debug(f"Platform camera enumeration unavailable: {e}")
+
+        return []
+
+    def _prime_macos_authorization(self) -> None:
+        """
+        Give macOS one chance to raise the camera permission dialog.
+
+        AVFoundation refuses to request authorization from a worker thread
+        ("can not spin main run loop from other thread"), so this runs inline
+        on the calling thread. It is attempted once per process and is a no-op
+        off macOS. Whether a dialog actually appears is up to the OS: a process
+        with no application bundle, or one started by launchd, is denied
+        without any prompt, which is why discovery still reports the denial
+        explicitly rather than relying on this succeeding.
+        """
+        self._authorization_primed = True
+
+        if platform.system() != "Darwin":
+            return
+
+        try:
+            cap = cv2.VideoCapture(0)
+            authorized = cap.isOpened()
+            cap.release()
+            if not authorized:
+                logger.debug(
+                    "macOS did not grant camera access on the priming probe")
+        except Exception as e:
+            logger.debug(f"Camera authorization priming failed: {e}")
+
+    def _probe_index(self, index: int) -> Optional[Dict]:
+        """
+        Blocking probe of a single camera index. Runs in a worker thread.
+
+        Returns camera info if the index yields a readable frame, else None.
+        """
+        cap = None
+        try:
+            cap = cv2.VideoCapture(index)
+            if not cap.isOpened():
+                return None
+
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            fps = int(cap.get(cv2.CAP_PROP_FPS))
+
+            ret, _ = cap.read()
+            if not ret:
+                return None
+
+            return {
+                "type": "usb",
+                "index": index,
+                "name": f"USB Camera {index}",
+                "device_path": self._get_device_path(index),
+                "resolution": f"{width}x{height}",
+                "fps": fps if fps > 0 else 30,
+                "status": "available",
+                "auto_config": {
+                    "camera_id": f"usb_camera_{index}",
+                    "camera_type": "usb",
+                    "source": str(index),
+                    "enabled": True,
+                },
+                "discovered_at": datetime.now().isoformat(),
+            }
+        except Exception as e:
+            logger.debug(f"No camera at index {index}: {e}")
+            return None
+        finally:
+            if cap is not None:
+                try:
+                    cap.release()
+                except Exception:
+                    pass
+
+    async def discover_usb_cameras_detailed(self) -> Dict:
+        """
+        Discover USB and built-in cameras, reporting why a device was missed.
+
+        OpenCV reports a permission denial exactly the same way it reports an
+        empty slot: VideoCapture.isOpened() returns False and nothing is
+        raised. Cross-referencing against the OS device list turns that silent
+        failure into an actionable message.
+
+        Returns:
+            {"cameras": [...], "warnings": [...], "permission_denied": bool}
         """
         logger.info("Starting USB camera discovery...")
-        usb_cameras = []
 
-        # Test camera indices 0-10
-        for index in range(11):
-            try:
-                cap = cv2.VideoCapture(index)
-                if cap.isOpened():
-                    # Get camera properties
-                    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                    fps = int(cap.get(cv2.CAP_PROP_FPS))
+        loop = asyncio.get_event_loop()
+        platform_cameras = await loop.run_in_executor(
+            None, self._enumerate_platform_cameras
+        )
+        if platform_cameras:
+            logger.info(
+                "OS reports %d attached camera(s): %s",
+                len(platform_cameras),
+                ", ".join(c["name"] for c in platform_cameras),
+            )
 
-                    # Try to read a frame to verify camera works
-                    ret, frame = cap.read()
+        # AVFoundation can only raise its permission dialog from the thread
+        # running the main loop, so the very first probe is deliberately not
+        # sent to the executor. Skipping this would mean the prompt could
+        # never appear, even when the process is entitled to show one.
+        if platform_cameras and not self._authorization_primed:
+            self._prime_macos_authorization()
 
-                    if ret:
-                        camera_info = {
-                            "type": "usb",
-                            "index": index,
-                            "name": f"USB Camera {index}",
-                            "device_path": self._get_device_path(index),
-                            "resolution": f"{width}x{height}",
-                            "fps": fps if fps > 0 else 30,
-                            "status": "available",
-                            "auto_config": {
-                                "camera_id": f"usb_camera_{index}",
-                                "camera_type": "usb",
-                                "source": str(index),
-                                "enabled": True,
-                            },
-                            "discovered_at": datetime.now().isoformat(),
-                        }
+        # Prefer the indices the OS actually reported. Blind-probing 0..10
+        # costs seconds per absent index and, on macOS, emits a stream of
+        # AVFoundation authorization warnings for slots that never existed.
+        if platform_cameras:
+            indices = [c["index"] for c in platform_cameras]
+        else:
+            indices = list(range(self.MAX_CAMERA_INDEX))
 
-                        usb_cameras.append(camera_info)
-                        logger.info(
-                            f"Found USB camera at index {index}: {width}x{height} @ {fps}fps")
+        # Probe off the event loop; VideoCapture blocks for seconds per index
+        # and would otherwise stall every other request, including WebSocket
+        # handshakes.
+        results = await asyncio.gather(
+            *(loop.run_in_executor(None, self._probe_index, i)
+              for i in indices)
+        )
+        usb_cameras = [cam for cam in results if cam]
 
-                    cap.release()
+        warnings: List[str] = []
+        permission_denied = bool(platform_cameras) and not usb_cameras
 
-            except Exception as e:
-                logger.debug(f"No camera at index {index}: {e}")
-                continue
+        if permission_denied:
+            names = ", ".join(c["name"] for c in platform_cameras)
+            warnings.append(
+                f"The system reports {len(platform_cameras)} attached camera(s) "
+                f"({names}) but none could be opened. This is almost always an "
+                f"operating-system camera permission denial, not a hardware "
+                f"fault. {self._permission_hint()}"
+            )
+            logger.warning(warnings[-1])
 
-        logger.info(f"USB camera discovery complete. Found {len(usb_cameras)} cameras")
-        return usb_cameras
+        for cam in usb_cameras:
+            logger.info(
+                f"Found USB camera at index {cam['index']}: "
+                f"{cam['resolution']} @ {cam['fps']}fps")
+
+        logger.info(
+            f"USB camera discovery complete. Found {len(usb_cameras)} cameras")
+
+        return {
+            "cameras": usb_cameras,
+            "warnings": warnings,
+            "permission_denied": permission_denied,
+            "platform_cameras": platform_cameras,
+        }
+
+    async def discover_usb_cameras(self) -> List[Dict]:
+        """Backwards-compatible wrapper returning only the camera list."""
+        result = await self.discover_usb_cameras_detailed()
+        return result["cameras"]
+
+    def _permission_hint(self) -> str:
+        """Platform-specific guidance for granting camera access."""
+        system = platform.system()
+        if system == "Darwin":
+            return (
+                "On macOS, grant camera access in System Settings > Privacy & "
+                "Security > Camera. Note that a background service started by "
+                "launchd cannot display a permission prompt and is denied "
+                "silently; run the server from a terminal once to trigger the "
+                "prompt, and grant the permission to that terminal application."
+            )
+        if system == "Linux":
+            return (
+                "On Linux, ensure the service account is a member of the "
+                "'video' group and that /dev/video* is readable."
+            )
+        return "Check the operating system's camera privacy settings."
 
     def _get_device_path(self, index: int) -> str:
         """Get the device path for a camera index (platform-specific)"""
@@ -214,53 +380,97 @@ class CameraDiscovery:
             Camera info dict if RTSP service found, None otherwise
         """
         try:
-            # Use asyncio for non-blocking connection check
-            try:
-                _, writer = await asyncio.wait_for(
-                    asyncio.open_connection(ip, port),
-                    timeout=timeout
-                )
-                writer.close()
-                await writer.wait_closed()
-                port_open = True
-            except (asyncio.TimeoutError, ConnectionRefusedError, OSError):
-                port_open = False
+            response = await self._rtsp_options_probe(ip, port, timeout)
 
-            if port_open:
-                # Port is open, try common RTSP URLs
-                common_urls = [
-                    f"rtsp://{ip}:{port}/stream",
-                    f"rtsp://{ip}:{port}/stream1",
-                    f"rtsp://{ip}:{port}/h264",
-                    f"rtsp://{ip}:{port}/live",
-                    f"rtsp://{ip}:{port}/cam/realmonitor?channel=1&subtype=0",
-                ]
+            # An open port proves nothing: 88 and 8080 are overwhelmingly HTTP
+            # admin panels. Only a device that answers the RTSP handshake is a
+            # camera, so anything else is discarded rather than guessed at.
+            if not response or not response.startswith(b"RTSP/"):
+                if response:
+                    logger.debug(
+                        f"{ip}:{port} is open but does not speak RTSP; ignoring")
+                return None
 
-                # Skip RTSP stream test to avoid blocking - just return if port is open
-                # The user can test the connection when adding the camera
-                camera_info = {
-                    "type": "rtsp",
-                    "ip": ip,
-                    "port": port,
-                    "name": f"IP Camera at {ip}",
-                    "urls": common_urls,
-                    "status": "available",
-                    "requires_auth": True,  # Most cameras require auth
-                    "auto_config": {
-                        "camera_id": f'rtsp_camera_{ip.replace(".", "_")}',
-                        "camera_type": "rtsp",
-                        "source": common_urls[0],
-                        "enabled": True,
-                    },
-                    "discovered_at": datetime.now().isoformat(),
-                    "note": "May require username/password. Try common credentials: admin/admin, admin/12345",
-                }
-                return camera_info
+            status_line = response.split(b"\r\n", 1)[0].decode(
+                "ascii", "replace")
+            requires_auth = b" 401 " in response or b" 403 " in response
+
+            common_urls = [
+                f"rtsp://{ip}:{port}/stream",
+                f"rtsp://{ip}:{port}/stream1",
+                f"rtsp://{ip}:{port}/h264",
+                f"rtsp://{ip}:{port}/live",
+                f"rtsp://{ip}:{port}/cam/realmonitor?channel=1&subtype=0",
+            ]
+
+            note = (
+                "RTSP server confirmed. Credentials are required; enter the "
+                "camera's username and password when adding it."
+                if requires_auth
+                else "RTSP server confirmed. The stream path may still need "
+                     "adjusting for this camera model."
+            )
+
+            return {
+                "type": "rtsp",
+                "ip": ip,
+                "port": port,
+                "name": f"IP Camera at {ip}",
+                "urls": common_urls,
+                "status": "available",
+                "requires_auth": requires_auth,
+                "rtsp_response": status_line,
+                "auto_config": {
+                    "camera_id": f'rtsp_camera_{ip.replace(".", "_")}',
+                    "camera_type": "rtsp",
+                    "source": common_urls[0],
+                    "enabled": True,
+                },
+                "discovered_at": datetime.now().isoformat(),
+                "note": note,
+            }
 
         except Exception as e:
             logger.debug(f"Error checking {ip}:{port}: {e}")
 
         return None
+
+    async def _rtsp_options_probe(
+        self, ip: str, port: int, timeout: float = 2.0
+    ) -> Optional[bytes]:
+        """
+        Send an RTSP OPTIONS request and return the raw reply.
+
+        A genuine RTSP server answers with a "RTSP/1.0 <code>" status line even
+        when it rejects the request for lack of credentials, which is what
+        distinguishes a camera from any other service on the same port.
+
+        Returns:
+            Raw response bytes, or None if the port is closed or silent.
+        """
+        writer = None
+        try:
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(ip, port), timeout=timeout
+            )
+            request = (
+                f"OPTIONS rtsp://{ip}:{port} RTSP/1.0\r\n"
+                f"CSeq: 1\r\n"
+                f"User-Agent: OpenEye-Discovery\r\n"
+                f"\r\n"
+            ).encode("ascii")
+            writer.write(request)
+            await writer.drain()
+            return await asyncio.wait_for(reader.read(1024), timeout=timeout)
+        except (asyncio.TimeoutError, ConnectionRefusedError, OSError):
+            return None
+        finally:
+            if writer is not None:
+                try:
+                    writer.close()
+                    await writer.wait_closed()
+                except Exception:
+                    pass
 
     async def _test_rtsp_stream(self, url: str, timeout: float = 2.0) -> bool:
         """
