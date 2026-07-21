@@ -357,9 +357,14 @@ build_frontend() {
 
 # Create an auto-start service: macOS launchd OR Linux systemd.
 create_systemd_service() {
-    # Non-interactive default: only create the service when explicitly requested
-    # via OPENEYE_INSTALL_SERVICE=1, matching the interactive "N" default.
-    local svc_default="N"; [ -n "${OPENEYE_INSTALL_SERVICE:-}" ] && svc_default="Y"
+    # An unsupervised install does not survive a reboot, so a service is the
+    # default. Opt out with OPENEYE_SKIP_SERVICE=1 (e.g. for CI or a dev box
+    # that starts the app by hand with ./start.sh).
+    if [ -n "${OPENEYE_SKIP_SERVICE:-}" ]; then
+        log_info "OPENEYE_SKIP_SERVICE=1 — not creating an auto-start service."
+        return
+    fi
+    local svc_default="Y"
     if ! confirm "Do you want to create an auto-start service? (y/N):" "$svc_default"; then
         return
     fi
