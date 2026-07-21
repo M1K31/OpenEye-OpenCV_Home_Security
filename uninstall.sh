@@ -23,6 +23,8 @@ OPENCV_DIR="$PROJECT_ROOT/opencv_surveillance"
 LABEL="com.smartindustries.openeye"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 PORT="${OPENEYE_PORT:-8200}"
+DATA_ROOT="${OPENEYE_DATA_ROOT:-$HOME/.local/share/openeye}"
+APP_DIR="$DATA_ROOT/app"
 
 KEEP_DATA=false; DRY=false
 NONINTERACTIVE="${OPENEYE_NONINTERACTIVE:-${CI:-}}"
@@ -76,6 +78,8 @@ echo -e "${BLUE}[3/5] Removing runtime + build artifacts...${NC}"
 for vdir in "$OPENCV_DIR/venv" "$OPENCV_DIR/.venv" "${OPENEYE_VENV:-$HOME/.local/share/openeye/venv}"; do
     [ -d "$vdir" ] && run "rm -rf \"$vdir\"" && echo "  ✓ venv removed ($vdir)"
 done
+run "rm -rf \"${OPENEYE_DATA_ROOT:-$HOME/.local/share/openeye}/app\""
+echo "  ✓ app snapshot removed ($APP_DIR)"
 run "rmdir \"$HOME/.local/share/openeye\" 2>/dev/null || true"
 run "rm -rf \"$OPENCV_DIR/frontend/dist\" \"$OPENCV_DIR/frontend/node_modules\""
 run "find \"$OPENCV_DIR\" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true"
@@ -91,6 +95,10 @@ else
     run "rm -f \"$OPENCV_DIR/.env\""
     for d in recordings faces data/snapshots data/thumbnails; do
         [ -d "$OPENCV_DIR/$d" ] && run "rm -rf \"$OPENCV_DIR/$d\""
+    done
+    run "rm -f \"$DATA_ROOT/surveillance.db\" \"$DATA_ROOT/surveillance.db-shm\" \"$DATA_ROOT/surveillance.db-wal\""
+    for d in recordings faces data; do
+        run "rm -rf \"$DATA_ROOT/$d\""
     done
     echo "  ✓ database, .env, and media removed"
 fi

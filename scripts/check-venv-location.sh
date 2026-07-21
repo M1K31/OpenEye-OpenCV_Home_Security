@@ -10,4 +10,12 @@ case "$VENV" in
   /Volumes/*) echo "FAIL: venv is on an external volume: $VENV"; exit 1 ;;
 esac
 [ -x "$VENV/bin/python3" ] || { echo "FAIL: no interpreter at $VENV/bin/python3"; exit 1; }
+
+PLIST="$HOME/Library/LaunchAgents/com.smartindustries.openeye.plist"
+if [ -f "$PLIST" ] && grep -q '/Volumes/' "$PLIST"; then
+    echo "FAIL: launchd plist still references an external volume:"
+    grep -n '/Volumes/' "$PLIST"
+    exit 1
+fi
+
 echo "OK: internal-disk venv at $VENV"

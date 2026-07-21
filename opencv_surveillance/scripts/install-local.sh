@@ -21,6 +21,12 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 # (opencv, av, face_recognition) fault with SIGBUS and kills the daemon.
 VENV="${OPENEYE_VENV:-$HOME/.local/share/openeye/venv}"
 
+# The service must not depend on the repo volume. macOS TCC denies launchd-spawned
+# binaries access to /Volumes unless individually granted, and an external volume can
+# vanish mid-run. Code is snapshotted into APP_DIR; db + media live under DATA_ROOT.
+DATA_ROOT="${OPENEYE_DATA_ROOT:-$HOME/.local/share/openeye}"
+APP_DIR="$DATA_ROOT/app"
+
 # Logging functions
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
@@ -252,6 +258,23 @@ install_python_deps() {
     log_success "Python dependencies installed"
 }
 
+# Copy the runnable application to the internal disk. This is a snapshot: changes in
+# the repo require re-running this installer, the same non-editable tradeoff the
+# ecosystem registry already makes.
+sync_app_to_internal() {
+    log_info "Syncing application code to $APP_DIR (internal disk)..."
+    mkdir -p "$APP_DIR"
+    rsync -a --delete \
+        --exclude 'venv/' --exclude '.venv/' \
+        --exclude 'frontend/node_modules/' \
+        --exclude '__pycache__/' --exclude '*.pyc' \
+        --exclude '.git/' \
+        --exclude 'recordings/' --exclude 'faces/' --exclude 'data/' \
+        --exclude 'surveillance.db*' \
+        "$PROJECT_DIR/" "$APP_DIR/"
+    log_success "Application synced to $APP_DIR"
+}
+
 # Generate secret keys
 generate_secrets() {
     log_info "Generating secret keys..."
@@ -280,8 +303,13 @@ SECRET_KEY=$SECRET_KEY_VAL
 JWT_SECRET_KEY=$JWT_SECRET
 ADMIN_TOKEN=$ADMIN_TOKEN
 
-# Database
-DATABASE_URL=sqlite:///./surveillance.db
+# Absolute internal paths so the service never touches the repo volume.
+DATABASE_URL=sqlite:///$DATA_ROOT/surveillance.db
+OPENEYE_DATA_DIR=$DATA_ROOT/data
+OPENEYE_RECORDINGS_DIR=$DATA_ROOT/recordings
+OPENEYE_SNAPSHOTS_DIR=$DATA_ROOT/data/snapshots
+OPENEYE_THUMBNAILS_DIR=$DATA_ROOT/data/thumbnails
+OPENEYE_FACES_DIR=$DATA_ROOT/faces
 
 # Server Configuration
 HOST=0.0.0.0
@@ -298,7 +326,10 @@ ENABLE_RECORDING=true
 # Logging
 LOG_LEVEL=INFO
 EOF
-    
+
+    mkdir -p "$DATA_ROOT/data/snapshots" "$DATA_ROOT/data/thumbnails" \
+             "$DATA_ROOT/recordings" "$DATA_ROOT/faces"
+
     log_success "Secret keys generated and saved to .env"
     log_warn "Keep your .env file secure and do not commit it to version control!"
 }
@@ -389,7 +420,7 @@ create_systemd_service() {
     <string>--host</string><string>0.0.0.0</string>
     <string>--port</string><string>$PORT</string>
   </array>
-  <key>WorkingDirectory</key><string>$PROJECT_DIR</string>
+  <key>WorkingDirectory</key><string>$APP_DIR</string>
   <key>EnvironmentVariables</key><dict>
     <key>ECOSYSTEM_SERVICE_PORT</key><string>$PORT</string>
   </dict>
@@ -441,8 +472,9 @@ create_launch_script() {
 #!/bin/bash
 # Start OpenEye Surveillance System
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+# Run from the internal-disk snapshot, not the script's own location — the
+# service must not depend on the repo volume (see install-local.sh).
+cd "@@APP_DIR@@"
 
 echo "Starting OpenEye Surveillance System..."
 
@@ -464,7 +496,8 @@ EOF
     # Portable placeholder substitution. Do NOT use `sed -i`: BSD/macOS requires a
     # detached backup suffix (-i '') while GNU/Linux forbids it, and this installer
     # supports both. Redirect-and-move works identically everywhere.
-    sed "s|@@VENV@@|$VENV|g" start.sh > start.sh.tmp && mv start.sh.tmp start.sh
+    sed -e "s|@@VENV@@|$VENV|g" -e "s|@@APP_DIR@@|$APP_DIR|g" start.sh > start.sh.tmp \
+        && mv start.sh.tmp start.sh
     chmod +x start.sh
 
     # Stop script
@@ -549,7 +582,16 @@ main() {
     generate_secrets
     setup_database
     build_frontend
+    sync_app_to_internal
+    cp "$PROJECT_DIR/.env" "$APP_DIR/.env"
     create_launch_script
+    # create_launch_script only (re)writes start.sh/stop.sh into $PROJECT_DIR (it
+    # already ran after the sync above), so mirror the freshly generated,
+    # already-resolved scripts into $APP_DIR too — otherwise a manual
+    # $APP_DIR/start.sh would still carry whatever start.sh existed at sync time.
+    cp "$PROJECT_DIR/start.sh" "$APP_DIR/start.sh"
+    cp "$PROJECT_DIR/stop.sh" "$APP_DIR/stop.sh"
+    chmod +x "$APP_DIR/start.sh" "$APP_DIR/stop.sh"
     create_systemd_service
     
     print_completion
