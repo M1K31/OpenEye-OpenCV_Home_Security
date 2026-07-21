@@ -2,6 +2,13 @@
 # OpenEye Surveillance System - Local Installation Script
 # This script automates the complete installation process for a local machine
 # Supports macOS and Linux
+#
+# Environment variables:
+#   OPENEYE_NONINTERACTIVE=1  Skip prompts (also: ECOSYSTEM_NONINTERACTIVE, CI, -y/--yes)
+#   OPENEYE_SKIP_SERVICE=1    Do not create/register an auto-start service
+#   OPENEYE_VENV=<path>       Override the venv location (default: ~/.local/share/openeye/venv)
+#   OPENEYE_DATA_ROOT=<path>  Override the data root (default: ~/.local/share/openeye)
+#   OPENEYE_RECREATE_VENV=1   Delete and rebuild the venv instead of reusing it
 
 set -e  # Exit on error
 
@@ -141,6 +148,7 @@ install_system_deps() {
             build-essential \
             cmake \
             pkg-config \
+            rsync \
             libopencv-dev \
             libavcodec-dev \
             libavformat-dev \
@@ -291,24 +299,65 @@ warn_macos_camera_permission() {
 sync_app_to_internal() {
     log_info "Syncing application code to $APP_DIR (internal disk)..."
     mkdir -p "$APP_DIR"
-    rsync -a --delete \
-        --exclude 'venv/' --exclude '.venv/' \
-        --exclude 'frontend/node_modules/' \
-        --exclude '__pycache__/' --exclude '*.pyc' \
-        --exclude '.git/' \
-        --exclude 'recordings/' --exclude 'faces/' --exclude 'data/' \
-        --exclude 'surveillance.db*' \
-        "$PROJECT_DIR/" "$APP_DIR/"
+
+    if command -v rsync >/dev/null 2>&1; then
+        rsync -a --delete \
+            --exclude 'venv/' --exclude '.venv/' \
+            --exclude 'frontend/node_modules/' \
+            --exclude '__pycache__/' --exclude '*.pyc' \
+            --exclude '.git/' \
+            --exclude 'recordings/' --exclude 'faces/' --exclude 'data/' \
+            --exclude 'surveillance.db*' \
+            --exclude '.env' \
+            "$PROJECT_DIR/" "$APP_DIR/"
+    elif command -v tar >/dev/null 2>&1; then
+        log_warn "rsync not found; falling back to a tar-based copy."
+        rm -rf "$APP_DIR"
+        mkdir -p "$APP_DIR"
+        (cd "$PROJECT_DIR" && tar \
+            --exclude='venv' --exclude='.venv' \
+            --exclude='frontend/node_modules' \
+            --exclude='__pycache__' --exclude='*.pyc' \
+            --exclude='.git' \
+            --exclude='recordings' --exclude='faces' --exclude='data' \
+            --exclude='surveillance.db*' \
+            --exclude='.env' \
+            -cf - .) | (cd "$APP_DIR" && tar -xf -)
+    else
+        log_error "Neither rsync nor tar is available — cannot sync the application to $APP_DIR."
+        log_info "Install rsync (e.g. 'apt-get install rsync') and re-run this installer."
+        exit 1
+    fi
+
     log_success "Application synced to $APP_DIR"
 }
 
 # Generate secret keys
 generate_secrets() {
-    log_info "Generating secret keys..."
-    
     cd "$PROJECT_DIR"
+
+    # Data directories are needed regardless of whether .env is regenerated.
+    mkdir -p "$DATA_ROOT/data/snapshots" "$DATA_ROOT/data/thumbnails" \
+             "$DATA_ROOT/recordings" "$DATA_ROOT/faces"
+
+    # Preserve an existing .env (and thus JWT_SECRET_KEY / ADMIN_TOKEN) across
+    # reinstalls, e.g. uninstall-keep-data.sh -> install-local.sh. Regenerating
+    # unconditionally would mint new secrets every run and invalidate exactly
+    # the sessions/tokens a keep-data reinstall promises to preserve. Matches
+    # the pattern AI-for-Survival's bin/install-local.sh uses for its env file.
+    if [[ -f "$PROJECT_DIR/.env" ]]; then
+        log_info ".env already exists — preserving existing secret keys (not regenerating)."
+        # Close the world-readable-secrets exposure even on the preserve path:
+        # older installs (pre-fix) may have left .env at 0644, and secrets must
+        # be owner-only regardless of whether this run generated them.
+        chmod 600 "$PROJECT_DIR/.env"
+        return
+    fi
+
+    log_info "Generating secret keys..."
+
     source "$VENV/bin/activate"
-    
+
     # Generate the primary app secret (used for sessions and, by default, JWTs).
     SECRET_KEY_VAL=$(python3 -c "import secrets; print(secrets.token_urlsafe(48))")
 
@@ -318,7 +367,12 @@ generate_secrets() {
     # Generate admin token
     ADMIN_TOKEN=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 
-    # Create .env file
+    # Create .env file. Truncate and lock it down to owner-only BEFORE any
+    # secret is written, so SECRET_KEY/JWT_SECRET_KEY/ADMIN_TOKEN never exist
+    # in a world-readable file, even momentarily (umask 022 would otherwise
+    # yield 0644 for the brief window between creation and a trailing chmod).
+    : > .env
+    chmod 600 .env
     cat > .env << EOF
 # OpenEye Surveillance System Configuration
 # Generated on $(date)
@@ -353,9 +407,6 @@ ENABLE_RECORDING=true
 # Logging
 LOG_LEVEL=INFO
 EOF
-
-    mkdir -p "$DATA_ROOT/data/snapshots" "$DATA_ROOT/data/thumbnails" \
-             "$DATA_ROOT/recordings" "$DATA_ROOT/faces"
 
     log_success "Secret keys generated and saved to .env"
     log_warn "Keep your .env file secure and do not commit it to version control!"
@@ -612,6 +663,7 @@ main() {
     build_frontend
     sync_app_to_internal
     cp "$PROJECT_DIR/.env" "$APP_DIR/.env"
+    chmod 600 "$APP_DIR/.env"
     create_launch_script
     # create_launch_script only (re)writes start.sh/stop.sh into $PROJECT_DIR (it
     # already ran after the sync above), so mirror the freshly generated,
