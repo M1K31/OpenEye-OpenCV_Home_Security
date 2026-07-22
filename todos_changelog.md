@@ -99,3 +99,24 @@ changes. See [CHANGELOG.md](CHANGELOG.md) for the full release history.
   is non-fatal.
 - In-app "Ecosystem Setup" panel (System & Alerts) for the shared HMAC secret.
 - Backend imports without `aiortc` (WebRTC optional, gated by `WEBRTC_AVAILABLE`).
+
+## 🔭 Open follow-ups (flagged 2026-07-21)
+
+- [ ] **`main` lacks the `.env` security fix.** Commit `2440686` (writes the
+  secrets file at 0600 instead of 0644, and preserves it across reinstalls) is on
+  `fix/camera-discovery-and-ws-rce` by an explicit owner decision. `main` still
+  ships the world-readable `.env` until that branch merges. **Deliberate — do not
+  cherry-pick it separately.**
+- [ ] **AI features are not wired.** `backend/core/ecosystem_ai_bridge.py` defines
+  `summarize_event()` and `shared_selected_model()`, but neither is called — the
+  docstring says "not wired by default". The AI provider key + per-task routing
+  endpoints exist (`/api/ai/providers`), so once OpenEye does real LLM work the
+  configuration surface is already there.
+- [ ] **Frontend panel for AI providers not built.** Backend routes are live and
+  admin-gated; the settings UI still needs a `.jsx` component matching this repo's
+  conventions (see `AlertSettingsPage.jsx`).
+- [ ] **Runs from a code snapshot.** The service runs `~/.local/share/openeye/app`,
+  not the repo, so repo edits require re-running `scripts/install-local.sh` — a
+  restart alone silently keeps the old code.
+
+Ecosystem-wide context is recorded in `appEcosystem/todos_changelog.md`.
