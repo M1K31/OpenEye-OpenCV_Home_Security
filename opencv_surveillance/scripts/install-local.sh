@@ -263,6 +263,24 @@ install_python_deps() {
         log_info "appEcosystem not found at $ECO_ROOT — standalone (set ECOSYSTEM_BASE_PATH to enable sync)"
     fi
 
+    # Cyber Agents — an independent project that also integrates with the
+    # ecosystem. Installed alongside the shared packages so its security agents
+    # and the AegisSIEM daemon are available to OpenEye. Runtime only: the daemon
+    # is NOT started here (launchd owns it; a second start vector would let two
+    # daemons share one SQLite state dir). Never fatal.
+    CYBER="${CYBER_AGENTS_PATH:-${ECOSYSTEM_BASE_PATH:-$PROJECT_DIR/../..}/CybersecurityTeam/cyber-agents}"
+    if [ -n "${OPENEYE_SKIP_CYBER_AGENTS:-}" ]; then
+        log_info "OPENEYE_SKIP_CYBER_AGENTS=1 — skipping cyber-agents setup"
+    elif [ -x "$CYBER/scripts/install-local.sh" ]; then
+        log_info "Preparing cyber-agents runtime (opt-in; enable its service with --plist)..."
+        ECOSYSTEM_BASE_PATH="${ECOSYSTEM_BASE_PATH:-$PROJECT_DIR/../..}" \
+            "$CYBER/scripts/install-local.sh" >/dev/null 2>&1 \
+            && log_success "cyber-agents runtime ready (not started)" \
+            || log_info "cyber-agents setup skipped (non-fatal)"
+    else
+        log_info "cyber-agents not present at $CYBER — skipping (optional component)"
+    fi
+
     log_success "Python dependencies installed"
 }
 
