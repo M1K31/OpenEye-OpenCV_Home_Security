@@ -27,6 +27,7 @@ const FaceClusteringPage = lazy(() => import('./pages/FaceClusteringPage'));
 const DetectionsPage = lazy(() => import('./pages/DetectionsPage')); // v3.10.0: Unified detections
 const AlertSettingsPage = lazy(() => import('./pages/AlertSettingsPage'));
 const NotificationSettingsPage = lazy(() => import('./pages/NotificationSettingsPage'));
+const AIProviderSettingsPage = lazy(() => import('./pages/AIProviderSettingsPage'));
 const SystemSettingsPage = lazy(() => import('./pages/SystemSettingsPage'));
 const TwoFactorSettings = lazy(() => import('./pages/TwoFactorSettings'));
 const ThemeSelectorPage = lazy(() => import('./pages/ThemeSelectorPage'));
@@ -225,6 +226,13 @@ function App() {
                 <PageErrorBoundaryWithRouter pageName="Notification Settings">
                   <Suspense fallback={<PageLoadingFallback />}>
                     <NotificationSettingsPage />
+                  </Suspense>
+                </PageErrorBoundaryWithRouter>
+              } />
+              <Route path="system/ai-providers" element={
+                <PageErrorBoundaryWithRouter pageName="AI Provider Settings">
+                  <Suspense fallback={<PageLoadingFallback />}>
+                    <AIProviderSettingsPage />
                   </Suspense>
                 </PageErrorBoundaryWithRouter>
               } />

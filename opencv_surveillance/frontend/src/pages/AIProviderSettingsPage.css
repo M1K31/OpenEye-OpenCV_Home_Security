@@ -1,0 +1,132 @@
+/* Copyright (c) 2025 Mikel Smart */
+/* Cloud AI provider keys + per-task routing. */
+
+.ai-provider-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg, 1.25rem);
+  padding: var(--spacing-lg, 1.25rem);
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.ai-provider-intro {
+  color: var(--color-label-secondary, #6b7280);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0 0 1rem;
+}
+
+.ai-provider-intro code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  background: var(--color-bg-secondary, rgba(0, 0, 0, 0.05));
+}
+
+.ai-provider-message {
+  padding: 0.625rem 0.875rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.ai-provider-message.is-ok {
+  background: rgba(52, 199, 89, 0.16);
+  color: var(--color-label-primary, #111827);
+}
+
+.ai-provider-message.is-error {
+  background: rgba(255, 59, 48, 0.16);
+  color: var(--color-label-primary, #111827);
+}
+
+.ai-provider-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.ai-provider-row {
+  padding: 0.875rem;
+  border-radius: 10px;
+  background: var(--color-bg-secondary, rgba(0, 0, 0, 0.03));
+}
+
+.ai-provider-row-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.625rem;
+}
+
+.ai-provider-name {
+  font-weight: 600;
+  color: var(--color-label-primary, #111827);
+}
+
+.ai-provider-hint {
+  font-size: 0.75rem;
+  color: var(--color-label-tertiary, #9ca3af);
+}
+
+.ai-provider-badge {
+  font-size: 0.75rem;
+  padding: 0.125rem 0.4rem;
+  border-radius: 5px;
+  color: var(--color-label-tertiary, #9ca3af);
+}
+
+.ai-provider-badge.is-configured {
+  background: rgba(52, 199, 89, 0.16);
+  color: #2f9e4f;
+  font-weight: 600;
+}
+
+/* The key input should take the room; buttons stay their natural size. */
+.ai-provider-controls {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.ai-provider-controls > *:first-child {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.ai-provider-updated {
+  margin-top: 0.375rem;
+  font-size: 0.75rem;
+  color: var(--color-label-tertiary, #9ca3af);
+}
+
+.ai-provider-route {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ai-provider-select {
+  padding: 0.5rem 0.625rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-separator, #d1d5db);
+  background: var(--color-bg-elevated, #fff);
+  color: var(--color-label-primary, #111827);
+  font-size: 0.875rem;
+  min-width: 200px;
+}
+
+@media (max-width: 600px) {
+  .ai-provider-route {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ai-provider-select {
+    width: 100%;
+  }
+}
