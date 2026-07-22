@@ -67,10 +67,11 @@ from backend.api.routes import (
     hardware,
     features,
     objects,  # v3.10.0: Object detection routes
-    ecosystem,  # v3.11.0: Ecosystem integration (MagicMirror, mobile apps)
+    ecosystem,  # v3.11.0: Ecosystem integration (MagicMirror, mobile apps,
     network_discovery,  # v3.11.4: Network discovery with Fing integration
     scheduled_tasks,  # v3.12.0: Scheduled tasks (retraining, retroactive search)
     license_plates,  # v3.11.7: License plate recognition (ALPR)
+    ai_providers,  # cloud AI provider keys + per-task routing
 )
 from backend.core.camera_manager import manager as camera_manager
 from backend.core.websocket_manager import broadcast_statistics_update
@@ -774,6 +775,7 @@ app.include_router(license_plates.router, prefix="/api/alpr", tags=["License Pla
 
 # First-Run Setup (with /api/setup prefix for consistency)
 app.include_router(setup.router, prefix="/api/setup", tags=["First-Run Setup"])
+app.include_router(ai_providers.router, prefix="/api/ai", tags=["AI Providers"])
 
 
 @app.get("/")
