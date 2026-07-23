@@ -106,8 +106,23 @@ install_dependencies() {
     echo "  Upgrading pip..."
     pip install --upgrade pip > /dev/null 2>&1
 
+    # This is the phase most likely to fail on a fresh Linux box (dlib and
+    # OpenCV need system libraries that install-deps.sh provides). Discarding
+    # the output left the user with only a downstream import error and no
+    # cause, so keep the log and surface the tail.
     echo "  Installing requirements..."
-    pip install -r requirements.txt > /dev/null 2>&1
+    PIP_LOG="$(mktemp)"
+    if ! pip install -r requirements.txt > "$PIP_LOG" 2>&1; then
+        echo -e "${RED}  ❌ Dependency installation failed${NC}"
+        tail -25 "$PIP_LOG" | sed 's/^/     /'
+        echo "     Full log: $PIP_LOG"
+        echo "     Missing system libraries are the usual cause — try:"
+        echo "       ./install-deps.sh"
+        deactivate
+        cd "$PROJECT_ROOT"
+        exit 1
+    fi
+    rm -f "$PIP_LOG"
 
     echo -e "${GREEN}  ✓ Dependencies installed${NC}"
 
@@ -238,14 +253,58 @@ build_frontend() {
 
     cd "$OPENCV_DIR/frontend"
 
+    # npm is not a Python dependency, so it is routinely absent on a server
+    # that installed everything else fine. Check before using it.
+    if ! command -v npm &> /dev/null; then
+        echo -e "${RED}  ❌ npm not found — cannot build the web UI.${NC}"
+        echo "     Install Node.js 18+ and re-run, e.g.:"
+        echo "       Debian/Ubuntu: sudo apt-get install -y nodejs npm"
+        echo "       Alpine:        apk add nodejs npm"
+        echo "       macOS:         brew install node"
+        FRONTEND_OK=false
+        cd "$PROJECT_ROOT"
+        echo ""
+        return
+    fi
+
+    # Output goes to a log rather than /dev/null: on failure the reason is the
+    # only thing that helps, and discarding it turned every frontend problem
+    # into a silent success.
+    BUILD_LOG="$(mktemp)"
     if [ ! -d "node_modules" ]; then
         echo "  Installing Node.js dependencies..."
-        npm install > /dev/null 2>&1
+        if ! npm install > "$BUILD_LOG" 2>&1; then
+            echo -e "${RED}  ❌ npm install failed${NC}"
+            tail -20 "$BUILD_LOG" | sed 's/^/     /'
+            echo "     Full log: $BUILD_LOG"
+            FRONTEND_OK=false
+            cd "$PROJECT_ROOT"
+            echo ""
+            return
+        fi
     fi
 
     echo "  Building production bundle..."
-    npm run build > /dev/null 2>&1
+    if ! npm run build > "$BUILD_LOG" 2>&1; then
+        echo -e "${RED}  ❌ npm run build failed${NC}"
+        tail -20 "$BUILD_LOG" | sed 's/^/     /'
+        echo "     Full log: $BUILD_LOG"
+        FRONTEND_OK=false
+        cd "$PROJECT_ROOT"
+        echo ""
+        return
+    fi
 
+    # A zero exit from a build tool is not proof it emitted anything.
+    if [ ! -f "dist/index.html" ]; then
+        echo -e "${RED}  ❌ Build reported success but dist/index.html is missing${NC}"
+        FRONTEND_OK=false
+        cd "$PROJECT_ROOT"
+        echo ""
+        return
+    fi
+
+    rm -f "$BUILD_LOG"
     echo -e "${GREEN}  ✓ Frontend built successfully${NC}"
     echo -e "${CYAN}  → Output: opencv_surveillance/frontend/dist/${NC}"
 
@@ -302,14 +361,16 @@ print('  ✓ All critical imports OK')
 
     # Check frontend build
     if [ ! -f "frontend/dist/index.html" ]; then
-        echo -e "${YELLOW}  ⚠ Frontend build not found${NC}"
+        echo -e "${RED}  ❌ Frontend build not found (frontend/dist/index.html)${NC}"
+        FRONTEND_OK=false
     else
         echo "  ✓ Frontend build verified"
     fi
 
-    # Check .env file
+    # Check .env file — without it there is no JWT secret, so logins fail.
     if [ ! -f ".env" ]; then
-        echo -e "${YELLOW}  ⚠ .env file missing${NC}"
+        echo -e "${RED}  ❌ .env file missing — the app cannot start${NC}"
+        ENV_OK=false
     else
         echo "  ✓ Environment configuration verified"
     fi
@@ -317,12 +378,35 @@ print('  ✓ All critical imports OK')
     deactivate
     cd "$PROJECT_ROOT"
 
-    echo -e "${GREEN}  ✓ Installation verified${NC}"
+    if [ "$FRONTEND_OK" = true ] && [ "$ENV_OK" = true ]; then
+        echo -e "${GREEN}  ✓ Installation verified${NC}"
+    else
+        echo -e "${YELLOW}  ⚠ Installation incomplete — see above${NC}"
+    fi
     echo ""
 }
 
 # Function to display summary
 display_summary() {
+    # Do not claim success when a required piece is missing: an install that
+    # says "Complete!" and then serves a blank page is the worst outcome.
+    if [ "$FRONTEND_OK" != true ] || [ "$ENV_OK" != true ]; then
+        echo -e "${RED}========================================${NC}"
+        echo -e "${RED}✗ OpenEye Setup INCOMPLETE${NC}"
+        echo -e "${RED}========================================${NC}"
+        echo ""
+        [ "$FRONTEND_OK" != true ] && \
+            echo -e "  ${RED}•${NC} The web UI was not built. The API will start, but"
+        [ "$FRONTEND_OK" != true ] && \
+            echo    "    http://localhost:8000 will not serve the interface."
+        [ "$ENV_OK" != true ] && \
+            echo -e "  ${RED}•${NC} .env is missing — the app cannot start."
+        echo ""
+        echo "  Fix the item(s) above and re-run ./setup-production.sh"
+        echo ""
+        return 1
+    fi
+
     echo -e "${GREEN}========================================${NC}"
     echo -e "${GREEN}✓ OpenEye Setup Complete!${NC}"
     echo -e "${GREEN}========================================${NC}"
@@ -361,6 +445,12 @@ display_summary() {
 
 # Main execution
 main() {
+    # Tracked across phases so the final summary reflects what actually
+    # happened. This script does not use `set -e` — phases are expected to
+    # continue after a soft failure — so success has to be recorded, not assumed.
+    FRONTEND_OK=true
+    ENV_OK=true
+
     check_python
     create_venv
     install_dependencies
@@ -373,5 +463,7 @@ main() {
     display_summary
 }
 
-# Run main function
+# Run main function, propagating a non-zero exit when the install is incomplete
+# so callers and CI can tell the difference.
 main
+exit $?
