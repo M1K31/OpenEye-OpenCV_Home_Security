@@ -112,11 +112,58 @@ changes. See [CHANGELOG.md](CHANGELOG.md) for the full release history.
   docstring says "not wired by default". The AI provider key + per-task routing
   endpoints exist (`/api/ai/providers`), so once OpenEye does real LLM work the
   configuration surface is already there.
-- [ ] **Frontend panel for AI providers not built.** Backend routes are live and
-  admin-gated; the settings UI still needs a `.jsx` component matching this repo's
-  conventions (see `AlertSettingsPage.jsx`).
+- [x] **Frontend panel for AI providers built.** `frontend/src/pages/
+  AIProviderSettingsPage.jsx` (+ `.css`), routed at `/system/ai-providers` in
+  `App.jsx`, using the universal `Button/TextField/Card` components and
+  `apiClient`. Matches AegisSIEM/AFS. (2026-07-21)
 - [ ] **Runs from a code snapshot.** The service runs `~/.local/share/openeye/app`,
   not the repo, so repo edits require re-running `scripts/install-local.sh` — a
   restart alone silently keeps the old code.
 
 Ecosystem-wide context is recorded in `appEcosystem/todos_changelog.md`.
+
+## 🐧 Linux smoke test — 2026-07-22
+
+Ran `setup-production.sh` in `debian:bookworm-slim`. Found and fixed a
+silent-failure chain in `aed3282`; the underlying cause is the native-dep
+requirement, which is inherent to this project.
+
+**Fixed — the install lied about success.** `setup-production.sh` has no
+`set -e`, and its two heaviest steps sent both stdout and exit status to
+`/dev/null`:
+
+    npm install > /dev/null 2>&1
+    npm run build > /dev/null 2>&1
+    echo "  ✓ Frontend built successfully"
+
+On a box without npm this printed success, exited 0, and produced no `dist/`.
+`verify_installation` saw the missing `dist/index.html` but downgraded it to a
+yellow warning; the summary still said "Setup Complete!" pointing at a UI that
+does not exist. The `pip install -r requirements.txt` step had the same shape,
+so a failed dlib/OpenCV build surfaced only later as
+`ModuleNotFoundError: face_recognition_models` with no cause shown — which is
+exactly what the container's first (pre-fix) run produced. Both now capture a
+log, check status, show the tail on failure, verify the artifact actually
+exists, and the summary refuses to claim success (exit 1) when a required piece
+is missing. Verified: on a bare box the fixed script stops at phase 3 and points
+to `./install-deps.sh`.
+
+### Still open / notes
+
+- [ ] **`setup-production.sh` does not run `install-deps.sh`.** The native libs
+  (dlib→cmake+build-essential, OpenCV, ffmpeg, portaudio) are a separate manual
+  step. Consider either invoking it, or making the pip-failure message the
+  single source of truth (currently done). A fully green run needs those libs
+  present — a bare `python3+npm` box cannot build the backend.
+- [ ] **No `apk`/Alpine branch in `install-deps.sh`.** `detect_platform()` falls
+  through to `PKG_MGR="none"`; an Alpine user gets no system deps and must
+  install them by hand. dlib on musl is its own adventure — may be out of scope,
+  but the installer should at least say so.
+- [ ] **Full green Linux run still pending** — the dlib compile is slow; a run
+  with the native deps present was in progress at time of writing. The backend
+  `import` and a served `/api/health` are not yet confirmed on Linux.
+- [ ] **`uninstall.sh` systemd branch** is correctly guarded (`if [ -f … ]`),
+  unlike AegisSIEM's was — but still unrun on Linux.
+- **Doc-policy note:** `todos_changelog.md` is *tracked* here (whitelisted in
+  `.gitignore:112`) and in LogAnalysis, but *ignored* in appEcosystem. One
+  convention is wrong under the no-dev-`.md` policy — owner call which.
