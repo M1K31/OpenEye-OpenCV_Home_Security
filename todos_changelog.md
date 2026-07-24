@@ -159,9 +159,18 @@ to `./install-deps.sh`.
   through to `PKG_MGR="none"`; an Alpine user gets no system deps and must
   install them by hand. dlib on musl is its own adventure — may be out of scope,
   but the installer should at least say so.
-- [ ] **Full green Linux run still pending** — the dlib compile is slow; a run
-  with the native deps present was in progress at time of writing. The backend
-  `import` and a served `/api/health` are not yet confirmed on Linux.
+- [x] **Full green Linux run** — with native deps present, `setup-production.sh`
+  completes: "Setup Complete!", exit 0, venv + frontend build verified. (2026-07-22)
+- [x] **Standalone backend could not import (fixed, `d228e7d`).** Even after a
+  green install the backend died on `import backend.main` with
+  `ModuleNotFoundError: ecosystem_auth`. `routes/ecosystem.py` imported it at
+  top level and `main.py` registers that router unconditionally, so a
+  standalone install (a *supported* config) had no working API. Guarded the
+  import — endpoints needing it now return 503 when appEcosystem is absent,
+  unchanged when present. Also: `setup-production.sh` never installed the shared
+  packages (only `install-local.sh` did); it now does, from the sibling repo.
+  A standalone end-to-end re-run confirming `import backend.main` succeeds was
+  in progress at time of writing.
 - [ ] **`uninstall.sh` systemd branch** is correctly guarded (`if [ -f … ]`),
   unlike AegisSIEM's was — but still unrun on Linux.
 - **Doc-policy note:** `todos_changelog.md` is *tracked* here (whitelisted in
