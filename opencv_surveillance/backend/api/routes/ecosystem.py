@@ -21,8 +21,32 @@ import os
 import asyncio
 import httpx
 
-from ecosystem_auth.tokens import sign_payload
-from ecosystem_auth.middleware import require_ecosystem_auth
+# ecosystem_auth ships with appEcosystem, which is an OPTIONAL sibling: OpenEye
+# is designed to install and run standalone. This module is imported
+# unconditionally by main.py, so a bare `import` here would take the whole app
+# down on a standalone install. Degrade instead: keep the module importable, and
+# have the endpoints that actually need ecosystem auth return 503 rather than
+# 500-ing the entire process at startup.
+try:
+    from ecosystem_auth.tokens import sign_payload
+    from ecosystem_auth.middleware import require_ecosystem_auth
+    ECOSYSTEM_AUTH_AVAILABLE = True
+except ModuleNotFoundError:
+    ECOSYSTEM_AUTH_AVAILABLE = False
+
+    def sign_payload(*_args, **_kwargs):  # type: ignore[misc]
+        raise HTTPException(
+            status_code=503,
+            detail="Ecosystem integration is not installed (appEcosystem/ecosystem_auth missing).",
+        )
+
+    def require_ecosystem_auth():  # type: ignore[misc]
+        # Used as a FastAPI dependency, so it must be callable at import time and
+        # only fail when a request actually reaches a protected endpoint.
+        raise HTTPException(
+            status_code=503,
+            detail="Ecosystem integration is not installed (appEcosystem/ecosystem_auth missing).",
+        )
 
 from backend.database.session import get_db, engine
 from backend.database import models
