@@ -145,7 +145,7 @@ export const HELP_CONTENT = {
   // Themes
   THEMES: {
     title: "Application Themes",
-    description: "Choose from 9 unique themes: Default (Professional blue), Sman (Classic red/blue), Bman (Dark knight), W Woman (Warrior gold), Flah (Speed red), Aman (Ocean teal), Cy (Tech silver), G Lantern (Willpower green), and Aqua Security (Liquid glass with modern frosted transparency). Access via Dashboard → 'Themes'. Theme persists across sessions."
+    description: "Choose from 9 unique themes: Default (Professional blue), Steel Blue (Classic red/blue), Midnight (Charcoal + gold), Crimson Gold (Regal crimson/blue/gold), Scarlet (Speed red), Tidal (Ocean teal), Circuit (Tech silver), Emerald (Willpower green), and Aqua Security (Liquid glass with modern frosted transparency). Access via Dashboard → 'Themes'. Theme persists across sessions."
   },
 
   // Live Streaming

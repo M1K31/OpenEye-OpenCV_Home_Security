@@ -126,13 +126,23 @@ const SystemSettingsPage = ({ embedded = false, initialTab = null }) => {
       logger.log('Validation response:', response.data);
 
       const isValid = response.data.exists && response.data.is_directory && response.data.writable;
+      // External/removable mounts can be unmounted or disconnected while OpenEye
+      // runs, which SIGBUS-crashes the backend. Mount roots differ by OS: macOS
+      // uses /Volumes; Linux uses /media, /mnt, or /run/media. Allowed, but warn.
+      const _extPrefixes = ['/Volumes/', '/media/', '/mnt/', '/run/media/'];
+      const _abs = response.data.absolute_path || '';
+      const _p = path.trim();
+      const isExternal = _extPrefixes.some(pre => _p.startsWith(pre) || _abs.startsWith(pre));
 
       setPathValidation(prev => ({
         ...prev,
         [pathType]: {
           valid: isValid,
+          warning: isValid && isExternal,
           message: isValid
-            ? `✓ Valid and writable (${response.data.absolute_path})`
+            ? (isExternal
+                ? `✓ Valid, but ⚠️ EXTERNAL drive — if it is unmounted or disconnected while OpenEye runs, the backend can crash (SIGBUS). The internal drive is strongly recommended.`
+                : `✓ Valid and writable (${response.data.absolute_path})`)
             : response.data.exists
               ? response.data.is_directory
                 ? '⚠ Path exists but not writable'
@@ -481,7 +491,7 @@ const SystemSettingsPage = ({ embedded = false, initialTab = null }) => {
             {pathValidation.recordings_path && (
               <div style={{
                 ...styles.validationMessage,
-                color: pathValidation.recordings_path.valid ? 'var(--color-success)' : 'var(--color-error)'
+                color: pathValidation.recordings_path.warning ? 'var(--color-warning, #d97706)' : pathValidation.recordings_path.valid ? 'var(--color-success)' : 'var(--color-error)'
               }}>
                 {pathValidation.recordings_path.message}
               </div>
@@ -514,7 +524,7 @@ const SystemSettingsPage = ({ embedded = false, initialTab = null }) => {
             {pathValidation.faces_path && (
               <div style={{
                 ...styles.validationMessage,
-                color: pathValidation.faces_path.valid ? 'var(--color-success)' : 'var(--color-error)'
+                color: pathValidation.faces_path.warning ? 'var(--color-warning, #d97706)' : pathValidation.faces_path.valid ? 'var(--color-success)' : 'var(--color-error)'
               }}>
                 {pathValidation.faces_path.message}
               </div>
@@ -547,7 +557,7 @@ const SystemSettingsPage = ({ embedded = false, initialTab = null }) => {
             {pathValidation.snapshots_path && (
               <div style={{
                 ...styles.validationMessage,
-                color: pathValidation.snapshots_path.valid ? 'var(--color-success)' : 'var(--color-error)'
+                color: pathValidation.snapshots_path.warning ? 'var(--color-warning, #d97706)' : pathValidation.snapshots_path.valid ? 'var(--color-success)' : 'var(--color-error)'
               }}>
                 {pathValidation.snapshots_path.message}
               </div>

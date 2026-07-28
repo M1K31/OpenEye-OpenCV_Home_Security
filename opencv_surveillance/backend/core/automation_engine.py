@@ -430,8 +430,7 @@ def hook_into_face_detection():
     This function should be called during application startup to register
     the automation processor with face detection events.
     """
-    # TODO: Register with face detection event system
-    # This would typically involve adding process_face_detection as a callback
-    # to be called whenever a face is detected
-    
+    # NOTE: no callback registration needed — the camera pipeline calls
+    # process_face_detection() directly from _create_face_detection_event()
+    # (camera_manager.py) for both known persons and (throttled) unknowns.
     logger.info("Automation engine initialized")

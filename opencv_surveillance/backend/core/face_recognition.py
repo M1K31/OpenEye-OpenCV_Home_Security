@@ -10,7 +10,7 @@ A global lock is used to prevent concurrent access during intensive operations.
 """
 
 import os
-import pickle
+import json
 import logging
 import threading
 from typing import List, Dict, Optional, Tuple
@@ -390,32 +390,72 @@ class FaceRecognitionManager:
             logger.info(f"Cluster training complete: {result}")
             return result
 
+    def _encodings_json_path(self) -> str:
+        """JSON path for the pickle-free encodings store (audit F-13)."""
+        base, _ = os.path.splitext(self.encodings_file)
+        return base + ".json"
+
     def save_encodings(self):
-        """Save face encodings to file"""
+        """
+        Save face encodings to a JSON file.
+
+        JSON is used instead of pickle so that loading the store can never
+        execute code, even if the data directory is tampered with (audit F-13).
+        Encodings are 128-d float vectors and serialize cleanly as lists.
+        """
         try:
             data = {
-                "encodings": self.known_face_encodings,
-                "names": self.known_face_names,
+                "version": 2,
+                "encodings": [
+                    np.asarray(enc, dtype=np.float64).tolist()
+                    for enc in self.known_face_encodings
+                ],
+                "names": list(self.known_face_names),
                 "threshold": self.recognition_threshold,
                 "method": self.detection_method,
             }
-            with open(self.encodings_file, "wb") as f:
-                pickle.dump(data, f)
-            logger.info(f"Encodings saved to: {self.encodings_file}")
+            json_path = self._encodings_json_path()
+            tmp_path = json_path + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(data, f)
+            os.replace(tmp_path, json_path)  # atomic write
+            try:
+                os.chmod(json_path, 0o600)
+            except OSError:
+                pass
+            logger.info(f"Encodings saved to: {json_path}")
         except Exception as e:
             logger.error(f"Error saving encodings: {e}")
 
     def load_encodings(self):
-        """Load face encodings from file"""
-        if not os.path.exists(self.encodings_file):
-            logger.info("No existing encodings file found")
+        """
+        Load face encodings from the JSON store.
+
+        Legacy ``.pkl`` files are intentionally NOT deserialized: calling
+        ``pickle.load`` on a writable data file is a code-execution vector
+        (audit F-13). If only a legacy pickle exists it is ignored and the user
+        must re-train faces to regenerate the JSON store.
+        """
+        json_path = self._encodings_json_path()
+        if not os.path.exists(json_path):
+            if os.path.exists(self.encodings_file):
+                logger.warning(
+                    "Found legacy pickle encodings at %s but refusing to load it "
+                    "for security reasons. Re-train faces to regenerate %s.",
+                    self.encodings_file,
+                    json_path,
+                )
+            else:
+                logger.info("No existing encodings file found")
             return
 
         try:
-            with open(self.encodings_file, "rb") as f:
-                data = pickle.load(f)
+            with open(json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
 
-            self.known_face_encodings = data.get("encodings", [])
+            self.known_face_encodings = [
+                np.asarray(enc, dtype=np.float64) for enc in data.get("encodings", [])
+            ]
             self.known_face_names = data.get("names", [])
             self.recognition_threshold = data.get("threshold", 0.6)
             self.detection_method = data.get("method", "hog")

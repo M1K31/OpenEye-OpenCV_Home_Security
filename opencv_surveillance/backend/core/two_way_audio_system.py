@@ -190,8 +190,13 @@ class AudioCapture:
 
     def _noise_suppression(self, audio_data: np.ndarray) -> np.ndarray:
         """Simple noise suppression using noise gate"""
-        # Calculate RMS
-        rms = np.sqrt(np.mean(audio_data**2))
+        # Calculate RMS. Guard against empty/invalid buffers: np.mean of an empty
+        # array is NaN and float overflow can make the mean negative, either of
+        # which makes np.sqrt emit "invalid value encountered in sqrt".
+        if audio_data.size == 0:
+            return audio_data
+        mean_sq = np.mean(np.square(audio_data, dtype=np.float64))
+        rms = np.sqrt(mean_sq) if np.isfinite(mean_sq) and mean_sq >= 0 else 0.0
 
         # Noise gate threshold
         threshold = 500

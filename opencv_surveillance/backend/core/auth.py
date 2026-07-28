@@ -1,8 +1,8 @@
 # Copyright (c) 2025 Mikel Smart
 # This file is part of OpenEye-OpenCV_Home_Security
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Optional
-import sys
 import logging
 import secrets
 
@@ -28,28 +28,88 @@ from backend.core.config import (
     REFRESH_TOKEN_EXPIRE_DAYS,
 )
 
-# Require SECRET_KEY and JWT_SECRET_KEY in production
-SECRET_KEY = os.getenv("SECRET_KEY")
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")  # Separate key for JWTs
+# Known published/placeholder keys that must never be used to sign tokens.
+# The service binds 0.0.0.0, so signing with any value committed to source
+# control would let any host on the network forge an admin JWT (audit F-02).
+_KNOWN_WEAK_KEYS = {
+    "",
+    "your-secret-key",
+    "dev-secret-key",
+    "dev-secret-key-change-in-production",
+    "change-me",
+    "changeme",
+}
 
-# Validate secret keys
-if not SECRET_KEY or SECRET_KEY in ["your-secret-key", "dev-secret-key"]:
-    if os.getenv("ENVIRONMENT", "development") == "production":
-        logger.error("CRITICAL: SECRET_KEY must be set in production!")
-        logger.error("Generate with: openssl rand -hex 64")
-        sys.exit(1)
-    logger.warning("Using weak SECRET_KEY - DEVELOPMENT ONLY")
-    SECRET_KEY = "dev-secret-key-change-in-production"
 
-if not JWT_SECRET_KEY:
-    JWT_SECRET_KEY = SECRET_KEY  # Fallback to SECRET_KEY if not set
-    logger.warning("JWT_SECRET_KEY not set, using SECRET_KEY (set separate key in production)")
-elif JWT_SECRET_KEY == SECRET_KEY:
-    logger.warning(
-        "⚠️  SECURITY WARNING: JWT_SECRET_KEY and SECRET_KEY are identical! "
-        "Use separate keys in production for better security isolation. "
-        "Generate a new key: openssl rand -hex 64"
+def _load_or_create_secret_key() -> str:
+    """
+    Return a strong SECRET_KEY, never a published constant.
+
+    Resolution order:
+      1. A strong ``SECRET_KEY`` from the environment (the production path).
+      2. A per-install key persisted at ``<data-dir>/secret.key`` with owner-only
+         (0600) permissions, generated once and reused so sessions survive
+         restarts. This replaces the old fallback to a constant that shipped in
+         the repository.
+      3. As a last resort (unwritable data dir), an ephemeral in-memory key —
+         still random, still never the published constant.
+    """
+    env_key = os.getenv("SECRET_KEY")
+    if env_key and env_key not in _KNOWN_WEAK_KEYS:
+        return env_key
+
+    if env_key:
+        logger.warning(
+            "SECRET_KEY is a known weak/placeholder value; generating a "
+            "per-install key instead."
+        )
+
+    data_root = Path(
+        os.getenv("OPENEYE_DATA_DIR")
+        or os.getenv("OPENEYE_DATA_ROOT")
+        or (Path.home() / ".local" / "share" / "openeye")
     )
+    key_file = data_root / "secret.key"
+
+    try:
+        if key_file.exists():
+            existing = key_file.read_text().strip()
+            if existing and existing not in _KNOWN_WEAK_KEYS:
+                return existing
+
+        key_file.parent.mkdir(parents=True, exist_ok=True)
+        new_key = secrets.token_hex(64)
+        key_file.write_text(new_key)
+        key_file.chmod(0o600)
+        logger.warning(
+            "SECRET_KEY was not provided; generated a new per-install key at %s "
+            "(set SECRET_KEY in the environment to override).",
+            key_file,
+        )
+        return new_key
+    except OSError as exc:
+        logger.error(
+            "Could not persist a SECRET_KEY (%s); using an ephemeral in-memory "
+            "key. Sessions will not survive a restart. Set SECRET_KEY explicitly.",
+            exc,
+        )
+        return secrets.token_hex(64)
+
+
+SECRET_KEY = _load_or_create_secret_key()
+
+# JWT signing key. Falls back to SECRET_KEY when a separate key is not provided;
+# both are now guaranteed strong (never a published constant).
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not JWT_SECRET_KEY:
+    JWT_SECRET_KEY = SECRET_KEY
+    logger.info("JWT_SECRET_KEY not set; deriving it from SECRET_KEY.")
+elif JWT_SECRET_KEY in _KNOWN_WEAK_KEYS:
+    logger.warning(
+        "JWT_SECRET_KEY is a known weak/placeholder value; deriving from "
+        "SECRET_KEY instead."
+    )
+    JWT_SECRET_KEY = SECRET_KEY
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 

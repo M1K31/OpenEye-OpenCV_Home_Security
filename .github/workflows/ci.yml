@@ -51,29 +51,28 @@ jobs:
         python -m pip install --upgrade pip
         # Use lightweight CI requirements to avoid disk space issues
         pip install -r requirements-ci.txt
-        # ecosystem_auth (public appEcosystem repo) is imported unguarded by the
-        # ecosystem router + tests; install from source until published.
-        pip install "ecosystem-auth @ git+https://github.com/M1K31/appEcosystem.git#subdirectory=auth/python"
+        # ecosystem_auth (public appEcosystem repo) — pinned to a commit SHA to
+        # prevent an unpinned-branch supply-chain change entering the build (F-06).
+        # Bump this SHA deliberately when appEcosystem is intentionally updated.
+        pip install "ecosystem-auth @ git+https://github.com/M1K31/appEcosystem.git@7bdeed0d2af8d6afbb28ef90bc10687267ab51f6#subdirectory=auth/python"
     
     - name: Run linting
       run: |
         cd opencv_surveillance
         pip install flake8 black
-        # Run flake8 with relaxed settings (allow long lines, ignore some common issues)
-        flake8 backend --max-line-length=120 --exclude=__pycache__,venv --ignore=E501,W503,E203 || echo "Linting completed with warnings"
-        # Skip black check for now (formatting is not strictly enforced)
-        # black --check backend
-      continue-on-error: true
-    
+        # HARD GATE: real breakage (syntax errors, undefined names) fails the build.
+        flake8 backend --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=__pycache__,venv
+        # ADVISORY: style issues are reported but do not fail the build (--exit-zero).
+        flake8 backend --count --exit-zero --max-line-length=120 --exclude=__pycache__,venv --ignore=E501,W503,E203 --statistics
+
     - name: Run tests
       env:
         # ecosystem auth is fail-closed; throwaway secret so auth paths run in CI.
         ECOSYSTEM_HMAC_SECRET: "ci-test-secret-not-for-production-0123456789abcdef"
       run: |
         cd opencv_surveillance
-        # Run tests, allow failure if tests need work
-        pytest tests/ -v --cov=backend --cov-report=xml -x --ignore=tests/e2e || echo "Some tests failed - check test output"
-      continue-on-error: true
+        # Tests must pass — no masking. A failing suite now fails the pipeline (F-03).
+        pytest tests/ -v --cov=backend --cov-report=xml -x --ignore=tests/e2e
     
     - name: Upload coverage
       uses: codecov/codecov-action@v4

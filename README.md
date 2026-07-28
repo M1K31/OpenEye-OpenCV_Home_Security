@@ -1,6 +1,6 @@
 # OpenEye - AI-Powered Home Security with OpenCV & Face Recognition
 
-![Version](https://img.shields.io/badge/version-3.11.5-blue.svg)
+![Version](https://img.shields.io/badge/version-3.11.8-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![OpenCV](https://img.shields.io/badge/OpenCV-4.8+-red.svg)
 ![License](https://img.shields.io/badge/license-MIT-yellow.svg)
@@ -279,9 +279,12 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 3. **Add cameras**:
    - Click **"Camera Discovery"** to auto-find cameras
    - Or manually add RTSP/USB cameras
-4. **Train face recognition** (optional):
-   - Go to **"AI & Faces"** → **"Upload Faces"**
-   - Create folders for each person with 3-10 clear photos
+4. **Train face recognition** (optional) — two ways:
+   - **From detections** (easiest): open **Detections → People**, review the faces the
+     system captured, tick a few clear ones, and choose **Assign to person…** to create
+     a new profile (e.g. "Mikel") or add to an existing one. Training runs automatically.
+   - **By upload**: go to **Face Management → Upload Faces** and add 3–10 clear photos
+     per person.
 5. **Configure notifications** (optional):
    - Go to **"System & Alerts"** → **"Configure Notification Providers"**
    - Add email, SMS, Telegram, or webhook providers
@@ -356,9 +359,27 @@ pytest
 
 ## 📊 Project Status
 
-**Current Version**: 3.11.5 (Camera Discovery Fix & Docker Documentation)
+**Current Version**: 3.11.8 (Face-Management Workflow & Stability)
 
-### Recent Updates (v3.11.5)
+### Recent Updates (v3.11.8)
+**Face management (UI):**
+- 👥 **Assign detections to a person** — from any face card, add it to an existing
+  saved profile *or* create a new person; the selected snapshots are used to train
+  recognition immediately (no separate train step).
+- ☑️ **Batch selection** — tick multiple detections and save them as a new person or
+  add them to an existing profile in one action.
+- 🏷️ **Accurate known/unknown labels** — auto-enumerated `unknownN` placeholders are
+  shown as *Unknown*, not as identified people; only named profiles read as "known".
+
+**Stability & noise:**
+- 🎥 **Recording crash fix** — thread-safe video writer (no more segfault when a
+  recording stops while a frame is being written).
+- 📹 **Camera startup** — reliable USB/AVFoundation open on macOS; unavailable cameras
+  no longer block startup.
+- 🔇 **Quieter logs** — suppressed benign FFmpeg `Invalid pts` warnings and fixed a
+  chatty event-publish retry loop.
+
+### Previous Updates (v3.11.5)
 **Bug Fixes:**
 - Fixed camera discovery API error (`get_all_cameras` → `get_cameras`)
 - Fixed CameraDiscoveryPage.jsx styling (hardcoded colors → CSS theme variables)
@@ -446,7 +467,7 @@ For more help, see [User Guide](docs/USER_GUIDE.md) or open an issue.
 
 MIT License - See [LICENSE](LICENSE) for details.
 
-Copyright (c) 2025 Mikel Smart (with help from Claude)
+Copyright (c) 2025 Smart Industries LLC (Mikel Smart)
 
 ---
 
@@ -472,11 +493,9 @@ UI Design Inspiration:
 
 ---
 
-**Made with ❤️ by Mikel Smart** | **100% Free Forever** | **No Subscriptions**
+**Made with ❤️ by Smart Industries LLC** | **100% Free Forever** | **No Subscriptions**
 
-## Cyber Claude Harness Integration
-
-OpenEye optionally forwards security camera events (person detected, motion detected) to the [cyber-claude-harness](../CybersecurityTeam/cyber-claude-agents/) daemon for cross-correlation with network threats. The `harness_bridge.py` module silently fails when the daemon is unavailable.
+## 📦 Deployment Notes
 
 ### Raspberry Pi Deployment
 

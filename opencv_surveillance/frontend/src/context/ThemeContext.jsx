@@ -13,15 +13,17 @@ export const useTheme = () => {
   return context;
 };
 
+// Descriptive, non-infringing palette names (audit F-09). Previous identifiers
+// referenced third-party characters and were an App Store IP-rejection risk.
 export const THEMES = {
   DEFAULT: 'default',
-  MAN_OF_STEEL: 'sman',
-  DARK_KNIGHT: 'bman',
-  AMAZONIAN_DEMIGOD: 'wwoman',
-  HERMES: 'fman',
-  KING_OF_ATLANTIS: 'aman',
-  CYBORG: 'cyborg',
-  LANTERN: 'glantern',
+  STEEL_BLUE: 'steel',
+  MIDNIGHT: 'midnight',
+  CRIMSON_GOLD: 'crimson',
+  SCARLET: 'scarlet',
+  TIDAL: 'tidal',
+  CIRCUIT: 'circuit',
+  EMERALD: 'emerald',
   AQUA_SECURITY: 'aquasecurity',
 };
 

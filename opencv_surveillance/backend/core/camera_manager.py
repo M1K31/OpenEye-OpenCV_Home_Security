@@ -5,16 +5,20 @@ Camera Manager - Enhanced with Granular Controls (v3.5.0)
 Integrates motion detection, image processing, and video quality processors
 """
 
+import os
 import cv2
 import numpy as np
 import time
+import sys
 import threading
 from abc import ABC, abstractmethod
+from collections import deque
 from typing import Optional, Dict, Any
 from pathlib import Path
 from datetime import datetime
 from .motion_detector import MotionDetector
 from .image_processor import ImageProcessor
+from .paths import paths  # single source of truth for snapshot/recording dirs
 from .video_processor import VideoProcessor, VideoSettings
 from .recorder import Recorder
 from .ffmpeg_recorder import FFmpegRecorder, EncoderCapabilities
@@ -56,10 +60,26 @@ class Camera(ABC):
         self.post_motion_cooldown = 5  # Default, can be overridden from DB
         self.last_faces_detected = []
         self.current_motion_event_id = None  # Track current motion event for face linking
+        # Throttle for UNKNOWN-person automation firing (presence/guest rules). A
+        # continuously-visible unknown must not hammer the rules query every frame;
+        # per-rule cooldowns still gate the actions themselves.
+        self._last_unknown_automation_time = 0.0
+        self.unknown_automation_min_interval = float(
+            os.getenv("OPENEYE_UNKNOWN_AUTOMATION_INTERVAL", "10")
+        )
 
         # Recording frame rate limiter - prevents fast playback
         # When recording, we limit frame writes to match the target FPS
         self.last_recording_frame_time = 0
+
+        # Rolling window of recent processed-frame timestamps. Used to measure the
+        # ACTUAL capture/processing fps so recordings are encoded at real-time
+        # speed. Encoding at the nominal fps_target while the pipeline ran far
+        # slower made playback appear sped up. `_recording_fps` freezes the
+        # measured rate for the duration of one clip. See todos_changelog.md
+        # (2026-07-25 — recording FPS accuracy).
+        self._recent_frame_times = deque(maxlen=45)
+        self._recording_fps = None
 
         # Load settings from database or use defaults
         settings = db_settings or {}
@@ -173,6 +193,34 @@ class Camera(ABC):
         # Override post_motion_cooldown if provided in settings
         if "post_motion_cooldown" in settings:
             self.post_motion_cooldown = settings["post_motion_cooldown"]
+
+    def _record_frame_tick(self) -> None:
+        """Record the timestamp of a processed frame (feeds measured_fps)."""
+        self._recent_frame_times.append(time.time())
+
+    def measured_fps(self) -> Optional[float]:
+        """
+        Actual processing fps from recent frames, or None if not enough samples.
+
+        Recordings are encoded at this rate so playback matches real time even
+        when per-frame detection keeps the pipeline well below fps_target.
+        """
+        times = self._recent_frame_times
+        if len(times) < 5:
+            return None
+        span = times[-1] - times[0]
+        if span <= 0:
+            return None
+        fps = (len(times) - 1) / span
+        # Clamp AND round to a WHOLE number. cv2.VideoWriter with a fractional fps
+        # emits duplicate presentation timestamps for consecutive frames
+        # ("Invalid pts N <= last N" / "non monotonic dts"), which the encoder
+        # rejects and drops. An integer fps keeps PTS strictly increasing.
+        return float(max(1, min(60, round(fps))))
+
+    def _resolve_recording_fps(self) -> float:
+        """FPS to encode the next clip at: measured rate, else configured target."""
+        return self.measured_fps() or (self.video_processor.settings.fps_target or 15)
 
     def request_recording(self, duration_seconds: int) -> None:
         """Ask the processing loop to record for the next N seconds.
@@ -386,7 +434,13 @@ class Camera(ABC):
         try:
             # Create snapshots directory if it doesn't exist
             # Use custom path from settings or default
-            snapshots_dir = Path(self.snapshots_path)
+            # Save under paths.snapshots_dir so the write location matches the
+            # /data/snapshots and /api/snapshots static mounts (both serve
+            # paths.snapshots_dir). Previously this used the cwd-relative
+            # self.snapshots_path default ('data/snapshots'), which diverged from
+            # the mount when OPENEYE_SNAPSHOTS_DIR was set → every snapshot 404'd
+            # in the face-review UI, and files landed in the disposable app copy.
+            snapshots_dir = paths.snapshots_dir
             snapshots_dir.mkdir(parents=True, exist_ok=True)
 
             # Generate filename with timestamp
@@ -455,6 +509,11 @@ class Camera(ABC):
                 # Create motion event
                 motion_event = MotionDetectionEvent(
                     camera_id=self.camera_id,
+                    # Use LOCAL time to match face detection events (which use
+                    # datetime.now()). The model default is datetime.utcnow, so
+                    # without this motion timestamps were stored in UTC — hours off
+                    # from face events and shown as "future" times in the UI.
+                    detected_at=datetime.now(),
                     motion_area=total_motion_area,
                     motion_percentage=motion_percentage,
                     contour_count=len(motion_areas),
@@ -519,7 +578,13 @@ class Camera(ABC):
         """
         try:
             # Create snapshots directory if it doesn't exist
-            snapshots_dir = Path(self.snapshots_path)
+            # Save under paths.snapshots_dir so the write location matches the
+            # /data/snapshots and /api/snapshots static mounts (both serve
+            # paths.snapshots_dir). Previously this used the cwd-relative
+            # self.snapshots_path default ('data/snapshots'), which diverged from
+            # the mount when OPENEYE_SNAPSHOTS_DIR was set → every snapshot 404'd
+            # in the face-review UI, and files landed in the disposable app copy.
+            snapshots_dir = paths.snapshots_dir
             snapshots_dir.mkdir(parents=True, exist_ok=True)
 
             # Generate filename with timestamp
@@ -615,8 +680,18 @@ class Camera(ABC):
                     f"{person_name} (confidence: {confidence:.2f})"
                 )
 
-                # Trigger automation rules for identified persons (not Unknown)
-                if person_name != "Unknown":
+                # Trigger automation rules. Known persons fire every detection.
+                # Unknown persons ALSO fire (for presence / guest-service rules that
+                # target person_name "Unknown"), but throttled per camera so a
+                # continuously-visible unknown doesn't hammer the rules query. The
+                # per-rule cooldown still gates the actual actions.
+                fire_automation = person_name != "Unknown"
+                if not fire_automation:
+                    now_ts = time.time()
+                    if now_ts - self._last_unknown_automation_time >= self.unknown_automation_min_interval:
+                        self._last_unknown_automation_time = now_ts
+                        fire_automation = True
+                if fire_automation:
                     try:
                         process_face_detection(
                             person_name=person_name,
@@ -677,6 +752,9 @@ class MockCamera(Camera):
         # Check if we should process this frame based on FPS target
         if not self.video_processor.should_process_frame():
             return None, False
+
+        # Sample the real frame cadence (drives measured_fps for accurate encoding).
+        self._record_frame_tick()
 
         # Create a blank frame with a timestamp
         self.frame.fill(0)
@@ -814,9 +892,10 @@ class MockCamera(Camera):
             if self.motion_detected:
                 self.last_motion_time = time.time()
             if not self.recorder.is_recording:
-                # Use camera's configured fps_target for accurate playback speed
-                recording_fps = self.video_processor.settings.fps_target or 15
-                self.recorder.start(self.width, self.height, fps=recording_fps, camera_id=self.camera_id or "mock")
+                # Encode at the MEASURED capture rate so playback matches real time
+                # (nominal fps_target overshot the achieved rate → sped-up playback).
+                self._recording_fps = self._resolve_recording_fps()
+                self.recorder.start(self.width, self.height, fps=self._recording_fps, camera_id=self.camera_id or "mock")
                 self.last_recording_frame_time = 0  # Reset frame time for new recording
 
             # Link motion event to the recording (if recording is active)
@@ -828,9 +907,10 @@ class MockCamera(Camera):
             cv2.circle(processed_frame, (self.width - 30, 30),
                        10, (0, 0, 255), -1)
 
-            # Frame rate limiting for recording - prevents fast playback
-            # Only write frames at the target FPS rate
-            recording_fps = self.video_processor.settings.fps_target or 15
+            # Frame rate limiting for recording - prevents fast playback. Use the
+            # same measured rate the writer was created with so writes and the
+            # encoded fps stay consistent.
+            recording_fps = self._recording_fps or self._resolve_recording_fps()
             frame_interval = 1.0 / recording_fps
             current_time = time.time()
 
@@ -912,22 +992,50 @@ class RTSPCamera(Camera):
 
     def start(self):
         # Detect if source is a USB device index (integer or numeric string)
-        try:
-            # Try to convert to int - if successful, it's a USB device
-            device_index = int(self.source)
-            print(f"Connecting to USB camera at index: {device_index}")
-            # Use default backend for USB cameras (no CAP_FFMPEG)
-            self.capture = cv2.VideoCapture(device_index)
-        except (ValueError, TypeError):
-            # Not a number, assume it's an RTSP URL or device path
-            print(f"Connecting to RTSP stream: {self.source}")
-            self.capture = cv2.VideoCapture(self.source, cv2.CAP_FFMPEG)
+        # Open with a few retries — a USB device can be briefly busy right after a
+        # restart (previous handle not fully released, or another app grabbed it).
+        max_attempts = 3
+        for attempt in range(1, max_attempts + 1):
+            try:
+                # Try to convert to int - if successful, it's a USB device
+                device_index = int(self.source)
+                print(f"Connecting to USB camera at index: {device_index} "
+                      f"(attempt {attempt}/{max_attempts})")
+                # Default backend. On macOS this resolves to AVFoundation and handles
+                # capture-by-index correctly (forcing CAP_AVFOUNDATION explicitly warns
+                # "can't be used to capture by index" and just falls back here anyway).
+                self.capture = cv2.VideoCapture(device_index)
+            except (ValueError, TypeError):
+                # Not a number, assume it's an RTSP URL or device path
+                print(f"Connecting to RTSP stream: {self.source}")
+                self.capture = cv2.VideoCapture(self.source, cv2.CAP_FFMPEG)
 
-        if not self.capture.isOpened():
-            print(f"Error: Could not open camera source: {self.source}")
+            if self.capture is not None and self.capture.isOpened():
+                break
+            print(f"Camera open attempt {attempt}/{max_attempts} failed for {self.source}")
+            if self.capture is not None:
+                self.capture.release()
+            if attempt < max_attempts:
+                time.sleep(2)
+
+        if self.capture is None or not self.capture.isOpened():
+            print(f"Error: Could not open camera source: {self.source} after {max_attempts} attempts")
             self.is_running = False
             return
         self.is_running = True
+
+        # Ask the device to capture at the configured fps so the hardware target
+        # actually matches the setting (previously fps_target only labelled the
+        # output file and was never sent to the device). Best-effort: many USB
+        # webcams ignore or clamp this, so recordings are still encoded at the
+        # MEASURED rate. See todos_changelog.md (2026-07-25 — camera fps accuracy).
+        try:
+            target_fps = self.video_processor.settings.fps_target or 15
+            self.capture.set(cv2.CAP_PROP_FPS, float(target_fps))
+            actual = self.capture.get(cv2.CAP_PROP_FPS)
+            print(f"Requested camera fps={target_fps}, device reports fps={actual}")
+        except Exception as e:
+            print(f"Could not set CAP_PROP_FPS: {e}")
         print("Camera started successfully.")
 
         # Load polygon-based motion zones from database (v3.6.2+)
@@ -986,6 +1094,9 @@ class RTSPCamera(Camera):
         if not ret:
             print("Error: Failed to grab frame from RTSP stream.")
             return None, False
+
+        # Sample the real frame cadence (drives measured_fps for accurate encoding).
+        self._record_frame_tick()
 
         # Store clean frame for recording
         clean_frame = frame.copy()
@@ -1096,9 +1207,10 @@ class RTSPCamera(Camera):
                 self.last_motion_time = time.time()
             if not self.recorder.is_recording:
                 height, width, _ = clean_frame.shape
-                # Use camera's configured fps_target for consistent playback speed
-                recording_fps = self.video_processor.settings.fps_target or 15
-                self.recorder.start(width, height, fps=recording_fps, camera_id=self.camera_id or "rtsp")
+                # Encode at the MEASURED capture rate so playback matches real time
+                # (nominal fps_target overshot the achieved rate → sped-up playback).
+                self._recording_fps = self._resolve_recording_fps()
+                self.recorder.start(width, height, fps=self._recording_fps, camera_id=self.camera_id or "rtsp")
                 self.last_recording_frame_time = 0  # Reset frame time for new recording
 
             # Link motion event to the recording (if recording is active)
@@ -1110,9 +1222,10 @@ class RTSPCamera(Camera):
             # Add recording indicator to the processed frame for streaming
             cv2.circle(processed_frame, (width - 30, 30), 10, (0, 0, 255), -1)
 
-            # Frame rate limiting for recording - prevents fast playback
-            # Only write frames at the target FPS rate
-            recording_fps = self.video_processor.settings.fps_target or 15
+            # Frame rate limiting for recording - prevents fast playback. Use the
+            # same measured rate the writer was created with so writes and the
+            # encoded fps stay consistent.
+            recording_fps = self._recording_fps or self._resolve_recording_fps()
             frame_interval = 1.0 / recording_fps
             current_time = time.time()
 

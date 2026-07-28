@@ -38,6 +38,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 
+# Load .env BEFORE importing any backend.* module. auth.py, database.session, and
+# others read os.getenv(...) at import time; if load_dotenv() runs after those
+# imports the .env values are ignored (previously it ran ~55 lines too late, so the
+# installer's SECRET_KEY/JWT_SECRET_KEY never took effect). See audit F-02 addendum.
+load_dotenv()
+
 from backend.database.session import engine, SessionLocal
 from backend.database.utils import get_db_context
 from backend.database import models, alert_models
@@ -91,8 +97,7 @@ from backend.middleware.performance import PerformanceMonitoringMiddleware
 from backend.core.audit_logger import get_audit_logger
 from backend.core.two_way_audio_system import audio_manager
 
-# Load environment variables from .env file
-load_dotenv()
+# (.env is loaded above, before the backend imports.)
 
 # Configure logging
 logging.basicConfig(
@@ -125,7 +130,7 @@ signal.signal(signal.SIGTERM, signal_handler)
 app = FastAPI(
     title="OpenEye Surveillance System",
     description="OpenCV-powered surveillance system with face recognition, motion detection, and video recording",
-    version="3.11.4",  # Scheduled Tasks & Retroactive Face Search
+    version="3.11.8",  # Face-Management Workflow & Stability
     docs_url="/api/docs",
     redoc_url="/api/redoc",
 )
@@ -148,16 +153,36 @@ if MAGICMIRROR_PORT:
         f"http://127.0.0.1:{MAGICMIRROR_PORT}"
     ])
 
-# Allow all ecosystem origins mode (for development/trusted networks)
+# Ecosystem mode (audit F-08): a wildcard origin ('*') must never be combined
+# with allow_credentials=True — that exposes the authenticated API to any
+# website the user visits. Instead, the operator supplies an explicit regex of
+# trusted origins. If ecosystem mode is enabled without a regex we FAIL SAFE:
+# keep the strict allowlist rather than opening a credentialed wildcard.
 CORS_ALLOW_ECOSYSTEM = os.getenv("CORS_ALLOW_ECOSYSTEM", "false").lower() == "true"
+CORS_ORIGIN_REGEX = os.getenv("CORS_ORIGIN_REGEX", "").strip() or None
+
+allow_origin_regex = None
+if CORS_ALLOW_ECOSYSTEM:
+    if CORS_ORIGIN_REGEX:
+        allow_origin_regex = CORS_ORIGIN_REGEX
+        logger.warning(
+            "CORS_ALLOW_ECOSYSTEM=true: allowing origins matching CORS_ORIGIN_REGEX=%s",
+            CORS_ORIGIN_REGEX,
+        )
+    else:
+        logger.critical(
+            "CORS_ALLOW_ECOSYSTEM=true but CORS_ORIGIN_REGEX is unset. Refusing to "
+            "enable a credentialed wildcard origin. Set CORS_ORIGIN_REGEX "
+            r"(e.g. 'https://.*\.mydomain\.com') to allow ecosystem origins. "
+            "Falling back to the strict CORS allowlist."
+        )
 
 logger.info(f"CORS origins configured: {CORS_ORIGINS}")
-if CORS_ALLOW_ECOSYSTEM:
-    logger.warning("CORS_ALLOW_ECOSYSTEM=true: Accepting connections from any origin (ecosystem mode)")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if CORS_ALLOW_ECOSYSTEM else CORS_ORIGINS,
+    allow_origins=CORS_ORIGINS,
+    allow_origin_regex=allow_origin_regex,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
@@ -176,9 +201,17 @@ app.add_middleware(EndpointRateLimiter, custom_limits={
     "stream": (500, 60),  # 500 streaming requests per minute
 })
 
-# CSRF protection (disabled by default - enable in production)
-# Uncomment the line below to enable CSRF protection:
-# app.add_middleware(CSRFProtection)
+# CSRF protection — DELIBERATELY NOT ENABLED (see docs/development/ADR-001-csrf.md).
+# OpenEye authenticates every state-changing request with a bearer JWT sent in
+# the Authorization header (not an ambient cookie), so classic CSRF does not
+# apply: a cross-site request cannot attach the token. The CSRFProtection
+# middleware is retained for a future cookie/session-based auth mode. If you add
+# any cookie-based authentication, enable it here:
+#     app.add_middleware(CSRFProtection)
+_CSRF_ENABLED = os.getenv("ENABLE_CSRF_PROTECTION", "false").lower() == "true"
+if _CSRF_ENABLED:
+    app.add_middleware(CSRFProtection)
+    logger.info("CSRF protection enabled (ENABLE_CSRF_PROTECTION=true)")
 
 # Performance monitoring middleware
 app.add_middleware(
@@ -362,6 +395,12 @@ async def startup_event():
 
     # Load existing cameras from database
     logger.info("Loading cameras from database...")
+    # Load cameras SYNCHRONOUSLY here on the main thread. On macOS the camera open
+    # goes through AVFoundation, which MUST be initialised on the process main thread
+    # (the ASGI startup runs there) — opening it from a worker thread segfaults. The
+    # per-camera open in camera_manager already bounds itself with a short retry loop,
+    # so a missing/busy device delays startup by a few seconds at most rather than
+    # blocking forever; unavailable cameras are reported and the server continues.
     # FIXED: Use context manager to prevent session leak (v3.6.0.1)
     with get_db_context() as db:
         from backend.database import crud

@@ -109,6 +109,8 @@ build/
 !/CHANGELOG.md
 !/DOCKER.md
 !/usage.md
+!/PRIVACY_POLICY.md
+!/LICENSE
 
 # Essential docs directory structure
 !/docs/
@@ -169,3 +171,8 @@ WALKTHROUGH.md
 progress-log.md
 PROGRESS.md
 STATUS.md
+
+# Local audit/test artifacts and dev-only harness bridge (never ship)
+audit_test_results.json
+test_photos_audit.py
+harness_bridge.py

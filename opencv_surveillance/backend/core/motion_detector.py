@@ -123,6 +123,19 @@ class MotionDetector:
         self.brightness_history = deque(maxlen=30)  # Track last 30 frames
         self.last_brightness = None
         self.brightness_change_threshold = 15  # Threshold for detecting sudden lighting changes
+        # After a lighting change, keep suppressing motion + using the fast
+        # learning rate for this many frames so MOG2 fully re-learns the new
+        # lighting before motion resumes. A single-frame suppression left the
+        # FOLLOWING frames reading the whole scene as foreground → short false
+        # "light shift" recordings. Tunable. See todos_changelog.md (2026-07-25).
+        self.lighting_settle_frames = 15
+        self._lighting_settle_counter = 0
+        # A brightness shift is only treated as a lighting change when the
+        # foreground covers at least this fraction of the frame. A real light
+        # shift is scene-wide; a moving object (even a large/close one, which
+        # also shifts average brightness) is localized and must NOT be
+        # suppressed. Tunable. See todos_changelog.md (2026-07-25).
+        self.lighting_area_fraction = 0.5
 
         # Temporal filtering for flicker reduction
         self.motion_history = deque(maxlen=3)  # Track last 3 frames
@@ -422,20 +435,25 @@ class MotionDetector:
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         current_brightness = np.mean(gray)
 
-        # Add to history
+        # Reference the rolling average BEFORE adding the current sample, so a
+        # GRADUAL drift (clouds, dimmer, auto-exposure) is caught too — testing
+        # only the per-frame delta missed slow shifts that still confuse the
+        # background model and produced false "motion".
+        avg_ref = (
+            sum(self.brightness_history) / len(self.brightness_history)
+            if self.brightness_history
+            else current_brightness
+        )
         self.brightness_history.append(current_brightness)
 
-        # Check for sudden brightness change
+        changed = False
         if self.last_brightness is not None:
-            brightness_diff = abs(current_brightness - self.last_brightness)
-
-            # Detect significant lighting change
-            if brightness_diff > self.brightness_change_threshold:
-                self.last_brightness = current_brightness
-                return True
+            sudden = abs(current_brightness - self.last_brightness) > self.brightness_change_threshold
+            gradual = abs(current_brightness - avg_ref) > self.brightness_change_threshold
+            changed = sudden or gradual
 
         self.last_brightness = current_brightness
-        return False
+        return changed
 
     def _apply_temporal_filter(self, motion_detected: bool) -> bool:
         """
@@ -662,13 +680,22 @@ class MotionDetector:
             # Original color-based processing
             blurred_frame = cv2.GaussianBlur(frame, self.blur_kernel, 0)
 
-        # Check for sudden lighting change
-        lighting_change_detected = self._detect_lighting_change(original_frame)
+        # Candidate lighting change from brightness (sudden or gradual). This is
+        # only a HINT — it is confirmed below using the foreground area fraction,
+        # so a large moving object (which also shifts average brightness) is not
+        # mistaken for a scene-wide lighting change and suppressed.
+        brightness_shift = self._detect_lighting_change(original_frame)
+
+        # "Settling" = still within a window opened by a CONFIRMED lighting change
+        # on a previous frame. Motion stays suppressed and MOG2 keeps the fast
+        # learning rate for the WHOLE window so it fully re-adapts.
+        settling = self._lighting_settle_counter > 0
 
         # STEP 2: BACKGROUND SUBTRACTION - Adjust learning rate based on lighting conditions
-        if lighting_change_detected:
-            # Fast adaptation during lighting changes
+        if settling:
+            # Fast adaptation during (and just after) lighting changes
             learning_rate = self.fast_learning_rate
+            self._lighting_settle_counter -= 1
         else:
             # Normal learning rate
             learning_rate = self.base_learning_rate
@@ -701,6 +728,16 @@ class MotionDetector:
             fg_mask = cv2.erode(fg_mask, None, iterations=self.erosion_iterations)
         if self.dilation_iterations > 0:
             fg_mask = cv2.dilate(fg_mask, None, iterations=self.dilation_iterations)
+
+        # STEP 4.5: CONFIRM LIGHTING CHANGE (scene-wide test). A genuine light
+        # shift lights up most of the frame as foreground; a moving object stays
+        # localized. Only then open the settle window + suppress — this is what
+        # keeps large real motion from being wrongly suppressed.
+        if brightness_shift and fg_mask.size:
+            fg_fraction = float(np.count_nonzero(fg_mask)) / fg_mask.size
+            if fg_fraction > self.lighting_area_fraction:
+                self._lighting_settle_counter = self.lighting_settle_frames
+                settling = True
 
         # STEP 5: CONTOUR DETECTION - Find contours of moving objects
         contours, _ = cv2.findContours(
@@ -751,13 +788,14 @@ class MotionDetector:
                 )
 
         # STEP 6: TEMPORAL FILTERING - Apply temporal filter to reduce flicker
-        # BUT: Skip temporal filter during lighting changes to allow fast reset
-        if not lighting_change_detected:
+        # BUT: while settling from a lighting change, suppress motion for the
+        # whole window (not just the single change frame) so the scene-wide
+        # brightness shift is not reported as motion.
+        if not settling:
             motion_detected = self._apply_temporal_filter(motion_detected)
         else:
-            # Clear motion history during lighting change
+            # Clear motion history and suppress motion for the settle window
             self.motion_history.clear()
-            # Suppress motion detection during lighting change
             motion_detected = False
             motion_areas = []
             triggered_zone_ids = []

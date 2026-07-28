@@ -7,6 +7,7 @@ Runs background clustering tasks automatically
 
 import logging
 import asyncio
+import os
 from datetime import datetime, timedelta
 from typing import Optional
 from backend.database.session import SessionLocal
@@ -61,6 +62,19 @@ class ClusteringScheduler:
         self.auto_name_enabled = auto_name_enabled
         self.cluster_known_faces = cluster_known_faces
 
+        # Scheduling mode (resource priority): "interval" runs every
+        # interval_minutes; "window" defers heavy cluster+train work to a
+        # low-traffic hour window (once/day) — e.g. overnight. Env-configurable.
+        # Manual "cluster now" from the UI always works regardless of mode.
+        self.schedule_mode = os.getenv(
+            "OPENEYE_CLUSTER_SCHEDULE_MODE", "interval"
+        ).strip().lower()
+        try:
+            self.window_start_hour = int(os.getenv("OPENEYE_CLUSTER_WINDOW_START_HOUR", "2")) % 24
+            self.window_end_hour = int(os.getenv("OPENEYE_CLUSTER_WINDOW_END_HOUR", "4")) % 24
+        except ValueError:
+            self.window_start_hour, self.window_end_hour = 2, 4
+
         self.last_run_time: Optional[datetime] = None
         self.is_running = False
         self.task: Optional[asyncio.Task] = None
@@ -108,14 +122,31 @@ class ClusteringScheduler:
                     logger.info("Auto-clustering triggered")
                     await self._run_clustering()
 
-                # Sleep for interval
-                await asyncio.sleep(self.interval_minutes * 60)
+                # In window mode, poll every ~10 min so the window start is caught
+                # promptly; in interval mode, sleep the full configured interval.
+                poll_seconds = 600 if self.schedule_mode == "window" else self.interval_minutes * 60
+                await asyncio.sleep(poll_seconds)
 
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Error in clustering scheduler: {e}")
                 await asyncio.sleep(60)  # Wait 1 minute before retrying
+
+    def _in_window(self, now: datetime) -> bool:
+        """True if `now` is inside the configured low-traffic window."""
+        h = now.hour
+        s, e = self.window_start_hour, self.window_end_hour
+        if s <= e:
+            return s <= h < e
+        return h >= s or h < e  # window crosses midnight (e.g. 22 -> 2)
+
+    def _current_window_start(self, now: datetime) -> datetime:
+        """Datetime at which the current/most-recent window opened."""
+        start = now.replace(hour=self.window_start_hour, minute=0, second=0, microsecond=0)
+        if now.hour < self.window_start_hour:
+            start -= timedelta(days=1)  # past midnight → window opened yesterday
+        return start
 
     async def _should_run_clustering(self) -> bool:
         """
@@ -127,11 +158,18 @@ class ClusteringScheduler:
         if not self.auto_cluster_enabled:
             return False
 
-        # Check if enough time has passed since last run
-        if self.last_run_time:
-            time_since_last_run = datetime.now() - self.last_run_time
-            if time_since_last_run < timedelta(minutes=self.interval_minutes):
+        now = datetime.now()
+        if self.schedule_mode == "window":
+            # Only run inside the low-traffic window, at most once per window/day.
+            if not self._in_window(now):
                 return False
+            if self.last_run_time and self.last_run_time >= self._current_window_start(now):
+                return False
+        else:
+            # Interval mode: run only once enough time has passed.
+            if self.last_run_time:
+                if (now - self.last_run_time) < timedelta(minutes=self.interval_minutes):
+                    return False
 
         # Check if there are enough faces (known + unknown) to cluster
         # FIXED: Use context manager to prevent session leak (v3.6.0.1)

@@ -9,6 +9,7 @@ Provides granular rate limiting for different API endpoints
 import time
 from fastapi import Request, HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 from collections import defaultdict
 from typing import Dict, Tuple
 import asyncio
@@ -122,6 +123,21 @@ class EndpointRateLimiter(BaseHTTPMiddleware):
         Returns:
             Category name (auth, write, read, stream, websocket)
         """
+        # Static content (snapshots, faces, recordings, frontend assets) is served
+        # in large bursts — a face-review/gallery page loads hundreds of thumbnails
+        # at once — and must NOT be throttled by the API read limit (that produced
+        # cascades of failed images). Serve it without rate limiting.
+        _STATIC_PREFIXES = (
+            "/data/", "/api/snapshots", "/faces/", "/recordings/",
+            "/assets/", "/static/",
+        )
+        _STATIC_SUFFIXES = (
+            ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".ico",
+            ".css", ".js", ".woff", ".woff2", ".mp4", ".map",
+        )
+        if path.startswith(_STATIC_PREFIXES) or path.endswith(_STATIC_SUFFIXES):
+            return "static"
+
         # Check patterns
         for pattern, category in self.compiled_patterns:
             if pattern.match(path):
@@ -150,8 +166,9 @@ class EndpointRateLimiter(BaseHTTPMiddleware):
             self.DEFAULT_LIMITS["read"]
         )
 
-        # Skip rate limiting for websockets (handled separately)
-        if category == "websocket":
+        # Skip rate limiting for websockets (handled separately) and static assets
+        # (galleries load hundreds of images at once — never throttle those).
+        if category in ("websocket", "static"):
             return await call_next(request)
 
         # Create tracking key
@@ -174,10 +191,16 @@ class EndpointRateLimiter(BaseHTTPMiddleware):
                 f"Rate limit exceeded for {client_ip} on {category} "
                 f"({current_count}/{requests_limit} requests)"
             )
-            raise HTTPException(
+            # Return a real 429 response. Raising HTTPException here would NOT be
+            # caught by FastAPI's exception handlers (this is a BaseHTTPMiddleware,
+            # outside the route/exception layer) and would surface to the client as
+            # a misleading 500 Internal Server Error.
+            return JSONResponse(
                 status_code=429,
-                detail=f"Rate limit exceeded for {category} endpoints. "
-                       f"Limit: {requests_limit} requests per {window_seconds} seconds.",
+                content={
+                    "detail": f"Rate limit exceeded for {category} endpoints. "
+                              f"Limit: {requests_limit} requests per {window_seconds} seconds."
+                },
                 headers={"Retry-After": str(window_seconds)},
             )
 

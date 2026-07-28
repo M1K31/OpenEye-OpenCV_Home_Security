@@ -40,6 +40,11 @@ def set_app_loop(loop: Optional[asyncio.AbstractEventLoop]) -> None:
     _app_loop = loop
 
 
+def get_app_loop() -> Optional[asyncio.AbstractEventLoop]:
+    """Return the running app loop captured at startup (or None before startup)."""
+    return _app_loop
+
+
 def check_cooldown(key: Any, seconds: int) -> tuple[bool, int]:
     """Return (allowed, suppressed_count_to_report).
 

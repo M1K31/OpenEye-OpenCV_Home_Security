@@ -20,6 +20,29 @@ from backend.database.models import FaceDetectionEvent, FaceCluster
 logger = logging.getLogger(__name__)
 
 
+def _resolve_snapshot_path(stored: Optional[str]) -> Optional[str]:
+    """
+    Resolve a stored snapshot reference to a real filesystem path.
+
+    Snapshots are recorded in the DB as URLs ('/data/snapshots/<file>' or
+    '/api/snapshots/<file>') for the frontend; os.path.exists()/shutil.copy2()
+    cannot use those (they resolve against the filesystem root). Both URL forms
+    map to paths.snapshots_dir. Absolute filesystem paths (legacy) pass through.
+    Without this, cluster-based training silently copied ZERO images.
+    """
+    if not stored:
+        return None
+    import os
+    from backend.core.paths import paths
+    for prefix in ("/data/snapshots/", "/api/snapshots/"):
+        if stored.startswith(prefix):
+            return str(paths.snapshots_dir / os.path.basename(stored))
+    if os.path.isabs(stored):
+        return stored
+    # bare filename or relative path -> assume it lives in the snapshots dir
+    return str(paths.snapshots_dir / os.path.basename(stored))
+
+
 class FaceClusteringService:
     """
     Service for clustering faces (both known and unknown) using machine learning
@@ -253,7 +276,8 @@ class FaceClusteringService:
             existing_files = {f.name for f in person_path.iterdir() if f.is_file()}
 
         for idx, face in enumerate(faces):
-            if face.snapshot_path and os.path.exists(face.snapshot_path):
+            _snap_fs = _resolve_snapshot_path(face.snapshot_path)
+            if _snap_fs and os.path.exists(_snap_fs):
                 try:
                     timestamp = face.detected_at.strftime("%Y%m%d_%H%M%S")
                     camera_id = face.camera_id.replace("/", "_")
@@ -265,7 +289,7 @@ class FaceClusteringService:
                         images_skipped += 1
                         continue
                     
-                    shutil.copy2(face.snapshot_path, dest_path)
+                    shutil.copy2(_snap_fs, dest_path)
                     images_copied += 1
                 except Exception as e:
                     logger.warning(f"Failed to copy snapshot {face.snapshot_path}: {e}")
@@ -757,7 +781,8 @@ class FaceClusteringService:
         images_copied = 0
         images_skipped = 0
         for idx, face in enumerate(faces):
-            if face.snapshot_path and os.path.exists(face.snapshot_path):
+            _snap_fs = _resolve_snapshot_path(face.snapshot_path)
+            if _snap_fs and os.path.exists(_snap_fs):
                 try:
                     # Create unique filename: timestamp_camera_idx.jpg
                     timestamp = face.detected_at.strftime("%Y%m%d_%H%M%S")
@@ -771,7 +796,7 @@ class FaceClusteringService:
                         continue
 
                     # Copy the snapshot
-                    shutil.copy2(face.snapshot_path, dest_path)
+                    shutil.copy2(_snap_fs, dest_path)
                     images_copied += 1
 
                     logger.debug(f"Copied snapshot: {face.snapshot_path} -> {dest_path}")

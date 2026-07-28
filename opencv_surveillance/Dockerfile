@@ -46,7 +46,7 @@ COPY requirements.txt .
 RUN pip install --user --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --user --no-cache-dir -r requirements.txt && \
     pip install --user --no-cache-dir \
-      "ecosystem-auth @ git+https://github.com/M1K31/appEcosystem.git#subdirectory=auth/python"
+      "ecosystem-auth @ git+https://github.com/M1K31/appEcosystem.git@7bdeed0d2af8d6afbb28ef90bc10687267ab51f6#subdirectory=auth/python"
 
 # ============================================
 # Stage 3: Runtime - Minimal production image
@@ -73,9 +73,11 @@ RUN useradd -m -u 1000 openeye && \
     mkdir -p /app/data /app/config /app/models /app/logs /app/frontend/dist && \
     chown -R openeye:openeye /app
 
-# Copy Python packages from builder to openeye user's home
-COPY --from=builder /root/.local /home/openeye/.local
-RUN chown -R openeye:openeye /home/openeye/.local
+# Copy Python packages from builder to openeye user's home, applying ownership
+# inline. A separate `RUN chown -R` re-wrote the entire multi-GB .local tree into
+# a NEW image layer (doubling its on-disk size at that step) and exhausted the
+# build disk — `COPY --chown` sets ownership without that extra layer.
+COPY --from=builder --chown=openeye:openeye /root/.local /home/openeye/.local
 
 # Set PATH to include local Python packages (using openeye user's path)
 ENV PATH=/home/openeye/.local/bin:$PATH \

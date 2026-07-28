@@ -173,10 +173,10 @@ html.default-theme body {
 }
 
 /* ===================
-   MAN OF STEEL THEME
+   STEEL BLUE THEME
    =================== */
-html.sman-theme,
-html.sman-theme body {
+html.steel-theme,
+html.steel-theme body {
   --bg-main: #0d47a1;
   --bg-panel: #1565c0;
   --bg-input: #0a3d91;
@@ -242,7 +242,7 @@ html.sman-theme body {
   --switch-track-on: #d32f2f;
   --switch-thumb: #ffd700;
 
-  /* Role Badge Gradients - Man of Steel themed */
+  /* Role Badge Gradients - Steel Blue themed */
   --role-admin-gradient: linear-gradient(135deg, #d32f2f, #b71c1c);
   --role-user-gradient: linear-gradient(135deg, #1565c0, #0d47a1);
   --role-viewer-gradient: linear-gradient(135deg, #ffd700, #e6c200);
@@ -263,16 +263,16 @@ html.sman-theme body {
   font-family: 'Arial Black', sans-serif;
 }
 
-.sman-theme button:hover {
+.steel-theme button:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(0, 82, 163, 0.3);
 }
 
 /* ===================
-   DARK KNIGHT THEME
+   MIDNIGHT THEME
    =================== */
-html.bman-theme,
-html.bman-theme body {
+html.midnight-theme,
+html.midnight-theme body {
   --bg-main: #111111;
   --bg-panel: #1a1a1a;
   --bg-input: #0a0a0a;
@@ -338,7 +338,7 @@ html.bman-theme body {
   --switch-track-on: #edc233;
   --switch-thumb: #111111;
 
-  /* Role Badge Gradients - Dark Knight themed */
+  /* Role Badge Gradients - Midnight themed */
   --role-admin-gradient: linear-gradient(135deg, #edc233, #d4ad20);
   --role-user-gradient: linear-gradient(135deg, #333333, #1a1a1a);
   --role-viewer-gradient: linear-gradient(135deg, #666666, #444444);
@@ -360,10 +360,10 @@ html.bman-theme body {
 }
 
 /* ===================
-   AMAZONIAN DEMIGOD THEME
+   CRIMSON GOLD THEME
    =================== */
-html.wwoman-theme,
-html.wwoman-theme body {
+html.crimson-theme,
+html.crimson-theme body {
   --bg-main: #0d3b66;
   --bg-panel: #1a5490;
   --bg-input: #0a2d4d;
@@ -429,7 +429,7 @@ html.wwoman-theme body {
   --switch-track-on: #c41e3a;
   --switch-thumb: #ffd700;
 
-  /* Role Badge Gradients - Amazonian Demigod themed */
+  /* Role Badge Gradients - Crimson Gold themed */
   --role-admin-gradient: linear-gradient(135deg, #c41e3a, #a01829);
   --role-user-gradient: linear-gradient(135deg, #ffd700, #e6c200);
   --role-viewer-gradient: linear-gradient(135deg, #1a5490, #0d3b66);
@@ -451,10 +451,10 @@ html.wwoman-theme body {
 }
 
 /* ===================
-   HERMES THEME
+   SCARLET THEME
    =================== */
-html.fman-theme,
-html.fman-theme body {
+html.scarlet-theme,
+html.scarlet-theme body {
   --theme-primary: #FFD700;
   --theme-secondary: #DC0000;
   --theme-background: #DC0000;
@@ -516,7 +516,7 @@ html.fman-theme body {
   --switch-track-on: #FFD700;
   --switch-thumb: #DC0000;
 
-  /* Role Badge Gradients - Hermes themed */
+  /* Role Badge Gradients - Scarlet themed */
   --role-admin-gradient: linear-gradient(135deg, #DC0000, #8B0000);
   --role-user-gradient: linear-gradient(135deg, #FFD700, #E6C200);
   --role-viewer-gradient: linear-gradient(135deg, #666666, #444444);
@@ -534,7 +534,7 @@ html.fman-theme body {
   color: #FFD700;
 }
 
-.fman-theme button {
+.scarlet-theme button {
   background: #FFD700;
   color: #8B0000;
   border: 2px solid #FFFFFF;
@@ -542,16 +542,16 @@ html.fman-theme body {
   text-transform: uppercase;
 }
 
-.fman-theme button:hover {
+.scarlet-theme button:hover {
   transform: scale(1.1);
   box-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
 }
 
 /* ===================
-   KING OF ATLANTIS THEME
+   TIDAL THEME
    =================== */
-html.aman-theme,
-html.aman-theme body {
+html.tidal-theme,
+html.tidal-theme body {
   --theme-primary: #FF6B35;
   --theme-secondary: #00C49A;
   --theme-background: #006994;
@@ -596,7 +596,7 @@ html.aman-theme body {
   --switch-track-on: #00C49A;
   --card-background: rgba(0, 105, 148, 0.9);
 
-  /* Role Badge Gradients - King of Atlantis themed */
+  /* Role Badge Gradients - Tidal themed */
   --role-admin-gradient: linear-gradient(135deg, #FF6B35, #E65A2E);
   --role-user-gradient: linear-gradient(135deg, #00C49A, #00A080);
   --role-viewer-gradient: linear-gradient(135deg, #006994, #004D6D);
@@ -614,23 +614,23 @@ html.aman-theme body {
   color: #FFFFFF;
 }
 
-.aman-theme button {
+.tidal-theme button {
   background: #FF6B35;
   color: #FFFFFF;
   border: 2px solid #00C49A;
   font-weight: bold;
 }
 
-.aman-theme button:hover {
+.tidal-theme button:hover {
   background: #00C49A;
   box-shadow: 0 0 15px rgba(0, 196, 154, 0.5);
 }
 
 /* ===================
-   LANTERN THEME
+   EMERALD THEME
    =================== */
-html.glantern-theme,
-html.glantern-theme body {
+html.emerald-theme,
+html.emerald-theme body {
   --theme-primary: #00A550;
   --theme-secondary: #B2FF9E;
   --theme-background: #001A0F;
@@ -675,7 +675,7 @@ html.glantern-theme body {
   --switch-track-on: #00A550;
   --card-background: rgba(0, 80, 40, 0.9);
 
-  /* Role Badge Gradients - Lantern themed */
+  /* Role Badge Gradients - Emerald themed */
   --role-admin-gradient: linear-gradient(135deg, #00A550, #008442);
   --role-user-gradient: linear-gradient(135deg, #B2FF9E, #8FE67A);
   --role-viewer-gradient: linear-gradient(135deg, #004D26, #001A0F);
@@ -693,7 +693,7 @@ html.glantern-theme body {
   color: #FFFFFF;
 }
 
-.glantern-theme button {
+.emerald-theme button {
   background: #00A550;
   color: #FFFFFF;
   border: 2px solid #B2FF9E;
@@ -701,16 +701,16 @@ html.glantern-theme body {
   box-shadow: 0 0 10px rgba(0, 165, 80, 0.5);
 }
 
-.glantern-theme button:hover {
+.emerald-theme button:hover {
   box-shadow: 0 0 25px rgba(0, 165, 80, 0.8);
   transform: scale(1.05);
 }
 
 /* ===================
-   CYBORG THEME
+   CIRCUIT THEME
    =================== */
-html.cyborg-theme,
-html.cyborg-theme body {
+html.circuit-theme,
+html.circuit-theme body {
   --theme-primary: #FF00FF;
   --theme-secondary: #00FFFF;
   --theme-background: #1A1A1A;
@@ -758,7 +758,7 @@ html.cyborg-theme body {
   --card-background: rgba(40, 40, 40, 0.95);
   --card-border: rgba(255, 0, 255, 0.2);
 
-  /* Role Badge Gradients - Cyborg themed */
+  /* Role Badge Gradients - Circuit themed */
   --role-admin-gradient: linear-gradient(135deg, #FF00FF, #CC00CC);
   --role-user-gradient: linear-gradient(135deg, #00FFFF, #00CCCC);
   --role-viewer-gradient: linear-gradient(135deg, #555555, #333333);
@@ -777,7 +777,7 @@ html.cyborg-theme body {
   font-family: 'Courier New', monospace;
 }
 
-.cyborg-theme button {
+.circuit-theme button {
   background: linear-gradient(135deg, #FF00FF 0%, #CC00CC 100%);
   color: #FFFFFF;
   border: 1px solid #00FFFF;
@@ -786,7 +786,7 @@ html.cyborg-theme body {
   letter-spacing: 1px;
 }
 
-.cyborg-theme button:hover {
+.circuit-theme button:hover {
   box-shadow: 0 0 20px rgba(255, 0, 255, 0.6);
   border-color: #FF00FF;
   transform: translateY(-2px);

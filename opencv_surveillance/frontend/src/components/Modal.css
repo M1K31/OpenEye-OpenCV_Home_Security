@@ -212,8 +212,8 @@ html.aquasecurity-theme .modal-backdrop {
 }
 
 /* Dark themes - stronger backdrop */
-html.sman-theme .modal-backdrop,
-html.bman-theme .modal-backdrop {
+html.steel-theme .modal-backdrop,
+html.midnight-theme .modal-backdrop {
   background: rgba(0, 0, 0, 0.6);
 }
 

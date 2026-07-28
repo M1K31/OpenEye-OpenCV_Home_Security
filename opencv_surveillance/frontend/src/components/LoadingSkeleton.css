@@ -125,8 +125,8 @@ html.aquasecurity-theme .skeleton {
   backdrop-filter: blur(10px);
 }
 
-html.sman-theme .skeleton::after,
-html.bman-theme .skeleton::after {
+html.steel-theme .skeleton::after,
+html.midnight-theme .skeleton::after {
   background: linear-gradient(
     90deg,
     transparent 0%,

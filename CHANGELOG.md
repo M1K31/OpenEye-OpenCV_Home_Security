@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.11.8] - 2026-07-27
+
+### Added
+- **Face management: assign detections to a person** - From any face detection you
+  can now add it to an existing saved profile *or* create a new person. Selected
+  snapshots are uploaded and used to train recognition automatically (no separate
+  train step). Replaces the previous new-name-only prompt.
+- **Batch selection** - Tick multiple detections and save them as a new person or
+  add them to an existing profile in one action.
+
+### Changed
+- **Accurate known/unknown labels** - Auto-enumerated `unknownN` cluster placeholders
+  are now shown as *Unknown* instead of as identified people; only named profiles
+  read as "known". Fixed the "Manage Person" control that routed to a dead page.
+
+### Fixed
+- **Recording crash (SIGSEGV)** - Added a lock around the video writer so a recording
+  stopping while a frame is being written can no longer segfault the backend
+  (`backend/core/recorder.py`).
+- **Camera startup** - Reliable USB/AVFoundation camera open on macOS; camera loading
+  no longer blocks or crashes app startup (`backend/core/camera_manager.py`,
+  `backend/main.py`).
+- **Log noise** - Suppressed benign FFmpeg `Invalid pts` encoder warnings
+  (`OPENCV_FFMPEG_LOGLEVEL`) and stopped a per-event ecosystem publish-retry warning
+  loop (non-blocking event fan-out + throttled client warnings).
+
+### Files Modified
+- `backend/core/recorder.py`, `backend/core/camera_manager.py`, `backend/main.py`,
+  `frontend/src/pages/DetectionsPage.jsx`, `scripts/install-local.sh`, `start.sh`,
+  `.env.example`, `README.md`
+
 ## [3.11.7] - 2025-01-26
 
 ### Fixed

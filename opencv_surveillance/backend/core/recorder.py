@@ -12,11 +12,37 @@ import os
 import json
 import time
 import json
+import threading
 from datetime import datetime
 import asyncio
 from backend.core.alert_manager import get_alert_manager
 
 from typing import List, Dict, Optional
+
+
+def _schedule_coroutine(coro) -> bool:
+    """
+    Schedule a coroutine on the app's main event loop from a camera thread.
+
+    The Recorder runs inside a per-camera worker thread with no event loop, so
+    asyncio.create_task() raised "no running event loop" and the alert coroutine
+    was never awaited (audit runtime finding). Hand it to the loop captured at
+    FastAPI startup instead. Never raises; drops the alert if the loop is gone.
+    """
+    try:
+        from backend.core.notification_dispatch import get_app_loop
+        loop = get_app_loop()
+        if loop is None or loop.is_closed() or not loop.is_running():
+            coro.close()
+            return False
+        asyncio.run_coroutine_threadsafe(coro, loop)
+        return True
+    except Exception:
+        try:
+            coro.close()
+        except Exception:
+            pass
+        return False
 
 
 class Recorder:
@@ -28,6 +54,12 @@ class Recorder:
         self.output_dir = output_dir
         self.is_recording = False
         self.writer = None
+        # Serialize all access to self.writer. The background processor thread
+        # calls write() while the main thread can call stop()/start() — releasing
+        # the FFmpeg VideoWriter on one thread while another is mid-write() is a
+        # use-after-free that SIGSEGVs inside libavcodec. RLock so nested calls
+        # on the same thread (start() releasing a stale writer) don't deadlock.
+        self._writer_lock = threading.RLock()
         self.filename = ""
         self.metadata_filename = ""
         # Maximum recording time in seconds (default: 5 minutes)
@@ -37,6 +69,8 @@ class Recorder:
         self.detected_faces = []
         self.recording_start_time = None
         self.frame_count = 0
+        # Motion events observed during this recording, linked to the DB row on stop.
+        self.associated_motion_event_ids = []
 
         # Create the output directory if it doesn't exist
         if not os.path.exists(self.output_dir):
@@ -58,13 +92,19 @@ class Recorder:
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        # Try different codecs based on platform and availability
-        # For macOS with AVFoundation, use MJPG or avc1
+        # Codec order matters for STABILITY. 'avc1' (in-process libx264) can hit an
+        # encoder error and SEGFAULT the whole backend under sustained recording on
+        # macOS — a native crash Python cannot catch. So prefer robust in-process
+        # codecs and keep avc1 as a last resort. Override with OPENEYE_VIDEO_CODEC
+        # (e.g. "mp4v", "MJPG", "avc1") to force a specific codec first.
         codecs_to_try = [
-            ("avc1", ".mp4"),  # H.264 for AVFoundation on macOS
-            ("mp4v", ".mp4"),  # MPEG-4 fallback
-            ("MJPG", ".avi"),  # Motion JPEG fallback
+            ("mp4v", ".mp4"),  # MPEG-4 — robust, no libx264 (default)
+            ("MJPG", ".avi"),  # Motion JPEG — very robust fallback
+            ("avc1", ".mp4"),  # H.264/libx264 — LAST resort (can crash under load)
         ]
+        _preferred = os.getenv("OPENEYE_VIDEO_CODEC", "").strip()
+        if _preferred:
+            codecs_to_try.sort(key=lambda c: 0 if c[0] == _preferred else 1)
 
         self.writer = None
         for codec_name, ext in codecs_to_try:
@@ -100,6 +140,7 @@ class Recorder:
         self.recording_start_time = datetime.now()
         self.frame_count = 0
         self.detected_faces = []
+        self.associated_motion_event_ids = []
 
         print(f"Started recording to {self.filename}")
 
@@ -108,7 +149,7 @@ class Recorder:
             alert_manager = get_alert_manager()
             # Get camera_id from the calling context if available
             camera_id = getattr(self, "camera_id", "unknown")
-            asyncio.create_task(
+            _schedule_coroutine(
                 alert_manager.trigger_recording_alert(
                     camera_id=camera_id,
                     recording_started=True,
@@ -122,9 +163,25 @@ class Recorder:
         """
         Writes a frame to the current recording.
         """
-        if self.is_recording and self.writer:
-            self.writer.write(frame)
-            self.frame_count += 1
+        # Hold the lock across the whole write so stop()/release() can't free the
+        # writer between the None-check and the native write() call.
+        with self._writer_lock:
+            if self.is_recording and self.writer:
+                self.writer.write(frame)
+                self.frame_count += 1
+
+    def add_motion_event_id(self, motion_event_id: int):
+        """
+        Track a motion event ID associated with this recording.
+
+        Parity with FFmpegRecorder.add_motion_event_id — the cv2 Recorder was
+        missing this method, so camera_manager's call raised AttributeError on
+        every motion event (audit runtime finding). IDs are linked to the
+        recording row when recording stops.
+        """
+        if self.is_recording and motion_event_id:
+            if motion_event_id not in self.associated_motion_event_ids:
+                self.associated_motion_event_ids.append(motion_event_id)
 
     def add_face_detection(self, face_data: Dict):
         """
@@ -161,11 +218,15 @@ class Recorder:
         if not self.is_recording:
             return
 
-        self.is_recording = False
-
-        if self.writer:
-            self.writer.release()
+        # Flip is_recording and release the writer under the lock so an in-flight
+        # write() on the background thread finishes (or no-ops) before release —
+        # releasing mid-write SIGSEGVs inside libavcodec.
+        with self._writer_lock:
+            self.is_recording = False
+            writer = self.writer
             self.writer = None
+        if writer:
+            writer.release()
 
             # Calculate recording duration
             duration = (
@@ -188,7 +249,7 @@ class Recorder:
             try:
                 alert_manager = get_alert_manager()
                 camera_id = getattr(self, "camera_id", "unknown")
-                asyncio.create_task(
+                _schedule_coroutine(
                     alert_manager.trigger_recording_alert(
                         camera_id=camera_id,
                         recording_started=False,
@@ -293,6 +354,18 @@ class Recorder:
 
                     db_event = crud.create_recording_event(db, recording_data)
                     print(f"✅ Recording event created in database: ID={db_event.id}")
+
+                    # Link the motion events observed during this clip to the row.
+                    if self.associated_motion_event_ids:
+                        from backend.database.models import MotionDetectionEvent
+                        linked = db.query(MotionDetectionEvent).filter(
+                            MotionDetectionEvent.id.in_(self.associated_motion_event_ids)
+                        ).update(
+                            {"recording_id": db_event.id, "recording_path": relative_path},
+                            synchronize_session=False,
+                        )
+                        db.commit()
+                        print(f"🔗 Linked {linked} motion events to recording ID={db_event.id}")
 
             except Exception as db_error:
                 print(f"⚠️ Failed to save recording to database: {db_error}")

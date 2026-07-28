@@ -19,46 +19,46 @@ const ThemeSelectorPage = ({ embedded = false }) => {
       description: 'Clean and professional design',
       colors: ['#667eea', '#764ba2', '#f8f9fa'],
     },
-    [THEMES.MAN_OF_STEEL]: {
-      name: 'Man of Steel',
-      icon: '🦸',
-      description: 'Classic red/blue with hope and power',
+    [THEMES.STEEL_BLUE]: {
+      name: 'Steel Blue',
+      icon: '🔵',
+      description: 'Classic red and blue with bright gold accents',
       colors: ['#0076a8', '#d32029', '#f2c700'],
     },
-    [THEMES.DARK_KNIGHT]: {
-      name: 'Dark Knight',
-      icon: '🦇',
-      description: 'Dark knight - brooding and mysterious',
+    [THEMES.MIDNIGHT]: {
+      name: 'Midnight',
+      icon: '🌙',
+      description: 'Brooding charcoal with gold highlights',
       colors: ['#111', '#333', '#edc233'],
     },
-    [THEMES.AMAZONIAN_DEMIGOD]: {
-      name: 'Amazonian Demigod',
+    [THEMES.CRIMSON_GOLD]: {
+      name: 'Crimson Gold',
       icon: '⭐',
-      description: 'Warrior gold - regal and vibrant',
+      description: 'Regal crimson, blue and warrior gold',
       colors: ['#a41b30', '#0074fa', '#f4d975'],
     },
-    [THEMES.HERMES]: {
-      name: 'Hermes',
+    [THEMES.SCARLET]: {
+      name: 'Scarlet',
       icon: '⚡',
-      description: 'Speed red - dynamic and energetic',
+      description: 'Dynamic speed red, energetic and bright',
       colors: ['#b90000', '#f4be00', '#fff'],
     },
-    [THEMES.KING_OF_ATLANTIS]: {
-      name: 'King of Atlantis',
-      icon: '🔱',
-      description: 'Ocean teal - deep sea depths',
+    [THEMES.TIDAL]: {
+      name: 'Tidal',
+      icon: '🌊',
+      description: 'Deep ocean teal and sea-glass tones',
       colors: ['#005642', '#d9c27f', '#7c4c2d'],
     },
-    [THEMES.CYBORG]: {
-      name: 'Cyborg',
+    [THEMES.CIRCUIT]: {
+      name: 'Circuit',
       icon: '🤖',
-      description: 'Tech silver - modern neon highlights',
+      description: 'Tech silver with neon magenta highlights',
       colors: ['#1a1a1a', '#555', '#ff00ff'],
     },
-    [THEMES.LANTERN]: {
-      name: 'Lantern',
+    [THEMES.EMERALD]: {
+      name: 'Emerald',
       icon: '💚',
-      description: 'Willpower green - cosmic power glow',
+      description: 'Vivid willpower green with a cosmic glow',
       colors: ['#00a064', '#007447', '#222'],
     },
     [THEMES.AQUA_SECURITY]: {

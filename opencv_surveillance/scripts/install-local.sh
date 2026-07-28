@@ -521,7 +521,9 @@ create_systemd_service() {
     <key>ECOSYSTEM_SERVICE_PORT</key><string>$PORT</string>
   </dict>
   <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
+  <!-- Restart only on a CRASH (non-zero exit), not on a clean stop. Unconditional
+       KeepAlive respawned the service after intentional stops and hid crashes. -->
+  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
   <key>StandardOutPath</key><string>$LOGDIR/stdout.log</string>
   <key>StandardErrorPath</key><string>$LOGDIR/stderr.log</string>
 </dict></plist>
@@ -587,8 +589,14 @@ set -a
 [ -f .env ] && . ./.env
 set +a
 
-# Start server (OpenEye's documented port is 8200; 8000 belongs to AI-for-Survival)
-python3 -m uvicorn backend.main:app --host 0.0.0.0 --port "${PORT:-8200}"
+# Quiet the FFmpeg encoder's benign, per-frame "mpeg4 Invalid pts" WARNINGS (the
+# mp4 still writes fine). 16 = AV_LOG_ERROR: real errors still show, warnings don't.
+export OPENCV_FFMPEG_LOGLEVEL=16
+
+# Start server (OpenEye's documented port is 8200; 8000 belongs to AI-for-Survival).
+# -u = unbuffered stdout/stderr so foreground logs stream live (otherwise print()
+# output block-buffers and the app looks "stuck" while it is actually running).
+python3 -u -m uvicorn backend.main:app --host 0.0.0.0 --port "${PORT:-8200}"
 EOF
     # Portable placeholder substitution. Do NOT use `sed -i`: BSD/macOS requires a
     # detached backup suffix (-i '') while GNU/Linux forbids it, and this installer
