@@ -606,11 +606,11 @@ class ScheduledTasksManager:
         try:
             with get_db_context() as db:
                 setting = db.query(SystemSettings).filter(
-                    SystemSettings.key == "scheduled_tasks"
+                    SystemSettings.setting_key == "scheduled_tasks"
                 ).first()
 
-                if setting and setting.value:
-                    data = json.loads(setting.value)
+                if setting and setting.setting_value:
+                    data = json.loads(setting.setting_value)
                     for task_data in data.get("tasks", []):
                         task_type = TaskType(task_data["task_type"])
                         if task_type in self.tasks:
@@ -629,15 +629,16 @@ class ScheduledTasksManager:
                 }
 
                 setting = db.query(SystemSettings).filter(
-                    SystemSettings.key == "scheduled_tasks"
+                    SystemSettings.setting_key == "scheduled_tasks"
                 ).first()
 
                 if setting:
-                    setting.value = json.dumps(data)
+                    setting.setting_value = json.dumps(data)
                 else:
                     setting = SystemSettings(
-                        key="scheduled_tasks",
-                        value=json.dumps(data)
+                        setting_key="scheduled_tasks",
+                        setting_value=json.dumps(data),
+                        setting_type="json",
                     )
                     db.add(setting)
 
