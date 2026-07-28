@@ -300,17 +300,17 @@ warn_macos_camera_permission() {
     [ "$CAMERAS" -gt 0 ] || return 0
 
     echo ""
-    log_warn "macOS camera permission is required for USB cameras"
-    echo "  The background service cannot display a permission prompt, so USB"
-    echo "  camera discovery will find nothing until access is granted."
+    log_warn "macOS: USB / built-in cameras need camera permission"
+    echo "  macOS only lets a process a user launched from a Terminal open the"
+    echo "  camera. A background/launchd service can't, so USB camera discovery"
+    echo "  will find nothing until access is granted."
     echo ""
-    echo "  To grant it, run the server once from Terminal:"
-    echo "    launchctl unload \"\$HOME/Library/LaunchAgents/$LABEL.plist\""
-    echo "    cd \"$APP_DIR\" && \"$VENV/bin/python3\" -m uvicorn backend.main:app --port $PORT"
+    echo "  Start OpenEye from a Terminal window so it can request access:"
+    echo "    cd \"$APP_DIR\" && ./start.sh"
     echo ""
-    echo "  Scan for USB cameras in the UI, approve the macOS prompt, then"
-    echo "  reload the service. If no prompt appears, enable your terminal"
-    echo "  under System Settings > Privacy & Security > Camera."
+    echo "  Approve the macOS camera prompt when it appears, then scan for USB"
+    echo "  cameras in the UI. If no prompt appears, enable your terminal app"
+    echo "  under System Settings > Privacy & Security > Camera, then restart."
     echo ""
 }
 
@@ -532,7 +532,7 @@ PLIST_EOF
         launchctl load "$PLIST"
         log_success "launchd agent $LABEL loaded (port $PORT)"
         log_info "Logs: $LOGDIR/{stdout,stderr}.log"
-        warn_macos_camera_permission
+        # (camera-permission note is printed once for all install modes near the end)
     else
         log_info "Creating systemd service..."
         sudo tee /etc/systemd/system/openeye.service > /dev/null << EOF
@@ -634,9 +634,13 @@ print_completion() {
     echo ""
     echo "  1. Review your configuration in .env file"
     echo "  2. Start the server with: ./start.sh"
-    echo "  3. Access the system at: http://localhost:8000"
+    echo "     (on macOS, run it from a Terminal window so the camera works — see below)"
+    echo "  3. Access the system at: http://localhost:${PORT:-8200}"
     echo "  4. Stop the server with: ./stop.sh"
     echo ""
+    # Always surface the macOS camera-permission note (not just for the --plist
+    # service), since USB cameras silently fail without it.
+    warn_macos_camera_permission
     log_info "Important Files:"
     echo "  - .env: Configuration and secret keys"
     echo "  - surveillance.db: Database file"
