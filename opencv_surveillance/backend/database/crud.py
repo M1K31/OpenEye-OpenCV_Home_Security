@@ -1,9 +1,10 @@
 # Copyright (c) 2025 Mikel Smart
 # This file is part of OpenEye-OpenCV_Home_Security
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 
+from backend.core.config import REFRESH_TOKEN_EXPIRE_DAYS
 from backend.database import models
 from backend.api.schemas import user as user_schema
 # NOTE: hash_password is imported lazily inside create_user (see below), not at
@@ -698,24 +699,35 @@ def create_refresh_token(
     db: Session,
     user_id: int,
     token: str,
-    expires_at: datetime,
+    expires_at: Optional[datetime] = None,
+    expires_delta: Optional[timedelta] = None,
     device_info: Optional[str] = None,
     ip_address: Optional[str] = None,
 ) -> models.RefreshToken:
     """
     Create a new refresh token for a user.
 
+    Expiry is optional: callers that do not care about the exact lifetime get the
+    configured default rather than having to compute a datetime themselves (making
+    it mandatory meant every caller duplicated the same `utcnow() + delta`, and it
+    was easy to pass an inconsistent window).
+
     Args:
         db: Database session
         user_id: User ID
         token: Refresh token string
-        expires_at: Token expiration datetime
+        expires_at: Absolute expiry. Wins if both are given.
+        expires_delta: Relative lifetime; defaults to REFRESH_TOKEN_EXPIRE_DAYS.
         device_info: User agent string
         ip_address: Client IP address
 
     Returns:
         RefreshToken model instance
     """
+    if expires_at is None:
+        delta = expires_delta or timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        expires_at = datetime.utcnow() + delta
+
     db_token = models.RefreshToken(
         user_id=user_id,
         token=token,

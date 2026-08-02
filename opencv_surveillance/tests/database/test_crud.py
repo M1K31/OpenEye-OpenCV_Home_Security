@@ -462,7 +462,7 @@ class TestRefreshTokenCRUD:
         assert created_token.id is not None
         assert created_token.token == token_string
         assert created_token.user_id == user.id
-        assert created_token.is_revoked is False
+        assert created_token.revoked is False
         assert created_token.expires_at > datetime.utcnow()
 
     def test_get_refresh_token_exists(self, db_session: Session):
@@ -527,7 +527,7 @@ class TestRefreshTokenCRUD:
 
         # Verify token is revoked
         revoked_token = crud.get_refresh_token(db_session, token_string)
-        assert revoked_token.is_revoked is True
+        assert revoked_token.revoked is True
 
     def test_revoke_refresh_token_not_found(self, db_session: Session):
         """Test revoking non-existent token returns False"""
@@ -550,7 +550,7 @@ class TestRefreshTokenCRUD:
 
         # Verify all tokens are revoked
         user_tokens = crud.get_user_refresh_tokens(db_session, user.id)
-        assert all(t.is_revoked for t in user_tokens)
+        assert all(t.revoked for t in user_tokens)
 
     def test_revoke_all_user_tokens_no_tokens(self, db_session: Session):
         """Test revoking all tokens for user with no tokens"""

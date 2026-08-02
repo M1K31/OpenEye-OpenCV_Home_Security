@@ -370,11 +370,24 @@ def refresh_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Check if token is revoked
+    # Reuse detection. Refresh tokens are single-use: a successful refresh revokes
+    # the old one. So being presented with an ALREADY-REVOKED token means the token
+    # was replayed — either it was stolen and used after the legitimate client had
+    # already rotated it, or the legitimate client is replaying a token an attacker
+    # has also seen. Either way the family must be considered compromised, so revoke
+    # every refresh token for this user and force a fresh login (OAuth 2.0 Security
+    # BCP, "Refresh Token Protection"). Simply rejecting this one token would leave
+    # the thief's other tokens working.
     if token_record.revoked:
+        revoked_count = crud.revoke_all_user_tokens(db, token_record.user_id)
+        logger.warning(
+            "Refresh token reuse detected for user_id=%s (ip=%s); revoked %s token(s) "
+            "for this user and forcing re-authentication.",
+            token_record.user_id, ip_address, revoked_count,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token has been revoked",
+            detail="Refresh token has been revoked. Please sign in again.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
