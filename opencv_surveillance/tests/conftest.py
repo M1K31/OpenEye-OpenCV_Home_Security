@@ -1,6 +1,16 @@
 # Copyright (c) 2025 Mikel Smart
 # This file is part of OpenEye-OpenCV_Home_Security
 
+import os
+
+# Disable endpoint rate limiting for the whole suite BEFORE importing backend.main:
+# the middleware reads this once when the app is constructed at import time. API
+# tests legitimately fire many requests at one endpoint within seconds, which the
+# limiter would (correctly) throttle — producing 429s that look like assertion
+# failures and have nothing to do with what is under test. The limiter's own unit
+# tests pass enabled=True explicitly so the throttling path is still covered.
+os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker

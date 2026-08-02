@@ -22,7 +22,7 @@ class TestEndpointRateLimiterInit:
     def test_init_default_limits(self, mock_create_task):
         """Test initialization with default limits"""
         app = FastAPI()
-        limiter = EndpointRateLimiter(app)
+        limiter = EndpointRateLimiter(app, enabled=True)
 
         assert limiter.limits == EndpointRateLimiter.DEFAULT_LIMITS
         assert "auth" in limiter.limits
@@ -42,7 +42,7 @@ class TestEndpointRateLimiterInit:
             "custom": (100, 60),  # Add new category
         }
 
-        limiter = EndpointRateLimiter(app, custom_limits=custom_limits)
+        limiter = EndpointRateLimiter(app, custom_limits=custom_limits, enabled=True)
 
         # Custom limits should override defaults
         assert limiter.limits["auth"] == (5, 30)
@@ -56,7 +56,7 @@ class TestEndpointRateLimiterInit:
     def test_init_cleanup_task_created(self, mock_create_task):
         """Test that cleanup task is created on initialization"""
         app = FastAPI()
-        limiter = EndpointRateLimiter(app, cleanup_interval=120)
+        limiter = EndpointRateLimiter(app, cleanup_interval=120, enabled=True)
 
         assert limiter.cleanup_interval == 120
         mock_create_task.assert_called_once()
@@ -69,7 +69,7 @@ class TestGetEndpointCategory:
     def setup_method(self, method, mock_create_task):
         """Create limiter instance for tests"""
         app = FastAPI()
-        self.limiter = EndpointRateLimiter(app)
+        self.limiter = EndpointRateLimiter(app, enabled=True)
 
     def test_auth_endpoint_login(self):
         """Test auth category for login endpoint"""
@@ -111,10 +111,18 @@ class TestGetEndpointCategory:
         category = self.limiter.get_endpoint_category("/api/recordings/456/stream", "GET")
         assert category == "stream"
 
-    def test_stream_legacy_recordings(self):
-        """Test stream category for legacy recordings path"""
+    def test_legacy_recordings_are_static(self):
+        """
+        Legacy recording files are served as static media, which is exempt from rate
+        limiting rather than merely generous ("stream").
+
+        Media is fetched with HTTP range requests, so a single video can issue many
+        requests while seeking — and a page of snapshots issues dozens at once. Under
+        the API read limit that produced cascades of broken images/video, so static
+        file paths and media suffixes short-circuit to the exempt "static" category.
+        """
         category = self.limiter.get_endpoint_category("/recordings/video.mp4", "GET")
-        assert category == "stream"
+        assert category == "static"
 
     def test_websocket_endpoint(self):
         """Test websocket category"""
@@ -162,6 +170,7 @@ class TestDispatch:
         app = FastAPI()
         self.limiter = EndpointRateLimiter(
             app,
+            enabled=True,
             custom_limits={
                 "auth": (3, 60),  # Only 3 requests per minute for testing
                 "read": (5, 60),  # 5 requests per minute for read
@@ -211,13 +220,15 @@ class TestDispatch:
         for i in range(3):
             await self.limiter.dispatch(mock_request, call_next)
 
-        # Fourth request should be blocked
-        with pytest.raises(HTTPException) as exc_info:
-            await self.limiter.dispatch(mock_request, call_next)
+        # Fourth request should be blocked.
+        # The limiter RETURNS a 429 response rather than raising HTTPException:
+        # an exception raised inside a BaseHTTPMiddleware is not handled by FastAPI's
+        # exception handlers, so it surfaced to clients as a 500 instead of a 429.
+        blocked = await self.limiter.dispatch(mock_request, call_next)
 
-        assert exc_info.value.status_code == 429
-        assert "Rate limit exceeded" in exc_info.value.detail
-        assert "Retry-After" in exc_info.value.headers
+        assert blocked.status_code == 429
+        assert b"Rate limit exceeded" in blocked.body
+        assert "Retry-After" in blocked.headers
 
     async def test_dispatch_different_clients_separate_limits(self):
         """Test that different clients have separate rate limits"""
@@ -242,8 +253,8 @@ class TestDispatch:
             await self.limiter.dispatch(mock_request1, call_next)
 
         # Client 1 blocked
-        with pytest.raises(HTTPException):
-            await self.limiter.dispatch(mock_request1, call_next)
+        blocked = await self.limiter.dispatch(mock_request1, call_next)
+        assert blocked.status_code == 429
 
         # But Client 2 should still be allowed
         response = await self.limiter.dispatch(mock_request2, call_next)
@@ -273,8 +284,8 @@ class TestDispatch:
             await self.limiter.dispatch(mock_auth_request, call_next)
 
         # Auth category blocked
-        with pytest.raises(HTTPException):
-            await self.limiter.dispatch(mock_auth_request, call_next)
+        blocked = await self.limiter.dispatch(mock_auth_request, call_next)
+        assert blocked.status_code == 429
 
         # But read category should still work (separate counter)
         response = await self.limiter.dispatch(mock_read_request, call_next)
@@ -315,8 +326,8 @@ class TestDispatch:
             await self.limiter.dispatch(mock_request, call_next)
 
         # Should be blocked now (at limit)
-        with pytest.raises(HTTPException):
-            await self.limiter.dispatch(mock_request, call_next)
+        blocked = await self.limiter.dispatch(mock_request, call_next)
+        assert blocked.status_code == 429
 
         # Manually replace one recent timestamp with an old one (beyond window)
         tracking_key = ("192.168.1.100", "auth")
@@ -364,7 +375,7 @@ class TestCleanupOldRequests:
         """Test that cleanup removes old request entries"""
         # Create limiter
         app = FastAPI()
-        limiter = EndpointRateLimiter(app, cleanup_interval=30)
+        limiter = EndpointRateLimiter(app, cleanup_interval=30, enabled=True)
 
         # Add some old and new entries
         now = time.time()
@@ -400,7 +411,7 @@ class TestCleanupOldRequests:
         """Test that cleanup runs at the specified interval"""
         # Create limiter
         app = FastAPI()
-        limiter = EndpointRateLimiter(app, cleanup_interval=60)
+        limiter = EndpointRateLimiter(app, cleanup_interval=60, enabled=True)
 
         # Mock sleep to run 3 times then cancel
         mock_sleep.side_effect = [None, None, None, asyncio.CancelledError()]
@@ -424,7 +435,7 @@ class TestEndpointPatterns:
     def setup_method(self, method, mock_create_task):
         """Create limiter instance for tests"""
         app = FastAPI()
-        self.limiter = EndpointRateLimiter(app)
+        self.limiter = EndpointRateLimiter(app, enabled=True)
 
     def test_pattern_precedence_password_reset(self):
         """Test that more specific patterns take precedence"""

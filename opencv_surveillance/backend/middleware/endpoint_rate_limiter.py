@@ -6,6 +6,7 @@ Per-Endpoint Rate Limiting Middleware
 Provides granular rate limiting for different API endpoints
 """
 
+import os
 import time
 from fastapi import Request, HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -79,7 +80,8 @@ class EndpointRateLimiter(BaseHTTPMiddleware):
         self,
         app,
         custom_limits: Dict[str, Tuple[int, int]] = None,
-        cleanup_interval: int = 60
+        cleanup_interval: int = 60,
+        enabled: bool = None,
     ):
         """
         Initialize per-endpoint rate limiter
@@ -88,8 +90,26 @@ class EndpointRateLimiter(BaseHTTPMiddleware):
             app: FastAPI application
             custom_limits: Override default limits {category: (requests, seconds)}
             cleanup_interval: Cleanup interval in seconds
+            enabled: Force limiting on/off. Defaults to the RATE_LIMIT_ENABLED
+                environment variable (on unless explicitly disabled).
         """
         super().__init__(app)
+
+        # Read once at construction: the value cannot change for a running app, and
+        # checking an env var on every request would be wasteful. An explicit
+        # `enabled` argument wins over the environment so a caller (notably the
+        # limiter's own unit tests, which run with limiting globally disabled) can
+        # exercise the real throttling path deliberately.
+        if enabled is None:
+            enabled = os.getenv("RATE_LIMIT_ENABLED", "true").strip().lower() not in (
+                "false", "0", "no", "off"
+            )
+        self.enabled = enabled
+        if not self.enabled:
+            logger.warning(
+                "Endpoint rate limiting is DISABLED (RATE_LIMIT_ENABLED=false). "
+                "Only do this when another layer enforces limits, or in tests."
+            )
 
         # Merge custom limits with defaults
         self.limits = self.DEFAULT_LIMITS.copy()
@@ -151,6 +171,14 @@ class EndpointRateLimiter(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         """Process each request with per-endpoint rate limiting"""
+
+        # Allow rate limiting to be switched off (RATE_LIMIT_ENABLED=false).
+        # Needed for two real cases: deployments that already rate-limit at a reverse
+        # proxy / API gateway and do not want a second budget applied per app
+        # instance, and test suites, which legitimately fire hundreds of requests at
+        # one endpoint in seconds and would otherwise be throttled into false failures.
+        if not self.enabled:
+            return await call_next(request)
 
         # Get client identifier and endpoint info
         client_ip = request.client.host
