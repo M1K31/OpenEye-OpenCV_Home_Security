@@ -191,8 +191,8 @@ class TestCameraCRUD:
             "camera_type": "New Test Camera",
             "source": "rtsp://new",
             "is_active": True,
-            "enable_motion_detection": True,
-            "enable_face_recognition": False
+            "motion_detection_enabled": True,
+            "face_detection_enabled": False
         }
         created_camera = crud.create_camera(db_session, camera_data)
 
@@ -200,8 +200,8 @@ class TestCameraCRUD:
         assert created_camera.camera_id == "new_camera"
         assert created_camera.camera_type == "New Test Camera"
         assert created_camera.is_active is True
-        assert created_camera.enable_motion_detection is True
-        assert created_camera.enable_face_recognition is False
+        assert created_camera.motion_detection_enabled is True
+        assert created_camera.face_detection_enabled is False
 
     def test_update_camera_success(self, db_session: Session):
         """Test successful camera update"""
@@ -217,14 +217,14 @@ class TestCameraCRUD:
         # Update camera
         update_data = {
             "camera_type": "Updated Name",
-            "enable_motion_detection": True
+            "motion_detection_enabled": True
         }
         updated_camera = crud.update_camera(db_session, "update_cam", update_data)
 
         assert updated_camera is not None
         assert updated_camera.camera_id == "update_cam"
         assert updated_camera.camera_type == "Updated Name"
-        assert updated_camera.enable_motion_detection is True
+        assert updated_camera.motion_detection_enabled is True
         # Original source should be unchanged
         assert updated_camera.source == "rtsp://original"
 
@@ -291,16 +291,16 @@ class TestCameraCRUD:
             "is_active": True
         }
         created_camera = crud.create_camera(db_session, camera_data)
-        original_last_active = created_camera.last_active
+        original_last_active = created_camera.last_active_at
 
         # Update last_active
         updated_camera = crud.update_camera_last_active(db_session, "last_active_cam")
 
         assert updated_camera is not None
-        assert updated_camera.last_active is not None
+        assert updated_camera.last_active_at is not None
         # Last active should be updated (different from original)
         if original_last_active is not None:
-            assert updated_camera.last_active >= original_last_active
+            assert updated_camera.last_active_at >= original_last_active
 
     def test_update_camera_last_active_not_found(self, db_session: Session):
         """Test updating last_active for non-existent camera returns None"""
@@ -317,7 +317,7 @@ class TestSystemSettingsCRUD:
         setting_data = {
             "setting_key": "test_key",
             "setting_value": "test_value",
-            "data_type": "string",
+            "setting_type": "string",
             "description": "Test setting"
         }
         crud.set_system_setting(db_session, **setting_data)
@@ -328,7 +328,7 @@ class TestSystemSettingsCRUD:
         assert retrieved_setting is not None
         assert retrieved_setting.setting_key == "test_key"
         assert retrieved_setting.setting_value == "test_value"
-        assert retrieved_setting.data_type == "string"
+        assert retrieved_setting.setting_type == "string"
 
     def test_get_system_setting_not_exists(self, db_session: Session):
         """Test retrieving non-existent setting returns None"""
@@ -347,7 +347,7 @@ class TestSystemSettingsCRUD:
             setting_data = {
                 "setting_key": f"key_{i}",
                 "setting_value": f"value_{i}",
-                "data_type": "string",
+                "setting_type": "string",
                 "description": f"Test setting {i}"
             }
             crud.set_system_setting(db_session, **setting_data)
@@ -362,7 +362,7 @@ class TestSystemSettingsCRUD:
         setting_data = {
             "setting_key": "new_setting",
             "setting_value": "new_value",
-            "data_type": "string",
+            "setting_type": "string",
             "description": "New test setting"
         }
         created_setting = crud.set_system_setting(db_session, **setting_data)
@@ -370,7 +370,7 @@ class TestSystemSettingsCRUD:
         assert created_setting is not None
         assert created_setting.setting_key == "new_setting"
         assert created_setting.setting_value == "new_value"
-        assert created_setting.data_type == "string"
+        assert created_setting.setting_type == "string"
         assert created_setting.description == "New test setting"
 
     def test_set_system_setting_update(self, db_session: Session):
@@ -379,7 +379,7 @@ class TestSystemSettingsCRUD:
         initial_data = {
             "setting_key": "update_setting",
             "setting_value": "initial_value",
-            "data_type": "string",
+            "setting_type": "string",
             "description": "Initial description"
         }
         crud.set_system_setting(db_session, **initial_data)
@@ -388,7 +388,7 @@ class TestSystemSettingsCRUD:
         update_data = {
             "setting_key": "update_setting",
             "setting_value": "updated_value",
-            "data_type": "string",
+            "setting_type": "string",
             "description": "Updated description"
         }
         updated_setting = crud.set_system_setting(db_session, **update_data)
@@ -407,7 +407,7 @@ class TestSystemSettingsCRUD:
         setting_data = {
             "setting_key": "delete_setting",
             "setting_value": "delete_value",
-            "data_type": "string",
+            "setting_type": "string",
             "description": "To be deleted"
         }
         crud.set_system_setting(db_session, **setting_data)
@@ -436,7 +436,7 @@ class TestSystemSettingsCRUD:
 
         # Check for some expected default keys
         setting_keys = {s.setting_key for s in all_settings}
-        expected_keys = {"recordings_path", "faces_path", "default_display_mode"}
+        expected_keys = {"recordings_path", "faces_path", "display_mode"}
         assert expected_keys.issubset(setting_keys)
 
 
@@ -599,14 +599,14 @@ class TestFaceDetectionEventsCRUD:
             "confidence": 0.95,
             "snapshot_path": "/snapshots/face_1.jpg"
         }
-        created_event = crud.create_face_detection_event(db_session, **event_data)
+        created_event = crud.create_face_detection_event(db_session, event_data)
 
         assert created_event.id is not None
         assert created_event.camera_id == "face_cam_1"
         assert created_event.person_name == "John Doe"
         assert created_event.confidence == 0.95
         assert created_event.snapshot_path == "/snapshots/face_1.jpg"
-        assert isinstance(created_event.timestamp, datetime)
+        assert isinstance(created_event.detected_at, datetime)
 
     def test_get_face_detection_events_empty(self, db_session: Session):
         """Test getting events from empty database"""
@@ -623,7 +623,7 @@ class TestFaceDetectionEventsCRUD:
                 "confidence": 0.8 + (i * 0.02),
                 "snapshot_path": f"/snapshots/face_{i}.jpg"
             }
-            crud.create_face_detection_event(db_session, **event_data)
+            crud.create_face_detection_event(db_session, event_data)
 
         events = crud.get_face_detection_events(db_session)
 
@@ -640,7 +640,7 @@ class TestFaceDetectionEventsCRUD:
                 "confidence": 0.9,
                 "snapshot_path": f"/snapshots/recent_{i}.jpg"
             }
-            crud.create_face_detection_event(db_session, **event_data)
+            crud.create_face_detection_event(db_session, event_data)
 
         # Get recent 5 detections
         recent_events = crud.get_recent_face_detections(db_session, limit=5)
@@ -656,28 +656,28 @@ class TestRecordingEventsCRUD:
         """Test creating recording event"""
         event_data = {
             "camera_id": "rec_cam_1",
-            "file_path": "/recordings/rec_1.mp4",
-            "start_time": datetime.utcnow(),
-            "trigger": "motion"
+            "recording_path": "/recordings/rec_1.mp4",
+            "started_at": datetime.utcnow(),
+            "motion_detected": True
         }
-        created_event = crud.create_recording_event(db_session, **event_data)
+        created_event = crud.create_recording_event(db_session, event_data)
 
         assert created_event.id is not None
         assert created_event.camera_id == "rec_cam_1"
-        assert created_event.file_path == "/recordings/rec_1.mp4"
-        assert created_event.trigger == "motion"
-        assert created_event.start_time is not None
+        assert created_event.recording_path == "/recordings/rec_1.mp4"
+        assert created_event.motion_detected is True
+        assert created_event.started_at is not None
 
     def test_update_recording_event_success(self, db_session: Session):
         """Test updating recording event"""
         # Create recording event
         event_data = {
             "camera_id": "update_rec_cam",
-            "file_path": "/recordings/update_rec.mp4",
-            "start_time": datetime.utcnow(),
-            "trigger": "motion"
+            "recording_path": "/recordings/update_rec.mp4",
+            "started_at": datetime.utcnow(),
+            "motion_detected": True
         }
-        created_event = crud.create_recording_event(db_session, **event_data)
+        created_event = crud.create_recording_event(db_session, event_data)
 
         # Update event
         end_time = datetime.utcnow()
@@ -709,16 +709,16 @@ class TestRecordingEventsCRUD:
         for i in range(5):
             event_data = {
                 "camera_id": f"cam_{i}",
-                "file_path": f"/recordings/rec_{i}.mp4",
-                "start_time": datetime.utcnow(),
-                "trigger": "motion"
+                "recording_path": f"/recordings/rec_{i}.mp4",
+                "started_at": datetime.utcnow(),
+                "motion_detected": True
             }
-            crud.create_recording_event(db_session, **event_data)
+            crud.create_recording_event(db_session, event_data)
 
         recordings = crud.get_recording_events(db_session)
 
         assert len(recordings) == 5
-        assert all(r.file_path.startswith("/recordings/rec_") for r in recordings)
+        assert all(r.recording_path.startswith("/recordings/rec_") for r in recordings)
 
 
 class TestSystemLogsCRUD:
@@ -729,7 +729,7 @@ class TestSystemLogsCRUD:
         log_data = {
             "log_level": "INFO",
             "message": "Test log message",
-            "source": "test_module",
+            "component": "test_module",
             "details": "Additional details"
         }
         created_log = crud.create_system_log(db_session, log_data)
@@ -737,9 +737,9 @@ class TestSystemLogsCRUD:
         assert created_log.id is not None
         assert created_log.log_level == "INFO"
         assert created_log.message == "Test log message"
-        assert created_log.source == "test_module"
+        assert created_log.component == "test_module"
         assert created_log.details == "Additional details"
-        assert isinstance(created_log.timestamp, datetime)
+        assert isinstance(created_log.created_at, datetime)
 
     def test_get_system_logs_empty(self, db_session: Session):
         """Test getting logs from empty database"""
@@ -753,7 +753,7 @@ class TestSystemLogsCRUD:
             log_data = {
                 "log_level": "INFO",
                 "message": f"Test message {i}",
-                "source": "test_source",
+                "component": "test_source",
                 "details": f"Details {i}"
             }
             crud.create_system_log(db_session, log_data)
@@ -761,7 +761,7 @@ class TestSystemLogsCRUD:
         logs = crud.get_system_logs(db_session)
 
         assert len(logs) == 5
-        assert all(log.source == "test_source" for log in logs)
+        assert all(log.component == "test_source" for log in logs)
 
     def test_get_system_logs_pagination(self, db_session: Session):
         """Test system logs pagination"""
@@ -770,7 +770,7 @@ class TestSystemLogsCRUD:
             log_data = {
                 "log_level": "INFO",
                 "message": f"Paginated message {i}",
-                "source": "pagination_test"
+                "component": "pagination_test"
             }
             crud.create_system_log(db_session, log_data)
 
@@ -800,7 +800,7 @@ class TestPTZPresetsCRUD:
         """Test creating PTZ preset"""
         preset_data = {
             "preset_number": 1,
-            "camera_type": "Home Position",
+            "name": "Home Position",
             "pan": 0.0,
             "tilt": 0.0,
             "zoom": 1.0
@@ -810,7 +810,7 @@ class TestPTZPresetsCRUD:
         assert created_preset.id is not None
         assert created_preset.camera_id == "ptz_cam_1"
         assert created_preset.preset_number == 1
-        assert created_preset.camera_type == "Home Position"
+        assert created_preset.name == "Home Position"
         assert created_preset.pan == 0.0
         assert created_preset.tilt == 0.0
         assert created_preset.zoom == 1.0
@@ -819,7 +819,7 @@ class TestPTZPresetsCRUD:
         """Test retrieving PTZ preset by ID"""
         preset_data = {
             "preset_number": 1,
-            "camera_type": "Test Preset",
+            "name": "Test Preset",
             "pan": 45.0,
             "tilt": 30.0,
             "zoom": 2.0
@@ -830,7 +830,7 @@ class TestPTZPresetsCRUD:
 
         assert retrieved_preset is not None
         assert retrieved_preset.id == created_preset.id
-        assert retrieved_preset.camera_type == "Test Preset"
+        assert retrieved_preset.name == "Test Preset"
 
     def test_get_ptz_preset_by_id_not_found(self, db_session: Session):
         """Test retrieving non-existent preset by ID returns None"""
@@ -841,7 +841,7 @@ class TestPTZPresetsCRUD:
         """Test deleting PTZ preset"""
         preset_data = {
             "preset_number": 1,
-            "camera_type": "Delete Me",
+            "name": "Delete Me",
             "pan": 0.0,
             "tilt": 0.0,
             "zoom": 1.0
