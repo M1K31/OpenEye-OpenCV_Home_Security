@@ -994,7 +994,18 @@ class RTSPCamera(Camera):
         # Detect if source is a USB device index (integer or numeric string)
         # Open with a few retries — a USB device can be briefly busy right after a
         # restart (previous handle not fully released, or another app grabbed it).
-        max_attempts = 3
+        #
+        # macOS: the FIRST open from OpenEye.app raises a camera-permission dialog,
+        # and the open keeps failing until the user clicks Allow. Three quick tries
+        # (~6s) expired long before a human could react, so the camera came up dead
+        # on first launch. Give Darwin a longer — but still bounded — window, and log
+        # every attempt so a slow open never looks like a hang. Once granted, the
+        # permission persists and the open succeeds on the first attempt.
+        _is_darwin = sys.platform == "darwin"
+        max_attempts = int(os.getenv("OPENEYE_CAMERA_OPEN_ATTEMPTS", "0") or 0) or (
+            8 if _is_darwin else 3
+        )
+        retry_delay = float(os.getenv("OPENEYE_CAMERA_OPEN_RETRY_DELAY", "2"))
         for attempt in range(1, max_attempts + 1):
             try:
                 # Try to convert to int - if successful, it's a USB device
@@ -1016,10 +1027,18 @@ class RTSPCamera(Camera):
             if self.capture is not None:
                 self.capture.release()
             if attempt < max_attempts:
-                time.sleep(2)
+                if _is_darwin and attempt == 1:
+                    print("  (macOS: if a camera-permission dialog is showing, click "
+                          "Allow — retrying while you respond)")
+                time.sleep(retry_delay)
 
         if self.capture is None or not self.capture.isOpened():
             print(f"Error: Could not open camera source: {self.source} after {max_attempts} attempts")
+            if _is_darwin:
+                print("  macOS camera access is required for local cameras. Launch "
+                      "OpenEye.app (or run ./start.sh from a Terminal) and approve the "
+                      "prompt, or enable OpenEye under System Settings > Privacy & "
+                      "Security > Camera, then restart OpenEye.")
             self.is_running = False
             return
         self.is_running = True

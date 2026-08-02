@@ -314,6 +314,29 @@ warn_macos_camera_permission() {
     echo ""
 }
 
+# Build OpenEye.app on macOS. This is what makes local cameras usable without the
+# Terminal workaround: the bundle embeds the interpreter and carries its own
+# NSCameraUsageDescription, so macOS can attribute the camera grant to OpenEye
+# instead of to Apple's python binary. Non-fatal — a failure here just means the
+# user falls back to running ./start.sh from a Terminal.
+build_macos_app() {
+    [ "$(uname -s)" = "Darwin" ] || return 0
+    local builder="$SCRIPT_DIR/build-macos-app.sh"
+    [ -x "$builder" ] || return 0
+
+    log_info "Building OpenEye.app (gives the camera permission a home)..."
+    if OPENEYE_DATA_ROOT="$DATA_ROOT" OPENEYE_VENV="$VENV" PORT="$PORT" \
+        "$builder" >/dev/null 2>&1; then
+        log_success "OpenEye.app created in ~/Applications"
+        echo "  Launch it from ~/Applications (or Spotlight) and approve the camera"
+        echo "  prompt once — the grant then persists across restarts."
+    else
+        log_warn "Could not build OpenEye.app (continuing)."
+        echo "  Run scripts/build-macos-app.sh manually, or start OpenEye from a"
+        echo "  Terminal with ./start.sh so the camera can be authorised."
+    fi
+}
+
 sync_app_to_internal() {
     log_info "Syncing application code to $APP_DIR (internal disk)..."
     mkdir -p "$APP_DIR"
@@ -641,6 +664,7 @@ print_completion() {
     # Always surface the macOS camera-permission note (not just for the --plist
     # service), since USB cameras silently fail without it.
     warn_macos_camera_permission
+    build_macos_app
     log_info "Important Files:"
     echo "  - .env: Configuration and secret keys"
     echo "  - surveillance.db: Database file"

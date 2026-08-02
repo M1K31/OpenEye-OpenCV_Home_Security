@@ -449,18 +449,27 @@ npm run build
 ```
 
 **macOS: USB or built-in camera not detected (native install)**:
-macOS only lets a process **you launched from a Terminal** open the camera. A
-background/launchd service can't request the permission prompt, so camera discovery
-finds nothing when OpenEye runs as a service.
-- Start OpenEye from a **Terminal window** so it can request access:
-  ```bash
-  cd ~/.local/share/openeye/app && ./start.sh
-  ```
-- **Approve the macOS camera prompt** when it appears, then scan for cameras in the UI.
-- If no prompt appears, enable your terminal app under **System Settings → Privacy &
-  Security → Camera**, then restart OpenEye.
-- From a git checkout you can also use `./restart.sh --foreground`, which stops any
-  background instance and runs OpenEye in the foreground (camera-capable).
+macOS grants camera access per *app*, and it will only prompt an app that has its own
+identity. A plain background/launchd service has none, so camera discovery silently
+finds nothing.
+
+**Recommended — use OpenEye.app** (created automatically by the installer in
+`~/Applications`, or build it with `opencv_surveillance/scripts/build-macos-app.sh`):
+1. Launch **OpenEye** from `~/Applications` or Spotlight.
+2. **Approve the camera prompt** the first time it appears.
+3. The UI opens automatically at http://localhost:8200.
+
+The grant persists across restarts. If no prompt appears, enable **OpenEye** under
+**System Settings → Privacy & Security → Camera**, then relaunch. After granting
+permission for the first time, restart OpenEye so the running process picks it up.
+
+**Alternative — run from a Terminal** (the Terminal's own camera grant is used):
+```bash
+cd ~/.local/share/openeye/app && ./start.sh
+```
+From a git checkout, `./restart.sh --foreground` does the same thing.
+
+> Logs for the app launcher: `~/.local/share/openeye/logs/openeye-app.log`
 
 **Docker: USB cameras not discovered (macOS/Windows)**:
 Docker Desktop runs containers in a Linux VM, preventing USB device access.
