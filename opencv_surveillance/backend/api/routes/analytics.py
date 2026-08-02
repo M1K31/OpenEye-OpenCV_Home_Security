@@ -13,7 +13,7 @@ from typing import Optional
 from datetime import datetime, timedelta
 import hashlib
 
-from backend.database.session import SessionLocal
+from backend.database.session import SessionLocal, get_db
 from backend.database.utils import get_db_context
 from backend.database import models
 from backend.core.performance import timed_lru_cache
@@ -21,12 +21,10 @@ from backend.core.performance import timed_lru_cache
 router = APIRouter()
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# get_db is imported from backend.database.session rather than redefined here:
+# FastAPI matches dependency_overrides by function identity, so a module-local
+# copy is a *different* dependency and silently escapes any override (and used a
+# separate session provider from the rest of the app).
 
 
 @timed_lru_cache(seconds=300, maxsize=32)  # Cache for 5 minutes

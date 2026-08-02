@@ -14,7 +14,7 @@ import os
 import json
 
 from backend.database import crud, models
-from backend.database.session import SessionLocal
+from backend.database.session import SessionLocal, get_db
 from backend.core import auth
 
 router = APIRouter()
@@ -120,12 +120,10 @@ class PathValidationRequest(BaseModel):
 # ============================================================================
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# get_db is imported from backend.database.session rather than redefined here:
+# FastAPI matches dependency_overrides by function identity, so a module-local
+# copy is a *different* dependency and silently escapes any override (and used a
+# separate session provider from the rest of the app).
 
 
 # ============================================================================

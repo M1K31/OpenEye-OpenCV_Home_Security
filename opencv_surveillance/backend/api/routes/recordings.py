@@ -18,7 +18,7 @@ import io
 import tempfile
 import logging
 
-from backend.database.session import SessionLocal
+from backend.database.session import SessionLocal, get_db
 from backend.database import models
 from backend.core.performance import paginate, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from backend.core.paths import paths
@@ -123,12 +123,10 @@ class RecordingSearchRequest(BaseModel):
 # Dependency
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# get_db is imported from backend.database.session rather than redefined here:
+# FastAPI matches dependency_overrides by function identity, so a module-local
+# copy is a *different* dependency and silently escapes any override (and used a
+# separate session provider from the rest of the app).
 
 
 # Endpoints

@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 import os
 import logging
 
-from backend.database.session import SessionLocal
+from backend.database.session import SessionLocal, get_db
 from backend.database import crud, models
 from backend.core.performance import paginate, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from backend.api.schemas.pagination import PaginatedResponse
@@ -107,13 +107,10 @@ class RecordingEventResponse(BaseModel):
         from_attributes = True
 
 
-def get_db():
-    """Dependency to get database session"""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# get_db is imported from backend.database.session rather than redefined here:
+# FastAPI matches dependency_overrides by function identity, so a module-local
+# copy is a *different* dependency and silently escapes any override (and used a
+# separate session provider from the rest of the app).
 
 
 @router.get("/history",

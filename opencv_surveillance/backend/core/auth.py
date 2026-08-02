@@ -15,7 +15,7 @@ import bcrypt
 from backend.database import crud
 from backend.api.schemas import user as user_schema
 from sqlalchemy.orm import Session
-from backend.database.session import SessionLocal
+from backend.database.session import SessionLocal, get_db
 from backend.core.security import verify_password
 import os
 
@@ -117,13 +117,12 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token")
 
 
-def get_db():
-    """Database session dependency"""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# get_db is imported from backend.database.session (see imports) rather than
+# redefined here. FastAPI matches dependency_overrides by function IDENTITY, so a
+# module-local copy — even an identical one — is a different dependency: overriding
+# the canonical get_db silently missed this one, and authentication kept querying the
+# real database. It also meant auth used a separate session provider from the rest of
+# the app. Import the single definition instead of duplicating it.
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
