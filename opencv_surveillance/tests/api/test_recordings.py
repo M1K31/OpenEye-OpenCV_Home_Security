@@ -36,18 +36,18 @@ class TestRecordingsAPI:
         recording1 = models.RecordingEvent(
             camera_id=test_camera.camera_id,
             started_at=datetime.utcnow(),
-            file_path="test_recording_1.mp4",
+            recording_path="test_recording_1.mp4",
             file_size_bytes=1024000,
             duration_seconds=60.0,
-            trigger_type="motion"
+            motion_detected=True
         )
         recording2 = models.RecordingEvent(
             camera_id=test_camera.camera_id,
             started_at=datetime.utcnow(),
-            file_path="test_recording_2.mp4",
+            recording_path="test_recording_2.mp4",
             file_size_bytes=2048000,
             duration_seconds=120.0,
-            trigger_type="face"
+            faces_detected=1
         )
         db_session.add_all([recording1, recording2])
         db_session.commit()
@@ -65,10 +65,10 @@ class TestRecordingsAPI:
             recording = models.RecordingEvent(
                 camera_id=test_camera.camera_id,
                 started_at=datetime.utcnow(),
-                file_path=f"test_recording_{i}.mp4",
+                recording_path=f"test_recording_{i}.mp4",
                 file_size_bytes=1024000,
                 duration_seconds=60.0,
-                trigger_type="motion"
+                motion_detected=True
             )
             db_session.add(recording)
         db_session.commit()
@@ -102,14 +102,14 @@ class TestRecordingsAPI:
         recording1 = models.RecordingEvent(
             camera_id=test_camera.camera_id,
             started_at=datetime.utcnow(),
-            file_path="camera1_recording.mp4",
+            recording_path="camera1_recording.mp4",
             file_size_bytes=1024000,
             duration_seconds=60.0
         )
         recording2 = models.RecordingEvent(
             camera_id=camera2.camera_id,
             started_at=datetime.utcnow(),
-            file_path="camera2_recording.mp4",
+            recording_path="camera2_recording.mp4",
             file_size_bytes=1024000,
             duration_seconds=60.0
         )
@@ -136,10 +136,10 @@ class TestRecordingsAPI:
         recording = models.RecordingEvent(
             camera_id=test_camera.camera_id,
             started_at=datetime.utcnow(),
-            file_path="test_recording.mp4",
+            recording_path="test_recording.mp4",
             file_size_bytes=1024000,
             duration_seconds=60.0,
-            trigger_type="motion"
+            motion_detected=True
         )
         db_session.add(recording)
         db_session.commit()
@@ -162,7 +162,7 @@ class TestRecordingsAPI:
         recording = models.RecordingEvent(
             camera_id=test_camera.camera_id,
             started_at=datetime.utcnow(),
-            file_path="test_recording.mp4",
+            recording_path="test_recording.mp4",
             file_size_bytes=1024000,
             duration_seconds=60.0
         )

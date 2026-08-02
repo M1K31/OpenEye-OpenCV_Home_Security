@@ -72,14 +72,14 @@ class TestFaceHistory:
         # Create test face detection events
         event1 = models.FaceDetectionEvent(
             camera_id=test_camera.camera_id,
-            timestamp=datetime.utcnow(),
+            detected_at=datetime.utcnow(),
             person_name="John Doe",
             confidence=0.95,
             snapshot_path="snapshots/john_1.jpg"
         )
         event2 = models.FaceDetectionEvent(
             camera_id=test_camera.camera_id,
-            timestamp=datetime.utcnow(),
+            detected_at=datetime.utcnow(),
             person_name="Jane Doe",
             confidence=0.87,
             snapshot_path="snapshots/jane_1.jpg"
@@ -99,7 +99,7 @@ class TestFaceHistory:
         for i in range(15):
             event = models.FaceDetectionEvent(
                 camera_id=test_camera.camera_id,
-                timestamp=datetime.utcnow(),
+                detected_at=datetime.utcnow(),
                 person_name=f"Person_{i}",
                 confidence=0.9,
                 snapshot_path=f"snapshots/person_{i}.jpg"
@@ -124,14 +124,14 @@ class TestFaceHistory:
         """Test filtering face history by person name"""
         event1 = models.FaceDetectionEvent(
             camera_id=test_camera.camera_id,
-            timestamp=datetime.utcnow(),
+            detected_at=datetime.utcnow(),
             person_name="John Doe",
             confidence=0.95,
             snapshot_path="snapshots/john_1.jpg"
         )
         event2 = models.FaceDetectionEvent(
             camera_id=test_camera.camera_id,
-            timestamp=datetime.utcnow(),
+            detected_at=datetime.utcnow(),
             person_name="Jane Doe",
             confidence=0.87,
             snapshot_path="snapshots/jane_1.jpg"
@@ -167,9 +167,9 @@ class TestFaceClustering:
         """Test getting details of a specific cluster"""
         # Create test cluster
         cluster = models.FaceCluster(
-            cluster_label=0,
+            label="0",
             representative_snapshot_path="clusters/cluster_0.jpg",
-            member_count=5
+            face_count=5
         )
         db_session.add(cluster)
         db_session.commit()
@@ -184,9 +184,9 @@ class TestFaceClustering:
     def test_identify_cluster(self, client, auth_headers, db_session):
         """Test assigning a person name to a cluster"""
         cluster = models.FaceCluster(
-            cluster_label=0,
+            label="0",
             representative_snapshot_path="clusters/cluster_0.jpg",
-            member_count=5
+            face_count=5
         )
         db_session.add(cluster)
         db_session.commit()
