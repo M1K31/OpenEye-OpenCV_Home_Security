@@ -320,7 +320,14 @@ warn_macos_camera_permission() {
 # instead of to Apple's python binary. Non-fatal — a failure here just means the
 # user falls back to running ./start.sh from a Terminal.
 build_macos_app() {
+    # macOS only, and purely ADDITIVE: the terminal workflow (./start.sh, ./stop.sh,
+    # ./restart.sh --foreground) and the Linux/systemd path are unchanged and remain
+    # fully supported. Set OPENEYE_SKIP_APP_BUNDLE=1 to opt out entirely.
     [ "$(uname -s)" = "Darwin" ] || return 0
+    [ "${OPENEYE_SKIP_APP_BUNDLE:-0}" = "1" ] && {
+        log_info "Skipping OpenEye.app (OPENEYE_SKIP_APP_BUNDLE=1); use ./start.sh from a Terminal."
+        return 0
+    }
     local builder="$SCRIPT_DIR/build-macos-app.sh"
     [ -x "$builder" ] || return 0
 

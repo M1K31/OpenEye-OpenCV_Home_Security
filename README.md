@@ -463,13 +463,25 @@ The grant persists across restarts. If no prompt appears, enable **OpenEye** und
 **System Settings → Privacy & Security → Camera**, then relaunch. After granting
 permission for the first time, restart OpenEye so the running process picks it up.
 
-**Alternative — run from a Terminal** (the Terminal's own camera grant is used):
+**Alternative — run from a Terminal** (fully supported; the Terminal's own camera
+grant is used). This is the same workflow Linux uses and remains first-class:
 ```bash
-cd ~/.local/share/openeye/app && ./start.sh
+cd ~/.local/share/openeye/app && ./start.sh    # ./stop.sh to stop
 ```
-From a git checkout, `./restart.sh --foreground` does the same thing.
+From a git checkout, `./restart.sh --foreground` does the same thing. To skip building
+the app bundle entirely, install with `OPENEYE_SKIP_APP_BUNDLE=1`.
 
 > Logs for the app launcher: `~/.local/share/openeye/logs/openeye-app.log`
+
+**macOS: changing storage paths (System → Storage Paths)**
+Recordings, snapshots and face directories stay fully configurable in the UI under the
+app bundle — it is not sandboxed, so it can use any location your user account can.
+macOS does separately protect a few locations, so if you point a path at **Documents,
+Desktop, Downloads, an external drive or a network volume**, approve the macOS prompt
+that appears (OpenEye declares these uses). If a path silently fails to save, enable
+**OpenEye** under **System Settings → Privacy & Security → Files and Folders**.
+Storing data on an internal disk remains the recommended default — an external volume
+that unmounts while recording can interrupt capture.
 
 **Docker: USB cameras not discovered (macOS/Windows)**:
 Docker Desktop runs containers in a Linux VM, preventing USB device access.
