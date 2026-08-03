@@ -3,7 +3,15 @@ import os
 from typing import Optional
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from cryptography.fernet import Fernet
+
+# Same optional-sibling contract as backend/api/routes/ecosystem.py: ecosystem_auth
+# ships with appEcosystem and OpenEye runs without it. Every test in this file
+# signs its requests through _auth_headers below, so without the package they all
+# fail at call time rather than being skipped. Skip the module instead, matching
+# how the routes themselves treat the dependency as optional.
+pytest.importorskip("ecosystem_auth")
 
 os.environ.setdefault("NOTIFICATION_ENCRYPTION_KEY", Fernet.generate_key().decode())
 os.environ.setdefault("ECOSYSTEM_HMAC_SECRET", "test-ecosystem-hmac-secret")

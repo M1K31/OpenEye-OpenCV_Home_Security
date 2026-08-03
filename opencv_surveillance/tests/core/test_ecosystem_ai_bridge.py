@@ -2,8 +2,18 @@
 
 import asyncio
 
-import ecosystem_ai
-import backend.core.ecosystem_ai_bridge as bridge
+import pytest
+
+# ecosystem_ai ships with the sibling appEcosystem project and is deliberately
+# optional: backend/core/ecosystem_ai_bridge.py guards every import of it and
+# returns None when it is missing, so OpenEye runs unchanged without it. It is
+# therefore absent from requirements, and a bare module-level `import
+# ecosystem_ai` here failed collection of this file on any machine that had not
+# installed the sibling project — including CI, where it errored the whole run.
+# Skip instead, so the suite reflects the module's own optional contract.
+ecosystem_ai = pytest.importorskip("ecosystem_ai")
+
+import backend.core.ecosystem_ai_bridge as bridge  # noqa: E402
 
 
 class _FakeProfile:
