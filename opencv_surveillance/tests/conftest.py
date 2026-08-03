@@ -95,6 +95,36 @@ def test_user(db_session):
 
 
 @pytest.fixture(autouse=True)
+def no_real_camera_io(monkeypatch):
+    """
+    Stop tests from opening real cameras or network streams.
+
+    POST /api/cameras calls camera_manager.add_camera(), which constructs a capture
+    and connects. test_create_camera posts source "rtsp://example.com/stream", so the
+    request blocked inside OpenCV's RTSP connect and the test never returned — the
+    suite hung indefinitely and only a per-test timeout revealed which test was at
+    fault. In CI that meant a runner held open with no useful output.
+
+    A unit test asserting "POST /cameras creates a record and returns it" has no
+    business dialling a camera, so add_camera is stubbed to report success without
+    touching hardware or the network. Tests that genuinely exercise camera_manager
+    should patch it explicitly with the behaviour they need.
+    """
+    # The singleton is exported as `manager`; the routes alias it on import
+    # (`from backend.core.camera_manager import manager as camera_manager`). Import it
+    # by its real name and let an ImportError surface — silently skipping the patch
+    # is how this stub appeared to work while the suite kept hanging.
+    from backend.core.camera_manager import manager as camera_manager
+
+    def _fake_add_camera(camera_id, camera_type="mock", source=None,
+                         enable_face_detection=False, *args, **kwargs):
+        return True, f"Camera '{camera_id}' added (stubbed in tests)"
+
+    monkeypatch.setattr(camera_manager, "add_camera", _fake_add_camera)
+    yield
+
+
+@pytest.fixture(autouse=True)
 def isolate_storage_paths(tmp_path, monkeypatch):
     """
     Redirect all storage paths at a per-test temp directory.
