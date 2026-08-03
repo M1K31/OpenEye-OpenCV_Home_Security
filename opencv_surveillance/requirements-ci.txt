@@ -64,13 +64,27 @@ pytest-asyncio>=0.23.0
 pytest-timeout>=2.3.0
 httpx>=0.27.0
 
-# NOTE: Heavy optional dependencies excluded for CI:
+# Cloud storage SDKs. tests/services/test_storage_service.py has 25 tests that
+# patch boto3.client, google.cloud.storage.Client and azure BlobServiceClient;
+# unittest.mock.patch imports its target, so without these installed the whole
+# file fails or errors rather than testing anything. Together they cost ~42 MB
+# (botocore is most of it) against torch's ~339 MB, so they do not reintroduce
+# the disk pressure that motivated this trimmed-down file — and they buy back
+# real coverage of the code path that moves user footage off the device.
+boto3>=1.34.0
+google-cloud-storage>=2.14.0
+azure-storage-blob>=12.19.0
+
+# NOTE: Heavy optional dependencies still excluded for CI:
 # - torch, torchvision, ultralytics (YOLO object detection)
 # - firebase-admin (push notifications)
 # - twilio (SMS)
-# - boto3, google-cloud-*, azure-* (cloud storage)
 # - paho-mqtt, HAP-python (smart home)
 # - pyaudio (two-way audio)
+#
+# Also absent by design: ecosystem_client / ecosystem_auth / ecosystem_ai, which
+# ship with the sibling appEcosystem project and are not published to PyPI. Tests
+# that need them skip themselves — see tests/test_comprehensive_ecosystem.py.
 
 
 

@@ -25,10 +25,29 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 
+import importlib.util
+
 import pytest
 
 # Ensure imports resolve
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# ecosystem_client and ecosystem_auth ship with the sibling appEcosystem project.
+# They are not on PyPI and are not in any requirements file, so they are absent
+# anywhere appEcosystem has not been installed alongside OpenEye — including CI,
+# where these tests failed rather than skipped. The application already treats the
+# sibling as optional (backend/api/routes/ecosystem.py says so outright and
+# answers with a clear error when it is missing), so the tests should agree.
+#
+# Marked per test rather than for the whole module on purpose: only 15 of the 72
+# tests here touch the sibling, and a module-level skip would silently drop the
+# other 57 — which cover URL safety, rate limiting and signature handling and
+# pass perfectly well without appEcosystem installed.
+requires_appecosystem = pytest.mark.skipif(
+    importlib.util.find_spec("ecosystem_client") is None
+    or importlib.util.find_spec("ecosystem_auth") is None,
+    reason="appEcosystem sibling (ecosystem_client / ecosystem_auth) not installed",
+)
 
 
 # ============================================================================
@@ -52,6 +71,7 @@ class TestCriticalFixes:
                 cfg = EcosystemConfig.from_env()
                 assert cfg.hmac_secret == "dev-ecosystem-secret-change-in-production"
 
+    @requires_appecosystem
     def test_c1_config_no_warning_when_set(self):
         """Config should NOT warn when secret is explicitly provided."""
         with patch.dict(os.environ, {"ECOSYSTEM_HMAC_SECRET": "my-prod-secret"}):
@@ -72,11 +92,13 @@ class TestCriticalFixes:
 
     # -- C-2: Auth on security endpoints --
 
+    @requires_appecosystem
     def test_c2_security_endpoint_requires_auth(self, client):
         """GET /ecosystem/security must reject unauthenticated requests."""
         resp = client.get("/api/ecosystem/security")
         assert resp.status_code == 401
 
+    @requires_appecosystem
     def test_c2_unblock_endpoint_requires_auth(self, client):
         """POST /ecosystem/security/unblock must reject unauthenticated requests."""
         resp = client.post("/api/ecosystem/security/unblock", params={"ip_address": "1.2.3.4"})
@@ -110,6 +132,7 @@ class TestCriticalFixes:
 
     # -- C-4: Crypto consolidation (single sign_payload source) --
 
+    @requires_appecosystem
     def test_c4_sign_payload_uses_compact_separators(self):
         """sign_payload from ecosystem_auth.tokens uses (',', ':') separators."""
         from ecosystem_auth.tokens import sign_payload
@@ -120,12 +143,14 @@ class TestCriticalFixes:
         expected = hmac.new("secret".encode(), expected_msg, hashlib.sha256).hexdigest()
         assert sig == expected
 
+    @requires_appecosystem
     def test_c4_ecosystem_security_imports_from_tokens(self):
         """ecosystem_security.py should re-export from ecosystem_auth.tokens."""
         from backend.core.ecosystem_security import sign_payload as sec_sign
         from ecosystem_auth.tokens import sign_payload as tok_sign
         assert sec_sign is tok_sign
 
+    @requires_appecosystem
     def test_c4_no_local_sign_payload_in_routes(self):
         """ecosystem.py routes should not define its own sign_payload."""
         import inspect
@@ -163,6 +188,7 @@ class TestHighPriorityFixes:
 
     # -- H-3: Webhook requires HMAC auth --
 
+    @requires_appecosystem
     def test_h3_webhook_rejects_unauthenticated(self, client):
         """POST /ecosystem/webhook must reject unauthenticated requests."""
         resp = client.post("/api/ecosystem/webhook", json={"event_type": "test"})
@@ -183,6 +209,7 @@ class TestHighPriorityFixes:
 
     # -- H-6: generate_challenge requires device_token --
 
+    @requires_appecosystem
     def test_h6_generate_challenge_requires_token(self):
         """generate_challenge must take device_token and return HMAC response."""
         from backend.core.ecosystem_security import generate_challenge, verify_challenge_response
@@ -191,6 +218,7 @@ class TestHighPriorityFixes:
         assert challenge != expected, "Challenge and response must differ"
         assert verify_challenge_response(challenge, expected, device_token)
 
+    @requires_appecosystem
     def test_h6_challenge_response_fails_wrong_token(self):
         """Challenge response with wrong token must fail."""
         from backend.core.ecosystem_security import generate_challenge, verify_challenge_response
@@ -241,6 +269,7 @@ class TestMediumPriorityFixes:
 
     # -- L-1: Pattern matching --
 
+    @requires_appecosystem
     def test_l1_matches_pattern_empty_strings(self):
         """Empty strings should never match."""
         from ecosystem_client.match import matches_pattern
@@ -248,10 +277,12 @@ class TestMediumPriorityFixes:
         assert matches_pattern("test", "") is False
         assert matches_pattern("", "") is False
 
+    @requires_appecosystem
     def test_l1_matches_pattern_wildcard(self):
         from ecosystem_client.match import matches_pattern
         assert matches_pattern("security.motion", "*") is True
 
+    @requires_appecosystem
     def test_l1_matches_pattern_prefix(self):
         from ecosystem_client.match import matches_pattern
         assert matches_pattern("security.motion_detected", "security.*") is True
@@ -261,6 +292,7 @@ class TestMediumPriorityFixes:
         assert matches_pattern("security", "security.*") is False
         assert matches_pattern("other.event", "security.*") is False
 
+    @requires_appecosystem
     def test_l1_matches_pattern_exact(self):
         from ecosystem_client.match import matches_pattern
         assert matches_pattern("security.motion", "security.motion") is True
@@ -808,6 +840,7 @@ class TestPrivacyAndPermissions:
         # Verify the logger doesn't log at DEBUG by default
         assert eco_logger.level <= logging.WARNING or eco_logger.level == logging.NOTSET
 
+    @requires_appecosystem
     def test_rate_limiting_blocks_brute_force(self):
         """Rate limiter should block after MAX_AUTH_ATTEMPTS."""
         from backend.core.ecosystem_security import (
@@ -830,6 +863,7 @@ class TestPrivacyAndPermissions:
             _auth_attempts.pop(test_ip, None)
             _blocked_ips.pop(test_ip, None)
 
+    @requires_appecosystem
     def test_successful_auth_clears_rate_limit(self):
         """Successful auth should clear rate limit counters."""
         from backend.core.ecosystem_security import (
