@@ -74,8 +74,16 @@ torch>=2.0.0  # PyTorch framework (required by YOLO)
 torchvision>=0.15.0  # Computer vision models and datasets
 scipy>=1.10.0  # Scientific computing for YOLO operations
 
-# Ecosystem integration — ecosystem_client is bundled in opencv_surveillance/ecosystem_client/
-# No pip install needed; it's importable from the project directory
+# Ecosystem integration — OPTIONAL, and not installable from here.
+# ecosystem_client / ecosystem_auth / ecosystem_ai ship with the sibling
+# appEcosystem project and are not published to PyPI, so they are simply absent
+# unless appEcosystem has been installed into the same environment. OpenEye runs
+# without them: backend/api/routes/ecosystem.py answers with a clear error when
+# they are missing, and the tests that need them skip themselves.
+#
+# (This previously claimed ecosystem_client was bundled under
+# opencv_surveillance/ecosystem_client/ and needed no install. There is no such
+# directory — it resolves from site-packages when appEcosystem is present.)
 
 # PostgreSQL (Phase 6 - Production Database) - FREE & OPEN SOURCE
 psycopg2-binary>=2.9.9  # PostgreSQL adapter
