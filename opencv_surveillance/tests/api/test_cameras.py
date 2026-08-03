@@ -61,7 +61,9 @@ class TestCamerasAPI:
             "recording_enabled": False
         }
         response = client.post("/api/cameras/", json=camera_data, headers=auth_headers)
-        assert response.status_code == 200
+        # The endpoint declares 201 Created, which is the correct status for a
+        # successful resource creation.
+        assert response.status_code == 201
         data = response.json()
         assert data["camera_id"] == "new_camera"
         assert data["camera_type"] == "rtsp"
@@ -122,19 +124,19 @@ class TestCamerasAPI:
 class TestCameraControl:
     """Test suite for camera control operations"""
 
-    def test_start_camera(self, client, auth_headers, test_camera):
-        """Test starting a camera stream"""
+    def test_activate_camera(self, client, auth_headers, test_camera):
+        """Test activating a camera (the route is /activate, not /start)"""
         response = client.post(
-            f"/api/cameras/{test_camera.camera_id}/start",
+            f"/api/cameras/{test_camera.camera_id}/activate",
             headers=auth_headers
         )
         # May return 200 (success) or 500 (if no actual camera hardware)
         assert response.status_code in [200, 500]
 
-    def test_stop_camera(self, client, auth_headers, test_camera):
-        """Test stopping a camera stream"""
+    def test_deactivate_camera(self, client, auth_headers, test_camera):
+        """Test deactivating a camera (the route is /deactivate, not /stop)"""
         response = client.post(
-            f"/api/cameras/{test_camera.camera_id}/stop",
+            f"/api/cameras/{test_camera.camera_id}/deactivate",
             headers=auth_headers
         )
         assert response.status_code in [200, 404]
@@ -145,5 +147,6 @@ class TestCameraControl:
             f"/api/cameras/{test_camera.camera_id}/snapshot",
             headers=auth_headers
         )
-        # Snapshot may not be available in test environment
-        assert response.status_code in [200, 404, 500]
+        # No real camera is opened in tests (see the no_real_camera_io fixture), so
+        # 503 "camera unavailable" is the expected answer rather than a failure.
+        assert response.status_code in [200, 404, 500, 503]

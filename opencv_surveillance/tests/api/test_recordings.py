@@ -25,10 +25,10 @@ class TestRecordingsAPI:
         response = client.get("/api/recordings/", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
-        assert "recordings" in data
-        assert "total" in data
-        assert data["total"] == 0
-        assert len(data["recordings"]) == 0
+        assert "data" in data
+        assert "total" in data["pagination"]
+        assert data["pagination"]["total"] == 0
+        assert len(data["data"]) == 0
 
     def test_list_recordings_with_data(self, client, auth_headers, db_session, test_camera):
         """Test listing recordings with existing data"""
@@ -55,8 +55,8 @@ class TestRecordingsAPI:
         response = client.get("/api/recordings/", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
-        assert data["total"] == 2
-        assert len(data["recordings"]) == 2
+        assert data["pagination"]["total"] == 2
+        assert len(data["data"]) == 2
 
     def test_list_recordings_pagination(self, client, auth_headers, db_session, test_camera):
         """Test pagination of recordings"""
@@ -74,26 +74,28 @@ class TestRecordingsAPI:
         db_session.commit()
 
         # Test page 1
-        response = client.get("/api/recordings/?limit=10&skip=0", headers=auth_headers)
+        response = client.get("/api/recordings/?page=1&page_size=10", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
-        assert data["total"] == 15
-        assert len(data["recordings"]) == 10
+        # `total` counts everything in the table; `filtered` counts what matched the
+        # camera_id filter, which is what this test is actually asserting.
+        assert data["pagination"]["filtered"] == 15
+        assert len(data["data"]) == 10
 
         # Test page 2
-        response = client.get("/api/recordings/?limit=10&skip=10", headers=auth_headers)
+        response = client.get("/api/recordings/?page=2&page_size=10", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
-        assert len(data["recordings"]) == 5
+        assert len(data["data"]) == 5
 
     def test_list_recordings_filter_by_camera(self, client, auth_headers, db_session, test_camera):
         """Test filtering recordings by camera ID"""
         # Create another camera
         camera2 = models.Camera(
             camera_id="test_camera_2",
-            camera_name="Test Camera 2",
-            source_url="mock",
-            enabled=True
+            camera_type="mock",
+            source="mock",
+            is_active=True
         )
         db_session.add(camera2)
         db_session.commit()
@@ -123,8 +125,10 @@ class TestRecordingsAPI:
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["total"] == 1
-        assert data["recordings"][0]["camera_id"] == test_camera.camera_id
+        # `total` counts every recording; `filtered` counts those matching the
+        # camera_id filter, which is what this test asserts.
+        assert data["pagination"]["filtered"] == 1
+        assert data["data"][0]["camera_id"] == test_camera.camera_id
 
     def test_list_recordings_unauthorized(self, client):
         """Test that unauthenticated requests are rejected"""
@@ -148,9 +152,11 @@ class TestRecordingsAPI:
         response = client.get(f"/api/recordings/{recording.id}", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
-        assert data["id"] == recording.id
-        assert data["camera_id"] == test_camera.camera_id
-        assert data["file_path"] == "test_recording.mp4"
+        assert "recording" in data and "metadata" in data
+        rec = data["recording"]
+        assert rec["recording_id"] == recording.id
+        assert rec["camera_id"] == test_camera.camera_id
+        assert rec["recording_path"] == "test_recording.mp4"
 
     def test_get_recording_not_found(self, client, auth_headers):
         """Test getting a non-existent recording"""

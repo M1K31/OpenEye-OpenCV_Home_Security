@@ -116,11 +116,30 @@ def no_real_camera_io(monkeypatch):
     # is how this stub appeared to work while the suite kept hanging.
     from backend.core.camera_manager import manager as camera_manager
 
+    # The create route does not just call add_camera — it then looks the camera up and
+    # checks `is_running` to confirm it started. A stub that only reports success
+    # leaves that lookup empty and the endpoint fails with a 500, so record the camera
+    # and hand back a minimal running stand-in.
+    class _StubCamera:
+        def __init__(self, camera_id):
+            self.camera_id = camera_id
+            self.is_running = True
+
+    stubbed = {}
+    real_get_camera = camera_manager.get_camera
+
     def _fake_add_camera(camera_id, camera_type="mock", source=None,
                          enable_face_detection=False, *args, **kwargs):
+        stubbed[camera_id] = _StubCamera(camera_id)
         return True, f"Camera '{camera_id}' added (stubbed in tests)"
 
+    def _fake_get_camera(camera_id, *args, **kwargs):
+        if camera_id in stubbed:
+            return stubbed[camera_id]
+        return real_get_camera(camera_id, *args, **kwargs)
+
     monkeypatch.setattr(camera_manager, "add_camera", _fake_add_camera)
+    monkeypatch.setattr(camera_manager, "get_camera", _fake_get_camera)
     yield
 
 
