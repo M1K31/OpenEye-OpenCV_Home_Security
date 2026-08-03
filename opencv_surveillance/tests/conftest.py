@@ -94,6 +94,70 @@ def test_user(db_session):
     return user
 
 
+@pytest.fixture(autouse=True)
+def isolate_storage_paths(tmp_path, monkeypatch):
+    """
+    Redirect all storage paths at a per-test temp directory.
+
+    The faces API is filesystem-backed (a person is a directory under faces_dir), so
+    without this the suite wrote into the developer's REAL data directory: running the
+    tests left a stray "John Doe" person in ~/.local/share/openeye/faces, which then
+    leaked into later tests — "list people when none exist" found one. Tests must
+    never touch real user data, and must not depend on execution order.
+
+    Autouse so every test is isolated by default rather than relying on each author
+    remembering to opt in.
+    """
+    from backend.core.paths import paths
+
+    for attr in ("data_dir", "faces_dir", "recordings_dir",
+                 "snapshots_dir", "thumbnails_dir"):
+        if hasattr(paths, attr):
+            target = tmp_path / attr.replace("_dir", "")
+            target.mkdir(parents=True, exist_ok=True)
+            monkeypatch.setattr(paths, attr, target, raising=False)
+    yield
+
+
+@pytest.fixture
+def admin_user(db_session):
+    """
+    Create an ADMIN user.
+
+    The default role for a new user is `viewer`, so the plain `test_user` fixture is
+    correctly refused (403) by anything guarded with require_user/require_admin —
+    uploads, deletions, model training. Tests that mean to exercise those endpoints
+    need a privileged identity; tests that mean to check the authorisation boundary
+    should keep using the viewer fixture.
+    """
+    from backend.database import crud
+    from backend.api.schemas import user as user_schema
+
+    user = crud.create_user(
+        db=db_session,
+        user=user_schema.UserCreate(
+            username="adminuser",
+            password="adminpass123",
+            email="admin@example.com",
+        ),
+    )
+    user.role = "admin"
+    db_session.commit()
+    db_session.refresh(user)
+    return user
+
+
+@pytest.fixture
+def admin_auth_headers(client, admin_user):
+    """Authentication headers for an admin user."""
+    response = client.post(
+        "/api/auth/login-2fa",
+        json={"username": "adminuser", "password": "adminpass123"},
+    )
+    assert response.status_code == 200, response.text
+    return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+
 @pytest.fixture
 def auth_headers(client, test_user):
     """Generate authentication headers with valid JWT token"""

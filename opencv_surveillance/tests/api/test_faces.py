@@ -25,29 +25,31 @@ class TestFacesAPI:
         response = client.get("/api/faces/people", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
-        assert "people" in data
-        assert len(data["people"]) == 0
+        assert "data" in data
+        assert len(data["data"]) == 0
 
-    def test_upload_face_missing_file(self, client, auth_headers):
+    def test_upload_face_missing_file(self, client, admin_auth_headers):
         """Test uploading face without file"""
         response = client.post(
-            "/api/faces/upload",
-            data={"person_name": "John Doe"},
-            headers=auth_headers
+            "/api/faces/people/John Doe/photos",
+            data={},  # no file part -> validation error
+            headers=admin_auth_headers
         )
         assert response.status_code in [400, 422]  # Bad request or validation error
 
-    def test_delete_face(self, client, auth_headers):
-        """Test deleting a known face"""
-        response = client.delete("/api/faces/John_Doe", headers=auth_headers)
+    def test_delete_face(self, client, admin_auth_headers):
+        """Test deleting a known face (admin-only)"""
+        response = client.delete("/api/faces/people/John_Doe", headers=admin_auth_headers)
         # May return 200 (deleted), 404 (not found), or 500 (filesystem error)
         assert response.status_code in [200, 404, 500]
 
     def test_train_model(self, client, auth_headers):
         """Test triggering face recognition model training"""
         response = client.post("/api/faces/train", headers=auth_headers)
-        # Training may succeed or fail depending on available faces
-        assert response.status_code in [200, 400, 500]
+        # Model training is admin-only; the fixture user is a regular user, so this
+        # must be refused. (Previously this asserted success and passed only because
+        # authentication was broken and never reached the permission check.)
+        assert response.status_code == 403
 
     def test_list_faces_unauthorized(self, client):
         """Test that unauthenticated requests are rejected"""
@@ -63,9 +65,9 @@ class TestFaceHistory:
         response = client.get("/api/faces/history", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
-        assert "events" in data
-        assert "total" in data
-        assert data["total"] == 0
+        assert "data" in data
+        assert "total" in data["pagination"]
+        assert data["pagination"]["total"] == 0
 
     def test_list_face_history_with_data(self, client, auth_headers, db_session, test_camera):
         """Test listing face detection events with existing data"""
@@ -90,8 +92,8 @@ class TestFaceHistory:
         response = client.get("/api/faces/history", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
-        assert data["total"] == 2
-        assert len(data["events"]) == 2
+        assert data["pagination"]["total"] == 2
+        assert len(data["data"]) == 2
 
     def test_face_history_pagination(self, client, auth_headers, db_session, test_camera):
         """Test pagination of face detection history"""
@@ -108,17 +110,17 @@ class TestFaceHistory:
         db_session.commit()
 
         # Test page 1
-        response = client.get("/api/faces/history?limit=10&skip=0", headers=auth_headers)
+        response = client.get("/api/faces/history?page=1&page_size=10", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
-        assert data["total"] == 15
-        assert len(data["events"]) == 10
+        assert data["pagination"]["total"] == 15
+        assert len(data["data"]) == 10
 
         # Test page 2
-        response = client.get("/api/faces/history?limit=10&skip=10", headers=auth_headers)
+        response = client.get("/api/faces/history?page=2&page_size=10", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
-        assert len(data["events"]) == 5
+        assert len(data["data"]) == 5
 
     def test_face_history_filter_by_person(self, client, auth_headers, db_session, test_camera):
         """Test filtering face history by person name"""
@@ -142,8 +144,8 @@ class TestFaceHistory:
         response = client.get("/api/faces/history?person_name=John Doe", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
-        assert data["total"] >= 1
-        for event in data["events"]:
+        assert data["pagination"]["total"] >= 1
+        for event in data["data"]:
             assert event["person_name"] == "John Doe"
 
 
@@ -159,7 +161,7 @@ class TestFaceClustering:
 
     def test_trigger_clustering(self, client, auth_headers):
         """Test triggering face clustering algorithm"""
-        response = client.post("/api/clusters/run", headers=auth_headers)
+        response = client.post("/api/clusters/cluster", json={}, headers=auth_headers)
         # Clustering may succeed or fail depending on available data
         assert response.status_code in [200, 400, 500]
 
@@ -179,7 +181,7 @@ class TestFaceClustering:
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == cluster.id
-        assert data["member_count"] == 5
+        assert data["face_count"] == 5
 
     def test_identify_cluster(self, client, auth_headers, db_session):
         """Test assigning a person name to a cluster"""
@@ -193,7 +195,7 @@ class TestFaceClustering:
         db_session.refresh(cluster)
 
         response = client.post(
-            f"/api/clusters/{cluster.id}/identify",
+            f"/api/clusters/{cluster.id}/assign-name",
             json={"person_name": "John Doe"},
             headers=auth_headers
         )
