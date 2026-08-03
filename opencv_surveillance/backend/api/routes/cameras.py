@@ -13,7 +13,7 @@ from backend.core.camera_manager import manager as camera_manager
 from backend.core.camera_validation import validate_camera_source
 from backend.database.session import get_db
 from backend.core.auth import get_current_active_user, get_current_user_media
-from backend.database import crud
+from backend.database import crud, models
 from backend.api.schemas import camera as camera_schema
 
 from backend.core.paths import paths

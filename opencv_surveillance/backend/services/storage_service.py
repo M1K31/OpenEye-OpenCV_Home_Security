@@ -302,7 +302,6 @@ _storage_service: Optional[CloudStorageService] = None
 
 def get_storage_service() -> Optional[CloudStorageService]:
     """Get or create cloud storage service instance"""
-    global _storage_service
     return _storage_service
 
 

@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from typing import List
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from backend.api.schemas import face as face_schema

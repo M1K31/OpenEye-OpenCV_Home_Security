@@ -154,7 +154,6 @@ def enable_query_profiling(slow_query_threshold_ms: float = 100.0):
         from backend.middleware.query_profiler import enable_query_profiling
         enable_query_profiling(slow_query_threshold_ms=100)
     """
-    global query_profiler
     query_profiler.slow_query_threshold_ms = slow_query_threshold_ms
     query_profiler.enable()
 

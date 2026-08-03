@@ -279,8 +279,6 @@ class CameraDiscovery:
 
         async def _do_scan():
             """Inner function to perform the actual scan"""
-            nonlocal network_cameras
-
             try:
                 # Get local subnets if none specified
                 if subnet is None:
