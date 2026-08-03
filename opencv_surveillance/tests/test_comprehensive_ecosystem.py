@@ -447,7 +447,7 @@ class TestCameraDiscovery:
             pytest.skip(f"Missing dependency: {e}")
 
         disc = CameraDiscovery()
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             disc.discover_usb_cameras()
         )
         assert isinstance(result, list)
@@ -461,7 +461,7 @@ class TestCameraDiscovery:
             pytest.skip(f"Missing dependency: {e}")
 
         disc = CameraDiscovery()
-        cameras = asyncio.get_event_loop().run_until_complete(
+        cameras = asyncio.run(
             disc.discover_usb_cameras()
         )
         for cam in cameras:
@@ -494,7 +494,7 @@ class TestCameraDiscovery:
 
         disc = CameraDiscovery()
         # Very short timeout to ensure it doesn't hang
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             disc.discover_network_cameras(timeout=2)
         )
         assert isinstance(result, list)
