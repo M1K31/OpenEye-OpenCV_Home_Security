@@ -12,6 +12,7 @@ import logging
 from backend.core.camera_manager import manager as camera_manager
 from backend.core.camera_validation import validate_camera_source
 from backend.database.session import get_db
+from backend.core.auth import get_current_active_user, get_current_user_media
 from backend.database import crud
 from backend.api.schemas import camera as camera_schema
 
@@ -31,7 +32,8 @@ logger = logging.getLogger(__name__)
 )
 def create_camera(
         camera: camera_schema.CameraCreate,
-        db: Session = Depends(get_db)):
+        db: Session = Depends(get_db),
+    current_user = Depends(get_current_active_user)):
     """
     Create a new camera configuration and start monitoring
 
@@ -89,7 +91,7 @@ def list_cameras(
     limit: int = 100,
     active_only: bool = False,
     db: Session = Depends(get_db),
-):
+    current_user = Depends(get_current_active_user)):
     """
     Get list of all cameras with pagination
 
@@ -108,7 +110,7 @@ def list_cameras(
 
 
 @router.get("/{camera_id}", response_model=camera_schema.CameraResponse)
-def get_camera(camera_id: str, db: Session = Depends(get_db)):
+def get_camera(camera_id: str, db: Session = Depends(get_db), current_user = Depends(get_current_active_user)):
     """
     Get camera configuration by camera_id
     """
@@ -127,7 +129,7 @@ def patch_camera(
     camera_id: str,
     camera_update: camera_schema.CameraUpdate,
     db: Session = Depends(get_db),
-):
+    current_user = Depends(get_current_active_user)):
     """
     Partially update camera configuration (PATCH)
 
@@ -217,7 +219,7 @@ def update_camera(
     camera_id: str,
     camera_update: camera_schema.CameraUpdate,
     db: Session = Depends(get_db),
-):
+    current_user = Depends(get_current_active_user)):
     """
     Update camera configuration (PUT - full update)
 
@@ -286,7 +288,7 @@ def update_camera(
 
 
 @router.delete("/{camera_id}", status_code=status.HTTP_200_OK)
-def delete_camera(camera_id: str, db: Session = Depends(get_db)):
+def delete_camera(camera_id: str, db: Session = Depends(get_db), current_user = Depends(get_current_active_user)):
     """
     Delete camera configuration and stop monitoring
 
@@ -313,7 +315,7 @@ def delete_camera(camera_id: str, db: Session = Depends(get_db)):
 
 @router.post("/{camera_id}/deactivate",
              response_model=camera_schema.CameraResponse)
-def deactivate_camera(camera_id: str, db: Session = Depends(get_db)):
+def deactivate_camera(camera_id: str, db: Session = Depends(get_db), current_user = Depends(get_current_active_user)):
     """
     Deactivate camera (soft delete - keeps configuration)
 
@@ -340,7 +342,7 @@ def deactivate_camera(camera_id: str, db: Session = Depends(get_db)):
 
 @router.post("/{camera_id}/activate",
              response_model=camera_schema.CameraResponse)
-def activate_camera(camera_id: str, db: Session = Depends(get_db)):
+def activate_camera(camera_id: str, db: Session = Depends(get_db), current_user = Depends(get_current_active_user)):
     """
     Activate previously deactivated camera
 
@@ -376,7 +378,7 @@ def activate_camera(camera_id: str, db: Session = Depends(get_db)):
 
 @router.get("/{camera_id}/status",
             response_model=camera_schema.CameraStatusResponse)
-def get_camera_status(camera_id: str, db: Session = Depends(get_db)):
+def get_camera_status(camera_id: str, db: Session = Depends(get_db), current_user = Depends(get_current_active_user)):
     """
     Get real-time camera status
 
@@ -462,7 +464,7 @@ async def generate_frames(camera_id: str):
 
 
 @router.get("/{camera_id}/stream")
-def stream_video(camera_id: str, db: Session = Depends(get_db)):
+def stream_video(camera_id: str, db: Session = Depends(get_db), current_user = Depends(get_current_user_media)):
     """
     Stream live video feed as MJPEG
 
@@ -491,7 +493,7 @@ def stream_video(camera_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{camera_id}/snapshot")
-def capture_snapshot(camera_id: str, db: Session = Depends(get_db)):
+def capture_snapshot(camera_id: str, db: Session = Depends(get_db), current_user = Depends(get_current_user_media)):
     """
     Capture a single frame snapshot
 
@@ -556,8 +558,8 @@ from backend.api.schemas import ecosystem as eco_schema
 @router.post("/{camera_id}/snapshot", response_model=eco_schema.SnapshotResponse)
 def capture_snapshot_voice(
     camera_id: str,
-    db: Session = Depends(get_db)
-):
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_active_user)):
     """
     Capture a snapshot from a camera (voice command endpoint).
     
@@ -616,8 +618,8 @@ def capture_snapshot_voice(
 @router.post("/{camera_id}/record/start", response_model=eco_schema.RecordingStartResponse)
 def start_recording(
     camera_id: str,
-    db: Session = Depends(get_db)
-):
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_active_user)):
     """
     Start recording on a camera.
     
@@ -673,8 +675,8 @@ def start_recording(
 @router.post("/{camera_id}/record/stop", response_model=eco_schema.RecordingStopResponse)
 def stop_recording(
     camera_id: str,
-    db: Session = Depends(get_db)
-):
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_active_user)):
     """
     Stop recording on a camera.
     
@@ -732,7 +734,9 @@ def stop_recording(
 
 
 @router.post("/discover", response_model=eco_schema.CameraDiscoveryResponse)
-async def discover_cameras_voice():
+async def discover_cameras_voice(
+    current_user = Depends(get_current_active_user),
+):
     """
     Discover cameras on the network.
     
