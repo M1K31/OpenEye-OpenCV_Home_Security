@@ -43,14 +43,27 @@ class MotionEventResponse(MotionEventBase):
         """Normalize snapshot path for API response - ensure it has the correct prefix"""
         if v is None:
             return None
-        path_str = str(v)
-        # Return the path as-is if it already starts with data/snapshots/
-        # The frontend will add the leading / to construct the URL
-        if path_str.startswith('data/snapshots/'):
-            return path_str
-        # If it's just a filename, add the prefix
-        if '/' not in path_str:
-            return f"data/snapshots/{path_str}"
+        path_str = str(v).replace("\\", "/")
+
+        # Always return a path RELATIVE to the snapshots directory. The client builds
+        # the URL as /data/snapshots/<value>, so anything else produces a broken link:
+        # an absolute path such as /home/user/openeye/data/snapshots/cam1/x.jpg used to
+        # be passed through untouched and became
+        # "/data/snapshots//home/user/openeye/data/snapshots/cam1/x.jpg", which 404s.
+        # Snapshot paths are stored inconsistently (bare filename, camera-relative,
+        # prefixed, or fully absolute), so normalise all four shapes here.
+        marker = "data/snapshots/"
+        idx = path_str.rfind(marker)
+        if idx != -1:
+            return path_str[idx + len(marker):]
+
+        # Absolute path that is not under data/snapshots (legacy or moved file):
+        # keep the last two segments so a camera subdirectory survives.
+        if path_str.startswith("/"):
+            parts = [p for p in path_str.split("/") if p]
+            return "/".join(parts[-2:]) if len(parts) >= 2 else parts[-1]
+
+        # Already relative (e.g. "cam1/x.jpg" or "x.jpg") — this is the wanted form.
         return path_str
 
     class Config:

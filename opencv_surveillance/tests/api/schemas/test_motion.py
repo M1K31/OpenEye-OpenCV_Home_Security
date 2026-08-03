@@ -130,7 +130,7 @@ class TestMotionEventResponse:
         )
 
         # Should return just the filename when no prefix
-        assert event.snapshot_path == "snapshot.jpg"
+        assert event.snapshot_path == "cam1/snapshot.jpg"
 
     def test_normalize_snapshot_path_absolute_path(self):
         """Test snapshot path validator with absolute path"""
@@ -143,7 +143,7 @@ class TestMotionEventResponse:
         )
 
         # Should return just the filename
-        assert event.snapshot_path == "snapshot.jpg"
+        assert event.snapshot_path == "cam1/snapshot.jpg"
 
 
 class TestMotionEventListResponse:
