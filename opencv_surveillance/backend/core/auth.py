@@ -8,7 +8,7 @@ import secrets
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 import bcrypt
 
@@ -227,6 +227,57 @@ async def get_current_active_user(
     if not current_user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
+
+
+async def get_current_user_media(
+    request: Request, db: Session = Depends(get_db)
+) -> user_schema.User:
+    """
+    Authenticate a MEDIA request from either the Authorization header or a cookie.
+
+    Media is loaded by the browser itself — live camera feeds are <img src=...> and
+    recordings are <video src=...> / download links. A plain tag cannot attach an
+    Authorization header, so protecting those routes with the normal bearer-only
+    dependency would authenticate nothing and simply break playback. The browser DOES
+    send cookies automatically, so accept the same JWT from an `access_token` cookie
+    as a fallback.
+
+    Deliberately NOT accepting the token from a query string: URLs end up in browser
+    history, proxy logs and Referer headers, which is exactly where a credential
+    should never be.
+
+    Use this only for media/streaming endpoints; JSON APIs should keep using
+    get_current_active_user so the bearer token stays the single mechanism there.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Not authenticated",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    token = None
+    auth_header = request.headers.get("Authorization") or ""
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header.split(" ", 1)[1].strip()
+    if not token:
+        token = request.cookies.get("access_token")
+    if not token:
+        raise credentials_exception
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+
+    user = crud.get_user_by_username(db, username=username)
+    if user is None:
+        raise credentials_exception
+    if not user.is_active:
+        raise HTTPException(status_code=400, detail="Inactive user")
+    return user
 
 
 def require_role(allowed_roles: list):

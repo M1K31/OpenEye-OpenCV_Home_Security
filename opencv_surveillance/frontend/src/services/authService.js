@@ -96,10 +96,38 @@ class AuthService {
     if (token) {
       localStorage.setItem('access_token', token);
       this.storeTokenTimestamp();
+      this.setMediaCookie(token);
     } else {
       localStorage.removeItem('access_token');
       localStorage.removeItem('token_timestamp');
       localStorage.removeItem('token_expires_at');
+      this.setMediaCookie(null);
+    }
+  }
+
+  /**
+   * Mirror the access token into a cookie so the browser can authenticate MEDIA.
+   *
+   * Live camera feeds are <img src="/api/cameras/../stream"> and recordings are
+   * <video src="/api/recordings/../download">. A plain tag cannot attach an
+   * Authorization header, so those endpoints accept the same JWT from this cookie
+   * (see backend get_current_user_media). Without it, securing media would simply
+   * break playback.
+   *
+   * SameSite=Strict keeps it from riding along on cross-site requests (CSRF), and
+   * the cookie is cleared on logout together with the stored token.
+   */
+  setMediaCookie(token) {
+    try {
+      const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+      if (token) {
+        document.cookie = `access_token=${token}; Path=/; SameSite=Strict${secure}`;
+      } else {
+        document.cookie = `access_token=; Path=/; Max-Age=0; SameSite=Strict${secure}`;
+      }
+    } catch (e) {
+      // Non-fatal: JSON APIs still work via the Authorization header.
+      logger.warn('Could not set media auth cookie:', e);
     }
   }
 

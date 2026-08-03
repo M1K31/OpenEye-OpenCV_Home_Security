@@ -19,6 +19,7 @@ import tempfile
 import logging
 
 from backend.database.session import SessionLocal, get_db
+from backend.core.auth import get_current_active_user, get_current_user_media
 from backend.database import models
 from backend.core.performance import paginate, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from backend.core.paths import paths
@@ -141,6 +142,7 @@ def list_recordings(
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description="Items per page"),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_active_user),
 ):
     """
     List recordings with optional filters and pagination
@@ -209,7 +211,8 @@ def list_recordings(
 
 
 @router.get("/recordings/{recording_id}")
-def get_recording_details(recording_id: int, db: Session = Depends(get_db)):
+def get_recording_details(recording_id: int, db: Session = Depends(get_db),
+                          current_user = Depends(get_current_active_user)):
     """
     Get detailed information about a recording including metadata
     """
@@ -234,7 +237,8 @@ def get_recording_details(recording_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/recordings/{recording_id}/download")
-def download_recording(recording_id: int, db: Session = Depends(get_db)):
+def download_recording(recording_id: int, db: Session = Depends(get_db),
+                       current_user = Depends(get_current_user_media)):
     """
     Download a recording file (with path traversal protection)
     """
@@ -257,7 +261,8 @@ def download_recording(recording_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/recordings/{recording_id}/stream")
-def stream_recording(recording_id: int, db: Session = Depends(get_db)):
+def stream_recording(recording_id: int, db: Session = Depends(get_db),
+                     current_user = Depends(get_current_user_media)):
     """
     Stream a recording file (with path traversal protection)
     """
@@ -301,7 +306,8 @@ def stream_recording(recording_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/recordings/{recording_id}")
-def delete_recording(recording_id: int, db: Session = Depends(get_db)):
+def delete_recording(recording_id: int, db: Session = Depends(get_db),
+                     current_user = Depends(get_current_active_user)):
     """
     Delete a recording and its files
     """
@@ -332,7 +338,8 @@ def delete_recording(recording_id: int, db: Session = Depends(get_db)):
 
 @router.post("/recordings/cleanup")
 def cleanup_old_recordings(
-    days_to_keep: int = Query(30, ge=7), db: Session = Depends(get_db)
+    days_to_keep: int = Query(30, ge=7), db: Session = Depends(get_db),
+    current_user = Depends(get_current_active_user),
 ):
     """
     Delete recordings older than specified days
@@ -374,7 +381,8 @@ def cleanup_old_recordings(
 
 
 @router.get("/recordings/storage/stats")
-def get_storage_statistics(db: Session = Depends(get_db)):
+def get_storage_statistics(db: Session = Depends(get_db),
+                           current_user = Depends(get_current_active_user)):
     """
     Get storage usage statistics (optimized with database aggregation)
     """
@@ -423,7 +431,8 @@ class ExportRequest(BaseModel):
 @router.post("/recordings/export")
 def export_recordings_zip(
     request: ExportRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_active_user)
 ):
     """
     Export multiple recordings as a ZIP file
