@@ -25,6 +25,13 @@ class AuthService {
     // Start refresh timer if token exists
     if (this.getToken()) {
       this.startTokenRefreshTimer();
+      // Re-issue the media cookie for a session that is already signed in.
+      // setToken() (which writes the cookie) only runs on login/refresh/logout, so
+      // without this an existing session — including every user upgrading to the
+      // build that started requiring auth on media — would hold a valid token in
+      // localStorage but no cookie, and every <img>/<video> request would 401 until
+      // they happened to re-login or the token refreshed.
+      this.setMediaCookie(this.getToken());
     }
   }
 
