@@ -170,7 +170,9 @@ async def websocket_statistics_endpoint(
             connection_id,
         )
 
-        # Keep connection alive and handle incoming messages
+        # Keep connection alive and handle incoming messages.
+        # consecutive_errors guards against a dead socket: see the handler below.
+        consecutive_errors = 0
         while True:
             try:
                 # Receive message from client (with timeout for keepalive)
@@ -218,8 +220,41 @@ async def websocket_statistics_endpoint(
                 logger.info(f"WebSocket disconnect signal from {user.username}")
                 break
             except Exception as e:
-                logger.error(f"Error handling WebSocket message from {user.username}: {e}")
-                # Don't break on message handling errors, continue listening
+                # Continuing is right for a bad MESSAGE, but fatal for a dead SOCKET:
+                # once the peer is gone (or the socket was never accepted),
+                # receive_text() raises the same error immediately on every pass, so
+                # "continue listening" became a tight infinite loop. Observed in the
+                # wild: ~24 million identical log lines, the asyncio event loop
+                # starved, and every HTTP request timing out while the port stayed
+                # open. Break on the errors that mean the connection is unusable, and
+                # cap consecutive failures as a backstop for anything unforeseen.
+                msg = str(e).lower()
+                if (
+                    isinstance(e, RuntimeError)
+                    or "not connected" in msg
+                    or "accept" in msg
+                    or "close" in msg
+                    or "disconnect" in msg
+                ):
+                    logger.info(
+                        f"WebSocket for {user.username} is no longer usable ({e}); "
+                        "closing listener."
+                    )
+                    break
+
+                consecutive_errors += 1
+                logger.error(
+                    f"Error handling WebSocket message from {user.username}: {e} "
+                    f"(consecutive={consecutive_errors})"
+                )
+                if consecutive_errors >= 5:
+                    logger.error(
+                        f"Too many consecutive WebSocket errors for {user.username}; "
+                        "closing listener to avoid a hot loop."
+                    )
+                    break
+            else:
+                consecutive_errors = 0
 
     except Exception as e:
         logger.error(f"WebSocket connection error for {user.username}: {e}")
