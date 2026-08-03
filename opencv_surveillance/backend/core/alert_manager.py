@@ -20,7 +20,18 @@ from backend.core.ecosystem_events import (
     build_intrusion_event,
     publish_ecosystem_event,
 )
-from backend.harness_bridge import forward_security_event
+try:
+    from backend.harness_bridge import forward_security_event
+except ImportError:
+    # backend/harness_bridge.py is a developer-only bridge to a separate local
+    # daemon and is gitignored on purpose ("never ship", .gitignore). Importing it
+    # unconditionally meant a fresh clone could not start at all: alert_manager is
+    # pulled in on the main startup path, so the missing module raised ImportError
+    # before the app came up, and CI died in conftest. It only ever worked on
+    # machines where the untracked file happened to exist.
+    async def forward_security_event(event_type, data):  # type: ignore[misc]
+        """No-op stand-in used whenever the optional harness bridge is absent."""
+        return False
 
 logger = logging.getLogger(__name__)
 
