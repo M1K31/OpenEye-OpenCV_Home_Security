@@ -1,8 +1,11 @@
 # Copyright (c) 2025 Mikel Smart
 # This file is part of OpenEye-OpenCV_Home_Security
 
-from fastapi import APIRouter, WebSocket
+from fastapi import APIRouter, Depends, Query, WebSocket
 from fastapi.responses import HTMLResponse, JSONResponse
+from typing import Optional
+from backend.core.auth import get_current_active_user
+from backend.api.routes.websockets import authenticate_websocket
 import logging
 
 try:
@@ -16,7 +19,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 @router.get("/test")
-async def index():
+async def index(current_user = Depends(get_current_active_user)):
     """Serve test page for two-way audio"""
     html = """
     <!DOCTYPE html>
@@ -60,7 +63,7 @@ async def index():
     return HTMLResponse(html)
 
 @router.get("/devices")
-def list_audio_devices():
+def list_audio_devices(current_user = Depends(get_current_active_user)):
     """List available audio input/output devices"""
     if not AUDIO_AVAILABLE:
         return JSONResponse(
@@ -70,7 +73,11 @@ def list_audio_devices():
     return audio_manager.list_audio_devices()
 
 @router.websocket("/ws/{camera_id}")
-async def websocket_audio_stream(websocket: WebSocket, camera_id: str):
+async def websocket_audio_stream(
+    websocket: WebSocket,
+    camera_id: str,
+    token: Optional[str] = Query(None),
+):
     """
     WebSocket endpoint for two-way audio streaming
 
@@ -84,6 +91,13 @@ async def websocket_audio_stream(websocket: WebSocket, camera_id: str):
         3. ICE candidates are exchanged
         4. Audio stream established
     """
+    # Authenticate BEFORE accepting: an unauthenticated peer must never reach the
+    # audio pipeline. authenticate_websocket closes the socket with a policy-violation
+    # code when the token is missing or invalid.
+    user = await authenticate_websocket(websocket, token)
+    if not user:
+        return
+
     await websocket.accept()
     if not AUDIO_AVAILABLE:
         await websocket.send_json({"error": "Two-way audio unavailable — pyaudio/aiortc not installed"})

@@ -13,6 +13,7 @@ from pydantic import BaseModel, EmailStr
 from datetime import datetime
 
 from backend.database.session import SessionLocal, get_db
+from backend.core.auth import get_current_active_user, get_current_user_media
 from backend.database import alert_models
 from backend.core.performance import paginate, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from backend.api.schemas.pagination import PaginatedResponse
@@ -110,7 +111,8 @@ def get_alert_configurations(
         user_id: int = Query(
             1,
             description="User ID"),
-        db: Session = Depends(get_db)):
+        db: Session = Depends(get_db),
+    current_user = Depends(get_current_active_user)):
     """
     Get alert configurations for a user
 
@@ -129,8 +131,8 @@ def get_alert_configurations(
              response_model=AlertConfigResponse,
              status_code=201)
 def create_alert_configuration(
-    config: AlertConfigCreate, db: Session = Depends(get_db)
-):
+    config: AlertConfigCreate, db: Session = Depends(get_db),
+    current_user = Depends(get_current_active_user)):
     """
     Create a new alert configuration
 
@@ -161,8 +163,8 @@ def create_alert_configuration(
 
 @router.put("/alerts/config/{config_id}", response_model=AlertConfigResponse)
 def update_alert_configuration(
-    config_id: int, config: AlertConfigCreate, db: Session = Depends(get_db)
-):
+    config_id: int, config: AlertConfigCreate, db: Session = Depends(get_db),
+    current_user = Depends(get_current_active_user)):
     """
     Update an existing alert configuration
     """
@@ -188,7 +190,7 @@ def update_alert_configuration(
 
 
 @router.delete("/alerts/config/{config_id}", status_code=200)
-def delete_alert_configuration(config_id: int, db: Session = Depends(get_db)):
+def delete_alert_configuration(config_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_active_user)):
     """
     Delete an alert configuration
     """
@@ -216,7 +218,7 @@ def get_notification_logs(
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description="Items per page"),
     db: Session = Depends(get_db),
-):
+    current_user = Depends(get_current_active_user)):
     """
     Get notification logs with optional filters and pagination
 
@@ -271,7 +273,7 @@ def get_notification_logs(
 
 
 @router.post("/alerts/test", status_code=200)
-async def test_alert(request: TestAlertRequest, db: Session = Depends(get_db)):
+async def test_alert(request: TestAlertRequest, db: Session = Depends(get_db), current_user = Depends(get_current_active_user)):
     """
     Send a test alert to verify notification settings
 
@@ -360,7 +362,7 @@ async def test_alert(request: TestAlertRequest, db: Session = Depends(get_db)):
 def get_alert_statistics(
     days: int = Query(7, description="Number of days to analyze"),
     db: Session = Depends(get_db),
-):
+    current_user = Depends(get_current_active_user)):
     """
     Get alert statistics for the specified time period
     """

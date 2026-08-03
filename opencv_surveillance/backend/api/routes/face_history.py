@@ -14,6 +14,7 @@ import os
 import logging
 
 from backend.database.session import SessionLocal, get_db
+from backend.core.auth import get_current_active_user, get_current_user_media
 from backend.database import crud, models
 from backend.core.performance import paginate, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from backend.api.schemas.pagination import PaginatedResponse
@@ -123,7 +124,7 @@ def get_detection_history(
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description="Items per page"),
     db: Session = Depends(get_db),
-):
+    current_user = Depends(get_current_active_user)):
     """
     Get recent face detection events with optional filters and pagination
 
@@ -242,7 +243,7 @@ def get_detection_statistics(
     camera_id: Optional[str] = Query(None, description="Filter by camera ID"),
     days: int = Query(7, description="Number of days for statistics"),
     db: Session = Depends(get_db),
-):
+    current_user = Depends(get_current_active_user)):
     """
     Get face detection statistics for the specified time period
 
@@ -266,7 +267,7 @@ def get_person_history(
     person_name: str,
     limit: int = Query(100, description="Maximum number of results", le=500),
     db: Session = Depends(get_db),
-):
+    current_user = Depends(get_current_active_user)):
     """
     Get detection history for a specific person
 
@@ -311,7 +312,7 @@ def get_recording_history(
     camera_id: Optional[str] = Query(None, description="Filter by camera ID"),
     limit: int = Query(20, description="Maximum number of results", le=100),
     db: Session = Depends(get_db),
-):
+    current_user = Depends(get_current_active_user)):
     """
     Get recent recording events
 
@@ -335,7 +336,7 @@ def cleanup_old_data(
             30,
             description="Number of days of data to keep"),
     db: Session = Depends(get_db),
-):
+    current_user = Depends(get_current_active_user)):
     """
     Clean up old events from the database
 
@@ -364,7 +365,7 @@ def get_detection_timeline(
     camera_id: Optional[str] = Query(None, description="Filter by camera ID"),
     hours: int = Query(24, description="Number of hours to analyze"),
     db: Session = Depends(get_db),
-):
+    current_user = Depends(get_current_active_user)):
     """
     Get a timeline of face detections grouped by hour
 
@@ -425,7 +426,7 @@ def reassign_face_detection(
     face_id: int,
     request: FaceReassignRequest,
     db: Session = Depends(get_db),
-):
+    current_user = Depends(get_current_active_user)):
     """
     Reassign a face detection event to a different person.
 
@@ -491,7 +492,7 @@ def reassign_face_detection(
 def bulk_reassign_face_detections(
     request: BulkFaceReassignRequest,
     db: Session = Depends(get_db),
-):
+    current_user = Depends(get_current_active_user)):
     """
     Bulk reassign multiple face detection events to a different person.
 

@@ -18,6 +18,7 @@ import os
 import logging
 
 from backend.database.session import get_db
+from backend.core.auth import get_current_active_user, get_current_user_media
 from backend.database import models
 from backend.core.performance import paginate, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE
 from backend.api.schemas.motion import (
@@ -43,8 +44,8 @@ def list_motion_events(
     start_date: Optional[datetime] = Query(None, description="Filter events after this date"),
     end_date: Optional[datetime] = Query(None, description="Filter events before this date"),
     has_faces: Optional[bool] = Query(None, description="Filter by face detection presence"),
-    db: Session = Depends(get_db)
-):
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_active_user)):
     """
     Get list of motion detection events with filtering and pagination
 
@@ -120,7 +121,7 @@ def list_motion_events(
 
 
 @router.get("/motion-events/{event_id}", response_model=MotionEventResponse)
-def get_motion_event(event_id: int, db: Session = Depends(get_db)):
+def get_motion_event(event_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_active_user)):
     """
     Get specific motion detection event by ID
     """
@@ -138,7 +139,7 @@ def get_motion_event(event_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/motion-events/{event_id}", status_code=status.HTTP_200_OK)
-def delete_motion_event(event_id: int, db: Session = Depends(get_db)):
+def delete_motion_event(event_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_active_user)):
     """
     Delete motion detection event and associated snapshot file
     
@@ -185,8 +186,8 @@ def delete_motion_event(event_id: int, db: Session = Depends(get_db)):
 def cleanup_old_motion_events(
     days: int = Query(30, ge=1, le=365, description="Delete events older than N days"),
     camera_id: Optional[str] = Query(None, description="Limit cleanup to specific camera"),
-    db: Session = Depends(get_db)
-):
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_active_user)):
     """
     Clean up old motion detection events
     
@@ -242,8 +243,8 @@ def cleanup_old_motion_events(
 def get_motion_statistics(
     days: int = Query(7, ge=1, le=365, description="Statistics period in days"),
     camera_id: Optional[str] = Query(None, description="Filter by camera ID"),
-    db: Session = Depends(get_db)
-):
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_active_user)):
     """
     Get motion detection statistics and analytics (optimized with database aggregation)
 
@@ -333,8 +334,8 @@ class SnapshotExportRequest(BaseModel):
 @router.post("/snapshots/export")
 def export_snapshots_zip(
     request: SnapshotExportRequest,
-    db: Session = Depends(get_db)
-):
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_active_user)):
     """
     Export multiple snapshots as a ZIP file
     
