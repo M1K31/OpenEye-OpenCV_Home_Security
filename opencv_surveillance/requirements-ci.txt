@@ -75,6 +75,11 @@ boto3>=1.34.0
 google-cloud-storage>=2.14.0
 azure-storage-blob>=12.19.0
 
+# Notification templating. alert_notification_system imports jinja2 directly; it
+# used to arrive only as a transitive dependency of torch, which this file
+# excludes, so the notification tests failed here while passing locally. ~1 MB.
+jinja2>=3.1.0
+
 # NOTE: Heavy optional dependencies still excluded for CI:
 # - torch, torchvision, ultralytics (YOLO object detection)
 # - firebase-admin (push notifications)

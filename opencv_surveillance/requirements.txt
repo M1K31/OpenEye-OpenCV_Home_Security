@@ -30,6 +30,12 @@ dlib>=19.24.0
 # Email notifications
 aiosmtplib>=2.0.0
 email-validator>=2.1.0
+# backend/core/alert_notification_system.py does `from jinja2 import Template` to
+# render notification bodies. It was never declared here and only ever resolved
+# because torch happens to depend on it — so notification templating silently
+# required a ~339 MB ML package, and broke anywhere torch was not installed
+# (including CI). Declare the real, direct dependency.
+jinja2>=3.1.0
 
 # SMS notifications (Twilio)
 twilio>=8.10.0
@@ -39,6 +45,14 @@ firebase-admin>=6.3.0
 
 # Async HTTP for webhooks
 aiohttp>=3.9.0
+# httpx and requests are imported directly by backend code but were never
+# declared, so they only arrived as transitive dependencies — httpx via
+# firebase-admin (which this file marks optional) and requests via the cloud
+# SDKs. backend/api/routes/ecosystem.py imports httpx at module scope and is
+# loaded during startup, so dropping the package that happened to supply it
+# would have broken the app. Declare what the code actually imports.
+httpx>=0.27.0
+requests>=2.31.0
 
 # Utilities
 python-dateutil>=2.8.2
