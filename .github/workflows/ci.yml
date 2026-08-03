@@ -66,13 +66,30 @@ jobs:
         flake8 backend --count --exit-zero --max-line-length=120 --exclude=__pycache__,venv --ignore=E501,W503,E203 --statistics
 
     - name: Run tests
+      # Hard ceiling on the whole job. Belt-and-braces with --timeout below: if a test
+      # wedges in a way pytest-timeout cannot interrupt, the job still ends in minutes
+      # instead of burning a runner until GitHub's 6-hour limit.
+      timeout-minutes: 25
       env:
         # ecosystem auth is fail-closed; throwaway secret so auth paths run in CI.
         ECOSYSTEM_HMAC_SECRET: "ci-test-secret-not-for-production-0123456789abcdef"
+        # Deterministic signing keys. Without these the app generates a per-install
+        # key on the fly, which works but writes a key file and logs a warning on
+        # every run.
+        SECRET_KEY: "ci-test-secret-key-not-for-production-0123456789abcdef0123456789"
+        JWT_SECRET_KEY: "ci-test-jwt-key-not-for-production-abcdef0123456789abcdef0123"
       run: |
         cd opencv_surveillance
         # Tests must pass — no masking. A failing suite now fails the pipeline (F-03).
-        pytest tests/ -v --cov=backend --cov-report=xml -x --ignore=tests/e2e
+        #
+        # --timeout: the suite contains tests that can block on I/O. Without a
+        # per-test timeout a single hang holds the runner open for hours and reports
+        # nothing useful; with it the offender fails and names itself.
+        # No -x: running to completion gives the full failure set in one pass, which
+        # is far more actionable than stopping at whichever test happens to fail first.
+        pytest tests/ -v --cov=backend --cov-report=xml \
+          --timeout=60 --timeout-method=thread \
+          --ignore=tests/e2e
     
     - name: Upload coverage
       uses: codecov/codecov-action@v4
