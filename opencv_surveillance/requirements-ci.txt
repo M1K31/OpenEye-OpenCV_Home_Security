@@ -43,7 +43,11 @@ onvif-zeep>=0.2.12
 
 # Two-Factor Authentication
 pyotp>=2.9.0
-pyqrcode>=1.2.1
+# Must match requirements.txt: backend/core/two_factor_auth.py does `import qrcode`
+# and uses qrcode.QRCode / qrcode.constants. pyqrcode is a DIFFERENT project that
+# provides the `pyqrcode` module, so pinning it here left the import unsatisfied and
+# every CI test run died in conftest before collecting a single test.
+qrcode[pil]>=7.4.2
 
 # Encryption
 cryptography>=41.0.0

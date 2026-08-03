@@ -11,6 +11,12 @@ jobs:
     name: Test Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
     strategy:
+      # Report every interpreter, do not cancel siblings on the first red one. With
+      # the default fail-fast the matrix surfaced one version at a time: 3.11 failed
+      # linting and cancelled 3.9/3.10, then 3.10 failed on a missing dependency and
+      # cancelled 3.9/3.11, so each push proved only that one version was broken and
+      # never that the others were green.
+      fail-fast: false
       matrix:
         python-version: ['3.9', '3.10', '3.11']
     
