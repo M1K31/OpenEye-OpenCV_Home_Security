@@ -20,6 +20,12 @@ Usage:
     PUT /api/settings/paths?migrate=true
 """
 
+# PEP 604 annotations (Path | str) are used below. This project supports Python
+# 3.9 (the runtime venv and the CI matrix both include it), where that syntax is a
+# TypeError at import time. Deferring annotation evaluation keeps the modern
+# syntax readable while remaining importable on 3.9.
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Optional, Literal
 import shutil
