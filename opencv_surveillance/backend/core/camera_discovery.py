@@ -639,19 +639,37 @@ class CameraDiscovery:
                 cap.release()
                 return {"success": False, "error": "Failed to open camera"}
 
-            # Try to read a frame
-            ret, frame = cap.read()
-            cap.release()
+            # Wait for a frame rather than demanding one immediately — same
+            # reasoning as _probe_index. A single read here rejected a Continuity
+            # Camera that discovery had *just* listed as available, so adding the
+            # phone failed with "Failed to read from camera" even though the
+            # device was fine and simply mid-wake.
+            deadline = time.monotonic() + self.FIRST_FRAME_TIMEOUT
+            started = time.monotonic()
+            frame = None
+            while True:
+                ret, frame = cap.read()
+                if ret and frame is not None:
+                    break
+                if time.monotonic() >= deadline:
+                    cap.release()
+                    return {
+                        "success": False,
+                        "error": (
+                            f"Opened the camera but received no frame within "
+                            f"{self.FIRST_FRAME_TIMEOUT:.0f}s"
+                        ),
+                    }
+                time.sleep(self.FIRST_FRAME_POLL_INTERVAL)
 
-            if not ret:
-                return {
-                    "success": False,
-                    "error": "Failed to read from camera"}
+            warmup = time.monotonic() - started
+            cap.release()
 
             return {
                 "success": True,
                 "message": "Camera connection successful",
                 "resolution": f"{frame.shape[1]}x{frame.shape[0]}",
+                "warmup_seconds": round(warmup, 2),
             }
 
         except Exception as e:
