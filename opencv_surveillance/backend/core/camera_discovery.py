@@ -7,11 +7,13 @@ Discovers RTSP/IP cameras on network and USB cameras connected to the system.
 import cv2
 import glob
 import json
+import os
 import socket
 import platform
 import logging
 import asyncio
 import subprocess
+import time
 from typing import List, Dict, Optional
 from datetime import datetime
 import netifaces
@@ -28,10 +30,25 @@ class CameraDiscovery:
     # Highest camera index probed during USB discovery (0..N-1)
     MAX_CAMERA_INDEX = 11
 
+    # How long to keep asking a device for its first frame once it has opened.
+    #
+    # A webcam delivers on the first read. An iPhone used as a Continuity Camera
+    # does not: opening the device only *starts* the handshake — the phone shows
+    # its "camera in use" notice and takes seconds to begin streaming. The probe
+    # used to call read() exactly once, get False, and release the device, which
+    # dropped the phone right as it was waking up.
+    #
+    # Only devices that OPEN but do not immediately produce a frame pay this cost,
+    # so ordinary webcams are unaffected and empty slots (which fail to open at
+    # all) are still rejected instantly.
+    FIRST_FRAME_TIMEOUT = float(os.environ.get("OPENEYE_FIRST_FRAME_TIMEOUT", "12"))
+    FIRST_FRAME_POLL_INTERVAL = 0.25
+
     def __init__(self):
         self.discovered_cameras = []
         self.scanning = False
         self._authorization_primed = False
+        self._macos_camera_cache = None
 
     def _enumerate_platform_cameras(self) -> List[Dict]:
         """
@@ -107,31 +124,69 @@ class CameraDiscovery:
         Returns camera info if the index yields a readable frame, else None.
         """
         cap = None
+        identity = self._describe_device(index)
+        label = identity.get("name") or f"index {index}"
         try:
             cap = cv2.VideoCapture(index)
             if not cap.isOpened():
+                # Logged at INFO, not DEBUG: when a camera the OS clearly lists
+                # cannot be opened, that fact is the whole diagnosis and it needs
+                # to be visible in the normal log. Silence here is what made an
+                # earlier camera outage so slow to pin down.
+                logger.info(
+                    "Camera probe: index %s (%s) is listed by the OS but "
+                    "VideoCapture could not open it", index, label)
                 return None
+            logger.info("Camera probe: index %s (%s) opened", index, label)
 
             width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             fps = int(cap.get(cv2.CAP_PROP_FPS))
 
-            ret, _ = cap.read()
-            if not ret:
-                return None
+            # Wait for the first frame rather than demanding one immediately. See
+            # FIRST_FRAME_TIMEOUT: a Continuity Camera opens straight away but only
+            # starts streaming once the phone has woken, so a single read() rejected
+            # it every time. Anything that opens deserves the chance to warm up.
+            deadline = time.monotonic() + self.FIRST_FRAME_TIMEOUT
+            first_frame_after = None
+            started = time.monotonic()
+            while True:
+                ret, frame = cap.read()
+                if ret and frame is not None:
+                    first_frame_after = time.monotonic() - started
+                    break
+                if time.monotonic() >= deadline:
+                    logger.debug(
+                        "Index %s opened but produced no frame within %.0fs",
+                        index, self.FIRST_FRAME_TIMEOUT)
+                    return None
+                time.sleep(self.FIRST_FRAME_POLL_INTERVAL)
+
+            # Re-read the geometry from the delivered frame. A device that is still
+            # negotiating reports placeholder dimensions, so the CAP_PROP values
+            # taken before the first frame can be wrong (or 0x0).
+            if frame is not None and getattr(frame, "shape", None):
+                height, width = frame.shape[0], frame.shape[1]
 
             return {
                 "type": "usb",
                 "index": index,
-                "name": f"USB Camera {index}",
+                "name": identity.get("name") or f"USB Camera {index}",
+                "device_uid": identity.get("uid"),
                 "device_path": self._get_device_path(index),
                 "resolution": f"{width}x{height}",
                 "fps": fps if fps > 0 else 30,
                 "status": "available",
+                "warmup_seconds": round(first_frame_after, 2),
+                # A device that needed a noticeable warm-up is almost certainly a
+                # Continuity Camera; surface it so the UI can explain the delay.
+                "slow_start": first_frame_after > 1.5,
                 "auto_config": {
                     "camera_id": f"usb_camera_{index}",
                     "camera_type": "usb",
                     "source": str(index),
+                    "device_uid": identity.get("uid"),
+                    "device_name": identity.get("name"),
                     "enabled": True,
                 },
                 "discovered_at": datetime.now().isoformat(),
@@ -245,6 +300,54 @@ class CameraDiscovery:
                 "'video' group and that /dev/video* is readable."
             )
         return "Check the operating system's camera privacy settings."
+
+    def _list_macos_cameras(self) -> List[Dict]:
+        """
+        Names and unique IDs of every camera macOS knows about, in system order.
+
+        Cached for the life of the service: system_profiler takes ~1s, and probing
+        calls this once per index.
+        """
+        if getattr(self, "_macos_camera_cache", None) is not None:
+            return self._macos_camera_cache
+
+        cameras: List[Dict] = []
+        if platform.system() == "Darwin":
+            try:
+                out = subprocess.run(
+                    ["system_profiler", "SPCameraDataType", "-json"],
+                    capture_output=True, text=True, timeout=15,
+                ).stdout
+                for entry in json.loads(out).get("SPCameraDataType", []):
+                    cameras.append({
+                        "name": entry.get("_name"),
+                        "uid": entry.get("spcamera_unique-id"),
+                        "model": entry.get("spcamera_model-id"),
+                    })
+            except Exception as e:
+                logger.debug("Could not enumerate macOS cameras: %s", e)
+
+        self._macos_camera_cache = cameras
+        return cameras
+
+    def _describe_device(self, index: int) -> Dict:
+        """
+        Best-effort real name and unique ID for an OpenCV camera index.
+
+        IMPORTANT — this is a positional guess, not an exact mapping. OpenCV's
+        AVFoundation backend addresses cameras by index and exposes no identifier,
+        so the only thing available is to line its indices up against the order
+        system_profiler reports. That order has matched in practice, but nothing
+        guarantees it, which is why the uid is recorded as a *hint* for detecting
+        drift rather than as something to open a camera by.
+
+        Returns empty values when the platform is not macOS or the lookup fails;
+        callers fall back to the index-based label.
+        """
+        cameras = self._list_macos_cameras()
+        if 0 <= index < len(cameras):
+            return cameras[index]
+        return {"name": None, "uid": None, "model": None}
 
     def _get_device_path(self, index: int) -> str:
         """Get the device path for a camera index (platform-specific)"""
