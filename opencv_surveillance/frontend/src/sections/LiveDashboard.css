@@ -240,6 +240,26 @@ html.aquasecurity-theme .camera-card {
   opacity: 0.65;
 }
 
+/* Outcome of the last reconnect. Sits under the feed so the explanation appears
+   next to the camera it concerns rather than in a global toast. */
+.reconnect-result {
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  border-radius: 6px;
+  margin: 6px 0 0;
+}
+
+.reconnect-result.ok {
+  background: color-mix(in srgb, var(--color-success) 18%, transparent);
+  color: var(--text-primary);
+}
+
+.reconnect-result.failed {
+  background: color-mix(in srgb, var(--color-warning, #d98a00) 20%, transparent);
+  color: var(--text-primary);
+}
+
 html.aquasecurity-theme .status-badge.active {
   background: #00AEEF;
   color: #1A1A1D;

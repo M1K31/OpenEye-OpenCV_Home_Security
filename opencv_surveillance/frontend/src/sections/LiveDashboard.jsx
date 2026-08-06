@@ -30,7 +30,8 @@ const CameraCard = React.memo(({
   screenshotFeedback,
   onRefresh,
   isRefreshing,
-  streamNonce
+  streamNonce,
+  refreshResult
 }) => {
   return (
     <div key={camera.camera_id} className="camera-card">
@@ -91,6 +92,18 @@ const CameraCard = React.memo(({
             {camera.is_active && !camera.is_running && (
               <small>Not currently reachable. If this is a phone, unlock it and bring it into range, then use Reconnect.</small>
             )}
+          </div>
+        )}
+        {/* Result of the last reconnect for THIS camera. Without it a correctly
+            failing reconnect is indistinguishable from a button that does
+            nothing — which is exactly how it was reported. */}
+        {refreshResult && (
+          <div
+            className={`reconnect-result ${refreshResult.ok ? 'ok' : 'failed'}`}
+            role="status"
+            aria-live="polite"
+          >
+            {refreshResult.ok ? '✅ ' : '⚠️ '}{refreshResult.message}
           </div>
         )}
         {flashingCamera === camera.camera_id && (
@@ -203,6 +216,10 @@ const LiveDashboard = () => {
   // phone takes seconds to come back and the control must not look inert.
   const [refreshingCamera, setRefreshingCamera] = useState(null);
 
+  // Outcome of the last reconnect: { camera_id, ok, message }. Shown on the card
+  // so a failure explains itself instead of looking like a dead button.
+  const [refreshResult, setRefreshResult] = useState(null);
+
   // Per-camera cache-buster for the MJPEG <img>. Reconnecting server-side is not
   // enough on its own: the browser holds an open multipart response and will keep
   // painting the stalled one unless the src changes.
@@ -221,16 +238,32 @@ const LiveDashboard = () => {
   const handleRefreshCamera = useCallback(async (camera) => {
     const id = camera.camera_id;
     setRefreshingCamera(id);
+    setRefreshResult(null);
     try {
-      await apiClient.post(`/cameras/${id}/reconnect`);
+      const res = await apiClient.post(`/cameras/${id}/reconnect`);
+
+      // Show what actually happened. The server already explains itself — a phone
+      // that is out of range comes back with a plain-language reason — and
+      // throwing that away is what made a correctly-failing reconnect look like a
+      // broken button: click, wait, nothing visibly changes, no explanation.
+      setRefreshResult({
+        camera_id: id,
+        ok: !!res.data?.connected,
+        message: res.data?.message
+          || (res.data?.connected ? 'Reconnected.' : 'Camera did not come back.'),
+      });
+
       // Re-read the list so the badge reflects real state rather than assuming
       // the reconnect worked — a phone still out of range stays disconnected,
       // and the UI should say so instead of flipping to Live.
       await refetchCameras();
       setStreamNonce((prev) => ({ ...prev, [id]: Date.now() }));
     } catch (err) {
-      console.error(`Reconnect failed for ${id}:`,
-        err?.response?.data?.detail || err.message);
+      setRefreshResult({
+        camera_id: id,
+        ok: false,
+        message: err?.response?.data?.detail || err.message || 'Reconnect failed.',
+      });
     } finally {
       setRefreshingCamera(null);
     }
@@ -662,6 +695,9 @@ const LiveDashboard = () => {
                   onRefresh={handleRefreshCamera}
                   isRefreshing={refreshingCamera === camera.camera_id}
                   streamNonce={streamNonce[camera.camera_id]}
+                  refreshResult={
+                    refreshResult?.camera_id === camera.camera_id ? refreshResult : null
+                  }
                 />
               ))}
             </div>

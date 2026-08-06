@@ -433,6 +433,38 @@ def reconnect_camera(
             detail=f"Camera '{camera_id}' not found",
         )
 
+    # Fail fast when the device simply is not attached.
+    #
+    # Without this the call spends 8 open attempts at 2s apart — 16 seconds of a
+    # spinning button — to rediscover what the OS could have said immediately:
+    # there is no such device. That retry budget exists for startup, where a macOS
+    # permission dialog may be waiting on a human; an interactive reconnect wants
+    # the opposite behaviour. Measured: a reconnect for an absent iPhone took
+    # 16.1s and told the user nothing.
+    try:
+        int(db_camera.source)          # only meaningful for local index sources
+        from backend.core.camera_discovery import discovery_service
+        attached = discovery_service._list_macos_cameras()
+        if attached and int(db_camera.source) >= len(attached):
+            names = ", ".join(c.get("name") or "?" for c in attached) or "none"
+            logger.info(
+                "Reconnect for '%s' skipped: source index %s but the OS lists %s "
+                "camera(s) (%s)", camera_id, db_camera.source, len(attached), names)
+            return {
+                "success": False,
+                "camera_id": camera_id,
+                "connected": False,
+                "message": (
+                    f"'{camera_id}' is not attached right now — the system currently "
+                    f"sees only: {names}. If this is a phone, unlock it, keep it "
+                    f"nearby on the same Wi-Fi and Apple account, then try again."
+                ),
+            }
+    except (ValueError, TypeError):
+        pass  # network/URL source: nothing to pre-check, go straight to opening
+    except Exception as e:
+        logger.debug("Reconnect pre-check for '%s' failed, continuing: %s", camera_id, e)
+
     # Drop the existing handle first. Reopening without releasing hands back the
     # same dead capture, which is the whole failure being worked around here.
     if camera_manager.get_camera(camera_id):
