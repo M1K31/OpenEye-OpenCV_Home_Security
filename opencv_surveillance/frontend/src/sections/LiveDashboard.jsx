@@ -27,7 +27,10 @@ const CameraCard = React.memo(({
   isPipActive,
   isFullscreenActive,
   flashingCamera,
-  screenshotFeedback
+  screenshotFeedback,
+  onRefresh,
+  isRefreshing,
+  streamNonce
 }) => {
   return (
     <div key={camera.camera_id} className="camera-card">
@@ -43,14 +46,35 @@ const CameraCard = React.memo(({
       */}
       <div className="camera-header">
         <h3>{camera.name || camera.camera_id}</h3>
-        <span className={`status-badge ${camera.is_running ? 'active' : 'inactive'}`}>
-          {!camera.is_active ? 'Disabled' : camera.is_running ? 'Live' : 'Disconnected'}
-        </span>
+        {/*
+          The status badge doubles as a per-camera refresh control: click it to
+          reconnect just this camera without disturbing the others.
+
+          A real <button>, not a clickable <span> — it must be keyboard reachable
+          and announced as a control. The badge classes are kept so it still reads
+          as status first and a control second.
+        */}
+        <button
+          type="button"
+          className={`status-badge status-badge--action ${camera.is_running ? 'active' : 'inactive'}`}
+          onClick={() => onRefresh && onRefresh(camera)}
+          disabled={isRefreshing}
+          title={`Reconnect ${camera.name || camera.camera_id} — refreshes only this camera`}
+          aria-label={`Reconnect ${camera.name || camera.camera_id}`}
+        >
+          {isRefreshing
+            ? '⏳ Reconnecting…'
+            : !camera.is_active ? 'Disabled'
+            : camera.is_running ? 'Live' : 'Disconnected'}
+        </button>
       </div>
       <div className="camera-feed">
         {camera.is_active && camera.is_running ? (
           <img
-            src={`/api/cameras/${camera.camera_id}/stream`}
+            // key + nonce force a remount so the browser drops the stalled
+            // multipart response; changing the attribute alone would not.
+            key={`${camera.camera_id}-${streamNonce || 0}`}
+            src={`/api/cameras/${camera.camera_id}/stream${streamNonce ? `?t=${streamNonce}` : ''}`}
             alt={`${camera.name} feed`}
             className="feed-image"
             onError={(e) => {
@@ -174,6 +198,43 @@ const LiveDashboard = () => {
   });
 
   const cameras = camerasData || [];
+
+  // camera_id currently reconnecting, so its badge can show progress. A sleeping
+  // phone takes seconds to come back and the control must not look inert.
+  const [refreshingCamera, setRefreshingCamera] = useState(null);
+
+  // Per-camera cache-buster for the MJPEG <img>. Reconnecting server-side is not
+  // enough on its own: the browser holds an open multipart response and will keep
+  // painting the stalled one unless the src changes.
+  const [streamNonce, setStreamNonce] = useState({});
+
+  /**
+   * Reconnect one camera and refresh just its card.
+   *
+   * Scoped to a single camera on purpose — a full reload tears down every other
+   * live stream to fix one, which on a multi-camera wall is a bad trade.
+   *
+   * For a phone this is the whole recovery path: a Continuity Camera drops
+   * whenever it locks or leaves range, and reconnecting restores it for as long
+   * as it stays in range. Until now the only way back was restarting the service.
+   */
+  const handleRefreshCamera = useCallback(async (camera) => {
+    const id = camera.camera_id;
+    setRefreshingCamera(id);
+    try {
+      await apiClient.post(`/cameras/${id}/reconnect`);
+      // Re-read the list so the badge reflects real state rather than assuming
+      // the reconnect worked — a phone still out of range stays disconnected,
+      // and the UI should say so instead of flipping to Live.
+      await refetchCameras();
+      setStreamNonce((prev) => ({ ...prev, [id]: Date.now() }));
+    } catch (err) {
+      console.error(`Reconnect failed for ${id}:`,
+        err?.response?.data?.detail || err.message);
+    } finally {
+      setRefreshingCamera(null);
+    }
+  }, [refetchCameras]);
 
   // Fetch events with caching (parallel requests with 10 second cache)
   // Memoize requests array to prevent infinite re-fetching
@@ -598,6 +659,9 @@ const LiveDashboard = () => {
                   isFullscreenActive={fullscreenCamera?.camera_id === camera.camera_id}
                   flashingCamera={flashingCamera}
                   screenshotFeedback={screenshotFeedback}
+                  onRefresh={handleRefreshCamera}
+                  isRefreshing={refreshingCamera === camera.camera_id}
+                  streamNonce={streamNonce[camera.camera_id]}
                 />
               ))}
             </div>

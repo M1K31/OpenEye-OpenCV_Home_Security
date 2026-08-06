@@ -17,6 +17,16 @@ const DashboardPage = ({ onLogout }) => {
   const [wsStatus, setWsStatus] = useState('disconnected'); // WebSocket connection status
   const [usePolling, setUsePolling] = useState(false); // Fallback to polling if WebSocket fails
   const [cameras, setCameras] = useState([]); // List of all cameras
+
+  // camera_id currently refreshing, so its badge can show progress. Reconnecting
+  // a sleeping phone takes seconds and the button must not look inert.
+  const [refreshingCamera, setRefreshingCamera] = useState(null);
+
+  // Per-camera cache-buster for the MJPEG <img>. Changing the src is the only
+  // reliable way to make a browser drop a stalled multipart stream and start a
+  // new one — without it, "refresh" would reconnect the camera server-side while
+  // the page kept showing the dead connection it already had.
+  const [streamNonce, setStreamNonce] = useState({});
   const [displayMode, setDisplayMode] = useState('grid'); // Display mode: grid, vertical, horizontal, cycle
   const [currentCameraIndex, setCurrentCameraIndex] = useState(0); // For cycle mode
   const [systemSettings, setSystemSettings] = useState({}); // System settings from backend
@@ -257,6 +267,48 @@ const DashboardPage = ({ onLogout }) => {
     setAudioModalOpen(true);
   };
 
+  /**
+   * Refresh one camera, without touching the others or reloading the page.
+   *
+   * Asks the server to drop that camera's capture and open a new one, then
+   * updates just this card. Deliberately scoped to a single camera: a whole-page
+   * reload tears down every other live stream to fix one, and on a dashboard
+   * with several cameras that is a poor trade.
+   *
+   * Also bumps a per-camera nonce on the stream URL. The server reconnecting is
+   * not enough on its own — the browser holds an open multipart response, and
+   * unless the src changes it will happily keep rendering the stalled one.
+   */
+  const handleRefreshCamera = async (camera) => {
+    const id = camera.camera_id;
+    setRefreshingCamera(id);
+    try {
+      const res = await apiClient.post(`/cameras/${id}/reconnect`);
+
+      // Re-read this camera's real state rather than assuming the reconnect
+      // worked — a phone that is still away reports connected:false, and the
+      // badge should say so instead of flipping to LIVE.
+      let updated = null;
+      try {
+        const fresh = await apiClient.get(`/cameras/${id}`);
+        updated = fresh.data;
+      } catch {
+        // Fall back to what reconnect told us if the re-read fails.
+        updated = { ...camera, is_running: !!res.data?.connected };
+      }
+
+      setCameras((prev) =>
+        prev.map((c) => (c.camera_id === id ? { ...c, ...updated } : c)));
+      setStreamNonce((prev) => ({ ...prev, [id]: Date.now() }));
+    } catch (err) {
+      // Leave the badge showing its existing state; the camera list is still
+      // valid, only the refresh attempt failed.
+      console.error(`Refresh failed for ${id}:`, err?.response?.data?.detail || err.message);
+    } finally {
+      setRefreshingCamera(null);
+    }
+  };
+
   // Helper function to render a single camera
   const renderCamera = (camera) => {
     if (!camera) return null;
@@ -277,18 +329,51 @@ const DashboardPage = ({ onLogout }) => {
                 aria-label={`Start two-way audio with ${camera.name || camera.camera_id}`}
               />
             )}
-            {/* is_running, not is_active: configuration says the camera is
-                switched on, only runtime state says a capture is actually open.
-                Gating on is_active alone requested streams from cameras that
-                were not there and logged a 503 per retry. */}
-            <span style={camera.is_running ? styles.liveIndicator : styles.offlineIndicator}>
-              {!camera.is_active ? '⚫ DISABLED' : camera.is_running ? '🔴 LIVE' : '⚫ DISCONNECTED'}
-            </span>
+            {/*
+              The status badge doubles as a per-camera refresh control.
+
+              is_running, not is_active: configuration says the camera is switched
+              on, only runtime state says a capture is actually open. Gating on
+              is_active alone requested streams from cameras that were not there
+              and logged a 503 per retry.
+
+              A real <button> rather than a clickable <span>: it has to be
+              reachable by keyboard and announced as a control, which a span with
+              an onClick is not. Styling stays identical so the badge still reads
+              as a status first and a control second.
+            */}
+            <button
+              type="button"
+              onClick={() => handleRefreshCamera(camera)}
+              disabled={refreshingCamera === camera.camera_id}
+              style={{
+                ...(camera.is_running ? styles.liveIndicator : styles.offlineIndicator),
+                border: 'none',
+                cursor: refreshingCamera === camera.camera_id ? 'wait' : 'pointer',
+                font: 'inherit',
+                opacity: refreshingCamera === camera.camera_id ? 0.6 : 1,
+              }}
+              title={`Refresh ${camera.name || camera.camera_id} — reconnects just this camera`}
+              aria-label={`Refresh ${camera.name || camera.camera_id}`}
+            >
+              {refreshingCamera === camera.camera_id
+                ? '⏳ REFRESHING'
+                : !camera.is_active ? '⚫ DISABLED'
+                : camera.is_running ? '🔴 LIVE' : '⚫ DISCONNECTED'}
+            </button>
           </div>
         </div>
         {camera.is_active && camera.is_running ? (
           <img
-            src={`/api/cameras/${camera.camera_id}/stream`}
+            // The nonce is what makes a refresh visible. Without a changed src the
+            // browser keeps the multipart response it already has, so the server
+            // could reconnect the camera while the page still showed the dead
+            // stream. key= forces React to remount the element rather than reuse
+            // the existing one with a new attribute.
+            key={`${camera.camera_id}-${streamNonce[camera.camera_id] || 0}`}
+            src={`/api/cameras/${camera.camera_id}/stream${
+              streamNonce[camera.camera_id] ? `?t=${streamNonce[camera.camera_id]}` : ''
+            }`}
             alt={`${camera.name || camera.camera_id} stream`}
             className="video-stream"
             style={styles.videoStream}

@@ -205,6 +205,41 @@ html.aquasecurity-theme .camera-card {
   color: white;
 }
 
+/* The badge is also the per-camera reconnect control. It is a real <button>, so
+   the browser's default button chrome has to be cleared for it to keep reading
+   as a status pill — while remaining focusable and keyboard-operable, which a
+   clickable <span> would not be. */
+.status-badge--action {
+  border: none;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  cursor: pointer;
+  line-height: inherit;
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+
+.status-badge--action:hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+
+.status-badge--action:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* Visible focus ring: the control must be usable without a mouse, and the pill
+   shape means the default outline needs the matching radius. */
+.status-badge--action:focus-visible {
+  outline: 2px solid var(--text-link, #4a9eff);
+  outline-offset: 2px;
+}
+
+.status-badge--action:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 html.aquasecurity-theme .status-badge.active {
   background: #00AEEF;
   color: #1A1A1D;
