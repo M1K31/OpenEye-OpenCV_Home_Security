@@ -456,8 +456,10 @@ def reconnect_camera(
                 "connected": False,
                 "message": (
                     f"'{camera_id}' is not attached right now — the system currently "
-                    f"sees only: {names}. If this is a phone, unlock it, keep it "
-                    f"nearby on the same Wi-Fi and Apple account, then try again."
+                    f"sees only: {names}. If this is an iPhone, macOS offers it as a "
+                    f"camera only while it is LOCKED and stationary, screen off, "
+                    f"near this Mac with Wi-Fi and Bluetooth on and the same Apple "
+                    f"account. Picking it up or unlocking it withdraws the camera."
                 ),
             }
     except (ValueError, TypeError):
@@ -495,7 +497,8 @@ def reconnect_camera(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=(
                 f"Could not reopen camera '{camera_id}': {e}. "
-                "If this is a phone, check that it is unlocked and in range."
+                "If this is an iPhone, it is offered as a camera only while locked, "
+                "still, and near this Mac — not while in use."
             ),
         )
 
@@ -510,8 +513,9 @@ def reconnect_camera(
             "camera_id": camera_id,
             "connected": False,
             "message": (
-                "Camera did not come back. If this is a phone, make sure it is "
-                "unlocked, nearby, and signed in to the same account."
+                "Camera did not come back. If this is an iPhone, leave it locked and "
+                "stationary near this Mac with Wi-Fi and Bluetooth on — it is "
+                "offered as a camera only in that state."
             ),
         }
 

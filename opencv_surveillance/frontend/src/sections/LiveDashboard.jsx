@@ -90,7 +90,19 @@ const CameraCard = React.memo(({
                 to tell a disabled camera from one that has simply wandered off. */}
             <p>{!camera.is_active ? 'Camera Disabled' : 'Camera Disconnected'}</p>
             {camera.is_active && !camera.is_running && (
-              <small>Not currently reachable. If this is a phone, unlock it and bring it into range, then use Reconnect.</small>
+              /*
+                Continuity Camera wants the phone LOCKED and STILL — the opposite
+                of what this text used to say. Apple only offers an iPhone as a
+                camera when it is locked, stationary, near the Mac, with its rear
+                cameras facing out; picking it up or unlocking it withdraws it.
+                The earlier "unlock it and bring it into range" actively told the
+                user to do the one thing that makes the camera disappear.
+              */
+              <small>
+                Not currently reachable. If this is an iPhone: leave it locked and
+                still, screen off, near this Mac with Wi-Fi and Bluetooth on — it is
+                offered as a camera only while stationary and locked. Then Reconnect.
+              </small>
             )}
           </div>
         )}
