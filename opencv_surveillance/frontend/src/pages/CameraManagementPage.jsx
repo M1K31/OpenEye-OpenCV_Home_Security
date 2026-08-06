@@ -33,6 +33,10 @@ const CameraManagementPage = ({ embedded = false }) => {
   // Comprehensive camera settings modal state
   const [settingsCamera, setSettingsCamera] = useState(null);
 
+  // camera_id currently being reconnected, or null. Reconnecting a sleeping
+  // phone can take several seconds, so the button has to show it is working.
+  const [reconnecting, setReconnecting] = useState(null);
+
   // PTZ control state
   const [ptzCamera, setPtzCamera] = useState(null);
 
@@ -111,6 +115,40 @@ const CameraManagementPage = ({ embedded = false }) => {
       loadCameras();
     } catch (err) {
       setError(`❌ Failed to toggle camera: ${err.response?.data?.detail || err.message}`);
+    }
+  };
+
+  /**
+   * Ask the server to drop a camera's capture handle and open it again.
+   *
+   * Nothing recovers a camera that went away and came back: the capture is
+   * opened once at start and never reopened, so a phone that locks — or a USB
+   * cable knocked loose and pushed back in — stays offline until the whole
+   * service restarts. This is the manual escape hatch, and it matters most for
+   * phones, which are *expected* to disconnect regularly.
+   *
+   * Deliberately slow to return: the server releases the device, waits for the
+   * OS to finish tearing it down, then reopens. Reconnecting a sleeping phone
+   * can take several seconds, so the button reports progress rather than
+   * appearing to hang.
+   */
+  const handleReconnectCamera = async (cameraId) => {
+    setReconnecting(cameraId);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await apiClient.post(`/cameras/${cameraId}/reconnect`);
+      if (res.data?.connected) {
+        setSuccess(`✅ ${res.data.message || `Camera ${cameraId} reconnected.`}`);
+      } else {
+        // Not an error: a mobile camera that is simply away is the normal case.
+        setError(`⚠️ ${res.data?.message || `Camera ${cameraId} did not come back.`}`);
+      }
+      loadCameras();
+    } catch (err) {
+      setError(`❌ Reconnect failed: ${err.response?.data?.detail || err.message}`);
+    } finally {
+      setReconnecting(null);
     }
   };
 
@@ -304,6 +342,16 @@ const CameraManagementPage = ({ embedded = false }) => {
                         title="PTZ controls"
                       >
                         PTZ
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="small"
+                        onClick={() => handleReconnectCamera(camera.camera_id)}
+                        disabled={reconnecting === camera.camera_id}
+                        icon="🔄"
+                        title="Drop the capture and open it again. Use after a phone has been away, or a camera was unplugged and reconnected."
+                      >
+                        {reconnecting === camera.camera_id ? 'Connecting…' : 'Reconnect'}
                       </Button>
                       <Button
                         variant={camera.is_active ? 'secondary' : 'primary'}

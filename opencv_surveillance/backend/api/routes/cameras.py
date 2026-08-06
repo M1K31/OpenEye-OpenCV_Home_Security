@@ -7,6 +7,7 @@ from datetime import datetime
 import cv2
 import asyncio
 import os
+import time
 import logging
 
 from backend.core.camera_manager import manager as camera_manager
@@ -374,6 +375,97 @@ def activate_camera(camera_id: str, db: Session = Depends(get_db), current_user 
     updated_camera = crud.update_camera(db, camera_id, update_data)
 
     return updated_camera
+
+
+@router.post("/{camera_id}/reconnect")
+def reconnect_camera(
+        camera_id: str,
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_active_user)):
+    """
+    Release a camera's capture handle and open it again.
+
+    Needed because nothing else can recover a camera that has gone away and come
+    back. The capture is opened once when the camera starts and never reopened,
+    so as soon as reads begin failing that handle is dead for the lifetime of the
+    process: the background processor keeps polling it, and the camera stays
+    offline until the whole service is restarted. Verified on 2026-08-05 — a USB
+    webcam was unplugged and plugged back in, macOS listed it again immediately,
+    and OpenEye still produced nothing until a restart, whereupon the same device
+    opened on the first attempt.
+
+    That matters most for phones. An iPhone used as a Continuity Camera is
+    *expected* to come and go as it locks or leaves the network, so "restart the
+    server to get the camera back" is not a workable answer for the one camera
+    type guaranteed to disconnect regularly.
+
+    This is a manual reconnect, not the automatic recovery the capture loop still
+    needs — it gives the UI a way to ask for a retry on demand.
+    """
+    db_camera = crud.get_camera_by_id(db, camera_id)
+    if not db_camera:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Camera '{camera_id}' not found",
+        )
+
+    # Drop the existing handle first. Reopening without releasing hands back the
+    # same dead capture, which is the whole failure being worked around here.
+    if camera_manager.get_camera(camera_id):
+        try:
+            camera_manager.remove_camera(camera_id)
+        except Exception as e:
+            logger.warning(
+                "Reconnect: releasing camera '%s' raised %s; continuing to reopen",
+                camera_id, e)
+
+    # Let the OS finish tearing the device down. On macOS an immediate reopen
+    # after a release can hand back a handle that never delivers frames — the
+    # same effect seen when a hung process was killed and the app relaunched too
+    # quickly. Env-tunable because the right value is hardware-dependent.
+    settle = float(os.environ.get("OPENEYE_RECONNECT_SETTLE_SECONDS", "2"))
+    if settle > 0:
+        time.sleep(settle)
+
+    try:
+        camera_manager.add_camera(
+            camera_id=db_camera.camera_id,
+            camera_type=db_camera.camera_type,
+            source=db_camera.source,
+        )
+    except Exception as e:
+        logger.error("Reconnect failed for camera '%s': %s", camera_id, e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                f"Could not reopen camera '{camera_id}': {e}. "
+                "If this is a phone, check that it is unlocked and in range."
+            ),
+        )
+
+    camera = camera_manager.get_camera(camera_id)
+    connected = bool(camera and getattr(camera, "is_running", False))
+
+    if not connected:
+        # Not a server error: a mobile camera that is simply away is the expected
+        # case, and the caller needs to be able to tell that apart from a fault.
+        return {
+            "success": False,
+            "camera_id": camera_id,
+            "connected": False,
+            "message": (
+                "Camera did not come back. If this is a phone, make sure it is "
+                "unlocked, nearby, and signed in to the same account."
+            ),
+        }
+
+    logger.info("Camera '%s' reconnected on request", camera_id)
+    return {
+        "success": True,
+        "camera_id": camera_id,
+        "connected": True,
+        "message": f"Camera '{camera_id}' reconnected.",
+    }
 
 
 @router.get("/{camera_id}/status",
