@@ -31,14 +31,24 @@ const CameraCard = React.memo(({
 }) => {
   return (
     <div key={camera.camera_id} className="camera-card">
+      {/*
+        Gate the stream on is_running, not is_active.
+
+        is_active is configuration ("this camera is switched on"); is_running is
+        whether a capture is actually open right now. They differ constantly — a
+        phone used as a Continuity Camera stays is_active while it is registered,
+        but stops running the moment it locks or leaves the network. Rendering the
+        <img> on is_active alone meant the browser requested a stream for a camera
+        that was not there and logged a 503 for every retry.
+      */}
       <div className="camera-header">
         <h3>{camera.name || camera.camera_id}</h3>
-        <span className={`status-badge ${camera.is_active ? 'active' : 'inactive'}`}>
-          {camera.is_active ? 'Live' : 'Offline'}
+        <span className={`status-badge ${camera.is_running ? 'active' : 'inactive'}`}>
+          {!camera.is_active ? 'Disabled' : camera.is_running ? 'Live' : 'Disconnected'}
         </span>
       </div>
       <div className="camera-feed">
-        {camera.is_active ? (
+        {camera.is_active && camera.is_running ? (
           <img
             src={`/api/cameras/${camera.camera_id}/stream`}
             alt={`${camera.name} feed`}
@@ -51,7 +61,12 @@ const CameraCard = React.memo(({
         ) : (
           <div className="feed-offline">
             <span>📡</span>
-            <p>Camera Offline</p>
+            {/* Say which of the two it is — "offline" alone left the user unable
+                to tell a disabled camera from one that has simply wandered off. */}
+            <p>{!camera.is_active ? 'Camera Disabled' : 'Camera Disconnected'}</p>
+            {camera.is_active && !camera.is_running && (
+              <small>Not currently reachable. If this is a phone, unlock it and bring it into range, then use Reconnect.</small>
+            )}
           </div>
         )}
         {flashingCamera === camera.camera_id && (

@@ -170,6 +170,20 @@ class CameraResponse(CameraBase):
     created_at: datetime
     last_active_at: datetime
 
+    # Runtime state, distinct from is_active.
+    #
+    # is_active is configuration — "this camera is switched on" — and is stored in
+    # the database. is_running is reality: whether a capture is actually open and
+    # producing frames right now. They diverge constantly. A phone used as a
+    # Continuity Camera is is_active=True the whole time it is registered, but
+    # is_running=False whenever it locks or leaves the network.
+    #
+    # Without this the UI could not tell the two apart, so it rendered a stream
+    # <img> for every configured camera and collected 503s from the ones that were
+    # not running. The client needs the difference to show "disconnected" instead
+    # of a broken image.
+    is_running: bool = False
+
     class Config:
         from_attributes = True
 

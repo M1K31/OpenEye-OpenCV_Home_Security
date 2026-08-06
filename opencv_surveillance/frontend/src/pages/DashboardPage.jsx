@@ -277,12 +277,16 @@ const DashboardPage = ({ onLogout }) => {
                 aria-label={`Start two-way audio with ${camera.name || camera.camera_id}`}
               />
             )}
-            <span style={camera.is_active ? styles.liveIndicator : styles.offlineIndicator}>
-              {camera.is_active ? '🔴 LIVE' : '⚫ OFFLINE'}
+            {/* is_running, not is_active: configuration says the camera is
+                switched on, only runtime state says a capture is actually open.
+                Gating on is_active alone requested streams from cameras that
+                were not there and logged a 503 per retry. */}
+            <span style={camera.is_running ? styles.liveIndicator : styles.offlineIndicator}>
+              {!camera.is_active ? '⚫ DISABLED' : camera.is_running ? '🔴 LIVE' : '⚫ DISCONNECTED'}
             </span>
           </div>
         </div>
-        {camera.is_active ? (
+        {camera.is_active && camera.is_running ? (
           <img
             src={`/api/cameras/${camera.camera_id}/stream`}
             alt={`${camera.name || camera.camera_id} stream`}
@@ -295,7 +299,9 @@ const DashboardPage = ({ onLogout }) => {
           />
         ) : (
           <div style={styles.offlineStream}>
-            <span style={styles.offlineText}>Camera Offline</span>
+            <span style={styles.offlineText}>
+              {!camera.is_active ? 'Camera Disabled' : 'Camera Disconnected'}
+            </span>
           </div>
         )}
       </div>

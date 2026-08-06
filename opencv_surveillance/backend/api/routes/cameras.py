@@ -107,7 +107,31 @@ def list_cameras(
         cameras = crud.get_cameras(db, skip=skip, limit=limit)
         total = db.query(crud.models.Camera).count()
 
-    return {"cameras": cameras, "total": total}
+    return {
+        "cameras": [_with_runtime_state(c) for c in cameras],
+        "total": total,
+    }
+
+
+def _with_runtime_state(db_camera):
+    """
+    Attach live `is_running` to a camera row on its way out of the API.
+
+    The database knows only configuration. Whether a capture is currently open
+    lives in camera_manager, so the two have to be joined here — otherwise a
+    client sees is_active=True for a phone that is locked and three streets away,
+    renders a video element for it, and gets a 503.
+
+    Set as an attribute rather than returning a dict so response_model validation
+    still runs against the ORM object.
+    """
+    try:
+        running = camera_manager.get_camera(db_camera.camera_id)
+        db_camera.is_running = bool(running and getattr(running, "is_running", False))
+    except Exception:
+        # Never let a status lookup break listing cameras.
+        db_camera.is_running = False
+    return db_camera
 
 
 @router.get("/{camera_id}", response_model=camera_schema.CameraResponse)
@@ -122,7 +146,7 @@ def get_camera(camera_id: str, db: Session = Depends(get_db), current_user = Dep
             detail=f"Camera '{camera_id}' not found",
         )
 
-    return db_camera
+    return _with_runtime_state(db_camera)
 
 
 @router.patch("/{camera_id}", response_model=camera_schema.CameraResponse)
