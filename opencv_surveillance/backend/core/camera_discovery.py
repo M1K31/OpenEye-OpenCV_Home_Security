@@ -34,21 +34,40 @@ class CameraDiscovery:
     #
     # A webcam delivers on the first read. An iPhone used as a Continuity Camera
     # does not: opening the device only *starts* the handshake — the phone shows
-    # its "camera in use" notice and takes seconds to begin streaming. The probe
-    # used to call read() exactly once, get False, and release the device, which
-    # dropped the phone right as it was waking up.
+    # its "camera in use" notice and takes seconds to begin streaming. Calling
+    # read() exactly once dropped the phone right as it was waking up.
     #
-    # Only devices that OPEN but do not immediately produce a frame pay this cost,
-    # so ordinary webcams are unaffected and empty slots (which fail to open at
-    # all) are still rejected instantly.
+    # Two budgets, because one flat value was wrong in both directions. A single
+    # 12s wait made a routine discovery sweep take 51.8s once a listed device
+    # stopped answering: every dead index paid the full timeout and held a worker
+    # thread while doing it. A sweep therefore uses the short budget, and the long
+    # one is spent only where a human is waiting on a specific device — adding a
+    # camera, testing a connection — or on a device already known to be slow.
     FIRST_FRAME_TIMEOUT = float(os.environ.get("OPENEYE_FIRST_FRAME_TIMEOUT", "12"))
+    FIRST_FRAME_TIMEOUT_SWEEP = float(
+        os.environ.get("OPENEYE_FIRST_FRAME_TIMEOUT_SWEEP", "1.5"))
     FIRST_FRAME_POLL_INTERVAL = 0.25
+
+    # Anything slower than this to produce its first frame is remembered and gets
+    # the patient budget on later sweeps, so a Continuity Camera stays findable
+    # without every empty index costing 12s.
+    SLOW_START_THRESHOLD = 0.75
+
+    # The OS device list changes while the service runs — phones arrive and leave,
+    # cables are pulled. Caching it for the process lifetime meant discovery kept
+    # reporting "the system reports 2 attached" long after one had gone, and kept
+    # probing an index that no longer existed. Short TTL: long enough to spare
+    # system_profiler once per index during a sweep, short enough to notice.
+    DEVICE_LIST_TTL = float(os.environ.get("OPENEYE_DEVICE_LIST_TTL", "10"))
 
     def __init__(self):
         self.discovered_cameras = []
         self.scanning = False
         self._authorization_primed = False
         self._macos_camera_cache = None
+        self._macos_camera_cache_at = 0.0
+        # uids seen to need a long warm-up, so later sweeps stay patient with them
+        self._slow_start_uids = set()
 
     def _enumerate_platform_cameras(self) -> List[Dict]:
         """
@@ -117,15 +136,31 @@ class CameraDiscovery:
         except Exception as e:
             logger.debug(f"Camera authorization priming failed: {e}")
 
-    def _probe_index(self, index: int) -> Optional[Dict]:
+    def _probe_index(self, index: int, patient: bool = False) -> Optional[Dict]:
         """
         Blocking probe of a single camera index. Runs in a worker thread.
+
+        Args:
+            index: camera index to probe.
+            patient: spend the long first-frame budget. Set when a human is
+                waiting on this specific device (adding or testing a camera).
+                A background sweep leaves it False so a dead index costs ~1.5s
+                instead of 12s — the difference between a 3s discovery call and
+                the 51.8s one observed once a listed phone stopped answering.
 
         Returns camera info if the index yields a readable frame, else None.
         """
         cap = None
         identity = self._describe_device(index)
         label = identity.get("name") or f"index {index}"
+        uid = identity.get("uid")
+
+        # A device that has already been seen to warm up slowly keeps the patient
+        # budget on every sweep, so a Continuity Camera does not become
+        # undiscoverable just because sweeps got faster.
+        if uid and uid in self._slow_start_uids:
+            patient = True
+        budget = self.FIRST_FRAME_TIMEOUT if patient else self.FIRST_FRAME_TIMEOUT_SWEEP
         try:
             cap = cv2.VideoCapture(index)
             if not cap.isOpened():
@@ -147,7 +182,7 @@ class CameraDiscovery:
             # FIRST_FRAME_TIMEOUT: a Continuity Camera opens straight away but only
             # starts streaming once the phone has woken, so a single read() rejected
             # it every time. Anything that opens deserves the chance to warm up.
-            deadline = time.monotonic() + self.FIRST_FRAME_TIMEOUT
+            deadline = time.monotonic() + budget
             first_frame_after = None
             started = time.monotonic()
             while True:
@@ -156,11 +191,18 @@ class CameraDiscovery:
                     first_frame_after = time.monotonic() - started
                     break
                 if time.monotonic() >= deadline:
-                    logger.debug(
-                        "Index %s opened but produced no frame within %.0fs",
-                        index, self.FIRST_FRAME_TIMEOUT)
+                    logger.info(
+                        "Camera probe: index %s (%s) opened but produced no frame "
+                        "within %.1fs%s", index, label, budget,
+                        "" if patient else " (sweep budget; a slow device is "
+                                           "retried patiently when added)")
                     return None
                 time.sleep(self.FIRST_FRAME_POLL_INTERVAL)
+
+            # Remember devices that need time, so later sweeps stay patient with
+            # this one specifically rather than with every index.
+            if uid and first_frame_after >= self.SLOW_START_THRESHOLD:
+                self._slow_start_uids.add(uid)
 
             # Re-read the geometry from the delivered frame. A device that is still
             # negotiating reports placeholder dimensions, so the CAP_PROP values
@@ -180,7 +222,7 @@ class CameraDiscovery:
                 "warmup_seconds": round(first_frame_after, 2),
                 # A device that needed a noticeable warm-up is almost certainly a
                 # Continuity Camera; surface it so the UI can explain the delay.
-                "slow_start": first_frame_after > 1.5,
+                "slow_start": first_frame_after >= self.SLOW_START_THRESHOLD,
                 "auto_config": {
                     "camera_id": f"usb_camera_{index}",
                     "camera_type": "usb",
@@ -308,7 +350,8 @@ class CameraDiscovery:
         Cached for the life of the service: system_profiler takes ~1s, and probing
         calls this once per index.
         """
-        if getattr(self, "_macos_camera_cache", None) is not None:
+        if (self._macos_camera_cache is not None
+                and (time.monotonic() - self._macos_camera_cache_at) < self.DEVICE_LIST_TTL):
             return self._macos_camera_cache
 
         cameras: List[Dict] = []
@@ -328,6 +371,7 @@ class CameraDiscovery:
                 logger.debug("Could not enumerate macOS cameras: %s", e)
 
         self._macos_camera_cache = cameras
+        self._macos_camera_cache_at = time.monotonic()
         return cameras
 
     def _describe_device(self, index: int) -> Dict:

@@ -7,6 +7,7 @@ Integrates motion detection, image processing, and video quality processors
 
 import os
 import cv2
+import logging
 import numpy as np
 import time
 import sys
@@ -19,6 +20,12 @@ from datetime import datetime
 from .motion_detector import MotionDetector
 from .image_processor import ImageProcessor
 from .paths import paths  # single source of truth for snapshot/recording dirs
+
+# This module historically used bare print() for everything, which is why camera
+# failures had no level, no timestamp and no module name — and why a single
+# repeated message could take over the log. New diagnostics go through logging so
+# they can be filtered and rate-limited like everything else.
+logger = logging.getLogger(__name__)
 from .video_processor import VideoProcessor, VideoSettings
 from .recorder import Recorder
 from .ffmpeg_recorder import FFmpegRecorder, EncoderCapabilities
@@ -960,6 +967,116 @@ class RTSPCamera(Camera):
         # Enable background processing by default for 24/7 surveillance
         self._background_processing_enabled = db_settings.get("background_processing", True) if db_settings else True
 
+        # Failure tracking, so a camera that goes away is handled once rather than
+        # rediscovered ten times a second.
+        #
+        # Previously every failed read printed a line and retried after 0.1s. A
+        # phone that locked overnight produced 18,665 lines — 96.6% of the entire
+        # log — and the handle was never reopened, so the camera stayed dead until
+        # the whole service restarted. Both halves of that are fixed here: log the
+        # transition rather than the attempt, and actually try to recover.
+        self._consecutive_failures = 0
+        self._failure_since = None
+        self._last_failure_log = 0.0
+        self._reconnect_attempts = 0
+        self._was_connected = False
+
+    # Consecutive failed reads before the capture is considered lost and reopened.
+    # ~2s at the background loop's cadence: long enough to ride out a dropped
+    # frame, short enough that a real disconnect is handled promptly.
+    RECONNECT_AFTER_FAILURES = int(os.getenv("OPENEYE_RECONNECT_AFTER_FAILURES", "20"))
+    RECONNECT_BACKOFF_MAX = float(os.getenv("OPENEYE_RECONNECT_BACKOFF_MAX", "60"))
+    FAILURE_LOG_INTERVAL = 60.0   # seconds between "still down" heartbeats
+
+    def _describe_self(self) -> str:
+        """Camera id and its real source type, for log messages."""
+        try:
+            int(self.source)
+            kind = "USB/local index"
+        except (ValueError, TypeError):
+            kind = "stream URL"
+        return f"{self.camera_id} ({kind} {self.source})"
+
+    def _note_frame_failure(self):
+        """
+        Record a failed read, logging the transition rather than every attempt.
+
+        The old code printed "Failed to grab frame from RTSP stream." on every
+        failure, for every camera type. It was wrong twice over: it named RTSP
+        when the camera was a USB webcam or an iPhone, which actively misled
+        diagnosis, and at ten failures a second it buried everything else in the
+        log — 18,665 lines from a single phone that had gone to sleep.
+        """
+        now = time.time()
+        self._consecutive_failures += 1
+
+        if self._consecutive_failures == 1:
+            self._failure_since = now
+            self._last_failure_log = now
+            logger.warning("Camera %s stopped delivering frames", self._describe_self())
+        elif (now - self._last_failure_log) >= self.FAILURE_LOG_INTERVAL:
+            self._last_failure_log = now
+            down_for = int(now - (self._failure_since or now))
+            logger.warning(
+                "Camera %s still down after %ss (%s failed reads)",
+                self._describe_self(), down_for, self._consecutive_failures)
+
+    def _note_frame_success(self):
+        """Record a good read, and announce recovery if we had been failing."""
+        if self._consecutive_failures:
+            down_for = int(time.time() - (self._failure_since or time.time()))
+            logger.info(
+                "Camera %s recovered after %ss (%s failed reads)",
+                self._describe_self(), down_for, self._consecutive_failures)
+        self._consecutive_failures = 0
+        self._failure_since = None
+        self._reconnect_attempts = 0
+        self._was_connected = True
+
+    def _reopen_capture(self) -> bool:
+        """
+        Release the capture and open it again. Returns True if frames resume.
+
+        This is the piece whose absence meant a camera that blipped was gone
+        until the whole service restarted: the capture was opened once at start
+        and never reopened, so a webcam unplugged and plugged straight back in
+        stayed dead while macOS listed it as present the entire time.
+
+        Releasing first is essential — reopening without releasing hands back the
+        same dead handle. The pause afterwards is not superstition either: on
+        macOS an immediate reopen can return a capture that never delivers a
+        frame, which is why a hurried restart earlier produced a process that was
+        born broken.
+        """
+        with self._frame_lock:
+            try:
+                if self.capture is not None:
+                    self.capture.release()
+            except Exception as e:
+                logger.debug("Releasing capture for %s raised %s", self.camera_id, e)
+            self.capture = None
+
+        time.sleep(float(os.getenv("OPENEYE_RECONNECT_SETTLE_SECONDS", "2")))
+
+        try:
+            try:
+                device_index = int(self.source)
+                capture = cv2.VideoCapture(device_index)
+            except (ValueError, TypeError):
+                capture = cv2.VideoCapture(self.source, cv2.CAP_FFMPEG)
+        except Exception as e:
+            logger.warning("Reopen of %s raised %s", self._describe_self(), e)
+            return False
+
+        if capture is None or not capture.isOpened():
+            if capture is not None:
+                capture.release()
+            return False
+
+        with self._frame_lock:
+            self.capture = capture
+        return True
+
     def _background_processor(self):
         """
         Background thread that continuously processes frames for motion/face detection.
@@ -978,7 +1095,34 @@ class RTSPCamera(Camera):
                 frame, motion_detected = self.get_frame()
 
                 if frame is None:
-                    time.sleep(0.1)
+                    # A None frame is not always a failure — the FPS limiter
+                    # returns one too — so only react once reads are genuinely
+                    # failing, which _note_frame_failure has counted.
+                    fails = self._consecutive_failures
+                    if fails == 0:
+                        time.sleep(0.1)
+                        continue
+
+                    if fails % self.RECONNECT_AFTER_FAILURES == 0:
+                        self._reconnect_attempts += 1
+                        logger.info(
+                            "Camera %s: attempting reconnect #%s after %s failed reads",
+                            self._describe_self(), self._reconnect_attempts, fails)
+                        if self._reopen_capture():
+                            # Don't declare victory here — the next successful read
+                            # does that, via _note_frame_success. A capture can open
+                            # and still deliver nothing.
+                            logger.info("Camera %s: capture reopened, awaiting frames",
+                                        self._describe_self())
+                            continue
+
+                    # Back off as failures persist instead of hammering a dead
+                    # device ten times a second. Doubling from the base interval up
+                    # to a ceiling keeps a brief glitch responsive while an absent
+                    # phone costs one read a minute rather than 36,000 an hour.
+                    delay = min(0.1 * (2 ** min(self._reconnect_attempts, 10)),
+                                self.RECONNECT_BACKOFF_MAX)
+                    self._stop_background.wait(delay)
                     continue
 
                 # Sleep to maintain target FPS
@@ -1111,8 +1255,10 @@ class RTSPCamera(Camera):
         with self._frame_lock:
             ret, frame = self.capture.read()
         if not ret:
-            print("Error: Failed to grab frame from RTSP stream.")
+            self._note_frame_failure()
             return None, False
+
+        self._note_frame_success()
 
         # Sample the real frame cadence (drives measured_fps for accurate encoding).
         self._record_frame_tick()

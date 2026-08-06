@@ -111,14 +111,36 @@ case "$LATENCY_MS" in
 esac
 
 # ---- camera + log signal -------------------------------------------------
+#
+# Count failures only since the CURRENT process started.
+#
+# This used to count a fixed byte window (`tail -c 400000`), which still spans
+# whatever came before the last restart. That produced two consecutive false
+# "degraded" alarms: once reporting 5358 failures when the true post-restart
+# count was zero and the system was perfectly healthy. Wrong in the alarming
+# direction is the failure mode that teaches an operator to ignore the monitor,
+# and it cuts the other way too — a genuine new spike is invisible while the
+# count is already saturated by history.
 GRAB_FAILS=0
 LOG_MB=0
 if [ -f "$APP_LOG" ]; then
     LOG_MB="$(du -m "$APP_LOG" 2>/dev/null | cut -f1)"
-    GRAB_FAILS="$(tail -c 400000 "$APP_LOG" 2>/dev/null | grep -c "Failed to grab frame" || true)"
+
+    # Byte offset of the last startup marker; everything after it belongs to the
+    # running process. Falls back to the whole file if no marker is present.
+    START_LINE="$(grep -n "Started server process" "$APP_LOG" 2>/dev/null | tail -1 | cut -d: -f1)"
+    if [ -n "$START_LINE" ]; then
+        GRAB_FAILS="$(tail -n "+$START_LINE" "$APP_LOG" 2>/dev/null \
+                      | grep -c "Failed to grab frame" || true)"
+        WINDOW="since restart"
+    else
+        GRAB_FAILS="$(grep -c "Failed to grab frame" "$APP_LOG" 2>/dev/null || true)"
+        WINDOW="whole log (no startup marker found)"
+    fi
+
     if [ "${GRAB_FAILS:-0}" -ge "$GRAB_FAIL_LIMIT" ]; then
         [ "$STATUS" = "ok" ] && STATUS="degraded"
-        note "camera: $GRAB_FAILS frame-grab failures in the recent log window"
+        note "camera: $GRAB_FAILS frame-grab failures $WINDOW"
     fi
     if [ "${LOG_MB:-0}" -ge 200 ]; then
         note "app log is ${LOG_MB}MB — check for repeating errors"
