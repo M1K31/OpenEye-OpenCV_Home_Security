@@ -723,6 +723,44 @@ def get_training_status(
     }
 
 
+@router.post("/faces/repair-encodings")
+def repair_face_encodings(
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(require_user),
+):
+    """
+    Retrain any identified person the system currently cannot recognise.
+
+    The same repair runs automatically on startup; this endpoint exists so a
+    user who notices a profile showing photos but no matches can force it
+    without restarting the service.
+
+    A person ends up in this state when their gallery photos never produced
+    encodings, or when they exist only as detections attributed to them with no
+    gallery at all. Both are repaired: the first by retraining, the second by
+    enrolling their detections first. People who already have encodings are
+    skipped, so calling this repeatedly is harmless.
+
+    **Authentication Required**: Admin or User role
+    """
+    try:
+        from backend.core.face_enrolment import repair_people_missing_encodings
+
+        summary = repair_people_missing_encodings(db)
+        repaired = summary["repaired"]
+        return {
+            "success": True,
+            "message": (
+                f"Repaired {len(repaired)} person(s)" if repaired
+                else "No people needed repair"
+            ),
+            **summary,
+        }
+    except Exception as e:
+        logger.error(f"Face encoding repair failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/faces/train", response_model=face_schema.TrainingResponse)
 def train_face_recognition(
     request: face_schema.TrainingRequest = None,

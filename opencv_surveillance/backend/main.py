@@ -426,6 +426,11 @@ async def startup_event():
         f"Face recognition initialized: {len(face_manager.known_face_names)} known faces"
     )
 
+    # Note: people left without encodings by the older code are NOT repaired
+    # automatically here. The defects that created them are fixed going forward,
+    # and rewriting existing galleries on every boot would modify a user's data
+    # without them asking. POST /api/faces/repair-encodings does it on request.
+
     # Load existing cameras from database
     logger.info("Loading cameras from database...")
     # Load cameras SYNCHRONOUSLY here on the main thread. On macOS the camera open
