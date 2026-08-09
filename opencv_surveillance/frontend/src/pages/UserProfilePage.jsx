@@ -248,11 +248,24 @@ const UserProfilePage = () => {
         >
           Notifications
         </button>
-        <button 
+        {/*
+          "Interface" became "Themes", and the two sections that were not about
+          themes moved to their own tab. Renaming the tab alone would have left
+          Display Options and Dashboard filed under a heading that does not
+          describe them — trading one inaccurate label for another. Splitting
+          keeps both names true.
+        */}
+        <button
           className={activeTab === 'ui' ? 'active' : ''}
           onClick={() => setActiveTab('ui')}
         >
-          Interface
+          Themes
+        </button>
+        <button
+          className={activeTab === 'display' ? 'active' : ''}
+          onClick={() => setActiveTab('display')}
+        >
+          Display
         </button>
         <button 
           className={activeTab === 'security' ? 'active' : ''}
@@ -447,11 +460,13 @@ const UserProfilePage = () => {
         </div>
       )}
       
-      {/* UI Tab */}
+      {/* Themes Tab — this and nothing else, so the label stays accurate. The
+          same ThemeSelectorPage previously had a second home at /themes; that
+          route now redirects here, making this the single place themes live. */}
       {activeTab === 'ui' && (
         <div className="tab-content">
           <section className="settings-section">
-            <h2>Appearance</h2>
+            <h2>Themes</h2>
             <p className="section-description">
               Choose your preferred theme for the interface.
             </p>
@@ -459,7 +474,13 @@ const UserProfilePage = () => {
             {/* Embedded Theme Selector */}
             <ThemeSelectorPage embedded={true} />
           </section>
+        </div>
+      )}
 
+      {/* Display Tab — the non-theme preferences that used to sit under
+          "Interface" alongside the theme picker. */}
+      {activeTab === 'display' && (
+        <div className="tab-content">
           <section className="settings-section">
             <h2>Display Options</h2>
 

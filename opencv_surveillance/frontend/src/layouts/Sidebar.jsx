@@ -70,14 +70,11 @@ const Sidebar = ({ isCollapsed }) => {
       label: 'System & Alerts',
       path: '/system',
       priority: 'medium'
-    },
-    {
-      id: 'themes',
-      icon: '🎨',
-      label: 'Themes',
-      path: '/themes',
-      priority: 'low'
     }
+    // The 'Themes' entry pointed at /themes, a standalone copy of the theme
+    // selector that also lives inside System & Alerts > My Profile > Themes.
+    // Two nav destinations for one settings screen is a way to make a user
+    // wonder which one is authoritative. /themes now redirects there.
   ];
 
   const handleNavigate = (section) => {

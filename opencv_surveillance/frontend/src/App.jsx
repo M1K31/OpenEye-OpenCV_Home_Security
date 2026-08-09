@@ -30,7 +30,9 @@ const NotificationSettingsPage = lazy(() => import('./pages/NotificationSettings
 const AIProviderSettingsPage = lazy(() => import('./pages/AIProviderSettingsPage'));
 const SystemSettingsPage = lazy(() => import('./pages/SystemSettingsPage'));
 const TwoFactorSettings = lazy(() => import('./pages/TwoFactorSettings'));
-const ThemeSelectorPage = lazy(() => import('./pages/ThemeSelectorPage'));
+// ThemeSelectorPage is no longer routed here — /themes redirects into the
+// profile tab, which imports the component directly. Left out of App's lazy
+// imports so nothing suggests a second route still renders it.
 const AutomationsPage = lazy(() => import('./pages/AutomationsPage'));
 const TimelineView = lazy(() => import('./pages/TimelineView'));
 const HardwareDetectionPage = lazy(() => import('./pages/HardwareDetectionPage'));
@@ -239,12 +241,15 @@ function App() {
               <Route path="system/2fa" element={
                 <Navigate to="/system?tab=2fa" replace />
               } />
+              {/* Theme settings moved into the profile tab, which embeds the very
+                  same ThemeSelectorPage. The standalone route was never removed,
+                  so the app shipped two routes rendering one component — and the
+                  duplicate was still linked in the sidebar, so it was a live
+                  second entry point rather than a stale path. Redirected rather
+                  than deleted so existing bookmarks still land somewhere useful.
+                  Joins the group of moved routes directly below. */}
               <Route path="themes" element={
-                <PageErrorBoundaryWithRouter pageName="Themes">
-                  <Suspense fallback={<PageLoadingFallback />}>
-                    <ThemeSelectorPage />
-                  </Suspense>
-                </PageErrorBoundaryWithRouter>
+                <Navigate to="/system?tab=profile" replace />
               } />
               {/* Redirect old standalone routes to System & Alerts tabs */}
               <Route path="system/hardware" element={
