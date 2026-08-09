@@ -12,12 +12,16 @@ v3.5.7 Enhancements:
 - Enhanced shadow removal with dual methods (binary + HSV)
 """
 import cv2
+import logging
 import numpy as np
 import json
+import os
 from typing import Optional, Dict, List, Tuple
 from collections import deque
 import time
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 class MotionDetector:
@@ -168,6 +172,9 @@ class MotionDetector:
 
         # Polygon-based zones (v3.6.2+)
         self.polygon_zones = []  # List of zone dictionaries with polygon coordinates
+        # Rasterised zone polygons, keyed by (zone id, frame width, frame height).
+        # Cleared whenever zones are reloaded so stale geometry cannot linger.
+        self._zone_mask_cache = {}
         self.camera_id = None  # Camera ID for loading zones from database
         self.db_session = None  # Database session for zone updates
 
@@ -232,11 +239,21 @@ class MotionDetector:
         try:
             from backend.database.models import MotionZone
 
-            # Query active zones for this camera
+            # Query active zones for this camera.
+            #
+            # ORDER BY id is not cosmetic: without it the database may return
+            # zones in any order, and anything that depends on which zone is seen
+            # first becomes non-deterministic between runs. The filtering loop no
+            # longer short-circuits on the first match, but a stable order still
+            # makes logs, statistics and reproduction consistent.
             zones = db_session.query(MotionZone).filter(
                 MotionZone.camera_id == camera_id,
                 MotionZone.is_active == True
-            ).all()
+            ).order_by(MotionZone.id).all()
+
+            # Zone geometry is about to change, so rasterised masks keyed by the
+            # old geometry must not survive.
+            self._zone_mask_cache = {}
 
             # Convert to internal format
             self.polygon_zones = []
@@ -267,6 +284,81 @@ class MotionDetector:
             print(f"Error loading polygon zones: {e}")
             self.polygon_zones = []
 
+    # How much of a contour must fall inside a zone for that zone to claim it.
+    #
+    # Asymmetric on purpose. An exclusion zone should catch motion that merely
+    # clips it — the point of "ignore the road" is that a car half in frame is
+    # still the road — so a small fraction is enough. An inclusion zone should
+    # require a more convincing share before it reports motion, or a person
+    # walking past the edge of the watched area triggers it.
+    EXCLUSION_OVERLAP_THRESHOLD = float(
+        os.environ.get("OPENEYE_ZONE_EXCLUDE_OVERLAP", "0.15"))
+    INCLUSION_OVERLAP_THRESHOLD = float(
+        os.environ.get("OPENEYE_ZONE_INCLUDE_OVERLAP", "0.30"))
+
+    def _zone_mask(self, zone: Dict, frame_width: int, frame_height: int):
+        """
+        Rasterise a zone polygon to a mask, cached per zone id and frame size.
+
+        Rebuilding this for every contour on every frame would be wasteful; zone
+        geometry only changes when zones are reloaded, and the cache is dropped
+        at that point.
+        """
+        key = (zone.get('id'), frame_width, frame_height)
+        cached = self._zone_mask_cache.get(key)
+        if cached is not None:
+            return cached
+
+        pts = np.array(
+            [[int(p['x'] * frame_width), int(p['y'] * frame_height)]
+             for p in zone['coordinates']],
+            dtype=np.int32,
+        )
+        mask = np.zeros((frame_height, frame_width), dtype=np.uint8)
+        cv2.fillPoly(mask, [pts], 255)
+        self._zone_mask_cache[key] = mask
+        return mask
+
+    def _contour_zone_overlap(
+        self,
+        contour: np.ndarray,
+        zone: Dict,
+        frame_width: int,
+        frame_height: int
+    ) -> float:
+        """
+        Fraction of the contour's area that falls inside the zone (0.0 - 1.0).
+
+        This replaces a centroid test that was documented as checking whether a
+        contour "intersects" a zone but actually asked only whether its centre
+        point was inside. The two are very different for real motion. A person
+        straddling the edge of an exclusion zone whose centroid lands just
+        outside was NOT excluded, so an ignored area still raised alerts; a large
+        blob overlapping an inclusion zone whose centroid landed outside was NOT
+        kept, so watched areas missed motion. A single contour spanning two
+        separate moving objects could have a centroid in neither zone.
+
+        Measuring actual overlap makes the behaviour describable: "how much of
+        this motion is in the zone", which is what the thresholds above express.
+        """
+        try:
+            zone_mask = self._zone_mask(zone, frame_width, frame_height)
+
+            contour_mask = np.zeros((frame_height, frame_width), dtype=np.uint8)
+            cv2.drawContours(contour_mask, [contour], -1, 255, thickness=cv2.FILLED)
+
+            contour_area = int(np.count_nonzero(contour_mask))
+            if contour_area == 0:
+                return 0.0
+
+            overlap = int(np.count_nonzero(cv2.bitwise_and(contour_mask, zone_mask)))
+            return overlap / contour_area
+
+        except Exception as e:
+            logger.warning("Zone overlap check failed for zone %s: %s",
+                           zone.get('id'), e)
+            return 0.0
+
     def _check_contour_in_zone(
         self,
         contour: np.ndarray,
@@ -275,43 +367,16 @@ class MotionDetector:
         frame_height: int
     ) -> bool:
         """
-        Check if a motion contour intersects with a zone polygon.
+        Whether a contour overlaps a zone enough for that zone to claim it.
 
-        Args:
-            contour: Motion contour from OpenCV
-            zone: Zone dictionary with normalized coordinates
-            frame_width: Frame width in pixels
-            frame_height: Frame height in pixels
-
-        Returns:
-            True if contour intersects zone, False otherwise
+        Kept as a boolean helper for callers that do not care about the amount;
+        the threshold depends on whether the zone excludes or includes.
         """
-        try:
-            # Convert normalized zone coordinates to pixel coordinates
-            zone_points = []
-            for point in zone['coordinates']:
-                x = int(point['x'] * frame_width)
-                y = int(point['y'] * frame_height)
-                zone_points.append([x, y])
-
-            zone_polygon = np.array(zone_points, dtype=np.int32)
-
-            # Get contour centroid
-            M = cv2.moments(contour)
-            if M['m00'] == 0:
-                return False
-
-            cx = int(M['m10'] / M['m00'])
-            cy = int(M['m01'] / M['m00'])
-
-            # Check if centroid is inside zone polygon
-            result = cv2.pointPolygonTest(zone_polygon, (cx, cy), False)
-
-            return result >= 0  # >= 0 means inside or on edge
-
-        except Exception as e:
-            print(f"Error checking contour in zone: {e}")
-            return False
+        threshold = (self.EXCLUSION_OVERLAP_THRESHOLD
+                     if zone.get('is_exclusion_zone')
+                     else self.INCLUSION_OVERLAP_THRESHOLD)
+        return self._contour_zone_overlap(
+            contour, zone, frame_width, frame_height) >= threshold
 
     def _filter_motion_by_zones(
         self,
@@ -362,21 +427,39 @@ class MotionDetector:
             if in_exclusion_zone:
                 continue  # Skip this contour
 
-            # Check inclusion zones
+            # Check inclusion zones.
+            #
+            # EVERY overlapping zone gets a say. The previous version broke out of
+            # this loop after the first zone the contour touched, regardless of
+            # whether that zone accepted it — so if the first zone rejected the
+            # contour on its sensitivity multiplier, no other zone was ever
+            # consulted, even one that would have accepted. "First" was whatever
+            # order the database happened to return (the query has no ORDER BY),
+            # which made the outcome vary between runs for the same scene. That
+            # non-determinism is what "zones do not ALWAYS respect the settings"
+            # looked like from outside.
             if inclusion_zones:
-                # Only keep contours in inclusion zones that meet zone-adjusted threshold
+                accepted = False
                 for zone in inclusion_zones:
-                    if self._check_contour_in_zone(contour, zone, frame_width, frame_height):
-                        # Apply zone's sensitivity multiplier to threshold
-                        # Lower multiplier = more sensitive (lower threshold)
-                        # Higher multiplier = less sensitive (higher threshold)
-                        zone_multiplier = zone.get('sensitivity_multiplier', 1.0)
-                        adjusted_threshold = base_min_contour_area * zone_multiplier
+                    if not self._check_contour_in_zone(
+                            contour, zone, frame_width, frame_height):
+                        continue
 
-                        if contour_area >= adjusted_threshold:
-                            filtered_contours.append(contour)
-                            triggered_zone_ids.append(zone['id'])
-                        break  # Only match first zone
+                    # Apply zone's sensitivity multiplier to threshold
+                    # Lower multiplier = more sensitive (lower threshold)
+                    # Higher multiplier = less sensitive (higher threshold)
+                    zone_multiplier = zone.get('sensitivity_multiplier', 1.0)
+                    adjusted_threshold = base_min_contour_area * zone_multiplier
+
+                    if contour_area >= adjusted_threshold:
+                        accepted = True
+                        # Record every zone that claims this motion, not just the
+                        # first: a reviewer asking "which zones fired" wants all
+                        # of them, and zone statistics should not under-count.
+                        triggered_zone_ids.append(zone['id'])
+
+                if accepted:
+                    filtered_contours.append(contour)
             else:
                 # No inclusion zones, apply base threshold
                 if contour_area >= base_min_contour_area:

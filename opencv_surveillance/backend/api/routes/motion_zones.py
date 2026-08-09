@@ -19,6 +19,7 @@ from backend.api.schemas.motion import (
     MotionZoneListResponse
 )
 from backend.core.auth import get_current_user
+from backend.core.camera_manager import manager as camera_manager
 
 
 router = APIRouter()
@@ -119,6 +120,11 @@ def create_motion_zone(
     db.commit()
     db.refresh(new_zone)
 
+    # Push the change to the running camera. Committing alone left the
+    # detector enforcing the zones it loaded at startup, so an edit looked
+    # saved while the camera carried on ignoring it until a restart.
+    camera_manager.reload_motion_zones(camera_id)
+
     return new_zone
 
 
@@ -198,6 +204,11 @@ def update_motion_zone(
     db.commit()
     db.refresh(zone)
 
+    # Push the change to the running camera. Committing alone left the
+    # detector enforcing the zones it loaded at startup, so an edit looked
+    # saved while the camera carried on ignoring it until a restart.
+    camera_manager.reload_motion_zones(camera_id)
+
     return zone
 
 
@@ -227,6 +238,11 @@ def delete_motion_zone(
 
     db.delete(zone)
     db.commit()
+
+    # Deleting matters most of all: a stale exclusion zone left in the running
+    # detector keeps suppressing motion in an area the user has just said they
+    # want watched again.
+    camera_manager.reload_motion_zones(camera_id)
 
     return None
 
@@ -260,5 +276,10 @@ def toggle_zone_active(
 
     db.commit()
     db.refresh(zone)
+
+    # Push the change to the running camera. Committing alone left the
+    # detector enforcing the zones it loaded at startup, so an edit looked
+    # saved while the camera carried on ignoring it until a restart.
+    camera_manager.reload_motion_zones(camera_id)
 
     return zone

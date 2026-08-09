@@ -1610,6 +1610,48 @@ class CameraManager:
             else:
                 print(f"Camera '{camera_id}' not found.")
 
+    def reload_motion_zones(self, camera_id: str) -> bool:
+        """
+        Re-read a running camera's motion zones from the database.
+
+        Zones were previously loaded exactly once, when the camera started. The
+        CRUD routes committed changes and called db.refresh(), which refreshes
+        the SQLAlchemy object — not the detector — so a user could draw, edit or
+        delete a zone, see the UI confirm the save, and have the running camera
+        keep enforcing the old geometry until the whole service restarted. On a
+        surveillance system that means an exclusion zone someone just drew over
+        a busy road quietly does nothing.
+
+        Returns True if a running camera picked the zones up.
+        """
+        with self._lock:
+            camera = self.cameras.get(camera_id)
+
+        if not camera:
+            # Not an error: zones can be edited for a camera that is disabled or
+            # currently disconnected. It will load them when it next starts.
+            logger.debug(
+                "Zone reload requested for '%s', which is not running", camera_id)
+            return False
+
+        detector = getattr(camera, "motion_detector", None)
+        if detector is None or not hasattr(detector, "load_polygon_zones"):
+            logger.debug("Camera '%s' has no motion detector to reload", camera_id)
+            return False
+
+        db = None
+        try:
+            db = SessionLocal()
+            detector.load_polygon_zones(camera_id, db)
+            logger.info("Reloaded motion zones for running camera '%s'", camera_id)
+            return True
+        except Exception as e:
+            logger.warning("Could not reload motion zones for '%s': %s", camera_id, e)
+            return False
+        finally:
+            if db is not None:
+                db.close()
+
     def get_camera_settings(self, camera_id: str) -> Optional[Dict[str, Any]]:
         """Get current settings for a camera"""
         with self._lock:
