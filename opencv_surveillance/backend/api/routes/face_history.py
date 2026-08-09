@@ -69,6 +69,57 @@ class BulkFaceReassignRequest(BaseModel):
     new_person_name: str = Field(..., description="New person name to assign, or 'Unknown' to mark as unknown")
 
 
+class BulkFaceDeleteRequest(BaseModel):
+    """Schema for bulk face detection deletion"""
+    face_ids: List[int] = Field(..., description="List of face detection event IDs to delete")
+
+
+def _remove_snapshot_file(snapshot_path: Optional[str]) -> bool:
+    """
+    Delete a detection's snapshot from disk. Returns True if a file was removed.
+
+    Snapshot paths are stored inconsistently — some absolute, some rooted at
+    "/data/snapshots/...", some bare filenames — because they were written by
+    different code paths over time. Rather than trust the stored string, resolve
+    it against the configured snapshots directory and refuse anything that lands
+    outside it: a path from the database should never be able to direct a delete
+    at an arbitrary location on disk.
+    """
+    if not snapshot_path:
+        return False
+
+    try:
+        from backend.core.paths import paths
+
+        snap_root = os.path.realpath(str(paths.snapshots_dir))
+        raw = str(snapshot_path).replace("\\", "/")
+
+        marker = "data/snapshots/"
+        idx = raw.rfind(marker)
+        relative = raw[idx + len(marker):] if idx != -1 else os.path.basename(raw)
+
+        candidate = os.path.realpath(os.path.join(snap_root, relative))
+
+        # Containment check, not decoration: without it a stored value of
+        # "../../etc/something" would escape the snapshots directory.
+        if not candidate.startswith(snap_root + os.sep):
+            logger.warning(
+                "Refusing to delete snapshot outside the snapshots directory: %r",
+                snapshot_path)
+            return False
+
+        if os.path.isfile(candidate):
+            os.remove(candidate)
+            return True
+        return False
+
+    except Exception as e:
+        # A missing or unreadable file must not fail the database deletion; the
+        # row is the thing that matters, the file is best-effort cleanup.
+        logger.warning("Could not remove snapshot %r: %s", snapshot_path, e)
+        return False
+
+
 # Pydantic Models for Responses
 class FaceDetectionEventResponse(BaseModel):
     id: int
@@ -486,6 +537,118 @@ def reassign_face_detection(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/history/{face_id}")
+def delete_face_detection(
+    face_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user)):
+    """
+    Delete a single face detection, including its snapshot on disk.
+
+    Reassigning could move a wrong detection to another person, but there was no
+    way to say "this is not a face at all" or "this frame is garbage" — a
+    misfire, a reflection, a blurred smear — so bad detections could only be
+    shuffled between people, never removed. That is why a cluster built from
+    them stayed wrong no matter how it was re-labelled.
+
+    Deletes the snapshot file too. Leaving it behind would repeat the bug found
+    in delete_person: rows removed, files orphaned, or the reverse — a gallery
+    entry pointing at an image nobody can account for.
+    """
+    face_event = db.query(models.FaceDetectionEvent).filter(
+        models.FaceDetectionEvent.id == face_id
+    ).first()
+
+    if not face_event:
+        raise HTTPException(status_code=404, detail=f"Face detection {face_id} not found")
+
+    cluster_id = face_event.cluster_id
+    snapshot = face_event.snapshot_path
+
+    db.delete(face_event)
+
+    # Keep the owning cluster's count honest, exactly as bulk-reassign does.
+    if cluster_id:
+        remaining = db.query(models.FaceDetectionEvent).filter(
+            models.FaceDetectionEvent.cluster_id == cluster_id
+        ).count()
+        db.query(models.FaceCluster).filter(
+            models.FaceCluster.id == cluster_id
+        ).update({models.FaceCluster.face_count: remaining},
+                 synchronize_session=False)
+
+    db.commit()
+
+    removed_file = _remove_snapshot_file(snapshot)
+
+    logger.info("Deleted face detection %s (cluster=%s, file_removed=%s)",
+                face_id, cluster_id, removed_file)
+
+    return {
+        "success": True,
+        "message": f"Detection {face_id} deleted",
+        "deleted_count": 1,
+        "file_removed": removed_file,
+    }
+
+
+@router.post("/history/bulk-delete")
+def bulk_delete_face_detections(
+    request: BulkFaceDeleteRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user)):
+    """
+    Delete several face detections at once, with their snapshots.
+
+    The batch counterpart of the endpoint above. Correcting a badly clustered
+    person means acting on tens of thumbnails, and doing that one request at a
+    time is slow enough that people give up and delete the whole person instead —
+    losing the good detections along with the bad.
+    """
+    if not request.face_ids:
+        raise HTTPException(status_code=400, detail="No face IDs provided")
+
+    face_events = db.query(models.FaceDetectionEvent).filter(
+        models.FaceDetectionEvent.id.in_(request.face_ids)
+    ).all()
+
+    if not face_events:
+        raise HTTPException(status_code=404, detail="No matching faces found")
+
+    affected_clusters = {f.cluster_id for f in face_events if f.cluster_id}
+    snapshots = [f.snapshot_path for f in face_events]
+    deleted_count = len(face_events)
+
+    db.query(models.FaceDetectionEvent).filter(
+        models.FaceDetectionEvent.id.in_(request.face_ids)
+    ).delete(synchronize_session=False)
+
+    for cluster_id in affected_clusters:
+        remaining = db.query(models.FaceDetectionEvent).filter(
+            models.FaceDetectionEvent.cluster_id == cluster_id
+        ).count()
+        db.query(models.FaceCluster).filter(
+            models.FaceCluster.id == cluster_id
+        ).update({models.FaceCluster.face_count: remaining},
+                 synchronize_session=False)
+
+    db.commit()
+
+    files_removed = sum(1 for s in snapshots if _remove_snapshot_file(s))
+    not_found = len(request.face_ids) - deleted_count
+
+    logger.info("Bulk-deleted %s detection(s); %s snapshot file(s) removed",
+                deleted_count, files_removed)
+
+    return {
+        "success": True,
+        "message": f"Deleted {deleted_count} detection(s)",
+        "deleted_count": deleted_count,
+        "files_removed": files_removed,
+        "errors": [f"{not_found} face(s) not found"] if not_found else [],
+    }
 
 
 @router.post("/history/bulk-reassign")
