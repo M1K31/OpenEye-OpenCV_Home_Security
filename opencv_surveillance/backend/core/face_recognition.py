@@ -46,6 +46,42 @@ _face_recognition_lock = threading.Lock()
 _training_in_progress = False
 
 
+def _encode_gallery_image(image):
+    """
+    Produce face encodings for a gallery photo, tolerating pre-cropped faces.
+
+    Gallery photos come from two very different sources. Some are ordinary
+    photos a user dropped in, where the face is one region of a larger scene.
+    Others are detection snapshots the system cropped itself — 144x144 boxes
+    that are *entirely* face, with no margin around them.
+
+    The detector cannot find a face in the second kind. HOG needs some context
+    around the head to match its gradient template, and a tight crop has none,
+    so every snapshot silently failed to encode. That is why a person built out
+    of their own detections ended up with photos on disk but zero encodings, and
+    could never be recognised afterwards.
+
+    So: try normal detection first, and only if it finds nothing, fall back to
+    treating the whole image as the face box. The fallback is gated on the image
+    looking like a crop — small and roughly square — so a large photo that
+    genuinely contains no face still yields nothing rather than a meaningless
+    encoding of scenery.
+    """
+    encodings = _face_recognition.face_encodings(image, model="large")
+    if encodings:
+        return encodings
+
+    height, width = image.shape[:2]
+    aspect = width / height if height else 0
+    if max(width, height) > 400 or not (0.6 <= aspect <= 1.7):
+        return []
+
+    # (top, right, bottom, left) — the entire image.
+    return _face_recognition.face_encodings(
+        image, known_face_locations=[(0, width, height, 0)], model="large"
+    )
+
+
 class FaceRecognitionManager:
     """
     Manages face recognition operations including training, recognition, and storage
@@ -171,9 +207,7 @@ class FaceRecognitionManager:
                     try:
                         # Load image and get face encodings
                         image = _face_recognition.load_image_file(image_path)
-                        face_encodings = _face_recognition.face_encodings(
-                            image, model="large"  # Use large model for better accuracy
-                        )
+                        face_encodings = _encode_gallery_image(image)
 
                         if len(face_encodings) > 0:
                             # Use the first face found in the image
@@ -277,9 +311,7 @@ class FaceRecognitionManager:
 
                 try:
                     image = _face_recognition.load_image_file(image_file_path)
-                    face_encodings = _face_recognition.face_encodings(
-                        image, model="large"
-                    )
+                    face_encodings = _encode_gallery_image(image)
 
                     if len(face_encodings) > 0:
                         self.known_face_encodings.append(face_encodings[0])
@@ -357,9 +389,7 @@ class FaceRecognitionManager:
             for photo_path in new_photo_paths:
                 try:
                     image = _face_recognition.load_image_file(photo_path)
-                    face_encodings = _face_recognition.face_encodings(
-                        image, model="large"
-                    )
+                    face_encodings = _encode_gallery_image(image)
 
                     if face_encodings:
                         self.known_face_encodings.append(face_encodings[0])

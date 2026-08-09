@@ -61,6 +61,10 @@ class FaceReassignResponse(BaseModel):
     face_id: int
     old_person_name: str
     new_person_name: str
+    # How many snapshots were copied into the person's gallery and whether the
+    # recogniser was retrained. Surfaced so the UI can tell the user their
+    # correction actually taught the system something.
+    enrolment: Optional[dict] = None
 
 
 class BulkFaceReassignRequest(BaseModel):
@@ -72,6 +76,97 @@ class BulkFaceReassignRequest(BaseModel):
 class BulkFaceDeleteRequest(BaseModel):
     """Schema for bulk face detection deletion"""
     face_ids: List[int] = Field(..., description="List of face detection event IDs to delete")
+
+
+# Names that identify no one, so there is nothing to enrol into.
+_NON_PERSON_NAMES = {"unknown", ""}
+
+
+def _enrol_detections(db: Session, face_ids: List[int], person_name: str) -> dict:
+    """
+    Copy reassigned detections into the person's gallery and retrain them.
+
+    Reassignment used to rewrite `person_name` on the rows and stop there. No
+    image was copied into the person's folder and no encoding was produced, so
+    building a person out of detections created a profile that looked populated —
+    the UI listed its detections — while holding zero photos and zero encodings.
+    Such a person can never be recognised: the next time they appear they are
+    detected as unknown and clustered as a stranger again, which is exactly what
+    happened to the two profiles created from unknown1 on this install (99 and 9
+    detections each, 0 photos, 0 encodings, while all 448 encodings still said
+    unknown1).
+
+    Assigning a face to someone is the user saying "this is them", so it should
+    also be what teaches the system to recognise them.
+
+    Reuses the cluster export path's snapshot resolver and per-person trainer
+    rather than reimplementing either. Deliberately non-fatal: the reassignment
+    itself is already committed, and failing to copy or train must not undo it.
+    """
+    clean = (person_name or "").strip()
+    if clean.lower() in _NON_PERSON_NAMES:
+        # "Unknown" is the placeholder for a face nobody has identified. Training
+        # a model on it would teach the recogniser to recognise "not recognised".
+        return {"enrolled": 0, "trained": False, "reason": "not a real person"}
+
+    copied = skipped = 0
+    try:
+        import shutil
+        from backend.core.paths import paths
+        from backend.core.face_clustering import _resolve_snapshot_path
+
+        person_path = paths.faces_dir / clean
+        person_path.mkdir(parents=True, exist_ok=True)
+        existing = set(os.listdir(person_path))
+
+        faces = db.query(models.FaceDetectionEvent).filter(
+            models.FaceDetectionEvent.id.in_(face_ids)
+        ).all()
+
+        for idx, face in enumerate(faces):
+            src = _resolve_snapshot_path(face.snapshot_path)
+            if not src or not os.path.exists(src):
+                continue
+            try:
+                stamp = face.detected_at.strftime("%Y%m%d_%H%M%S")
+                cam = (face.camera_id or "cam").replace("/", "_")
+                dest_name = f"{stamp}_{cam}_{idx}.jpg"
+                if dest_name in existing:
+                    skipped += 1
+                    continue
+                shutil.copy2(src, person_path / dest_name)
+                existing.add(dest_name)
+                copied += 1
+            except Exception as e:
+                logger.warning("Could not copy %s into %s: %s",
+                               face.snapshot_path, clean, e)
+    except Exception as e:
+        logger.warning("Enrolment copy step failed for '%s': %s", clean, e)
+        return {"enrolled": 0, "trained": False, "reason": str(e)}
+
+    if not copied:
+        return {"enrolled": 0, "skipped": skipped, "trained": False,
+                "reason": "no new snapshots to enrol"}
+
+    trained = False
+    try:
+        from backend.core.face_recognition import get_face_manager
+        result = get_face_manager().train_person(clean)
+        # train_person reports success even when it encoded nothing, which is
+        # the case that matters here: photos copied but no encoding produced
+        # leaves the person just as unrecognisable as before. Report on the
+        # encodings, not on the call completing.
+        encodings = int(result.get("encodings_added") or 0)
+        trained = encodings > 0
+        logger.info("Enrolled %s image(s) for '%s'; trained=%s (%s encoding(s))",
+                    copied, clean, trained, encodings)
+        return {"enrolled": copied, "skipped": skipped,
+                "trained": trained, "encodings": encodings}
+    except Exception as e:
+        # Photos are on disk either way; training can be retried from the UI.
+        logger.warning("Training after enrolment failed for '%s': %s", clean, e)
+
+    return {"enrolled": copied, "skipped": skipped, "trained": trained}
 
 
 def _remove_snapshot_file(snapshot_path: Optional[str]) -> bool:
@@ -524,12 +619,18 @@ def reassign_face_detection(
 
         db.commit()
 
+        # Teach the recogniser what the user just told it. Without this the
+        # person gains a detection but no photo and no encoding, and stays
+        # unrecognisable.
+        enrolment = _enrol_detections(db, [face_id], new_person_name)
+
         return FaceReassignResponse(
             success=True,
             message=f"Face reassigned from '{old_person_name}' to '{new_person_name}'",
             face_id=face_id,
             old_person_name=old_person_name,
             new_person_name=new_person_name,
+            enrolment=enrolment,
         )
 
     except HTTPException:
@@ -718,9 +819,16 @@ def bulk_reassign_face_detections(
         if not_found_count > 0:
             errors.append(f"{not_found_count} face(s) not found")
 
+        enrolment = _enrol_detections(db, request.face_ids, new_person_name)
+
         return {
             "success": True,
-            "message": f"Reassigned {reassigned_count} face(s) to '{new_person_name}'",
+            "message": (
+                f"Reassigned {reassigned_count} face(s) to '{new_person_name}'"
+                + (f"; enrolled {enrolment['enrolled']} photo(s)"
+                   if enrolment.get("enrolled") else "")
+            ),
+            "enrolment": enrolment,
             "reassigned_count": reassigned_count,
             "new_person_name": new_person_name,
             "errors": errors,

@@ -232,47 +232,80 @@ app.add_middleware(
 # Import centralized path manager
 from backend.core.paths import paths
 
-# All directories are auto-created by PathManager
-# Mount recordings directory
-app.mount(
-    "/recordings",
-    StaticFiles(directory=str(paths.recordings_dir)),
-    name="recordings"
-)
+# Storage is served through routes that resolve the directory PER REQUEST, not
+# through StaticFiles mounts bound at import.
+#
+# StaticFiles captures its `directory` argument the moment the mount is created,
+# which is import time — before the startup event applies the storage paths saved
+# in the database (see the update_paths call further down this file), and long
+# before a user changes them in System Settings. Both of those call
+# paths.update_paths(), and neither could reach a mount that had already
+# memorised the old directory.
+#
+# That was not theoretical. The /faces mount bound to the environment's faces
+# directory; startup then applied the database's `faces_path` and FaceManager was
+# created afterwards, so it WROTE to a different directory than the mount SERVED
+# from. Result: 17,699 face images on disk and every single one 404ing in the UI,
+# which is what made person galleries look empty and "photos: 0" look like data
+# loss. Snapshots escaped only because the startup call happens to omit
+# snapshots_dir, so writer and reader stayed accidentally consistent.
+#
+# Resolving per request means the served directory always matches the one being
+# written to, including after a runtime path change with no restart.
 
-# Mount faces directory
-app.mount(
-    "/faces",
-    StaticFiles(directory=str(paths.faces_dir)),
-    name="faces"
-)
 
-# Mount snapshots directory (v3.5.6+: Primary endpoint under /api/)
-app.mount(
-    "/api/snapshots",
-    StaticFiles(directory=str(paths.snapshots_dir)),
-    name="snapshots_api"
-)
+def _serve_from(base_dir_getter, relative_path: str):
+    """
+    Serve a file from a storage directory resolved at request time.
 
-# Mount snapshots directory (legacy paths for backward compatibility)
-app.mount(
-    "/data/snapshots",
-    StaticFiles(directory=str(paths.snapshots_dir)),
-    name="snapshots_data"
-)
+    base_dir_getter is a callable rather than a path so the CURRENT value of
+    paths.* is read on every request; capturing the value here would rebuild the
+    exact bug this replaces.
+    """
+    base = Path(str(base_dir_getter())).resolve()
+    candidate = (base / relative_path).resolve()
 
-app.mount(
-    "/legacy/snapshots",
-    StaticFiles(directory=str(paths.snapshots_dir)),
-    name="snapshots_legacy"
-)
+    # Containment check. These paths come straight from the URL, so without it
+    # "../../.." walks anywhere the process can read.
+    if candidate != base and base not in candidate.parents:
+        raise HTTPException(status_code=404, detail="Not found")
 
-# Mount thumbnails directory
-app.mount(
-    "/data/thumbnails",
-    StaticFiles(directory=str(paths.thumbnails_dir)),
-    name="thumbnails"
-)
+    if not candidate.is_file():
+        raise HTTPException(status_code=404, detail="Not found")
+
+    return FileResponse(str(candidate))
+
+
+@app.get("/recordings/{file_path:path}", include_in_schema=False)
+def serve_recording_file(file_path: str):
+    return _serve_from(lambda: paths.recordings_dir, file_path)
+
+
+@app.get("/faces/{file_path:path}", include_in_schema=False)
+def serve_face_file(file_path: str):
+    return _serve_from(lambda: paths.faces_dir, file_path)
+
+
+@app.get("/api/snapshots/{file_path:path}", include_in_schema=False)
+def serve_snapshot_file(file_path: str):
+    return _serve_from(lambda: paths.snapshots_dir, file_path)
+
+
+# Legacy snapshot paths, kept because stored snapshot_path values in the database
+# still carry them.
+@app.get("/data/snapshots/{file_path:path}", include_in_schema=False)
+def serve_snapshot_file_legacy_data(file_path: str):
+    return _serve_from(lambda: paths.snapshots_dir, file_path)
+
+
+@app.get("/legacy/snapshots/{file_path:path}", include_in_schema=False)
+def serve_snapshot_file_legacy(file_path: str):
+    return _serve_from(lambda: paths.snapshots_dir, file_path)
+
+
+@app.get("/data/thumbnails/{file_path:path}", include_in_schema=False)
+def serve_thumbnail_file(file_path: str):
+    return _serve_from(lambda: paths.thumbnails_dir, file_path)
 
 
 @app.on_event("startup")
