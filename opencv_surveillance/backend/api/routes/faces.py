@@ -305,10 +305,25 @@ def update_person(
 @router.delete("/faces/people/{person_name}",
                response_model=face_schema.DeleteResponse)
 def delete_person(
-    person_name: str, current_user: user_schema.User = Depends(require_admin)
+    person_name: str,
+    db: Session = Depends(get_db),
+    current_user: user_schema.User = Depends(require_admin),
 ):
     """
-    Delete a person and all their photos from the system
+    Delete a person, their photos, and the database rows that referenced them.
+
+    The database half of this was missing. delete_person removed the person's
+    directory from disk and nothing else, so every face_detection_events row for
+    that person survived — still carrying snapshot_path values pointing at images
+    that had just been deleted. Any view listing detections kept rendering them,
+    and the browser collected a 404 for each one. Measured on this install before
+    the fix: 19 orphaned rows across six deleted people, every snapshot missing.
+
+    Deleting the rows rather than blanking the name is deliberate. Their images
+    are gone, so the records cannot be reviewed, re-clustered or corrected — they
+    are not history any more, just broken references. Someone removing a wrongly
+    grouped "unknown" person is asking for it to go away, not to linger as
+    unviewable entries.
 
     **Authentication Required**: Admin role only
     """
@@ -321,8 +336,50 @@ def delete_person(
                 status_code=404, detail=f"Person '{person_name}' not found"
             )
 
-        return face_schema.DeleteResponse(
-            success=True, message=f"Person '{person_name}' deleted successfully")
+        # Anything still pointing at the now-deleted person.
+        #
+        # Note the exact match: values like "Unknown" are the placeholder for a
+        # face that was seen but not recognised, not a person anyone deleted, and
+        # must survive untouched.
+        detections_removed = (
+            db.query(models.FaceDetectionEvent)
+            .filter(models.FaceDetectionEvent.person_name == person_name)
+            .delete(synchronize_session=False)
+        )
+
+        clusters_cleared = (
+            db.query(models.FaceCluster)
+            .filter(models.FaceCluster.label == person_name)
+            .delete(synchronize_session=False)
+        )
+
+        # Automations are NOT deleted. A rule is a thing the user built on
+        # purpose, and silently removing it because a face was deleted would be a
+        # surprise; report it instead so they can decide.
+        affected_rules = (
+            db.query(models.AutomationRule)
+            .filter(models.AutomationRule.person_name == person_name)
+            .count()
+        )
+
+        db.commit()
+
+        logger.info(
+            "Deleted person '%s': %s detection(s), %s cluster(s) removed; "
+            "%s automation rule(s) still reference this name",
+            person_name, detections_removed, clusters_cleared, affected_rules)
+
+        message = (
+            f"Person '{person_name}' deleted, along with {detections_removed} "
+            f"detection(s) and {clusters_cleared} cluster(s)."
+        )
+        if affected_rules:
+            message += (
+                f" {affected_rules} automation rule(s) still target this name and "
+                f"were left in place — review them."
+            )
+
+        return face_schema.DeleteResponse(success=True, message=message)
 
     except HTTPException:
         raise

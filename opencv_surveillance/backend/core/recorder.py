@@ -61,6 +61,10 @@ class Recorder:
         # on the same thread (start() releasing a stale writer) don't deadlock.
         self._writer_lock = threading.RLock()
         self.filename = ""
+        # Which codec actually opened, so callers and metadata can tell whether a
+        # given file is browser-playable rather than guessing from the extension
+        # (mp4v and avc1 both produce .mp4, and only one of them plays).
+        self.codec_in_use = None
         self.metadata_filename = ""
         # Maximum recording time in seconds (default: 5 minutes)
         self.max_recording_duration = max_recording_duration
@@ -92,15 +96,36 @@ class Recorder:
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        # Codec order matters for STABILITY. 'avc1' (in-process libx264) can hit an
-        # encoder error and SEGFAULT the whole backend under sustained recording on
-        # macOS — a native crash Python cannot catch. So prefer robust in-process
-        # codecs and keep avc1 as a last resort. Override with OPENEYE_VIDEO_CODEC
-        # (e.g. "mp4v", "MJPG", "avc1") to force a specific codec first.
+        # Codec order is a trade between PLAYABILITY and STABILITY, and both sides
+        # of it have bitten this project.
+        #
+        # Playability: mp4v is MPEG-4 Part 2 (Simple Profile). No browser can play
+        # it — not Chrome, not Safari, not Firefox — so with mp4v first, every
+        # recording was unplayable in the Events page and could only be watched by
+        # downloading it into VLC or QuickTime. Confirmed by ffprobe on a real
+        # recording: codec_name=mpeg4, profile=Simple Profile, codec_tag=mp4v.
+        # <video> needs H.264, VP9 or AV1.
+        #
+        # Stability: avc1 was moved to LAST precisely because in-process libx264
+        # could hit an encoder error and SEGFAULT the backend under sustained
+        # recording on macOS — a native crash Python cannot catch or log. That is
+        # why the order looked backwards.
+        #
+        # H.264 now goes first so recordings are watchable in the browser, with
+        # mp4v immediately behind it: if the H.264 writer cannot be opened we fall
+        # straight back and recording still happens. What this does NOT protect
+        # against is the historical crash, which occurred during sustained
+        # writeFrame rather than at open time — no amount of open-time checking
+        # sees that coming.
+        #
+        # If recording starts crashing the backend again, this is the first thing
+        # to suspect, and the fix needs no code change:
+        #     OPENEYE_VIDEO_CODEC=mp4v
+        # restores the previous behaviour immediately.
         codecs_to_try = [
-            ("mp4v", ".mp4"),  # MPEG-4 — robust, no libx264 (default)
-            ("MJPG", ".avi"),  # Motion JPEG — very robust fallback
-            ("avc1", ".mp4"),  # H.264/libx264 — LAST resort (can crash under load)
+            ("avc1", ".mp4"),  # H.264 — the only one browsers can play
+            ("mp4v", ".mp4"),  # MPEG-4 Part 2 — robust, but not browser-playable
+            ("MJPG", ".avi"),  # Motion JPEG — very robust last resort
         ]
         _preferred = os.getenv("OPENEYE_VIDEO_CODEC", "").strip()
         if _preferred:
@@ -122,7 +147,18 @@ class Recorder:
                 )
 
                 if self.writer.isOpened():
-                    print(f"Successfully initialized video writer with codec '{codec_name}' for {self.filename}")
+                    self.codec_in_use = codec_name
+                    # Say plainly when a recording will not be watchable in the
+                    # browser, rather than leaving someone to discover it by
+                    # clicking play on a black rectangle.
+                    if codec_name == "avc1":
+                        print(f"Successfully initialized video writer with codec "
+                              f"'{codec_name}' (H.264, browser-playable) for {self.filename}")
+                    else:
+                        print(f"Successfully initialized video writer with codec "
+                              f"'{codec_name}' for {self.filename} — NOTE: this codec is "
+                              f"not playable in a browser; the Events page will offer "
+                              f"download only")
                     break
                 else:
                     # Clean up the writer object
