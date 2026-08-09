@@ -12,6 +12,7 @@ import Button from '../components/universal/Button';
 import { useCachedApi, useCachedApiMultiple } from '../hooks/useCachedApi';
 import { CacheTTL } from '../services/apiCache';
 import LoadingSkeleton, { SkeletonCameraCard, SkeletonEventTimeline } from '../components/LoadingSkeleton';
+import AudioModal from '../components/AudioModal';
 import './LiveDashboard.css';
 
 /**
@@ -31,7 +32,8 @@ const CameraCard = React.memo(({
   onRefresh,
   isRefreshing,
   streamNonce,
-  refreshResult
+  refreshResult,
+  onAudioClick
 }) => {
   return (
     <div key={camera.camera_id} className="camera-card">
@@ -131,6 +133,30 @@ const CameraCard = React.memo(({
         </span>
       </div>
       <div className="camera-actions">
+        {/*
+          Two-way audio, ported here from pages/DashboardPage.jsx.
+
+          That page was dead code — nothing imported it — but it held the only
+          one-click entry point to two-way audio in the whole app. The feature
+          itself was never unreachable (CameraSettingsModal also renders
+          TwoWayAudio), but it took Settings > scroll to find. Deleting the dead
+          page without bringing this across would have quietly made a working
+          feature harder to reach.
+
+          Gated on is_running rather than is_active: talking to a camera that is
+          configured but not currently connected cannot work.
+        */}
+        <Button
+          variant="secondary"
+          size="small"
+          onClick={() => onAudioClick(camera)}
+          title="Two-way audio"
+          aria-label={`Start two-way audio with ${camera.name || camera.camera_id}`}
+          disabled={!camera.is_running}
+          icon="🎤"
+        >
+          Audio
+        </Button>
         <Button
           variant="secondary"
           size="small"
@@ -231,6 +257,9 @@ const LiveDashboard = () => {
   // Outcome of the last reconnect: { camera_id, ok, message }. Shown on the card
   // so a failure explains itself instead of looking like a dead button.
   const [refreshResult, setRefreshResult] = useState(null);
+
+  // Camera whose two-way audio modal is open, or null.
+  const [audioCamera, setAudioCamera] = useState(null);
 
   // Per-camera cache-buster for the MJPEG <img>. Reconnecting server-side is not
   // enough on its own: the browser holds an open multipart response and will keep
@@ -710,6 +739,7 @@ const LiveDashboard = () => {
                   refreshResult={
                     refreshResult?.camera_id === camera.camera_id ? refreshResult : null
                   }
+                  onAudioClick={setAudioCamera}
                 />
               ))}
             </div>
@@ -844,6 +874,18 @@ const LiveDashboard = () => {
           camera={settingsCamera}
           onClose={() => setSettingsCamera(null)}
           onUpdate={refetchCameras}
+        />
+      )}
+
+      {/* Two-way audio. Previously reachable in one click only from the dead
+          DashboardPage; this restores that shortcut on the dashboard people
+          actually use. */}
+      {audioCamera && (
+        <AudioModal
+          isOpen={true}
+          onClose={() => setAudioCamera(null)}
+          cameraId={audioCamera.camera_id}
+          cameraName={audioCamera.name || audioCamera.camera_id}
         />
       )}
     </div>
