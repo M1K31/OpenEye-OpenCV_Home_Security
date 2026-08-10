@@ -78,8 +78,32 @@ echo -e "${BLUE}[3/5] Removing runtime + build artifacts...${NC}"
 for vdir in "$OPENCV_DIR/venv" "$OPENCV_DIR/.venv" "${OPENEYE_VENV:-$HOME/.local/share/openeye/venv}"; do
     [ -d "$vdir" ] && run "rm -rf \"$vdir\"" && echo "  ✓ venv removed ($vdir)"
 done
-run "rm -rf \"${OPENEYE_DATA_ROOT:-$HOME/.local/share/openeye}/app\""
-echo "  ✓ app snapshot removed ($APP_DIR)"
+# The app directory is supposed to hold only synced code, so this used to be an
+# unconditional "rm -rf $APP_DIR" that ran here in the build-artifacts step,
+# ahead of the --keep-data guard below. It is not only code. Because the runtime
+# resolved relative storage paths against its working directory rather than the
+# configured location, live installs keep surveillance.db, faces/ and
+# recordings/ inside this directory — so --keep-data would delete the database
+# and every recording while printing "Kept: surveillance.db ... recordings/".
+#
+# Under --keep-data, remove the code and leave anything that holds user data,
+# using the same protected set as scripts/sync-app.sh. A full purge still takes
+# the whole directory.
+if $KEEP_DATA; then
+    if [ -d "$APP_DIR" ]; then
+        while IFS= read -r entry; do
+            case "$(basename "$entry")" in
+                recordings|faces|data|logs|models|.env) continue ;;
+                surveillance.db|surveillance.db-shm|surveillance.db-wal) continue ;;
+                *) run "rm -rf \"$entry\"" ;;
+            esac
+        done < <(find "$APP_DIR" -mindepth 1 -maxdepth 1)
+        echo "  ✓ app code removed, user data under $APP_DIR kept"
+    fi
+else
+    run "rm -rf \"$APP_DIR\""
+    echo "  ✓ app snapshot removed ($APP_DIR)"
+fi
 run "rm -rf \"$OPENCV_DIR/frontend/dist\" \"$OPENCV_DIR/frontend/node_modules\""
 run "find \"$OPENCV_DIR\" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true"
 run "rm -f \"$OPENCV_DIR/start.sh\" \"$OPENCV_DIR/stop.sh\""

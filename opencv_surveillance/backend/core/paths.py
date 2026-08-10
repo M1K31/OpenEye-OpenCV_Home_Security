@@ -35,6 +35,24 @@ DEFAULT_THUMBNAILS_DIR = DEFAULT_DATA_DIR / "thumbnails"
 DEFAULT_FACES_DIR = PROJECT_ROOT / "faces"
 
 
+def resolve_under_project(value: "str | Path") -> Path:
+    """
+    Turn a configured storage path into an absolute one, deterministically.
+
+    Relative values are resolved against the project root, never against the
+    process working directory. `Path("faces").resolve()` silently means
+    "faces, relative to wherever this process happened to be started", which is
+    how the gallery ended up in one directory while the configuration named
+    another. The stored settings on an existing install are relative
+    ("faces", "recordings", "data/snapshots"), so this is the function that
+    decides what they mean.
+    """
+    path = Path(value)
+    if not path.is_absolute():
+        path = PROJECT_ROOT / path
+    return Path(os.path.normpath(str(path)))
+
+
 class PathManager:
     """
     Centralized path management with environment variable support
@@ -54,25 +72,25 @@ class PathManager:
 
     def __init__(self):
         # Allow override via environment variables
-        self.data_dir = Path(
+        self.data_dir = resolve_under_project(
             os.getenv("OPENEYE_DATA_DIR", str(DEFAULT_DATA_DIR))
-        ).resolve()
+        )
 
-        self.recordings_dir = Path(
+        self.recordings_dir = resolve_under_project(
             os.getenv("OPENEYE_RECORDINGS_DIR", str(DEFAULT_RECORDINGS_DIR))
-        ).resolve()
+        )
 
-        self.snapshots_dir = Path(
+        self.snapshots_dir = resolve_under_project(
             os.getenv("OPENEYE_SNAPSHOTS_DIR", str(DEFAULT_SNAPSHOTS_DIR))
-        ).resolve()
+        )
 
-        self.thumbnails_dir = Path(
+        self.thumbnails_dir = resolve_under_project(
             os.getenv("OPENEYE_THUMBNAILS_DIR", str(DEFAULT_THUMBNAILS_DIR))
-        ).resolve()
+        )
 
-        self.faces_dir = Path(
+        self.faces_dir = resolve_under_project(
             os.getenv("OPENEYE_FACES_DIR", str(DEFAULT_FACES_DIR))
-        ).resolve()
+        )
 
         # Log configured paths
         logger.info("PathManager initialized:")
@@ -157,15 +175,15 @@ class PathManager:
             faces_dir: New faces directory
         """
         if recordings_dir:
-            self.recordings_dir = Path(recordings_dir).resolve()
+            self.recordings_dir = resolve_under_project(recordings_dir)
             logger.info(f"Updated recordings path: {self.recordings_dir}")
 
         if snapshots_dir:
-            self.snapshots_dir = Path(snapshots_dir).resolve()
+            self.snapshots_dir = resolve_under_project(snapshots_dir)
             logger.info(f"Updated snapshots path: {self.snapshots_dir}")
 
         if faces_dir:
-            self.faces_dir = Path(faces_dir).resolve()
+            self.faces_dir = resolve_under_project(faces_dir)
             logger.info(f"Updated faces path: {self.faces_dir}")
 
         # Ensure new directories exist

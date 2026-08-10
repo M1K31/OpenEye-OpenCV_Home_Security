@@ -403,6 +403,12 @@ async def startup_event():
         # These will override PathManager defaults if set
         db_recordings_path = system_settings.get("recordings_path")
         db_faces_path = system_settings.get("faces_path")
+        # NOTE: snapshots_path is stored by the settings API but deliberately not
+        # applied here yet. It is set to "data/snapshots" on existing installs,
+        # which now resolves under the app directory — while the 16 GB of
+        # existing snapshots still sit at the location the environment names.
+        # Applying it before that data is consolidated would orphan all of it.
+        # Wire this up together with the storage-layout migration.
 
         # Update PathManager with database settings if they exist
         if db_recordings_path or db_faces_path:
