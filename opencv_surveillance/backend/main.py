@@ -36,13 +36,19 @@ from fastapi import FastAPI, HTTPException, WebSocket, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from dotenv import load_dotenv
-
-# Load .env BEFORE importing any backend.* module. auth.py, database.session, and
-# others read os.getenv(...) at import time; if load_dotenv() runs after those
-# imports the .env values are ignored (previously it ran ~55 lines too late, so the
-# installer's SECRET_KEY/JWT_SECRET_KEY never took effect). See audit F-02 addendum.
-load_dotenv()
+# Load configuration BEFORE importing any other backend.* module. auth.py,
+# database.session and others read os.getenv(...) at import time; if this runs
+# after those imports the values are ignored (it previously ran ~55 lines too
+# late, so the installer's SECRET_KEY/JWT_SECRET_KEY never took effect). See
+# audit F-02 addendum.
+#
+# This reads the data root's config.env, falling back to the legacy .env beside
+# the code, with the real process environment always winning. It replaces a bare
+# load_dotenv(), which looked for .env relative to the *working directory* — so
+# a launch agent, login item or application bundle got no configuration at all
+# and came up without a signing key.
+from backend.core.config_loader import load_configuration
+load_configuration()
 
 from backend.database.session import engine, SessionLocal
 from backend.database.utils import get_db_context

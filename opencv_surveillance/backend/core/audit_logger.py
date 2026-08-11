@@ -104,13 +104,13 @@ class AuditLogger:
 
         Args:
             log_dir: Directory for audit log files. Relative values are resolved
-                against the application root, not the working directory — audit
-                logs are a security record, and scattering them into whichever
+                against the data root, not the working directory — audit logs
+                are a security record, and scattering them into whichever
                 directory the process was launched from makes them useless.
         """
-        from backend.core.paths import resolve_under_project
+        from backend.core.paths import resolve_under_data_root
 
-        self.log_dir = resolve_under_project(log_dir)
+        self.log_dir = resolve_under_data_root(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
         # Create separate log file for audit events
