@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "status": "in-progress",
+  "completed_at": "2026-08-11T02:30:42.939797",
+  "moved": [
+    {
+      "label": "faces",
+      "from": "/Users/mikelsmart/GitHub/OpenEye-OpenCV_Home_Security/pytest-of-mikelsmart/pytest-5/test_a_failed_copy_leaves_the_0/app/faces",
+      "to": "/Users/mikelsmart/GitHub/OpenEye-OpenCV_Home_Security/pytest-of-mikelsmart/pytest-5/test_a_failed_copy_leaves_the_0/data-root/faces",
+      "files": 1,
+      "bytes": 1000
+    }
+  ]
+}

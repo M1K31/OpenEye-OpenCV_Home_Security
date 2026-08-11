@@ -43,10 +43,16 @@ SECRET_KEYS = (
 
 
 def config_file_path(data_root: Optional[Path] = None) -> Path:
-    """Where this installation's configuration lives."""
+    """
+    Where this installation's configuration lives.
+
+    Coerces rather than assuming a Path: a data root arrives from environment
+    variables and command-line arguments as often as from Python, and a bare
+    string used to fail here with an unhelpful TypeError about dividing strings.
+    """
     from backend.core.paths import DATA_ROOT
 
-    return (data_root or DATA_ROOT) / CONFIG_FILENAME
+    return Path(data_root or DATA_ROOT) / CONFIG_FILENAME
 
 
 def _candidate_files(data_root: Optional[Path]) -> List[Path]:

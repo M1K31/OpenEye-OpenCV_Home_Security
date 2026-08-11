@@ -109,6 +109,32 @@ class TestPlanning:
 
         assert {i.label for i in plan.items} == {"database", "database-wal", "database-shm"}
 
+    def test_explicit_no_database_is_not_treated_as_autodetect(self, roots):
+        """
+        database_path=None used to mean both "none" and "work it out", so a
+        caller saying there was no database silently got the live one instead —
+        which is how this planner tried to move the developer's own database
+        into a temporary directory.
+        """
+        _tree(roots.app, {"faces/a.jpg": b"x"})
+
+        plan = sm.build_plan(data_root=roots.data, app_root=roots.app,
+                             current_paths=_paths_stub(), database_path=None)
+
+        assert not any(i.label.startswith("database") for i in plan.items)
+
+    def test_omitting_the_argument_still_autodetects(self, roots, monkeypatch):
+        """The default has to keep finding the database actually in use."""
+        db = roots.tmp / "live.db"
+        db.write_bytes(b"db")
+        monkeypatch.setattr(sm, "_current_database_path", lambda: db)
+
+        plan = sm.build_plan(data_root=roots.data, app_root=roots.app,
+                             current_paths=_paths_stub())
+
+        assert [i.label for i in plan.items] == ["database"]
+        assert plan.items[0].source == db
+
     def test_legacy_env_is_picked_up_as_the_config_source(self, roots):
         (roots.app / ".env").write_text("SECRET_KEY=abc\n")
 

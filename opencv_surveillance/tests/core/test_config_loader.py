@@ -99,6 +99,24 @@ class TestPrecedence:
         assert loaded == [legacy_root / ".env"]
 
 
+class TestPathCoercion:
+    def test_a_string_data_root_works(self, tmp_path):
+        """
+        Data roots arrive from environment variables and CLI arguments as
+        strings; this used to fail with a TypeError about dividing strings.
+        """
+        _write(tmp_path / "config.env", OE_TEST_VALUE="from-string-root")
+
+        loaded = config_loader.load_configuration(str(tmp_path))
+
+        assert os.environ["OE_TEST_VALUE"] == "from-string-root"
+        assert tmp_path / "config.env" in loaded
+
+    def test_config_file_path_appends_the_filename(self, tmp_path):
+        assert config_loader.config_file_path(tmp_path) == tmp_path / "config.env"
+        assert config_loader.config_file_path(str(tmp_path)) == tmp_path / "config.env"
+
+
 class TestSecrets:
     def test_secret_names_are_declared(self):
         """These are the values that must survive a migration."""

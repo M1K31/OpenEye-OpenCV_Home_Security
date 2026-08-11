@@ -50,6 +50,11 @@ MEDIA_LAYOUT: Dict[str, str] = {
 # not-yet-checkpointed transactions.
 DATABASE_SUFFIXES = ("", "-wal", "-shm")
 
+# Distinguishes "work out which database is in use" from "there is no database
+# to move". Passing None had meant both, so a caller that explicitly said "no
+# database" silently got the live one instead.
+AUTODETECT = object()
+
 
 @dataclass
 class MoveItem:
@@ -194,7 +199,7 @@ def build_plan(
     data_root: Optional[Path] = None,
     current_paths: Optional[object] = None,
     app_root: Optional[Path] = None,
-    database_path: Optional[Path] = None,
+    database_path=AUTODETECT,
 ) -> MigrationPlan:
     """
     Work out what is not yet under the data root.
@@ -249,8 +254,12 @@ def build_plan(
             ))
             break  # one source per media type: the first populated one wins
 
-    # The database, with its sidecar files.
-    db_source = Path(database_path) if database_path else _current_database_path()
+    # The database, with its sidecar files. Omitting the argument means "find
+    # the one in use"; passing None explicitly means "there is none to move".
+    if database_path is AUTODETECT:
+        db_source = _current_database_path()
+    else:
+        db_source = Path(database_path) if database_path else None
     if db_source and db_source.exists() and not _is_within(db_source, data_root):
         for suffix in DATABASE_SUFFIXES:
             candidate = Path(str(db_source) + suffix)
