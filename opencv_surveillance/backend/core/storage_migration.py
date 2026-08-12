@@ -231,6 +231,13 @@ def build_plan(
             candidates.append(Path(configured))
         candidates.append(app_root / relative)
 
+        # Consider every candidate rather than stopping at the first populated
+        # one. The configuration can name a near-empty directory while the real
+        # media sits elsewhere: on the install this was built for, the faces
+        # setting pointed at a stub holding a single stale file while the actual
+        # gallery of 23,943 images was beside the code. Taking the first hit
+        # would have migrated the stub and left the gallery behind.
+        populated = []
         seen = set()
         for source in candidates:
             source = Path(os.path.normpath(str(source)))
@@ -244,15 +251,34 @@ def build_plan(
                 continue
 
             count, size = _tree_stats(source)
-            plan.items.append(MoveItem(
-                label=attribute.replace("_dir", ""),
-                source=source,
-                destination=destination,
-                file_count=count,
-                total_bytes=size,
-                same_filesystem=_same_filesystem(source, destination),
-            ))
-            break  # one source per media type: the first populated one wins
+            populated.append((count, size, source))
+
+        if not populated:
+            continue
+
+        # Richest wins, so a stub can never displace the real thing.
+        populated.sort(key=lambda entry: (entry[0], entry[1]), reverse=True)
+        count, size, source = populated[0]
+
+        label = attribute.replace("_dir", "")
+        plan.items.append(MoveItem(
+            label=label,
+            source=source,
+            destination=destination,
+            file_count=count,
+            total_bytes=size,
+            same_filesystem=_same_filesystem(source, destination),
+        ))
+
+        # More than one populated location means data would be left behind
+        # wherever we did not look. That is the failure this module exists to
+        # prevent, so it is reported rather than resolved by guesswork.
+        for other_count, _other_size, other in populated[1:]:
+            plan.problems.append(
+                f"{label}: found data in more than one place. Migrating "
+                f"{source} ({count} files) but {other} still holds "
+                f"{other_count} file(s). Move or remove it, then run again."
+            )
 
     # The database, with its sidecar files. Omitting the argument means "find
     # the one in use"; passing None explicitly means "there is none to move".
@@ -300,7 +326,7 @@ def preflight(plan: MigrationPlan) -> List[str]:
     Returned rather than raised so a caller can show the whole list at once
     instead of one problem per attempt.
     """
-    problems: List[str] = []
+    problems: List[str] = list(plan.problems)
 
     if plan.is_noop:
         return problems
@@ -366,6 +392,83 @@ def _move_tree(item: MoveItem) -> None:
         item.source.unlink()
 
 
+# Configuration keys that name a storage location. After a migration these all
+# point at directories that no longer exist.
+_STORAGE_KEYS = (
+    "OPENEYE_DATA_DIR",
+    "OPENEYE_RECORDINGS_DIR",
+    "OPENEYE_SNAPSHOTS_DIR",
+    "OPENEYE_THUMBNAILS_DIR",
+    "OPENEYE_FACES_DIR",
+    "DATABASE_URL",
+)
+
+
+def _retire_storage_keys(text: str, data_root: Path) -> Tuple[str, List[str]]:
+    """
+    Comment out settings that name a storage location, returning the new text.
+
+    Commented rather than deleted: the original intent stays visible and the
+    change is trivially reversible, while the values stop taking effect.
+    """
+    output, retired = [], []
+
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            key = stripped.split("=", 1)[0].strip()
+            if key in _STORAGE_KEYS:
+                retired.append(key)
+                output.append(
+                    f"# Retired by the storage migration on "
+                    f"{datetime.utcnow().date()}: this named a location that no "
+                    f"longer holds data. Paths now resolve under {data_root}."
+                )
+                output.append(f"# {line}")
+                continue
+        output.append(line)
+
+    return "\n".join(output) + "\n", retired
+
+
+def _write_migrated_config(plan: MigrationPlan, destination: Path) -> None:
+    """
+    Copy the configuration, retiring the settings that named the old locations.
+
+    Copying it verbatim would be worse than not copying it at all: every
+    OPENEYE_*_DIR and DATABASE_URL in it points at a directory this migration
+    just emptied, and those values take precedence over the data root. The
+    application would come up configured to look exactly where its data is not.
+
+    The legacy file is retired in place as well, and that half matters more than
+    it looks. The start script sources it and exports the result, and the process
+    environment outranks the config file — so leaving the original intact would
+    have meant the retired settings won anyway, and the migration would appear to
+    have lost every gallery and recording the moment the service restarted.
+    """
+    source_text = plan.config_source.read_text()
+
+    migrated, retired = _retire_storage_keys(source_text, plan.data_root)
+    destination.write_text(migrated)
+
+    if retired:
+        logger.info("Retired stale storage settings in config: %s",
+                    ", ".join(retired))
+        try:
+            legacy_text, _ = _retire_storage_keys(source_text, plan.data_root)
+            plan.config_source.write_text(legacy_text)
+            logger.info("Retired the same settings in %s, which the start "
+                        "script exports into the environment.",
+                        plan.config_source)
+        except OSError as e:
+            logger.error(
+                "Could not retire storage settings in %s: %s. That file is "
+                "exported by the start script and will override the data root — "
+                "comment out %s by hand before starting the service.",
+                plan.config_source, e, ", ".join(retired),
+            )
+
+
 def migrate(plan: Optional[MigrationPlan] = None, dry_run: bool = False) -> dict:
     """
     Execute a plan. Returns a summary; raises only if the caller must intervene.
@@ -401,7 +504,7 @@ def migrate(plan: Optional[MigrationPlan] = None, dry_run: bool = False) -> dict
 
     if plan.config_source:
         destination = plan.data_root / "config.env"
-        shutil.copy2(plan.config_source, destination)
+        _write_migrated_config(plan, destination)
         # Secrets: readable by the owner only, wherever they came from.
         secure_permissions(destination)
         moved.append("config")
@@ -518,3 +621,97 @@ def import_data(source: Path, data_root: Optional[Path] = None,
 
     logger.info("Imported %s from %s", ", ".join(imported) or "nothing", source)
     return {"imported": imported, "data_root": str(target_root)}
+
+
+# --------------------------------------------------------------------------
+# Command line
+# --------------------------------------------------------------------------
+
+def main(argv=None) -> int:
+    """
+    Run storage operations from a shell.
+
+    Deliberately a command rather than something that happens on first launch.
+    Moving tens of gigabytes is not a side effect a user should discover after
+    the fact, and an explicit invocation is what makes the reverse direction —
+    handing an installation back to a source install — a supported thing rather
+    than an emergency.
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog="python -m backend.core.storage_migration",
+        description="Move OpenEye's data under the data root, or back out again.",
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    plan_cmd = sub.add_parser("plan", help="show what would move, and change nothing")
+    run_cmd = sub.add_parser("migrate", help="move storage under the data root")
+    run_cmd.add_argument("--yes", action="store_true",
+                         help="skip the confirmation prompt")
+    exp = sub.add_parser("export", help="copy the data root to a portable directory")
+    exp.add_argument("destination")
+    imp = sub.add_parser("import", help="adopt a previously exported directory")
+    imp.add_argument("source")
+    imp.add_argument("--overwrite", action="store_true",
+                     help="replace populated directories")
+
+    for p in (plan_cmd, run_cmd, exp, imp):
+        p.add_argument("--data-root", default=None,
+                       help="override the data root (default: this install's)")
+
+    args = parser.parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    data_root = Path(args.data_root) if args.data_root else None
+
+    if args.command == "plan":
+        plan = build_plan(data_root=data_root)
+        print(plan.describe())
+        problems = preflight(plan)
+        if problems:
+            # Showing these here rather than only on the real run is the point
+            # of a dry run: the user finds out what blocks them before they have
+            # stopped the service.
+            print("\nBlocking problems:")
+            for problem in problems:
+                print(f"  - {problem}")
+        return 0
+
+    if args.command == "migrate":
+        plan = build_plan(data_root=data_root)
+        print(plan.describe())
+        if plan.is_noop:
+            return 0
+
+        problems = preflight(plan)
+        if problems:
+            print("\nCannot proceed:")
+            for problem in problems:
+                print(f"  - {problem}")
+            return 1
+
+        if not args.yes:
+            print(f"\nThis moves {plan.total_files} files ({_human(plan.total_bytes)}). "
+                  "Stop the OpenEye service first.")
+            if input("Continue? [y/N] ").strip().lower() not in ("y", "yes"):
+                print("Aborted; nothing was moved.")
+                return 1
+
+        result = migrate(plan)
+        print(f"\n{result}")
+        return 0 if result.get("migrated") else 1
+
+    if args.command == "export":
+        print(export_data(Path(args.destination), data_root=data_root))
+        return 0
+
+    if args.command == "import":
+        print(import_data(Path(args.source), data_root=data_root,
+                          overwrite=args.overwrite))
+        return 0
+
+    return 1
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())

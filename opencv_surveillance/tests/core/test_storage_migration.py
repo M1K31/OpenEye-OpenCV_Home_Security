@@ -135,6 +135,48 @@ class TestPlanning:
         assert [i.label for i in plan.items] == ["database"]
         assert plan.items[0].source == db
 
+    def test_a_stub_never_displaces_the_real_gallery(self, roots):
+        """
+        The configuration can name a nearly-empty directory while the real media
+        sits elsewhere. Taking the first populated candidate migrated a stub
+        holding one stale file and left a gallery of 23,943 images behind.
+        """
+        stub = _tree(roots.tmp / "stub-faces", {"face_encodings.json": b"{}"})
+        _tree(roots.app, {f"faces/person/{i}.jpg": b"x" for i in range(12)})
+
+        plan = sm.build_plan(data_root=roots.data, app_root=roots.app,
+                             current_paths=_paths_stub(faces_dir=stub),
+                             database_path=None)
+
+        faces = next(i for i in plan.items if i.label == "faces")
+        assert faces.source == roots.app / "faces"
+        assert faces.file_count == 12
+
+    def test_data_in_two_places_is_reported_not_silently_dropped(self, roots):
+        stub = _tree(roots.tmp / "stub-faces", {"leftover.jpg": b"x"})
+        _tree(roots.app, {f"faces/{i}.jpg": b"x" for i in range(5)})
+
+        plan = sm.build_plan(data_root=roots.data, app_root=roots.app,
+                             current_paths=_paths_stub(faces_dir=stub),
+                             database_path=None)
+
+        assert any("more than one place" in p for p in plan.problems)
+        # And preflight refuses, rather than stranding the other copy.
+        assert any("more than one place" in p for p in sm.preflight(plan))
+
+    def test_migration_refuses_while_data_is_in_two_places(self, roots):
+        stub = _tree(roots.tmp / "stub-faces", {"leftover.jpg": b"x"})
+        _tree(roots.app, {f"faces/{i}.jpg": b"x" for i in range(5)})
+
+        plan = sm.build_plan(data_root=roots.data, app_root=roots.app,
+                             current_paths=_paths_stub(faces_dir=stub),
+                             database_path=None)
+        result = sm.migrate(plan)
+
+        assert result["migrated"] is False
+        assert (roots.app / "faces" / "0.jpg").exists()
+        assert (stub / "leftover.jpg").exists()
+
     def test_legacy_env_is_picked_up_as_the_config_source(self, roots):
         (roots.app / ".env").write_text("SECRET_KEY=abc\n")
 
@@ -223,6 +265,36 @@ class TestMigrating:
         assert oct(config.stat().st_mode)[-3:] == "600"
         # The original is copied, not moved: an unmigrated rollback still works.
         assert (roots.app / ".env").exists()
+
+    def test_stale_storage_settings_are_retired_from_the_config(self, roots):
+        """
+        Copying the config verbatim would be worse than not copying it: those
+        values name directories the migration just emptied, and they take
+        precedence over the data root — so the app would come up configured to
+        look exactly where its data no longer is.
+        """
+        (roots.app / ".env").write_text(
+            "SECRET_KEY=keep-me\n"
+            "OPENEYE_FACES_DIR=/old/faces\n"
+            "OPENEYE_SNAPSHOTS_DIR=/old/snaps\n"
+            "DATABASE_URL=sqlite:////old/surveillance.db\n"
+            "ECOSYSTEM_REGISTRY_URL=http://localhost:8500\n"
+        )
+        _tree(roots.app, {"faces/a.jpg": b"x"})
+
+        plan = sm.build_plan(data_root=roots.data, app_root=roots.app,
+                             current_paths=_paths_stub(), database_path=None)
+        sm.migrate(plan)
+
+        text = (roots.data / "config.env").read_text()
+        # Secrets and unrelated settings survive untouched.
+        assert "SECRET_KEY=keep-me" in text
+        assert "ECOSYSTEM_REGISTRY_URL=http://localhost:8500" in text
+        # Stale storage settings no longer take effect...
+        for key in ("OPENEYE_FACES_DIR", "OPENEYE_SNAPSHOTS_DIR", "DATABASE_URL"):
+            assert f"\n{key}=" not in "\n" + text
+            # ...but remain visible, so the original intent is not lost.
+            assert f"# {key}=" in text
 
     def test_writes_a_completion_marker(self, roots):
         _tree(roots.app, {"faces/a.jpg": b"x"})

@@ -427,8 +427,31 @@ async def update_storage_paths(
             "snapshots_dir": "/mnt/storage/snapshots"
         }
     """
-    from backend.core.paths import paths
+    from backend.core.paths import paths, APP_ROOT, resolve_under_data_root
     from backend.utils.migrate_media import migrate_files
+
+    # Storage inside the application directory is exactly the configuration this
+    # release exists to undo. That directory holds shipped code and is replaced
+    # wholesale on upgrade — and once the application ships as a bundle it is not
+    # reliably writable at all — so anything stored there is lost the next time
+    # the user updates, silently and completely.
+    for field_name, value in (
+        ("recordings_dir", paths_update.recordings_dir),
+        ("snapshots_dir", paths_update.snapshots_dir),
+        ("faces_dir", paths_update.faces_dir),
+    ):
+        if not value:
+            continue
+        candidate = resolve_under_data_root(value)
+        if candidate == APP_ROOT or APP_ROOT in candidate.parents:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"{field_name} cannot be inside the application directory "
+                    f"({APP_ROOT}). Anything stored there is destroyed when the "
+                    f"application is updated. Choose a location outside it."
+                ),
+            )
 
     migration_results = {}
 

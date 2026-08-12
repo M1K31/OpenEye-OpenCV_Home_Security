@@ -332,3 +332,57 @@ class TestLegacyMediaAdoption:
 
         assert manager.faces_dir == app_root / "faces"
         assert manager.recordings_dir == app_root / "recordings"
+
+
+class TestStoragePathGuard:
+    """
+    Storage must never be configured inside the application directory.
+
+    That directory is replaced wholesale on upgrade, and in a bundle it is not
+    reliably writable — so anything stored there is destroyed the next time the
+    user updates, with no warning and no error.
+    """
+
+    def _guard(self, value):
+        """The check as the settings endpoint applies it."""
+        from backend.core.paths import APP_ROOT, resolve_under_data_root
+
+        candidate = resolve_under_data_root(value)
+        return candidate == APP_ROOT or APP_ROOT in candidate.parents
+
+    def test_rejects_a_path_inside_the_application_directory(self):
+        from backend.core.paths import APP_ROOT
+
+        assert self._guard(str(APP_ROOT / "faces")) is True
+        assert self._guard(str(APP_ROOT / "nested" / "recordings")) is True
+
+    def test_rejects_the_application_directory_itself(self):
+        from backend.core.paths import APP_ROOT
+
+        assert self._guard(str(APP_ROOT)) is True
+
+    def test_accepts_a_location_outside_it(self, tmp_path):
+        assert self._guard(str(tmp_path / "media")) is False
+
+    def test_accepts_an_external_drive(self):
+        assert self._guard("/Volumes/Locker2/openeye/recordings") is False
+
+
+class TestStorageLayoutSummary:
+    def test_it_reports_both_roots_and_counts(self, caplog):
+        """
+        The split hid for months because each directory was logged separately.
+        One block, naming both roots and what is in each, is what makes a
+        divergence visible.
+        """
+        from backend.main import _log_storage_layout
+
+        with caplog.at_level("INFO"):
+            _log_storage_layout()
+
+        text = "\n".join(r.message for r in caplog.records)
+        assert "app root" in text
+        assert "data root" in text
+        for label in ("faces", "recordings", "snapshots", "thumbnails"):
+            assert label in text
+        assert "files" in text or "MISSING" in text

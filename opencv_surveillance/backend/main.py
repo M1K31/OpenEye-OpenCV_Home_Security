@@ -314,6 +314,54 @@ def serve_thumbnail_file(file_path: str):
     return _serve_from(lambda: paths.thumbnails_dir, file_path)
 
 
+def _log_storage_layout():
+    """
+    Log both roots and every storage location with a file count.
+
+    Deliberately reports counts rather than just paths: a path that looks right
+    but holds nothing is the shape this problem actually takes, and it reads as
+    normal in a log full of directory names.
+    """
+    from backend.core.paths import APP_ROOT, DATA_ROOT, paths as storage
+    from backend.database.session import SQLALCHEMY_DATABASE_URL
+
+    def describe(path):
+        try:
+            target = Path(path)
+            if not target.exists():
+                return "MISSING"
+            count = sum(1 for _ in target.rglob("*") if _.is_file())
+            return f"{count} files"
+        except OSError as e:
+            return f"unreadable ({e})"
+
+    logger.info("Storage layout:")
+    logger.info(f"  app root  (shipped code) : {APP_ROOT}")
+    logger.info(f"  data root (writable)     : {DATA_ROOT}")
+    logger.info(f"  database                 : {SQLALCHEMY_DATABASE_URL}")
+    for label, value in (
+        ("faces", storage.faces_dir),
+        ("recordings", storage.recordings_dir),
+        ("snapshots", storage.snapshots_dir),
+        ("thumbnails", storage.thumbnails_dir),
+    ):
+        inside = "" if str(value).startswith(str(DATA_ROOT)) else "  <- OUTSIDE THE DATA ROOT"
+        logger.info(f"  {label:<24} : {value} ({describe(value)}){inside}")
+
+    try:
+        from backend.core.storage_migration import build_plan
+
+        plan = build_plan()
+        if not plan.is_noop:
+            logger.warning(
+                "Storage is split across locations. %s item(s) are not under the "
+                "data root; run the storage migration to consolidate them.",
+                len(plan.items),
+            )
+    except Exception as e:
+        logger.debug(f"Could not evaluate migration state: {e}")
+
+
 @app.on_event("startup")
 async def startup_event():
     """
@@ -409,23 +457,34 @@ async def startup_event():
         # These will override PathManager defaults if set
         db_recordings_path = system_settings.get("recordings_path")
         db_faces_path = system_settings.get("faces_path")
-        # NOTE: snapshots_path is stored by the settings API but deliberately not
-        # applied here yet. It is set to "data/snapshots" on existing installs,
-        # which now resolves under the app directory — while the 16 GB of
-        # existing snapshots still sit at the location the environment names.
-        # Applying it before that data is consolidated would orphan all of it.
-        # Wire this up together with the storage-layout migration.
+        # snapshots_path was stored by the settings API but never applied here,
+        # so snapshots alone followed the environment while recordings and faces
+        # followed the database — the application read its own media from two
+        # different roots depending on the type, which is how 16 GB of snapshots
+        # ended up somewhere the rest of the storage was not.
+        db_snapshots_path = system_settings.get("snapshots_path")
 
         # Update PathManager with database settings if they exist
-        if db_recordings_path or db_faces_path:
+        if db_recordings_path or db_faces_path or db_snapshots_path:
             logger.info("Applying custom paths from database settings...")
             paths.update_paths(
                 recordings_dir=db_recordings_path,
+                snapshots_dir=db_snapshots_path,
                 faces_dir=db_faces_path
             )
 
         logger.info(
             f"System settings loaded - Recordings: {paths.recordings_dir}, Faces: {paths.faces_dir}")
+
+    # Print the storage layout, with counts, every time.
+    #
+    # The reason this exists: for months this installation kept its database and
+    # galleries beside the code while its snapshots sat somewhere else entirely,
+    # and nothing ever said so. Each directory was resolved independently and
+    # logged separately, so the split was invisible. A single block naming both
+    # roots and what is actually in each makes that class of divergence obvious
+    # the moment it happens, instead of after a user reports missing photos.
+    _log_storage_layout()
 
     # PathManager automatically creates all required directories
     logger.info("Required directories handled by PathManager")
