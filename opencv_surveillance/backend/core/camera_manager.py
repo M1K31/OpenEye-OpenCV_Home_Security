@@ -35,7 +35,17 @@ import asyncio
 from backend.core.alert_manager import get_alert_manager
 from backend.core.automation_engine import process_face_detection
 from backend.database.session import SessionLocal
-from backend.database.models import Camera as CameraModel, MotionDetectionEvent, FaceDetectionEvent
+from backend.database.models import (
+    Camera as CameraModel,
+    MotionDetectionEvent,
+    FaceDetectionEvent,
+    FaceCluster,
+)
+from backend.core.capture_policy import (
+    CapturePolicy,
+    CaptureSettings,
+    MODE_SYSTEM_DEFAULT,
+)
 from backend.database.utils import get_db_context
 
 
@@ -74,6 +84,21 @@ class Camera(ABC):
         self.unknown_automation_min_interval = float(
             os.getenv("OPENEYE_UNKNOWN_AUTOMATION_INTERVAL", "10")
         )
+
+        # Decides which recognised faces are worth keeping a likeness of. Holds
+        # per-camera state, so one policy object per camera and not a shared one.
+        # It governs storage only — automation runs from _act_on_face() whatever
+        # this decides.
+        self._capture_policy = CapturePolicy(
+            CaptureSettings(
+                required_consecutive_passes=int(
+                    (db_settings or {}).get("capture_required_passes", 3)),
+                cluster_maturity=int(
+                    (db_settings or {}).get("capture_cluster_maturity", 25)),
+            )
+        )
+        self.face_capture_mode = (db_settings or {}).get(
+            "face_capture_mode", MODE_SYSTEM_DEFAULT)
 
         # Recording frame rate limiter - prevents fast playback
         # When recording, we limit frame writes to match the target FPS
@@ -621,11 +646,118 @@ class Camera(ABC):
             print(f"Error saving face snapshot: {e}")
             return None
 
+    def _act_on_face(self, face: dict) -> None:
+        """
+        Run the user's automation rules for a recognised face.
+
+        Separate from recording it, and unconditional. Whether a likeness is
+        worth keeping is a storage question; whether to unlock a door, change
+        the lighting or warn an intruder is not, and the two were previously the
+        same function. Every suppression added to the capture policy would
+        otherwise have quietly suppressed an automation too.
+
+        Known persons fire every detection. Unknown persons also fire — presence
+        and guest-service rules target "Unknown" — but throttled per camera so a
+        continuously visible stranger does not hammer the rules query. The
+        per-rule cooldown still gates the actions themselves.
+        """
+        if not self.camera_id:
+            return
+
+        person_name = face.get("name", "Unknown")
+
+        fire_automation = person_name != "Unknown"
+        if not fire_automation:
+            now_ts = time.time()
+            if now_ts - self._last_unknown_automation_time >= self.unknown_automation_min_interval:
+                self._last_unknown_automation_time = now_ts
+                fire_automation = True
+
+        if not fire_automation:
+            return
+
+        try:
+            process_face_detection(
+                person_name=person_name,
+                camera_id=self.camera_id,
+                confidence=face.get("confidence", 0.0),
+                detected_at=datetime.now(),
+            )
+        except Exception as e:
+            print(f"Error processing automation rules for {person_name}: {e}")
+
+    def _handle_detected_faces(self, frame: np.ndarray, faces: list) -> None:
+        """
+        Act on every recognised face, and record the ones worth keeping.
+
+        The order matters: acting comes first and is never skipped, so an
+        automation cannot be lost to a storage decision made afterwards.
+
+        This replaces two identical copies of the same loop, one in each frame
+        path. They had already drifted into being maintained in parallel, which
+        is how a fix to one could silently miss the other.
+        """
+        if not faces:
+            return
+
+        for face in faces:
+            self._act_on_face(face)
+
+            decision = self._capture_policy.evaluate(
+                face,
+                camera_id=self.camera_id or "unknown",
+                mode=self.face_capture_mode,
+                cluster_face_count=self._cluster_size_for(face),
+            )
+
+            snapshot_path = None
+            if decision.capture:
+                snapshot_path = self._save_face_snapshot(
+                    frame, face.get("location", {})
+                )
+            else:
+                logger.debug("Not capturing %s on %s: %s",
+                             face.get("name"), self.camera_id, decision.reason)
+
+            if decision.capture or decision.record_sighting:
+                # A sighting keeps the events page, per-person history and an
+                # unknown person's location record intact. Without a snapshot it
+                # carries no encoding either, so it never feeds clustering or
+                # training — which is the cost being avoided.
+                self._create_face_detection_event(
+                    frame, face, snapshot_path,
+                    store_encoding=decision.capture,
+                )
+
+    def _cluster_size_for(self, face: dict) -> Optional[int]:
+        """
+        How many faces the cluster this detection belongs to already holds.
+
+        Used to stop enriching a stranger who is already well represented. Only
+        the recogniser's own cluster association is consulted; running a fresh
+        similarity search here would reintroduce exactly the per-frame cost this
+        work exists to remove.
+        """
+        cluster_id = face.get("cluster_id")
+        if not cluster_id:
+            return None
+
+        try:
+            with get_db_context() as db:
+                cluster = db.query(FaceCluster).filter(
+                    FaceCluster.id == cluster_id
+                ).first()
+                return cluster.face_count if cluster else None
+        except Exception as e:
+            logger.debug("Could not read cluster size: %s", e)
+            return None
+
     def _create_face_detection_event(
         self,
         frame: np.ndarray,
         face: dict,
         snapshot_path: Optional[str] = None,
+        store_encoding: bool = True,
     ) -> Optional[int]:
         """
         Create a FaceDetectionEvent in the database with face encoding for clustering.
@@ -669,7 +801,10 @@ class Camera(ABC):
                     motion_detected=face.get("motion_detected", False),
                     frame_width=frame.shape[1],
                     frame_height=frame.shape[0],
-                    face_encoding=face.get("encoding"),  # Base64 encoded face encoding for clustering
+                    # Only a captured likeness carries an encoding. A sighting
+                    # row records who and where without giving clustering or
+                    # training anything new to chew on.
+                    face_encoding=face.get("encoding") if store_encoding else None,
                 )
 
                 db.add(face_event)
@@ -679,7 +814,6 @@ class Camera(ABC):
                 event_id = face_event.id
                 person_name = face.get("name", "Unknown")
                 confidence = face.get("confidence", 0.0)
-                detected_at = face_event.detected_at
                 # Session automatically closed by context manager
 
                 print(
@@ -687,28 +821,13 @@ class Camera(ABC):
                     f"{person_name} (confidence: {confidence:.2f})"
                 )
 
-                # Trigger automation rules. Known persons fire every detection.
-                # Unknown persons ALSO fire (for presence / guest-service rules that
-                # target person_name "Unknown"), but throttled per camera so a
-                # continuously-visible unknown doesn't hammer the rules query. The
-                # per-rule cooldown still gates the actual actions.
-                fire_automation = person_name != "Unknown"
-                if not fire_automation:
-                    now_ts = time.time()
-                    if now_ts - self._last_unknown_automation_time >= self.unknown_automation_min_interval:
-                        self._last_unknown_automation_time = now_ts
-                        fire_automation = True
-                if fire_automation:
-                    try:
-                        process_face_detection(
-                            person_name=person_name,
-                            camera_id=self.camera_id,
-                            confidence=confidence,
-                            detected_at=detected_at
-                        )
-                    except Exception as e:
-                        print(f"Error processing automation rules for {person_name}: {e}")
-
+                # NOTE: automation used to fire from here. It now runs in
+                # _act_on_face(), called from the frame loop for every recognised
+                # face, because this function is about to become conditional.
+                # Leaving the two coupled would have meant that throttling
+                # captures also throttled automations — lights not changing,
+                # access not granted — and it would have failed silently, since
+                # fewer captures is exactly what success looks like.
                 return event_id
 
         except Exception as e:
@@ -868,18 +987,8 @@ class MockCamera(Camera):
                 self.face_detector.process_frame(
                     processed_frame, self.motion_detected))
 
-            # Save face detection events to database
-            if self.last_faces_detected:
-                for face in self.last_faces_detected:
-                    # Save face snapshot
-                    face_snapshot_path = self._save_face_snapshot(
-                        processed_frame, face.get("location", {})
-                    )
-
-                    # Create face detection event in database with encoding
-                    face_event_id = self._create_face_detection_event(
-                        processed_frame, face, face_snapshot_path
-                    )
+            # Act on every face, record the ones worth keeping.
+            self._handle_detected_faces(processed_frame, self.last_faces_detected)
 
             # Update motion event with face count if faces detected
             if self.last_faces_detected and self.current_motion_event_id:
@@ -1340,18 +1449,8 @@ class RTSPCamera(Camera):
                 self.face_detector.process_frame(
                     processed_frame, self.motion_detected))
 
-            # Save face detection events to database
-            if self.last_faces_detected:
-                for face in self.last_faces_detected:
-                    # Save face snapshot
-                    face_snapshot_path = self._save_face_snapshot(
-                        processed_frame, face.get("location", {})
-                    )
-
-                    # Create face detection event in database with encoding
-                    face_event_id = self._create_face_detection_event(
-                        processed_frame, face, face_snapshot_path
-                    )
+            # Act on every face, record the ones worth keeping.
+            self._handle_detected_faces(processed_frame, self.last_faces_detected)
 
             # Update motion event with face count if faces detected
             if self.last_faces_detected and self.current_motion_event_id:
