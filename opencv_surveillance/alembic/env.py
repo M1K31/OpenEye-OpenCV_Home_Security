@@ -1,3 +1,4 @@
+import logging
 from logging.config import fileConfig
 import sys
 import os
@@ -33,13 +34,25 @@ config = context.config
 # Set the database URL from our session configuration
 config.set_main_option('sqlalchemy.url', SQLALCHEMY_DATABASE_URL)
 
-# Interpret the config file for Python logging.
-# This line sets up loggers basically.
-# disable_existing_loggers=False: migrations run IN-PROCESS at app startup
-# (main.py -> command.upgrade). With the default (True), fileConfig would DISABLE
-# every already-configured app logger (backend.*), so all logging went silent
-# right after migrations and the running server looked "hung". Keep them alive.
-if config.config_file_name is not None:
+# Interpret the config file for Python logging — but only when nothing has
+# configured logging already.
+#
+# Migrations run IN-PROCESS at application startup (main.py -> command.upgrade),
+# and fileConfig does more than enable loggers: it REPLACES the root logger's
+# handlers with the ones named in alembic.ini, which is a console handler. An
+# earlier fix passed disable_existing_loggers=False, and that was necessary but
+# not sufficient — the app's loggers stayed alive while the file handler they
+# wrote through was thrown away.
+#
+# In the packaged application the effect was total: the log file stopped at
+# "Running database migrations..." and every later line — camera startup, the
+# storage layout, errors — went to a stderr that a Finder-launched bundle has
+# nowhere to put. The server looked like it had hung immediately after starting.
+#
+# So: if the application has already set up logging, leave it alone. When
+# alembic is run from the command line the root logger has no handlers and this
+# configures them as usual.
+if config.config_file_name is not None and not logging.getLogger().handlers:
     fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # add your model's MetaData object here

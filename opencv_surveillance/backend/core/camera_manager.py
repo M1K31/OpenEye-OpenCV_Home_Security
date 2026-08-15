@@ -152,10 +152,21 @@ class Camera(ABC):
 
         # Initialize Recorder and Face Detector with system settings
         # Get system settings for paths and durations
-        recordings_path = settings.get("recordings_path", "recordings")
+        # Resolved through PathManager rather than passed through raw.
+        #
+        # These settings are stored as relative strings ("recordings", "faces",
+        # "data/snapshots"), and handing them straight to the recorder meant it
+        # resolved them against the process working directory. That was survivable
+        # while the app was started by a script that cd'd into the right place. It
+        # is not survivable in a bundle: the working directory is inside
+        # OpenEye.app, so recordings were written into the application bundle
+        # itself — a directory that is deleted and rebuilt on every update, and
+        # that the download route correctly refuses to serve from because it sits
+        # outside the configured recordings directory.
+        recordings_path = str(paths.recordings_dir)
         max_recording_duration = settings.get("max_recording_duration", 300)
-        faces_path = settings.get("faces_path", "faces")
-        snapshots_path = settings.get("snapshots_path", "data/snapshots")
+        faces_path = str(paths.faces_dir)
+        snapshots_path = str(paths.snapshots_dir)
 
         # Check if hardware video encoding is enabled (v3.7.1+)
         use_hardware_encoding = settings.get("hardware_video_encoding", False)

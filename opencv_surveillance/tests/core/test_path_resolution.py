@@ -461,3 +461,71 @@ class TestStoragePathGuardInContainers:
             assert guard_app_dir is False
         else:
             assert guard_app_dir is True
+
+
+class TestRecordingsNeverLandInsideTheBundle:
+    """
+    Where the recorder writes must come from PathManager, not from a raw setting.
+
+    The stored settings are relative strings ("recordings", "faces",
+    "data/snapshots"). Passing them straight to the recorder made it resolve them
+    against the process working directory, which inside an application bundle is
+    Contents/Resources/app — so recordings were written into the bundle itself.
+    That directory is deleted and rebuilt by every update, and the download route
+    correctly refuses to serve from it, so the files were both doomed and
+    unplayable. Twelve real recordings were written there before this was caught.
+    """
+
+    def test_the_camera_is_given_absolute_paths_from_the_path_manager(self):
+        import inspect
+
+        from backend.core import camera_manager
+
+        source = inspect.getsource(camera_manager.Camera.__init__)
+
+        # The values handed to the recorder and detector must come from
+        # PathManager, which resolves against the data root.
+        assert "recordings_path = str(paths.recordings_dir)" in source
+        assert "faces_path = str(paths.faces_dir)" in source
+        assert "snapshots_path = str(paths.snapshots_dir)" in source
+
+        # And must not be read straight from the settings dictionary, which is
+        # where the relative strings come from.
+        assert 'settings.get("recordings_path"' not in source
+        assert 'settings.get("faces_path"' not in source
+        assert 'settings.get("snapshots_path"' not in source
+
+    def test_those_paths_are_absolute_and_under_the_data_root(self, monkeypatch):
+        """
+        Built fresh rather than read off the module singleton: other tests
+        legitimately repoint that singleton, so asserting against it here would
+        be testing whichever test happened to run last.
+        """
+        from backend.core import paths as paths_module
+
+        for name in ("OPENEYE_DATA_DIR", "OPENEYE_RECORDINGS_DIR",
+                     "OPENEYE_SNAPSHOTS_DIR", "OPENEYE_THUMBNAILS_DIR",
+                     "OPENEYE_FACES_DIR"):
+            monkeypatch.delenv(name, raising=False)
+
+        manager = paths_module.PathManager()
+
+        for value in (manager.recordings_dir, manager.faces_dir, manager.snapshots_dir):
+            assert value.is_absolute()
+            assert str(value).startswith(str(paths_module.DATA_ROOT))
+
+
+class TestStoredMediaPathsResolveConsistently:
+    def test_both_recording_routes_resolve_the_same_way(self):
+        """
+        /download went through PathManager and /stream did not, so the same
+        stored path was legitimate on one route and a 403 "path traversal
+        attempt" on the other.
+        """
+        import inspect
+
+        from backend.api.routes import recordings
+
+        stream = inspect.getsource(recordings.stream_recording)
+        assert "paths.resolve_path(recording.recording_path)" in stream
+        assert "Path(recording.recording_path).resolve()" not in stream

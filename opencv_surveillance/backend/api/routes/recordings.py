@@ -277,7 +277,13 @@ def stream_recording(recording_id: int, db: Session = Depends(get_db),
 
     # Security: Validate file path before streaming
     try:
-        full_path = Path(recording.recording_path).resolve()
+        # Through PathManager, not Path().resolve(): stored paths are relative
+        # on older installs, and resolving those against the working directory
+        # pointed them wherever the process happened to be started — which then
+        # failed the containment check below and returned 403 for a file that was
+        # perfectly legitimate. /download already went through PathManager; this
+        # route was left behind.
+        full_path = paths.resolve_path(recording.recording_path)
         allowed_dir = paths.recordings_dir.resolve()
 
         if not str(full_path).startswith(str(allowed_dir)):
