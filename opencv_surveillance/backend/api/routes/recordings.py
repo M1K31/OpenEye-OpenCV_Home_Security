@@ -57,15 +57,38 @@ def safe_file_response(
         full_path = paths.resolve_path(file_path)
         allowed_dir_resolved = allowed_dir.resolve()
 
-        # Security check: Ensure file is within allowed directory
         if not str(full_path).startswith(str(allowed_dir_resolved)):
-            logger.warning(
-                f"Path traversal attempt blocked: {file_path} -> {full_path} not in {allowed_dir_resolved}"
-            )
-            raise HTTPException(
-                status_code=403,
-                detail="Access denied: File path not in allowed directory"
-            )
+            # This path came out of our own database, not from the request, so a
+            # value outside the media directory is far more likely to be a stale
+            # row than an attack — a recording written before storage moved, or
+            # by a build that resolved paths differently. Look for the same file
+            # in the directory where recordings actually live.
+            #
+            # Reporting these as "path traversal attempt blocked" with a 403 was
+            # actively misleading: it described an intrusion while the real
+            # situation was ordinary history pointing at an old location, and it
+            # sent the interface a status that means "refused" rather than
+            # "gone".
+            recovered = allowed_dir_resolved / Path(file_path).name
+            if recovered.is_file():
+                logger.info(
+                    "Serving %s from %s; the stored path %s predates the current "
+                    "storage layout.", recovered.name, allowed_dir_resolved, file_path
+                )
+                full_path = recovered
+            else:
+                logger.warning(
+                    "Recording unavailable: stored path %s is outside %s and no "
+                    "file named %s exists there.",
+                    file_path, allowed_dir_resolved, Path(file_path).name
+                )
+                raise HTTPException(
+                    status_code=404,
+                    detail=(
+                        "This recording's file is no longer available. It was "
+                        "stored outside the current media directory."
+                    ),
+                )
 
         # Check file exists and is a file (not directory)
         if not full_path.exists():
@@ -287,13 +310,22 @@ def stream_recording(recording_id: int, db: Session = Depends(get_db),
         allowed_dir = paths.recordings_dir.resolve()
 
         if not str(full_path).startswith(str(allowed_dir)):
-            logger.warning(
-                f"Path traversal attempt blocked in stream: {recording.recording_path}"
-            )
-            raise HTTPException(
-                status_code=403,
-                detail="Access denied: File path not in allowed directory"
-            )
+            # Same reasoning as safe_file_response: the value came from our own
+            # database, so outside the media directory means stale history, not
+            # an intruder. Recover by name where possible, and otherwise say the
+            # file is gone rather than that access was refused.
+            recovered = allowed_dir / Path(recording.recording_path).name
+            if recovered.is_file():
+                full_path = recovered
+            else:
+                logger.warning(
+                    "Recording %s unavailable: stored path %s is outside %s.",
+                    recording.id, recording.recording_path, allowed_dir
+                )
+                raise HTTPException(
+                    status_code=404,
+                    detail="This recording's file is no longer available.",
+                )
 
         if not full_path.exists() or not full_path.is_file():
             raise HTTPException(status_code=404, detail="Recording file not found")
