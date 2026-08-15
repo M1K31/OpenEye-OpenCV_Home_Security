@@ -64,12 +64,22 @@ def default_data_root(app_root: Path = APP_ROOT) -> Path:
     if override:
         return Path(os.path.normpath(os.path.expanduser(override)))
 
-    # Containers get an explicit mount rather than a home-directory guess.
-    if os.path.exists("/.dockerenv") and os.path.isdir("/data"):
-        return Path("/data")
-
     if is_source_checkout(app_root):
         return app_root
+
+    # Containers keep their data beside the code, because that is where the
+    # volumes are mounted. The shipped compose file mounts /app/data,
+    # /app/recordings and /app/faces, so the application directory is not
+    # ephemeral there the way it is for a desktop install — the mounts are what
+    # make the data survive, not the location.
+    #
+    # Falling through to the platform default here was a real regression: it
+    # resolved to a home directory no volume covers, so every database write,
+    # recording and face landed in the container's writable layer and vanished
+    # on the next restart, silently. /data is honoured first for anyone using
+    # that convention, and OPENEYE_DATA_ROOT above overrides either.
+    if os.path.exists("/.dockerenv") or os.getenv("OPENEYE_IN_CONTAINER"):
+        return Path("/data") if os.path.isdir("/data") else app_root
 
     home = Path.home()
     if sys.platform == "darwin":

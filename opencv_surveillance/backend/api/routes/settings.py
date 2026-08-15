@@ -427,20 +427,28 @@ async def update_storage_paths(
             "snapshots_dir": "/mnt/storage/snapshots"
         }
     """
-    from backend.core.paths import paths, APP_ROOT, resolve_under_data_root
+    from backend.core.paths import (
+        paths, APP_ROOT, DATA_ROOT, resolve_under_data_root,
+    )
     from backend.utils.migrate_media import migrate_files
 
-    # Storage inside the application directory is exactly the configuration this
-    # release exists to undo. That directory holds shipped code and is replaced
-    # wholesale on upgrade — and once the application ships as a bundle it is not
-    # reliably writable at all — so anything stored there is lost the next time
-    # the user updates, silently and completely.
+    # Storage inside the application directory is the configuration this release
+    # exists to undo: that directory holds shipped code, is replaced wholesale on
+    # upgrade, and inside a bundle is not reliably writable at all.
+    #
+    # Except where the two roots are deliberately the same — a source checkout,
+    # and a container, where the compose file mounts volumes over /app/data and
+    # its siblings so those paths are backed by the host rather than the image.
+    # There, "inside the application directory" is the correct answer, and
+    # refusing it would reject the shipped Docker layout outright.
+    guard_app_dir = DATA_ROOT != APP_ROOT
+
     for field_name, value in (
         ("recordings_dir", paths_update.recordings_dir),
         ("snapshots_dir", paths_update.snapshots_dir),
         ("faces_dir", paths_update.faces_dir),
     ):
-        if not value:
+        if not value or not guard_app_dir:
             continue
         candidate = resolve_under_data_root(value)
         if candidate == APP_ROOT or APP_ROOT in candidate.parents:

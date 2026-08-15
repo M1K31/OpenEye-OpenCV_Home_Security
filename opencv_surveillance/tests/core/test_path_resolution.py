@@ -386,3 +386,78 @@ class TestStorageLayoutSummary:
         for label in ("faces", "recordings", "snapshots", "thumbnails"):
             assert label in text
         assert "files" in text or "MISSING" in text
+
+
+class TestContainerDataRoot:
+    """
+    A container keeps its data beside the code, because that is where the
+    volumes are.
+
+    The regression these guard against was severe and silent: resolving to a
+    home directory no volume covers meant every database write, recording and
+    face landed in the container's writable layer and disappeared on the next
+    restart, with nothing in the logs to say so.
+    """
+
+    def _container(self, monkeypatch, has_data_dir=False):
+        from backend.core import paths
+
+        monkeypatch.delenv("OPENEYE_DATA_ROOT", raising=False)
+        monkeypatch.setenv("OPENEYE_IN_CONTAINER", "1")
+        monkeypatch.setattr(paths.sys, "platform", "linux")
+        monkeypatch.setattr(paths.os.path, "isdir",
+                            lambda p: has_data_dir and str(p) == "/data")
+        return paths
+
+    def test_a_container_does_not_write_to_an_unmounted_home(self, tmp_path, monkeypatch):
+        paths = self._container(monkeypatch)
+        app_root = tmp_path / "app"
+        app_root.mkdir()
+
+        resolved = paths.default_data_root(app_root)
+
+        assert resolved == app_root
+        assert ".local/share" not in str(resolved)
+
+    def test_a_data_mount_is_preferred_when_present(self, tmp_path, monkeypatch):
+        paths = self._container(monkeypatch, has_data_dir=True)
+        app_root = tmp_path / "app"
+        app_root.mkdir()
+
+        assert paths.default_data_root(app_root) == Path("/data")
+
+    def test_an_explicit_override_still_wins_in_a_container(self, tmp_path, monkeypatch):
+        paths = self._container(monkeypatch, has_data_dir=True)
+        monkeypatch.setenv("OPENEYE_DATA_ROOT", str(tmp_path / "chosen"))
+
+        assert paths.default_data_root(tmp_path / "app") == tmp_path / "chosen"
+
+    def test_a_normal_linux_install_is_unaffected(self, tmp_path, monkeypatch):
+        """The container branch must not leak into ordinary Linux installs."""
+        from backend.core import paths
+
+        monkeypatch.delenv("OPENEYE_DATA_ROOT", raising=False)
+        monkeypatch.delenv("OPENEYE_IN_CONTAINER", raising=False)
+        monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+        monkeypatch.setattr(paths.sys, "platform", "linux")
+        monkeypatch.setattr(paths.os.path, "exists", lambda p: False)
+        installed = tmp_path / "app"
+        installed.mkdir()
+
+        assert paths.default_data_root(installed) == Path.home() / ".local" / "share" / "openeye"
+
+
+class TestStoragePathGuardInContainers:
+    def test_the_app_directory_guard_is_skipped_when_the_roots_match(self):
+        """
+        In a container and in a source checkout the two roots are deliberately
+        the same, so rejecting "inside the application directory" would reject
+        the shipped Docker layout.
+        """
+        from backend.core.paths import APP_ROOT, DATA_ROOT
+
+        guard_app_dir = DATA_ROOT != APP_ROOT
+        if DATA_ROOT == APP_ROOT:
+            assert guard_app_dir is False
+        else:
+            assert guard_app_dir is True

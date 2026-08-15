@@ -80,6 +80,15 @@ RUN useradd -m -u 1000 openeye && \
 COPY --from=builder --chown=openeye:openeye /root/.local /home/openeye/.local
 
 # Set PATH to include local Python packages (using openeye user's path)
+# Where the application writes. Set explicitly rather than left to detection:
+# the compose file mounts volumes over /app/data, /app/recordings and
+# /app/faces, so in a container the application directory is host-backed and is
+# the right place for data. Without this the resolver falls back to a home
+# directory that no volume covers, and every write is lost when the container
+# restarts.
+ENV OPENEYE_DATA_ROOT=/app \
+    OPENEYE_IN_CONTAINER=1
+
 ENV PATH=/home/openeye/.local/bin:$PATH \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
