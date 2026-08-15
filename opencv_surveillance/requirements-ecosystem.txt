@@ -1,0 +1,23 @@
+# OpenEye — appEcosystem integration (optional)
+#
+#     pip install -r requirements-ecosystem.txt
+#
+# Install this alongside requirements.txt to let OpenEye register with an
+# ecosystem registry, publish events, and answer peer requests. Without it
+# OpenEye runs exactly as before: the ecosystem routes report the integration as
+# unavailable rather than failing, so this is additive and safe to skip.
+#
+# Distribution names differ from import names — appecosystem-client provides
+# ecosystem_client, appecosystem-auth provides ecosystem_auth, and
+# appecosystem-ai provides ecosystem_ai. Searching PyPI for the import name
+# finds nothing, which is worth knowing before concluding they are unpublished.
+#
+# The `appecosystem` umbrella distribution is deliberately NOT listed. That
+# package is the registry service and its CLI — the thing OpenEye talks *to*,
+# not a library it consumes — and it requires Python >= 3.10, which would rule
+# out OpenEye's current 3.9 runtime for no benefit. The three libraries below
+# each support >= 3.9.
+
+appecosystem-client>=0.3.1   # service registration, discovery, event publishing
+appecosystem-auth>=0.4.0     # peer authentication, shared identity
+appecosystem-ai>=0.1.0       # AI provider bridge used by the ecosystem AI routes
