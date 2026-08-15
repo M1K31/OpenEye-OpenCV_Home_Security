@@ -263,6 +263,25 @@ class Camera(Base):
     face_detection_scale = Column(String, default="auto")  # "auto", "none", or float like "0.5" (manual scale factor)
     min_face_size_pixels = Column(Integer, default=20)  # Minimum face size to detect (pixels, after scaling)
 
+    # --- Capture policy (v3.12) ---------------------------------------------
+    # These govern what a recognised face *leaves behind*, never whether it is
+    # recognised or whether it triggers automation. Recognition and the user's
+    # rules run at full rate regardless of anything set here.
+    #
+    # "system_default" applies the capture policy: a face must persist across
+    # several passes before its first likeness is kept, an enrolled person is
+    # refreshed once a day per camera, and a stranger already in a well-populated
+    # cluster contributes nothing further. "all_faces" keeps every one, which is
+    # the older behaviour and the reason installs accumulated tens of thousands
+    # of near-duplicate crops.
+    face_capture_mode = Column(String, default="system_default")
+
+    # Recognition is the most expensive work per frame; motion detection is not.
+    # With this on, an empty room costs almost nothing. The window is sticky, so
+    # a person standing still at a door is still identified.
+    recognition_requires_motion = Column(Boolean, default=True)
+    recognition_motion_window_seconds = Column(Integer, default=30)
+
     # Motion detection settings
     motion_detection_enabled = Column(
         Boolean, default=False

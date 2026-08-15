@@ -414,6 +414,26 @@ async def startup_event():
                     conn.execute(text("ALTER TABLE cameras ADD COLUMN audio_device TEXT"))
                     conn.commit()
                 logger.info("✅ Added audio_device column")
+
+            # Capture policy (v3.12). These control what a recognised face
+            # leaves behind — never whether it is recognised, and never whether
+            # it triggers automation. Defaults match the shipped policy, so an
+            # upgraded install starts behaving economically without any action.
+            capture_columns = (
+                ("face_capture_mode", "TEXT DEFAULT 'system_default'"),
+                ("recognition_requires_motion", "BOOLEAN DEFAULT 1"),
+                ("recognition_motion_window_seconds", "INTEGER DEFAULT 30"),
+            )
+            for column_name, definition in capture_columns:
+                if column_name in columns:
+                    continue
+                logger.info(f"Adding {column_name} column to cameras table...")
+                with engine.connect() as conn:
+                    conn.execute(text(
+                        f"ALTER TABLE cameras ADD COLUMN {column_name} {definition}"
+                    ))
+                    conn.commit()
+                logger.info(f"✅ Added {column_name} column")
     except Exception as e:
         logger.warning(f"Schema migration check failed (non-critical): {e}")
 

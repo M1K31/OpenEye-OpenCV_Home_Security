@@ -37,7 +37,9 @@ class FaceDetector:
         scale_mode: str = "auto",
         upsample_times: int = 1,
         min_face_size: int = 20,
-        detection_cooldown: float = 2.0
+        detection_cooldown: float = 2.0,
+        requires_motion: bool = True,
+        motion_sticky_seconds: float = 30.0
     ):
         """
         Initialize face detector
@@ -71,6 +73,20 @@ class FaceDetector:
         self.detections_buffer = []  # Store recent detections
         self.max_buffer_size = 10
 
+        # Recognition is by far the most expensive thing this process does, and
+        # it was running on a timer alone — an empty room was fully detected,
+        # encoded and matched every couple of seconds, around the clock. Motion
+        # detection costs a fraction of that, so it decides when recognition is
+        # worth doing at all.
+        #
+        # The window is sticky rather than instantaneous on purpose: someone
+        # standing still at a door stops generating motion while very much still
+        # being someone the access rules need to identify.
+        self.requires_motion = requires_motion
+        self.motion_sticky_seconds = max(0.0, motion_sticky_seconds)
+        self._last_motion_time = None
+        self._skipped_since_motion = 0
+
         logger.info(
             f"FaceDetector initialized (enabled={enabled}, scale={scale_mode}, "
             f"upsample={upsample_times}, min_size={min_face_size}px, cooldown={detection_cooldown}s)"
@@ -97,6 +113,9 @@ class FaceDetector:
             logger.debug("Face recognition library not available")
             return False
 
+        if not self._within_motion_window():
+            return False
+
         if self.last_detection_time is None:
             return True
 
@@ -104,6 +123,47 @@ class FaceDetector:
             datetime.now() -
             self.last_detection_time).total_seconds()
         return time_since_last >= self.detection_cooldown
+
+    def note_motion(self, motion_detected: bool):
+        """
+        Record that something moved, whether or not recognition runs.
+
+        Called on every frame, before the decision to recognise. Motion has to
+        be tracked continuously — if it were only recorded on frames that
+        already passed the cooldown, the window would be sampled at the very
+        rate it is supposed to gate.
+        """
+        if motion_detected:
+            self._last_motion_time = datetime.now()
+            if self._skipped_since_motion:
+                logger.debug("Resuming recognition after %s skipped frame(s)",
+                             self._skipped_since_motion)
+                self._skipped_since_motion = 0
+
+    def _within_motion_window(self) -> bool:
+        """Whether anything has moved recently enough to be worth looking at."""
+        if not self.requires_motion:
+            return True
+
+        if self._last_motion_time is None:
+            self._skipped_since_motion += 1
+            return False
+
+        idle = (datetime.now() - self._last_motion_time).total_seconds()
+        if idle <= self.motion_sticky_seconds:
+            return True
+
+        self._skipped_since_motion += 1
+        # Logged so a camera that never recognises anything is diagnosable —
+        # a motion configuration that excludes everything would otherwise
+        # silently disable face recognition on that camera.
+        if self._skipped_since_motion % 500 == 1:
+            logger.debug(
+                "Skipping recognition: no motion for %.0fs (%s frames skipped). "
+                "Disable recognition_requires_motion for this camera to run it "
+                "continuously.", idle, self._skipped_since_motion,
+            )
+        return False
 
     def process_frame(
         self, frame: np.ndarray, motion_detected: bool = False
@@ -118,6 +178,8 @@ class FaceDetector:
         Returns:
             Tuple of (annotated_frame, list of detected faces)
         """
+        self.note_motion(motion_detected)
+
         if not self.should_process_frame():
             return frame, []
 

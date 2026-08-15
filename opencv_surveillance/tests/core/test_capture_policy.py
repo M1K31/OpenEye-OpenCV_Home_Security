@@ -252,3 +252,74 @@ class TestHousekeeping:
                             CAMERA, now=i * 100)
 
         assert len(policy._tracks) < 10
+
+
+# ------------------------------------------------------------- motion gate
+
+class TestMotionGate:
+    """
+    Recognition ran on a timer alone, so an empty room was detected, encoded and
+    matched every couple of seconds around the clock. This is the largest single
+    saving in the whole feature, and also the one with the most obvious way to
+    get it wrong — gate too tightly and a person standing still stops being
+    identified, which would break access control silently.
+    """
+
+    def _detector(self, **kwargs):
+        from datetime import datetime, timedelta
+        from backend.core.face_detection import FaceDetector
+
+        detector = FaceDetector.__new__(FaceDetector)
+        detector.enabled = True
+        detector.last_detection_time = None
+        detector.requires_motion = kwargs.get("requires_motion", True)
+        detector.motion_sticky_seconds = kwargs.get("motion_sticky_seconds", 30.0)
+        detector._last_motion_time = None
+        detector._skipped_since_motion = 0
+        detector.face_manager = type("M", (), {"is_available": lambda self: True})()
+        return detector, datetime, timedelta
+
+    def test_no_motion_means_no_recognition(self):
+        detector, _dt, _td = self._detector()
+        assert detector.should_process_frame() is False
+
+    def test_motion_enables_recognition(self):
+        detector, _dt, _td = self._detector()
+        detector.note_motion(True)
+        assert detector.should_process_frame() is True
+
+    def test_a_stationary_person_is_still_recognised(self):
+        """
+        The important one. Someone waiting at a door stops generating motion but
+        is exactly who the access rules need identified.
+        """
+        detector, datetime, timedelta = self._detector(motion_sticky_seconds=30)
+        detector.note_motion(True)
+        detector._last_motion_time = datetime.now() - timedelta(seconds=20)
+
+        assert detector.should_process_frame() is True
+
+    def test_recognition_stops_once_the_room_has_been_still(self):
+        detector, datetime, timedelta = self._detector(motion_sticky_seconds=30)
+        detector.note_motion(True)
+        detector._last_motion_time = datetime.now() - timedelta(seconds=45)
+
+        assert detector.should_process_frame() is False
+
+    def test_the_gate_can_be_turned_off_per_camera(self):
+        """A camera whose motion detection is unreliable must still recognise."""
+        detector, _dt, _td = self._detector(requires_motion=False)
+        assert detector.should_process_frame() is True
+
+    def test_motion_is_recorded_even_when_recognition_is_skipped(self):
+        """
+        Motion has to be tracked on every frame. Recording it only on frames
+        that already passed the cooldown would sample the window at the very
+        rate it is meant to gate.
+        """
+        detector, _dt, _td = self._detector()
+        detector.note_motion(False)
+        assert detector._last_motion_time is None
+
+        detector.note_motion(True)
+        assert detector._last_motion_time is not None

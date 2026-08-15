@@ -202,7 +202,14 @@ class Camera(ABC):
             scale_mode=settings.get("face_detection_scale", "auto"),  # "auto", "none", or "0.5"
             upsample_times=settings.get("face_detection_upsample", 1),  # 0, 1, or 2
             min_face_size=settings.get("min_face_size_pixels", 20),  # Minimum face size in pixels
-            detection_cooldown=2.0  # Seconds between detections
+            detection_cooldown=2.0,  # Seconds between detections
+            # Only look for faces when something has moved recently. Recognition
+            # is the most expensive work this process does and an empty room
+            # needs none of it. Sticky, so a stationary person at a door is still
+            # identified.
+            requires_motion=settings.get("recognition_requires_motion", True),
+            motion_sticky_seconds=float(
+                settings.get("recognition_motion_window_seconds", 30)),
         )
 
         # Store snapshots path for motion detection
@@ -1598,6 +1605,21 @@ class CameraManager:
                         "codec": db_camera.codec,
                         # Recording settings
                         "post_motion_cooldown": db_camera.post_motion_cooldown,
+                        # Capture policy. getattr with a default so a database
+                        # that predates these columns still starts — the inline
+                        # schema check adds them, but settings are read on paths
+                        # that can run before it.
+                        "face_capture_mode": getattr(
+                            db_camera, "face_capture_mode", None) or "system_default",
+                        "recognition_requires_motion": bool(getattr(
+                            db_camera, "recognition_requires_motion", True)),
+                        "recognition_motion_window_seconds": int(getattr(
+                            db_camera, "recognition_motion_window_seconds", None) or 30),
+                        # System-wide capture tunables.
+                        "capture_required_passes": int(
+                            system_settings.get("capture_required_passes", 3)),
+                        "capture_cluster_maturity": int(
+                            system_settings.get("capture_cluster_maturity", 25)),
                         # System settings (paths, max duration, display mode)
                         "recordings_path": system_settings.get(
                             "recordings_path", "recordings"
