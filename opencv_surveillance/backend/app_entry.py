@@ -16,10 +16,14 @@ launcher, which is the binary carrying the application's code identity, so
 anything heavy or failure-prone belongs behind it rather than in it.
 """
 
+import json
 import logging
 import os
 import socket
 import sys
+import threading
+import time
+import urllib.request
 from pathlib import Path
 
 DEFAULT_PORT = 8200
@@ -96,6 +100,70 @@ def publish_port(port: int) -> None:
         os.environ["ECOSYSTEM_SERVICE_PORT"] = str(port)
 
 
+def write_runtime_state(data_root: Path, port: int) -> Path:
+    """
+    Record where the application actually ended up.
+
+    The port is not always the one that was asked for — if something already
+    holds it, the server moves to the next free one rather than refusing to
+    start. That is the right behaviour for a desktop app, but it leaves the user
+    with a bookmark pointing at nothing and no way to find out where the app
+    went. Writing it down makes the answer discoverable to the user, to the
+    health-watch script, and to anything else that needs to find this instance.
+    """
+    state = {
+        "url": f"http://localhost:{port}",
+        "port": port,
+        "pid": os.getpid(),
+        "started_at": time.time(),
+    }
+    path = data_root / "runtime.json"
+    try:
+        path.write_text(json.dumps(state, indent=2))
+    except OSError as e:
+        logging.getLogger("openeye.launcher").warning(
+            "Could not record runtime state: %s", e)
+    return path
+
+
+def _wait_until_serving(port: int, timeout: float = 60.0) -> bool:
+    deadline = time.time() + timeout
+    url = f"http://127.0.0.1:{port}/api/health"
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=2) as response:
+                if response.status == 200:
+                    return True
+        except Exception:
+            time.sleep(0.5)
+    return False
+
+
+def open_ui_when_ready(port: int) -> None:
+    """
+    Show the user their application once it is actually serving.
+
+    A bundle launched from Finder has no terminal and no obvious next step, so
+    starting a web server and saying nothing looks exactly like failing to
+    start — especially when the port has moved and the user's bookmark now
+    points somewhere dead.
+
+    Waits for health rather than opening immediately, because a browser opened
+    against a server still importing OpenCV shows a connection error and teaches
+    the user that the app is broken.
+    """
+    def _run():
+        if _wait_until_serving(port):
+            import webbrowser
+
+            webbrowser.open(f"http://localhost:{port}")
+        else:
+            logging.getLogger("openeye.launcher").error(
+                "Server did not become healthy; not opening the interface.")
+
+    threading.Thread(target=_run, name="open-ui", daemon=True).start()
+
+
 def main() -> int:
     data_root = _data_root()
     log_path = configure_logging(data_root)
@@ -108,6 +176,14 @@ def main() -> int:
     logger.info("  data root: %s", data_root)
     logger.info("  log file : %s", log_path)
     logger.info("  port     : %s", port)
+    logger.info("  open     : http://localhost:%s", port)
+
+    write_runtime_state(data_root, port)
+
+    # Only when launched as an application. Started from a terminal or a service
+    # manager, a browser appearing unbidden is an intrusion, not a convenience.
+    if os.environ.get("OPENEYE_LAUNCHED_BY_BUNDLE") == "1":
+        open_ui_when_ready(port)
 
     import uvicorn
 

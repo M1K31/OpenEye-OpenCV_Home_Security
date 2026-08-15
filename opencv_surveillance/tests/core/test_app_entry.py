@@ -87,3 +87,68 @@ class TestLogging:
         app_entry.configure_logging(tmp_path)
 
         assert (log_dir / "openeye-app.log.1").exists()
+
+
+class TestRuntimeState:
+    """
+    Where the application ended up has to be discoverable.
+
+    The port moves when something already holds the preferred one — correct for
+    a desktop app, but it left a user staring at a bookmark that pointed at a
+    different, older instance while the real one ran elsewhere. That actually
+    happened: two instances, the browser on the wrong one, and the camera
+    apparently broken when it was working perfectly.
+    """
+
+    def test_it_records_the_url_and_port(self, tmp_path):
+        path = app_entry.write_runtime_state(tmp_path, 8207)
+
+        import json
+        state = json.loads(path.read_text())
+        assert state["port"] == 8207
+        assert state["url"] == "http://localhost:8207"
+        assert state["pid"] == os.getpid()
+
+    def test_it_lands_in_the_data_root(self, tmp_path):
+        assert app_entry.write_runtime_state(tmp_path, 8200) == tmp_path / "runtime.json"
+
+    def test_an_unwritable_data_root_does_not_stop_startup(self, tmp_path):
+        """Recording where we are is useful; failing to is not worth refusing to run."""
+        unwritable = tmp_path / "missing" / "deeper"
+        app_entry.write_runtime_state(unwritable, 8200)  # must not raise
+
+
+class TestOpeningTheInterface:
+    def test_the_browser_opens_only_for_an_application_launch(self, monkeypatch):
+        """
+        From a terminal or a service manager a browser appearing unbidden is an
+        intrusion, so the flag the bundle sets is what gates it.
+        """
+        opened = []
+        monkeypatch.setattr(app_entry, "_wait_until_serving", lambda port, timeout=60.0: True)
+
+        import webbrowser
+        monkeypatch.setattr(webbrowser, "open", lambda url: opened.append(url))
+
+        app_entry.open_ui_when_ready(8207)
+        for _ in range(50):
+            if opened:
+                break
+            import time as _t
+            _t.sleep(0.02)
+
+        assert opened == ["http://localhost:8207"]
+
+    def test_it_does_not_open_a_browser_at_a_server_that_never_came_up(self, monkeypatch):
+        """A connection error teaches the user the app is broken."""
+        opened = []
+        monkeypatch.setattr(app_entry, "_wait_until_serving", lambda port, timeout=60.0: False)
+
+        import webbrowser
+        monkeypatch.setattr(webbrowser, "open", lambda url: opened.append(url))
+
+        app_entry.open_ui_when_ready(8207)
+        import time as _t
+        _t.sleep(0.2)
+
+        assert opened == []
