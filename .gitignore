@@ -182,3 +182,11 @@ harness_bridge.py
 # fresh on every install; the checkout must not carry one machine's paths.
 /opencv_surveillance/start.sh
 /opencv_surveillance/stop.sh
+
+# Build inputs cached locally by scripts/build-macos-app.sh — currently a 15 MB
+# relocatable CPython tarball. It is a build input, not source: a `git add -A`
+# would otherwise commit an interpreter distribution to the repository.
+/.build-cache/
+
+# A built application bundle, wherever it is produced.
+*.app/
