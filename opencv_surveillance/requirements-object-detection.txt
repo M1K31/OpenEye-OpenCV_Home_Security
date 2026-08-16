@@ -1,0 +1,33 @@
+# OpenEye — object detection (optional)
+#
+#     pip install -r requirements-object-detection.txt
+#
+# Adds YOLO-based detection of vehicles, animals, packages and people alongside
+# face recognition. Install it only if you intend to switch object detection on:
+# `ENABLE_OBJECT_DETECTION` defaults to false, and
+# `backend/core/object_detection.py` guards its import, so OpenEye runs normally
+# without any of this and reports the feature as unavailable rather than failing.
+#
+# Why it is separate. On the Linux image these three packages pulled 3.3 GB of
+# wheels, roughly 2.1 GB of it the NVIDIA CUDA stack that torch depends on —
+# cuBLAS 543 MB, cuDNN 445 MB, cuSOLVER 224 MB, cuSPARSELt 221 MB, cuFFT 214 MB,
+# NCCL 206 MB, triton 185 MB — on an arm64 image that will never have an NVIDIA
+# GPU. The image was 10.5 GB. On macOS the same stack is roughly 472 MB of the
+# bundle, about a third of it.
+#
+# polars arrives through ultralytics (8.4.x replaced pandas with it) and is not
+# used by OpenEye directly. It leaves with this file.
+#
+# On a machine with no NVIDIA GPU — every Mac, and most small Linux servers —
+# installing the CPU build of torch instead avoids the CUDA packages entirely:
+#
+#     pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+#     pip install ultralytics
+#
+# Model weights are a separate, later download: ultralytics fetches the .pt file
+# on first use. Point it at the data root rather than letting it write beside the
+# code, which inside an application bundle is replaced on every update.
+
+ultralytics>=8.0.0    # YOLOv8/v9/v10
+torch>=2.0.0          # required by ultralytics
+torchvision>=0.15.0   # vision models and transforms

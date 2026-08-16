@@ -241,6 +241,10 @@ install_python_deps() {
     # Install requirements. If a native build (e.g. av without ffmpeg) fails,
     # retry without the WebRTC stack so the rest of the app still installs —
     # the backend degrades gracefully (WEBRTC_AVAILABLE=False).
+    # The base set only. Object detection and the ecosystem libraries are
+    # separate files, because most installations never enable either and object
+    # detection alone pulls several gigabytes (torch and, on Linux, the CUDA
+    # stack it depends on). Both are reported to the user at the end.
     log_info "Installing required packages..."
     if ! pip install -r requirements.txt; then
         log_warn "Full install failed (likely the WebRTC/av native build)."
@@ -698,6 +702,16 @@ print_completion() {
     echo "  - Setup Guide: docs/setup_guide.md"
     echo "  - API Reference: docs/api_reference.md"
     echo ""
+    # Both optional sets are named here rather than left to be discovered. The
+    # base install deliberately omits them, and someone who wanted object
+    # detection would otherwise conclude it was broken rather than not installed.
+    echo ""
+    echo "Optional add-ons (not installed):"
+    echo "  Object detection (YOLO — several GB, needs ENABLE_OBJECT_DETECTION=true):"
+    echo "      source \"$VENV_DIR/bin/activate\" && pip install -r requirements-object-detection.txt"
+    echo "  appEcosystem integration (registry, events, peer auth):"
+    echo "      source \"$VENV_DIR/bin/activate\" && pip install -r requirements-ecosystem.txt"
+
 }
 
 # Main installation flow
