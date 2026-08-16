@@ -165,6 +165,31 @@ else
         run "rm -rf \"$BUNDLE_DATA_ROOT\""
         echo "  ✓ bundled application data removed ($BUNDLE_DATA_ROOT)"
     fi
+
+    # State macOS keeps for an application *outside* its bundle and data root.
+    # None of it is large, but it is what makes a "clean" reinstall not clean:
+    # ~/Library/Logs/OpenEye survived from an install three weeks dead, and the
+    # CrashReporter entries keep an app's crash history alive across reinstalls.
+    if [ "$(uname -s)" = "Darwin" ]; then
+        for leftover in \
+            "$HOME/Library/Logs/OpenEye" \
+            "$HOME/Library/Preferences/$LABEL.plist" \
+            "$HOME/Library/Caches/$LABEL" \
+            "$HOME/Library/Saved Application State/$LABEL.savedState" \
+            "$HOME/Library/HTTPStorages/$LABEL" ; do
+            [ -e "$leftover" ] && run "rm -rf \"$leftover\""
+        done
+        run "rm -f \"$HOME/Library/Application Support/CrashReporter\"/*[Oo]pen[Ee]ye*.plist 2>/dev/null || true"
+        echo "  ✓ macOS application state removed (logs, caches, crash history)"
+
+        # The camera and microphone grants belong to the bundle identity, not to
+        # the files just deleted, so they outlive an uninstall. Leaving them means
+        # a reinstall silently inherits an approval the user never granted it,
+        # which is indistinguishable from a permission that is working.
+        run "tccutil reset Camera $LABEL >/dev/null 2>&1 || true"
+        run "tccutil reset Microphone $LABEL >/dev/null 2>&1 || true"
+        echo "  ✓ camera and microphone permissions reset"
+    fi
     echo "  ✓ database, .env, and media removed"
 fi
 
