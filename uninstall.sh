@@ -26,6 +26,20 @@ PORT="${OPENEYE_PORT:-8200}"
 DATA_ROOT="${OPENEYE_DATA_ROOT:-$HOME/.local/share/openeye}"
 APP_DIR="$DATA_ROOT/app"
 
+# Where a bundled installation keeps its data. This is NOT the same place as the
+# source install's DATA_ROOT above, and it is the larger of the two by far — the
+# database, galleries, recordings and snapshots all live here. Without it a
+# "full purge" left tens of gigabytes behind while reporting success, which is
+# both a surprise on a machine someone is trying to reclaim and a way for a
+# supposedly clean reinstall to inherit the previous install's state.
+case "$(uname -s)" in
+    Darwin) BUNDLE_DATA_ROOT="$HOME/Library/Application Support/OpenEye" ;;
+    *)      BUNDLE_DATA_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/openeye" ;;
+esac
+
+# The built application bundle, which is a build artifact rather than user data.
+BUNDLE_APP="$PROJECT_ROOT/dist"
+
 KEEP_DATA=false; DRY=false
 NONINTERACTIVE="${OPENEYE_NONINTERACTIVE:-${CI:-}}"
 for a in "$@"; do
@@ -105,6 +119,24 @@ else
     echo "  ✓ app snapshot removed ($APP_DIR)"
 fi
 run "rm -rf \"$OPENCV_DIR/frontend/dist\" \"$OPENCV_DIR/frontend/node_modules\""
+# The built .app is a build artifact rather than user data, so it goes in both
+# modes — keeping it after an uninstall would leave a bundle that still launches
+# and recreates state the user just asked to be rid of.
+#
+# Removed twice on purpose. Deleting a directory Finder has open races with
+# Finder writing .DS_Store back into it: the contents go, then the final rmdir
+# fails with "Directory not empty" over a file that did not exist when the
+# delete started. One retry settles it, and reporting success only after the
+# directory is actually gone keeps the summary honest.
+if [ -d "$BUNDLE_APP" ]; then
+    run "rm -rf \"$BUNDLE_APP\" 2>/dev/null || true"
+    run "rm -rf \"$BUNDLE_APP\" 2>/dev/null || true"
+    if $DRY || [ ! -d "$BUNDLE_APP" ]; then
+        echo "  ✓ built application bundle removed ($BUNDLE_APP)"
+    else
+        echo -e "${YELLOW}  ! $BUNDLE_APP could not be fully removed; delete it by hand${NC}"
+    fi
+fi
 run "find \"$OPENCV_DIR\" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true"
 run "rm -f \"$OPENCV_DIR/start.sh\" \"$OPENCV_DIR/stop.sh\""
 echo "  ✓ build + caches cleared"
@@ -123,6 +155,16 @@ else
     for d in recordings faces data; do
         run "rm -rf \"$DATA_ROOT/$d\""
     done
+    # The bundled installation's data root — the database, galleries, recordings
+    # and snapshots, and by far the largest thing OpenEye owns. Skipped when it
+    # is the same directory as DATA_ROOT, which is the case for a Linux source
+    # install. Without this a "full purge" reported success while leaving tens of
+    # gigabytes in place, and a supposedly clean reinstall inherited the previous
+    # installation's database.
+    if [ "$BUNDLE_DATA_ROOT" != "$DATA_ROOT" ] && [ -d "$BUNDLE_DATA_ROOT" ]; then
+        run "rm -rf \"$BUNDLE_DATA_ROOT\""
+        echo "  ✓ bundled application data removed ($BUNDLE_DATA_ROOT)"
+    fi
     echo "  ✓ database, .env, and media removed"
 fi
 
