@@ -25,7 +25,11 @@ const EventDetailModal = ({ event, onClose, onDelete }) => {
   if (!event) return null;
 
   const isVideo = !!event.recording_id;
-  const hasSnapshot = !!event.snapshot_path || event.hasSnapshot;
+  // Requires the path itself, not merely a flag saying one should exist.
+  // `event.hasSnapshot` alone sent the viewer down the image branch with nothing
+  // to point it at, which is how a missing snapshot ended up looking like a
+  // broken one instead of showing the "no media" state that already exists.
+  const hasSnapshot = !!event.snapshot_path;
   const eventTime = new Date(event.timestamp).toLocaleString();
 
   const handleSave = async () => {
@@ -211,9 +215,16 @@ const EventDetailModal = ({ event, onClose, onDelete }) => {
               </div>
             ) : hasSnapshot ? (
               <img
-                src={event.snapshot_path
-                  ? (event.snapshot_path.startsWith('/') ? event.snapshot_path : `/${event.snapshot_path}`)
-                  : `/data/snapshots/${event.camera_id}/${event.id}.jpg`}
+                // Only ever the path the event actually carries. The previous
+                // fallback built `/data/snapshots/<camera>/<id>.jpg`, a layout
+                // that has never existed — snapshots are flat files named
+                // `face_<camera>_<timestamp>.jpg` — so every event without a
+                // stored path requested a URL guaranteed to 404 and then showed
+                // the error placeholder, which reads as a broken or half-drawn
+                // image rather than as "there is no snapshot for this event".
+                src={event.snapshot_path.startsWith('/')
+                  ? event.snapshot_path
+                  : `/${event.snapshot_path}`}
                 alt="Event snapshot"
                 className="event-snapshot"
                 onError={(e) => {
