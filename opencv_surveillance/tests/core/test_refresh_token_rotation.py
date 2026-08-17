@@ -21,7 +21,7 @@ def _make_user(db, username="rotationuser"):
         UserCreate(
             username=username,
             email=f"{username}@example.com",
-            password="testpassword123",
+            password="Testpassword123!",
         ),
     )
 

@@ -6,11 +6,11 @@ First-run setup endpoints for admin account creation.
 """
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from backend.database.session import get_db
 from backend.database.models import User
 from backend.core.auth import hash_password
-import re
+from backend.core.password_policy import validate_password
 
 router = APIRouter(tags=["setup"])
 
@@ -20,41 +20,25 @@ class SetupInitializeRequest(BaseModel):
 
     username: str = Field(..., min_length=3, max_length=50)
     email: EmailStr
-    password: str = Field(
-        ..., min_length=8
-    )  # No character limit, but we validate bytes
+    password: str = Field(...)
 
-    @validator("password")
-    def validate_password_strength(cls, v):
-        """Validate password meets security requirements."""
-        errors = []
+    @field_validator("password")
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        """
+        Validate against the configured policy.
 
-        if len(v) < 8:
-            errors.append("Password must be at least 8 characters long")
+        These rules used to be written out here as literals, which made this the
+        only endpoint enforcing them and left MIN_PASSWORD_LENGTH and the
+        REQUIRE_* settings inert. The rules themselves are unchanged; they now
+        come from one place, so tightening the configuration tightens every
+        password path rather than none of them.
 
-        # Note: We don't reject passwords > 72 bytes here.
-        # The hash_password() function will automatically truncate them.
-        # This provides better UX - passwords "just work"
-
-        if not re.search(r"[A-Z]", v):
-            errors.append(
-                "Password must contain at least one uppercase letter")
-
-        if not re.search(r"[a-z]", v):
-            errors.append(
-                "Password must contain at least one lowercase letter")
-
-        if not re.search(r"\d", v):
-            errors.append("Password must contain at least one number")
-
-        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', v):
-            errors.append(
-                "Password must contain at least one special character")
-
-        if errors:
-            raise ValueError(", ".join(errors))
-
-        return v
+        Long passwords are still accepted rather than rejected: hash_password()
+        truncates at bcrypt's 72-byte limit deliberately, for the sake of
+        passwords that "just work".
+        """
+        return validate_password(v)
 
 
 @router.get("/status")

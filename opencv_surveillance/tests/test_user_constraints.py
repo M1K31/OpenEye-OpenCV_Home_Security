@@ -4,12 +4,12 @@ from backend.api.schemas import user as user_schema
 
 def test_duplicate_username(db_session, patch_hashing_if_needed):
     # create first user
-    u1 = user_schema.UserCreate(username="dupuser", email="dup1@example.com", password="pw")
+    u1 = user_schema.UserCreate(username="dupuser", email="dup1@example.com", password="Pwxxxx1!")
     created1 = crud.create_user(db=db_session, user=u1)
     assert created1.username == "dupuser"
 
     # attempt to create second user with same username
-    u2 = user_schema.UserCreate(username="dupuser", email="dup2@example.com", password="pw2")
+    u2 = user_schema.UserCreate(username="dupuser", email="dup2@example.com", password="Pw2xxxx!")
     try:
         crud.create_user(db=db_session, user=u2)
         # Depending on DB constraints, this may raise or commit; verify uniqueness by querying
@@ -22,11 +22,11 @@ def test_duplicate_username(db_session, patch_hashing_if_needed):
 
 
 def test_email_uniqueness(db_session, patch_hashing_if_needed):
-    u1 = user_schema.UserCreate(username="u1", email="same@example.com", password="pw")
+    u1 = user_schema.UserCreate(username="u1", email="same@example.com", password="Pwxxxx1!")
     created1 = crud.create_user(db=db_session, user=u1)
     assert created1.email == "same@example.com"
 
-    u2 = user_schema.UserCreate(username="u2", email="same@example.com", password="pw2")
+    u2 = user_schema.UserCreate(username="u2", email="same@example.com", password="Pw2xxxx!")
     try:
         crud.create_user(db=db_session, user=u2)
         # verify only one user with that email exists

@@ -321,7 +321,7 @@ class TestNotificationProvider:
             "smtp_host": "smtp.gmail.com",
             "smtp_port": 587,
             "username": "user@gmail.com",
-            "password": "secret123",
+            "password": "Secret123!",
         }
 
         # Mock encryption key

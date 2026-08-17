@@ -31,7 +31,7 @@ class TestPasswordHashing:
 
     def test_hash_password_normal(self):
         """Test hashing a normal password"""
-        password = "my_secure_password_123"
+        password = "My_secure_password_123"
         hashed = hash_password(password)
 
         assert hashed is not None
@@ -52,7 +52,7 @@ class TestPasswordHashing:
 
     def test_hash_password_unicode(self):
         """Test hashing a password with unicode characters"""
-        password = "pāsswörd_with_ūnicode_🔒"
+        password = "Pāsswörd_with_ūnicode_🔒1"
 
         hashed = hash_password(password)
 
@@ -70,7 +70,7 @@ class TestPasswordHashing:
 
     def test_hash_password_consistency(self):
         """Test that same password produces different hashes (salt)"""
-        password = "test_password"
+        password = "Test_password1"
 
         hash1 = hash_password(password)
         hash2 = hash_password(password)

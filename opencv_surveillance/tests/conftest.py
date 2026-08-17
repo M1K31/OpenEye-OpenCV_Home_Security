@@ -87,7 +87,7 @@ def test_user(db_session):
 
     user_data = user_schema.UserCreate(
         username="testuser",
-        password="testpass123",
+        password="Testpass123!",
         email="test@example.com"
     )
     user = crud.create_user(db=db_session, user=user_data)
@@ -186,7 +186,7 @@ def admin_user(db_session):
         db=db_session,
         user=user_schema.UserCreate(
             username="adminuser",
-            password="adminpass123",
+            password="Adminpass123!",
             email="admin@example.com",
         ),
     )
@@ -201,7 +201,7 @@ def admin_auth_headers(client, admin_user):
     """Authentication headers for an admin user."""
     response = client.post(
         "/api/auth/login-2fa",
-        json={"username": "adminuser", "password": "adminpass123"},
+        json={"username": "adminuser", "password": "Adminpass123!"},
     )
     assert response.status_code == 200, response.text
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
@@ -212,7 +212,7 @@ def auth_headers(client, test_user):
     """Generate authentication headers with valid JWT token"""
     response = client.post(
         "/api/auth/login-2fa",
-        json={"username": "testuser", "password": "testpass123"}
+        json={"username": "testuser", "password": "Testpass123!"}
     )
     assert response.status_code == 200
     token = response.json()["access_token"]

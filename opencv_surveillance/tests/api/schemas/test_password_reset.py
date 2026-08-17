@@ -8,6 +8,7 @@ Unit tests for password reset API schemas
 import pytest
 from pydantic import ValidationError
 
+from backend.core.password_policy import password_failures
 from backend.api.schemas.password_reset import (
     PasswordResetRequest,
     Check2FAStatusRequest,
@@ -24,12 +25,12 @@ class TestPasswordResetRequest:
         request = PasswordResetRequest(
             username="admin",
             totp_code="123456",
-            new_password="newpassword123",
+            new_password="Newpassword123!",
         )
 
         assert request.username == "admin"
         assert request.totp_code == "123456"
-        assert request.new_password == "newpassword123"
+        assert request.new_password == "Newpassword123!"
 
     def test_totp_code_must_be_numeric(self):
         """Test that TOTP code must be numeric"""
@@ -37,7 +38,7 @@ class TestPasswordResetRequest:
             PasswordResetRequest(
                 username="admin",
                 totp_code="ABC123",  # Contains non-numeric characters
-                new_password="newpassword123",
+                new_password="Newpassword123!",
             )
 
         errors = exc_info.value.errors()
@@ -51,7 +52,7 @@ class TestPasswordResetRequest:
             PasswordResetRequest(
                 username="admin",
                 totp_code="12-456",  # Contains dash
-                new_password="newpassword123",
+                new_password="Newpassword123!",
             )
 
         errors = exc_info.value.errors()
@@ -65,7 +66,7 @@ class TestPasswordResetRequest:
             PasswordResetRequest(
                 username="admin",
                 totp_code="12345",  # Only 5 digits
-                new_password="newpassword123",
+                new_password="Newpassword123!",
             )
 
         errors = exc_info.value.errors()
@@ -77,7 +78,7 @@ class TestPasswordResetRequest:
             PasswordResetRequest(
                 username="admin",
                 totp_code="1234567",  # 7 digits
-                new_password="newpassword123",
+                new_password="Newpassword123!",
             )
 
         errors = exc_info.value.errors()
@@ -89,7 +90,7 @@ class TestPasswordResetRequest:
         with pytest.raises(ValidationError) as exc_info:
             PasswordResetRequest(
                 totp_code="123456",
-                new_password="newpassword123",
+                new_password="Newpassword123!",
             )
 
         errors = exc_info.value.errors()
@@ -101,7 +102,7 @@ class TestPasswordResetRequest:
             PasswordResetRequest(
                 username="",  # Empty string
                 totp_code="123456",
-                new_password="newpassword123",
+                new_password="Newpassword123!",
             )
 
         errors = exc_info.value.errors()
@@ -118,34 +119,50 @@ class TestPasswordResetRequest:
         errors = exc_info.value.errors()
         assert any(error["loc"] == ("new_password",) for error in errors)
 
-    def test_new_password_min_length(self):
-        """Test new_password must have minimum length of 4"""
+    def test_short_password_is_rejected(self):
+        """A password under the configured minimum is refused."""
         with pytest.raises(ValidationError) as exc_info:
             PasswordResetRequest(
                 username="admin",
                 totp_code="123456",
-                new_password="abc",  # Only 3 characters
+                new_password="Ab1!",
             )
 
         errors = exc_info.value.errors()
         assert any(error["loc"] == ("new_password",) for error in errors)
 
-    def test_valid_minimum_password_length(self):
-        """Test that exactly 4 character password is valid"""
-        request = PasswordResetRequest(
-            username="admin",
-            totp_code="123456",
-            new_password="1234",  # Exactly 4 characters
-        )
+    def test_reset_enforces_the_same_policy_as_every_other_path(self):
+        """
+        The reason this file exists in its current form.
 
-        assert request.new_password == "1234"
+        This schema used to carry min_length=4 and no character rules, so
+        POST /auth/reset-password would set a four-character password that
+        POST /users/{id}/password refused at eight. The test that lived here
+        asserted "1234" was valid, which is how the gap survived: it was
+        written down as intended behaviour.
+
+        The floor now comes from password_policy, which reads it from
+        configuration, so tightening the configuration tightens this path too.
+        """
+        weak = "1234"
+        assert password_failures(weak), "test premise: this must violate the policy"
+
+        with pytest.raises(ValidationError):
+            PasswordResetRequest(
+                username="admin", totp_code="123456", new_password=weak)
+
+        ok = "Str0ng!Passw0rd"
+        assert not password_failures(ok)
+        request = PasswordResetRequest(
+            username="admin", totp_code="123456", new_password=ok)
+        assert request.new_password == ok
 
     def test_totp_code_all_zeros(self):
         """Test TOTP code with all zeros (valid numeric)"""
         request = PasswordResetRequest(
             username="admin",
             totp_code="000000",
-            new_password="newpassword",
+            new_password="Newpassword1!",
         )
 
         assert request.totp_code == "000000"

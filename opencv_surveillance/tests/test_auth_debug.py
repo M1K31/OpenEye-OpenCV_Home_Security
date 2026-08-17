@@ -25,7 +25,7 @@ def test_login_endpoint(client, test_user):
 
     response = client.post(
         "/api/auth/login-2fa",
-        json={"username": "testuser", "password": "testpass123"}
+        json={"username": "testuser", "password": "Testpass123!"}
     )
     print(f"Login response status: {response.status_code}")
     print(f"Login response body: {response.json()}")

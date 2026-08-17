@@ -50,7 +50,7 @@ class OpenEyeUser(HttpUser):
         # Login to get authentication token
         response = self.client.post(
             "/api/auth/login",
-            json={"username": "admin", "password": "admin"},
+            json={"username": "admin", "password": "Adminx1!"},
             name="/api/auth/login [LOGIN]"
         )
 
@@ -252,7 +252,7 @@ class HeavyUser(HttpUser):
         """Authenticate user"""
         response = self.client.post(
             "/api/auth/login",
-            json={"username": "admin", "password": "admin"}
+            json={"username": "admin", "password": "Adminx1!"}
         )
         if response.status_code == 200:
             self.token = response.json().get("access_token")
@@ -312,7 +312,7 @@ class ReadOnlyUser(HttpUser):
         """Authenticate user"""
         response = self.client.post(
             "/api/auth/login",
-            json={"username": "admin", "password": "admin"}
+            json={"username": "admin", "password": "Adminx1!"}
         )
         if response.status_code == 200:
             self.token = response.json().get("access_token")

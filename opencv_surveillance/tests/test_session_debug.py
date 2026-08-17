@@ -65,7 +65,7 @@ def test_login_session_trace(client, test_user, db_session):
     # Attempt login
     response = client.post(
         "/api/auth/login-2fa",
-        json={"username": "testuser", "password": "testpass123"}
+        json={"username": "testuser", "password": "Testpass123!"}
     )
 
     print(f"Response status: {response.status_code}")

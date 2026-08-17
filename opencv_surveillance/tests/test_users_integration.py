@@ -21,7 +21,7 @@ def test_create_user_route(db_session, patch_hashing_if_needed):
 
     client = TestClient(app)
 
-    payload = {"username": "intuser", "email": "int@example.com", "password": "secret"}
+    payload = {"username": "intuser", "email": "int@example.com", "password": "Secret1!"}
     resp = client.post("/api/users/", json=payload)
     assert resp.status_code in (200, 201), resp.text
     body = resp.json()

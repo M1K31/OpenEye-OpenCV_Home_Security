@@ -4,8 +4,10 @@
 User Management Schemas
 v3.11.1: Enhanced for multi-user ecosystem support
 """
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, field_validator
 from pydantic import ConfigDict
+
+from backend.core.password_policy import validate_password
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
@@ -150,7 +152,14 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     """Create new user"""
+    # Had no constraint at all, which made POST /users/ the weakest way into
+    # the system: any password, including an empty one.
     password: str
+
+    @field_validator("password")
+    @classmethod
+    def _check_password(cls, v: str) -> str:
+        return validate_password(v)
     role: UserRole = UserRole.viewer
     display_name: Optional[str] = None
     face_profile_name: Optional[str] = None  # Link to face recognition profile
@@ -174,7 +183,14 @@ class UserUpdate(BaseModel):
 class UserPasswordChange(BaseModel):
     """Change password request"""
     current_password: str
-    new_password: str = Field(..., min_length=8)
+    # min_length=8 here enforced the length but none of the character rules,
+    # so this path was weaker than /setup/admin and stronger than the reset.
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def _check_password(cls, v: str) -> str:
+        return validate_password(v)
 
 
 class UserRoleChange(BaseModel):

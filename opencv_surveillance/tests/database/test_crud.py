@@ -19,7 +19,7 @@ class TestUserCRUD:
     def test_get_user_by_username_exists(self, db_session: Session):
         """Test retrieving existing user by username"""
         # Create test user
-        user_data = UserCreate(username="testuser", email="test@example.com", password="testpass123")
+        user_data = UserCreate(username="testuser", email="test@example.com", password="Testpass123!")
         created_user = crud.create_user(db_session, user_data)
 
         # Retrieve user
@@ -37,7 +37,7 @@ class TestUserCRUD:
 
     def test_create_user(self, db_session: Session):
         """Test user creation"""
-        user_data = UserCreate(username="newuser", email="new@example.com", password="securepass")
+        user_data = UserCreate(username="newuser", email="new@example.com", password="Securepass1!")
         created_user = crud.create_user(db_session, user_data)
 
         assert created_user.id is not None
@@ -49,7 +49,7 @@ class TestUserCRUD:
 
     def test_get_user_by_id(self, db_session: Session):
         """Test retrieving user by ID"""
-        user_data = UserCreate(username="idtest", email="id@example.com", password="pass123")
+        user_data = UserCreate(username="idtest", email="id@example.com", password="Pass123!")
         created_user = crud.create_user(db_session, user_data)
 
         retrieved_user = crud.get_user(db_session, created_user.id)
@@ -446,7 +446,7 @@ class TestRefreshTokenCRUD:
     def test_create_refresh_token(self, db_session: Session):
         """Test creating refresh token"""
         # Create user first
-        user_data = UserCreate(username="tokenuser", email="token@example.com", password="pass123")
+        user_data = UserCreate(username="tokenuser", email="token@example.com", password="Pass123!")
         user = crud.create_user(db_session, user_data)
 
         # Create refresh token
@@ -468,7 +468,7 @@ class TestRefreshTokenCRUD:
     def test_get_refresh_token_exists(self, db_session: Session):
         """Test retrieving existing refresh token"""
         # Create user and token
-        user_data = UserCreate(username="gettoken", email="get@example.com", password="pass123")
+        user_data = UserCreate(username="gettoken", email="get@example.com", password="Pass123!")
         user = crud.create_user(db_session, user_data)
 
         token_string = "get_token_12345"
@@ -489,7 +489,7 @@ class TestRefreshTokenCRUD:
     def test_get_user_refresh_tokens(self, db_session: Session):
         """Test getting all tokens for a user"""
         # Create user
-        user_data = UserCreate(username="multitoken", email="multi@example.com", password="pass123")
+        user_data = UserCreate(username="multitoken", email="multi@example.com", password="Pass123!")
         user = crud.create_user(db_session, user_data)
 
         # Create multiple tokens for user
@@ -506,7 +506,7 @@ class TestRefreshTokenCRUD:
     def test_get_user_refresh_tokens_empty(self, db_session: Session):
         """Test getting tokens for user with no tokens"""
         # Create user without tokens
-        user_data = UserCreate(username="notokens", email="notokens@example.com", password="pass123")
+        user_data = UserCreate(username="notokens", email="notokens@example.com", password="Pass123!")
         user = crud.create_user(db_session, user_data)
 
         user_tokens = crud.get_user_refresh_tokens(db_session, user.id)
@@ -515,7 +515,7 @@ class TestRefreshTokenCRUD:
     def test_revoke_refresh_token_success(self, db_session: Session):
         """Test revoking refresh token"""
         # Create user and token
-        user_data = UserCreate(username="revoketoken", email="revoke@example.com", password="pass123")
+        user_data = UserCreate(username="revoketoken", email="revoke@example.com", password="Pass123!")
         user = crud.create_user(db_session, user_data)
 
         token_string = "revoke_token_12345"
@@ -537,7 +537,7 @@ class TestRefreshTokenCRUD:
     def test_revoke_all_user_tokens(self, db_session: Session):
         """Test revoking all tokens for a user"""
         # Create user with multiple tokens
-        user_data = UserCreate(username="revokeall", email="revokeall@example.com", password="pass123")
+        user_data = UserCreate(username="revokeall", email="revokeall@example.com", password="Pass123!")
         user = crud.create_user(db_session, user_data)
 
         for i in range(5):
@@ -555,7 +555,7 @@ class TestRefreshTokenCRUD:
     def test_revoke_all_user_tokens_no_tokens(self, db_session: Session):
         """Test revoking all tokens for user with no tokens"""
         # Create user without tokens
-        user_data = UserCreate(username="revokeempty", email="revokeempty@example.com", password="pass123")
+        user_data = UserCreate(username="revokeempty", email="revokeempty@example.com", password="Pass123!")
         user = crud.create_user(db_session, user_data)
 
         revoked_count = crud.revoke_all_user_tokens(db_session, user.id)
@@ -564,7 +564,7 @@ class TestRefreshTokenCRUD:
     def test_delete_expired_tokens(self, db_session: Session):
         """Test deleting expired tokens"""
         # Create user
-        user_data = UserCreate(username="expireduser", email="expired@example.com", password="pass123")
+        user_data = UserCreate(username="expireduser", email="expired@example.com", password="Pass123!")
         user = crud.create_user(db_session, user_data)
 
         # Create expired token (negative expiry)
