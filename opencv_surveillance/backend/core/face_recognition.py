@@ -82,6 +82,36 @@ def _encode_gallery_image(image):
     )
 
 
+# ---------------------------------------------------------------- gallery size
+#
+# Recognition compares every detected face against the whole gallery on every
+# frame, so per-frame cost is linear in the number of encodings held. Training
+# appends and never removed, which made that cost grow by roughly one encoding
+# per person per camera per day, without limit.
+#
+# Two mechanisms, because they answer different problems. Dedupe stops the
+# gallery growing for the ordinary case — the same person, the same doorway,
+# the same light — where another encoding teaches the recogniser nothing. The
+# cap is a backstop for a subject whose appearance genuinely varies every day,
+# which dedupe cannot catch.
+#
+# 0.28 is measured, not guessed. Against the live 701-encoding gallery, greedy
+# dedupe at this distance keeps ~150 of 561 training encodings while every
+# held-out face still matches, and the WORST held-out match sits 0.212 below
+# the 0.6 recognition threshold — the same margin as the undeduplicated gallery
+# (0.204). It buys a ~73% reduction for no measurable loss.
+#
+# Deliberately far below the ~0.6 recognition threshold: this asks "is this
+# redundant?", which is a much stricter question than "is this the same person?".
+DUPLICATE_DISTANCE = 0.28
+
+# Reached only by a subject dedupe cannot compress. Ten people at this cap is
+# 2,500 comparisons per face per frame, which an older Intel Mac and a Pi can
+# both carry. On the measured gallery dedupe alone stays far under it, so this
+# is a true backstop rather than the thing doing the work.
+MAX_ENCODINGS_PER_PERSON = 250
+
+
 class FaceRecognitionManager:
     """
     Manages face recognition operations including training, recognition, and storage
@@ -350,6 +380,67 @@ class FaceRecognitionManager:
             _training_in_progress = False
             return result
 
+    def _indices_for(self, person_name: str) -> list:
+        return [i for i, n in enumerate(self.known_face_names) if n == person_name]
+
+    def _is_redundant(self, candidate, indices: list) -> bool:
+        """
+        True when an encoding this person already has says the same thing.
+
+        Redundancy, not identity: the threshold is far tighter than the one used
+        to decide whether two faces are the same person.
+        """
+        if not indices:
+            return False
+        known = [self.known_face_encodings[i] for i in indices]
+        return float(np.min(_face_recognition.face_distance(known, candidate))) < DUPLICATE_DISTANCE
+
+    def _evict_to_cap(self, person_name: str) -> int:
+        """
+        Drop the most redundant encodings until this person is back under the cap.
+
+        Not "drop the oldest". A single night-time capture is worth more than the
+        fifty daytime ones that resemble each other, and age does not measure
+        that. Each round removes whichever encoding sits closest to another of
+        the same person — the one whose removal loses the least coverage of how
+        they can look.
+
+        The pairwise distances are computed ONCE and then masked. Rebuilding
+        them per removal is the obvious implementation and is quadratic per
+        removal on top of quadratic overall: measured at 6s to compact a
+        701-encoding gallery but ~400s for 1500, which would exceed the 120s
+        training timeout. That matters more than it appears — a timeout is
+        recorded as a training failure, a failed training leaves trained_at
+        null, and an untrained cluster keeps collecting faces. The slow version
+        would have made a large gallery grow faster.
+        """
+        indices = self._indices_for(person_name)
+        excess = len(indices) - MAX_ENCODINGS_PER_PERSON
+        if excess <= 0:
+            return 0
+
+        encodings = np.asarray([self.known_face_encodings[i] for i in indices],
+                               dtype=np.float64)
+        distances = np.linalg.norm(
+            encodings[:, None, :] - encodings[None, :, :], axis=-1)
+        np.fill_diagonal(distances, np.inf)
+
+        for _ in range(excess):
+            # Smallest nearest-neighbour distance = the least distinctive
+            # encoding this person has. A removed row is all-inf, so it can
+            # neither be chosen again nor keep another encoding alive.
+            victim = int(np.argmin(distances.min(axis=1)))
+            distances[victim, :] = np.inf
+            distances[:, victim] = np.inf
+
+        surviving = set(np.flatnonzero(np.isfinite(distances).any(axis=1)).tolist())
+        doomed = sorted((indices[i] for i in range(len(indices))
+                         if i not in surviving), reverse=True)
+        for i in doomed:
+            del self.known_face_encodings[i]
+            del self.known_face_names[i]
+        return len(doomed)
+
     def train_from_cluster_export(
         self, person_name: str, new_photo_paths: list
     ) -> Dict:
@@ -385,6 +476,7 @@ class FaceRecognitionManager:
             start_time = datetime.now()
             encodings_added = 0
             photos_failed = 0
+            encodings_skipped = 0
 
             for photo_path in new_photo_paths:
                 try:
@@ -392,9 +484,13 @@ class FaceRecognitionManager:
                     face_encodings = _encode_gallery_image(image)
 
                     if face_encodings:
-                        self.known_face_encodings.append(face_encodings[0])
-                        self.known_face_names.append(person_name)
-                        encodings_added += 1
+                        if self._is_redundant(face_encodings[0],
+                                              self._indices_for(person_name)):
+                            encodings_skipped += 1
+                        else:
+                            self.known_face_encodings.append(face_encodings[0])
+                            self.known_face_names.append(person_name)
+                            encodings_added += 1
                     else:
                         photos_failed += 1
                         logger.warning(f"No face in cluster export: {photo_path}")
@@ -402,15 +498,29 @@ class FaceRecognitionManager:
                     photos_failed += 1
                     logger.error(f"Error encoding cluster photo {photo_path}: {e}")
 
+            encodings_evicted = self._evict_to_cap(person_name)
+
             self.save_encodings()
             self.statistics["total_encodings"] = len(self.known_face_encodings)
             self.statistics["total_people"] = len(set(self.known_face_names))
+
+            if encodings_skipped or encodings_evicted:
+                # Reported rather than silent: a gallery that stops growing
+                # should be visibly a decision, not something that looks like
+                # training quietly failing.
+                logger.info(
+                    "Gallery for '%s': +%d, %d redundant, %d evicted, %d held",
+                    person_name, encodings_added, encodings_skipped,
+                    encodings_evicted, len(self._indices_for(person_name)),
+                )
 
             training_time = (datetime.now() - start_time).total_seconds()
             _training_in_progress = False
 
             result = {
                 "success": True,
+                "encodings_skipped_redundant": encodings_skipped,
+                "encodings_evicted": encodings_evicted,
                 "source": "cluster_export",
                 "person_name": person_name,
                 "encodings_added": encodings_added,
