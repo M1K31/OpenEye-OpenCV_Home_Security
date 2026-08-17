@@ -106,6 +106,13 @@ class TestActingIsNeverSuppressed:
         """
         The user's third example: identify and notify, add nothing to the
         cluster and do not retrain.
+
+        "Add nothing" is now once a day rather than never. A trained cluster
+        whose face recognition could not name gets one capture per camera per
+        day, because a recognition failure on a trained cluster is evidence the
+        training does not cover this angle or this light — the moment more
+        material would help. What must not change is that identifying and
+        notifying never depend on whether a likeness was kept.
         """
         cam, automations = camera.cam, camera.automations
         frame = np.zeros((480, 640, 3), np.uint8)
@@ -115,7 +122,8 @@ class TestActingIsNeverSuppressed:
             cam._handle_detected_faces(frame, [subject])
 
         assert len(automations) == 1  # unknown-person throttle, not suppression
-        cam._save_face_snapshot.assert_not_called()
+        # One hard-case capture for the day, then nothing more.
+        assert cam._save_face_snapshot.call_count == 1
 
     def test_unknown_automation_throttle_is_unchanged(self, camera):
         """That throttle is about automation rate and predates this work."""

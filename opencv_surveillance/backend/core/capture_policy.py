@@ -63,6 +63,13 @@ class CaptureSettings:
     # instantaneous so someone standing still at a door is still identified.
     motion_sticky_seconds: int = 30
 
+    # A face inside a trained cluster that recognition still could not name gets
+    # a capture on this budget. Same shape as the refresh interval, and separate
+    # from it so neither allowance can exhaust the other — a subject the
+    # recogniser keeps failing on is exactly who needs new material, and would
+    # otherwise be competing with the people it recognises perfectly well.
+    hard_case_interval_seconds: int = 24 * 60 * 60
+
 
 @dataclass
 class CaptureDecision:
@@ -155,6 +162,7 @@ class CapturePolicy:
         mode: str = MODE_SYSTEM_DEFAULT,
         cluster_face_count: Optional[int] = None,
         cluster_is_trained: Optional[bool] = None,
+        cluster_id: Optional[int] = None,
         person_is_known: Optional[bool] = None,
         now: Optional[float] = None,
     ) -> CaptureDecision:
@@ -172,6 +180,8 @@ class CapturePolicy:
             cluster_is_trained: whether that cluster has been promoted into a
                 trained profile — None when unknown, which is treated as
                 untrained
+            cluster_id: which cluster this face matched, used to budget hard
+                cases per cluster rather than per the literal name 'Unknown'
             person_is_known: whether the name corresponds to an enrolled person
             now: injected clock, for tests
         """
@@ -237,6 +247,29 @@ class CapturePolicy:
             # cluster that is still untrained means clustering or training is
             # not running, which is worth knowing.
             if cluster_is_trained:
+                # A trained cluster whose face recognition could not name is not
+                # a stranger. It is a subject the recogniser is failing on, in
+                # this light or at this angle — and that failure is an argument
+                # FOR collecting, not against it. Refusing here would withhold
+                # the material that would fix the very thing going wrong.
+                #
+                # Budgeted per cluster, not per name: every unrecognised face
+                # arrives called "Unknown", so a name-keyed budget would let one
+                # cluster consume the allowance of all of them.
+                #
+                # Safe only because the gallery is bounded — without the dedupe
+                # and cap, a permanently unrecognisable subject could grow it
+                # without limit through this branch.
+                scope = self._hard_case_name(cluster_id)
+                if not self._captured_recently(
+                        scope, camera_id, now,
+                        interval=self.settings.hard_case_interval_seconds):
+                    self._note_capture(scope, camera_id, now)
+                    return CaptureDecision(
+                        True, sighting,
+                        f"unrecognised face in a trained cluster of "
+                        f"{cluster_face_count}",
+                    )
                 return CaptureDecision(
                     False, sighting,
                     f"cluster already holds {cluster_face_count} faces",
@@ -264,11 +297,25 @@ class CapturePolicy:
         """
         return f"{name}@{camera_id}"
 
-    def _captured_recently(self, name: str, camera_id: str, now: float) -> bool:
+    @staticmethod
+    def _hard_case_name(cluster_id: Optional[int]) -> str:
+        """
+        A budget scope for faces a trained cluster failed to recognise.
+
+        Keyed on the cluster rather than the name, because every such face
+        arrives called "Unknown" and a name-keyed budget would be shared by all
+        of them at once.
+        """
+        return f"\x00hardcase:{cluster_id if cluster_id is not None else 'none'}"
+
+    def _captured_recently(self, name: str, camera_id: str, now: float,
+                           interval: Optional[float] = None) -> bool:
         last = self._last_capture.get(self._scope(name, camera_id))
         if last is None:
             return False
-        return now - last < self.settings.known_capture_interval_seconds
+        if interval is None:
+            interval = self.settings.known_capture_interval_seconds
+        return now - last < interval
 
     def _note_capture(self, name: str, camera_id: str, now: float) -> None:
         self._last_capture[self._scope(name, camera_id)] = now

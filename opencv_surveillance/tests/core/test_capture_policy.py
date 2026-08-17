@@ -228,10 +228,142 @@ class TestClusteredUnknowns:
         assert any(sightings) is True
 
     def test_the_threshold_is_configurable(self):
+        """
+        A cluster of 10 counts as mature once the threshold says so. The first
+        arrival now spends the hard-case allowance, so the maturity rule shows
+        itself on the second — before this change it answered immediately.
+        """
         policy = CapturePolicy(CaptureSettings(cluster_maturity=10))
 
-        assert _confirm(policy, face("Unknown"), now=0, cluster_face_count=10,
-                        cluster_is_trained=True).capture is False
+        f = face("Unknown")
+        _arrive(policy, f, now=0, cluster_face_count=10, cluster_is_trained=True)
+        second = policy.evaluate(f, CAMERA, cluster_face_count=10,
+                                 cluster_is_trained=True, now=5)
+
+        assert second.capture is False
+        assert "already holds 10 faces" in second.reason
+
+
+
+def _arrive(policy, f, camera=CAMERA, now=0.0, **kwargs):
+    """
+    One arrival, after the persistence gate has been cleared.
+
+    _confirm returns the LAST of its passes, which is right for a rule that
+    suppresses on every pass but wrong for a once-per-day budget: the first pass
+    spends the allowance and the rest report it as already spent.
+    """
+    for i in range(policy.settings.required_consecutive_passes - 1):
+        policy.evaluate(f, camera, now=now + i, **kwargs)
+    return policy.evaluate(f, camera,
+                           now=now + policy.settings.required_consecutive_passes - 1,
+                           **kwargs)
+
+
+class TestUnrecognisedFacesInTrainedClusters:
+    """
+    A face inside a trained cluster that recognition still could not name.
+
+    Refusing it was the remaining trap: a recognition failure on a trained
+    cluster is evidence the training does not yet cover this angle or this
+    light, so the moment more material would help was the moment collection
+    stopped. It earns a capture on its own slow budget instead.
+    """
+
+    def test_an_unrecognised_face_in_a_trained_cluster_is_captured(self):
+        policy = CapturePolicy()
+
+        decision = _confirm(policy, face("Unknown"), now=0,
+                            cluster_face_count=701, cluster_is_trained=True,
+                            cluster_id=1)
+
+        assert decision.capture is True
+        assert "unrecognised face in a trained cluster" in decision.reason
+
+    def test_it_is_budgeted_not_unlimited(self):
+        policy = CapturePolicy()
+
+        f = face("Unknown")
+        first = _arrive(policy, f, now=0, cluster_face_count=701,
+                        cluster_is_trained=True, cluster_id=1)
+        # Within the sticky window, so the track survives and the budget — not
+        # the persistence gate — is what answers.
+        second = policy.evaluate(f, CAMERA, cluster_face_count=701,
+                                 cluster_is_trained=True, cluster_id=1, now=10)
+
+        assert first.capture is True
+        assert second.capture is False
+        assert "already holds" in second.reason
+
+    def test_the_budget_renews_the_next_day(self):
+        policy = CapturePolicy()
+
+        f = face("Unknown")
+        _arrive(policy, f, now=0, cluster_face_count=701,
+                cluster_is_trained=True, cluster_id=1)
+        later = _arrive(policy, f, now=86_401, cluster_face_count=701,
+                        cluster_is_trained=True, cluster_id=1)
+
+        assert later.capture is True
+
+    def test_each_cluster_has_its_own_budget(self):
+        """
+        Every unrecognised face arrives called "Unknown", so a name-keyed budget
+        would let the first cluster consume the allowance of all of them.
+        """
+        policy = CapturePolicy()
+
+        f = face("Unknown")
+        _arrive(policy, f, now=0, cluster_face_count=701,
+                cluster_is_trained=True, cluster_id=1)
+        other = policy.evaluate(f, CAMERA, cluster_face_count=40,
+                                cluster_is_trained=True, cluster_id=2, now=10)
+
+        assert other.capture is True
+
+    def test_each_camera_has_its_own_budget(self):
+        policy = CapturePolicy()
+
+        f = face("Unknown")
+        _arrive(policy, f, now=0, cluster_face_count=701,
+                cluster_is_trained=True, cluster_id=1)
+        elsewhere = policy.evaluate(f, "back_door",
+                                    cluster_face_count=701,
+                                    cluster_is_trained=True, cluster_id=1, now=10)
+
+        assert elsewhere.capture is True
+
+    def test_the_hard_case_budget_does_not_consume_the_refresh_budget(self):
+        """The two allowances are separate; one must not exhaust the other."""
+        policy = CapturePolicy()
+
+        _arrive(policy, face("Unknown"), now=0, cluster_face_count=701,
+                cluster_is_trained=True, cluster_id=1)
+        named = _confirm(policy, face("unknown1", top=300), now=10)
+
+        assert named.capture is True
+        assert "refreshing an enrolled likeness" in named.reason
+
+    def test_an_untrained_cluster_still_takes_the_untrained_path(self):
+        policy = CapturePolicy()
+
+        decision = _confirm(policy, face("Unknown"), now=0,
+                            cluster_face_count=701, cluster_is_trained=False,
+                            cluster_id=1)
+
+        assert decision.capture is True
+        assert "not been trained" in decision.reason
+
+    def test_a_suppressed_hard_case_still_records_the_sighting(self):
+        policy = CapturePolicy()
+
+        f = face("Unknown")
+        sightings = [
+            policy.evaluate(f, CAMERA, now=i, cluster_face_count=701,
+                            cluster_is_trained=True, cluster_id=1).record_sighting
+            for i in range(policy.settings.required_consecutive_passes)
+        ]
+        assert any(sightings) is True
 
 
 # ------------------------------------------------------------- camera mode

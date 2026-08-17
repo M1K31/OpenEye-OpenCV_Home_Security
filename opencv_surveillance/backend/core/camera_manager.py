@@ -728,6 +728,7 @@ class Camera(ABC):
                 mode=self.face_capture_mode,
                 cluster_face_count=cluster_size,
                 cluster_is_trained=cluster_trained,
+                cluster_id=face.get("cluster_id"),
             )
 
             snapshot_path = None
