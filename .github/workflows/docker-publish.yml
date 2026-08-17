@@ -46,6 +46,7 @@ jobs:
           type=raw,value=latest,enable={{is_default_branch}}
 
     - name: Build and push
+      id: build
       uses: docker/build-push-action@v5
       with:
         context: ./opencv_surveillance
@@ -66,6 +67,36 @@ jobs:
       run: |
         echo "Pushed to DockerHub: ${DOCKERHUB_REPO}"
         echo "Tags: ${IMAGE_TAGS}"
+
+    # Scan what was actually published, rather than a locally built approximation
+    # of it. This is a surveillance system that people run on their own networks,
+    # so the vulnerabilities that matter are the ones in the artifact they pull.
+    - name: Scan the published image (Docker Scout)
+      uses: docker/scout-action@v1
+      with:
+        command: cves
+        # By digest, not by tag: this scans exactly the artifact that was just
+        # pushed, with no dependence on tag resolution and no interpolation of a
+        # ref name into the job.
+        image: ${{ env.DOCKERHUB_REPO }}@${{ steps.build.outputs.digest }}
+        # Only what a maintainer would act on. Reporting every low-severity
+        # finding in a Debian base image trains everyone to ignore the output,
+        # which is worse than not scanning.
+        only-severities: critical,high
+        only-fixed: true
+        sarif-file: scout-cves.sarif
+        summary: true
+      continue-on-error: true
+
+    # A findings report that fails the release would mean a CVE in a base image
+    # blocks a fix the users are waiting for. The scan informs; it does not gate.
+    - name: Publish scan results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: docker-scout-cves
+        path: scout-cves.sarif
+        if-no-files-found: ignore
 
     - name: Update DockerHub description
       # Cosmetic: syncs the repo README to Docker Hub. The Docker Hub description
