@@ -868,18 +868,39 @@ async def shutdown_event():
     # Step 9: Cancel all remaining async tasks
     try:
         logger.info("[9/9] Canceling remaining async tasks...")
-        tasks = [task for task in asyncio.all_tasks() if not task.done()]
+
+        # Excluding this handler's own task is the whole point. asyncio
+        # all_tasks() includes the coroutine doing the cancelling, so the
+        # previous version cancelled itself and then awaited its own
+        # cancellation. That raised CancelledError, which inherits from
+        # BaseException rather than Exception, so the handler below never caught
+        # it — every quit ended in a traceback, and anything after this step was
+        # skipped.
+        current = asyncio.current_task()
+        tasks = [
+            task for task in asyncio.all_tasks()
+            if task is not current and not task.done()
+        ]
 
         if tasks:
             logger.info(f"  Found {len(tasks)} pending task(s)")
             for task in tasks:
                 task.cancel()
 
-            # Wait for task cancellations with timeout
-            await asyncio.wait(tasks, timeout=3.0)
+            # return_exceptions collects each task's CancelledError as a result
+            # instead of re-raising it here. Cancelling is what was asked for, so
+            # the tasks reporting that they were cancelled is success.
+            await asyncio.wait_for(
+                asyncio.gather(*tasks, return_exceptions=True), timeout=3.0)
             logger.info("✓ Async tasks canceled")
         else:
             logger.info("✓ No pending async tasks")
+    except asyncio.TimeoutError:
+        logger.warning("⚠ Some async tasks did not stop within 3s")
+    except asyncio.CancelledError:
+        # The loop is being torn down around us. Nothing left to clean up, and
+        # propagating turns an orderly shutdown into a traceback.
+        logger.info("✓ Shutdown interrupted by loop teardown")
     except Exception as e:
         logger.error(f"✗ Error canceling async tasks: {e}")
 
