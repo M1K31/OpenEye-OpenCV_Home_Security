@@ -149,11 +149,13 @@ class TestClusteredUnknowns:
         # A list, not any(): any() short-circuits on the first sighting and the
         # remaining passes never run, so the face is never actually confirmed.
         sightings = [
-            policy.evaluate(f, CAMERA, now=i, cluster_face_count=25).record_sighting
+            policy.evaluate(f, CAMERA, now=i, cluster_face_count=25,
+                            cluster_is_trained=True).record_sighting
             for i in range(policy.settings.required_consecutive_passes)
         ]
         sighted = any(sightings)
-        decision = policy.evaluate(f, CAMERA, now=3, cluster_face_count=25)
+        decision = policy.evaluate(f, CAMERA, now=3, cluster_face_count=25,
+                                   cluster_is_trained=True)
 
         assert decision.capture is False
         assert "25 faces" in decision.reason
@@ -175,10 +177,61 @@ class TestClusteredUnknowns:
         assert decision.capture is True
         assert "new or under-represented" in decision.reason
 
+    def test_a_mature_but_untrained_cluster_keeps_collecting(self):
+        """
+        The trap this guards against.
+
+        Size means the cluster has enough faces to become a profile. Trained
+        means it actually did. Stopping on size alone strands a cluster that was
+        never promoted: it would hold exactly the faces it has now, forever, and
+        the promotion that would have made stopping correct is the very thing
+        that never ran.
+        """
+        policy = CapturePolicy()
+
+        decision = _confirm(policy, face("Unknown"), now=0,
+                            cluster_face_count=701, cluster_is_trained=False)
+
+        assert decision.capture is True
+        assert "not been trained" in decision.reason
+
+    def test_an_unknown_trained_state_is_treated_as_untrained(self):
+        """
+        Absence of evidence is not evidence of promotion. A caller that cannot
+        say whether the cluster was trained gets the safe answer — keep
+        collecting — rather than a silent permanent stop.
+        """
+        policy = CapturePolicy()
+
+        decision = _confirm(policy, face("Unknown"), now=0,
+                            cluster_face_count=701, cluster_is_trained=None)
+
+        assert decision.capture is True
+
+    def test_a_trained_cluster_still_records_the_sighting(self):
+        """Suppressing the likeness must never suppress the record of presence."""
+        policy = CapturePolicy()
+
+        f = face("Unknown")
+        # A list, not any(): any() short-circuits on the first sighting and the
+        # remaining passes never run. The 60s throttle means only the first pass
+        # reports one, so the last decision alone would say False.
+        sightings = [
+            policy.evaluate(f, CAMERA, now=i, cluster_face_count=701,
+                            cluster_is_trained=True).record_sighting
+            for i in range(policy.settings.required_consecutive_passes)
+        ]
+        decision = policy.evaluate(f, CAMERA, now=3, cluster_face_count=701,
+                                   cluster_is_trained=True)
+
+        assert decision.capture is False
+        assert any(sightings) is True
+
     def test_the_threshold_is_configurable(self):
         policy = CapturePolicy(CaptureSettings(cluster_maturity=10))
 
-        assert _confirm(policy, face("Unknown"), now=0, cluster_face_count=10).capture is False
+        assert _confirm(policy, face("Unknown"), now=0, cluster_face_count=10,
+                        cluster_is_trained=True).capture is False
 
 
 # ------------------------------------------------------------- camera mode

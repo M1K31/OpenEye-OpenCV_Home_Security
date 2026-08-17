@@ -416,6 +416,19 @@ class FaceClusteringService:
                     export_result["training_success"] = True
                     export_result["training_source"] = "cluster_incremental"
                     self.statistics["auto_trains"] += 1
+
+                    # Stamp the promotion. This is the only place that can
+                    # honestly say the cluster became a profile the recogniser
+                    # knows, and the capture policy reads it to decide whether
+                    # "already holds enough faces" means "well represented" or
+                    # "stuck". Set only on success: a timeout or a training
+                    # error leaves it null, which keeps the cluster collecting.
+                    cluster = db.query(FaceCluster).filter(
+                        FaceCluster.id == cluster_id
+                    ).first()
+                    if cluster is not None:
+                        cluster.trained_at = datetime.utcnow()
+                        db.commit()
             except Exception as e:
                 logger.error(f"Failed cluster training: {e}")
                 export_result["training_success"] = False

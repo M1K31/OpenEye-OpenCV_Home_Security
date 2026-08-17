@@ -154,6 +154,7 @@ class CapturePolicy:
         camera_id: str,
         mode: str = MODE_SYSTEM_DEFAULT,
         cluster_face_count: Optional[int] = None,
+        cluster_is_trained: Optional[bool] = None,
         person_is_known: Optional[bool] = None,
         now: Optional[float] = None,
     ) -> CaptureDecision:
@@ -168,6 +169,9 @@ class CapturePolicy:
             camera_id: which camera saw it
             mode: this camera's capture mode
             cluster_face_count: size of the cluster this face matches, if any
+            cluster_is_trained: whether that cluster has been promoted into a
+                trained profile — None when unknown, which is treated as
+                untrained
             person_is_known: whether the name corresponds to an enrolled person
             now: injected clock, for tests
         """
@@ -220,9 +224,28 @@ class CapturePolicy:
             return CaptureDecision(True, sighting, "refreshing an enrolled likeness")
 
         if cluster_face_count is not None and cluster_face_count >= self.settings.cluster_maturity:
+            # Size alone is not a reason to stop. Stopping is only correct once
+            # the cluster has been promoted into a trained profile, because from
+            # then on the person is recognised by name and refreshed on the
+            # normal per-day-per-camera schedule — there is a route by which
+            # their likeness stays current.
+            #
+            # An untrained cluster has no such route. If collection stopped here
+            # it would hold exactly the faces it has now, forever, and never
+            # become a profile: promotion is what training does, and training is
+            # what has not happened. So keep collecting, and say so — a mature
+            # cluster that is still untrained means clustering or training is
+            # not running, which is worth knowing.
+            if cluster_is_trained:
+                return CaptureDecision(
+                    False, sighting,
+                    f"cluster already holds {cluster_face_count} faces",
+                )
+            self._note_capture(name, camera_id, now)
             return CaptureDecision(
-                False, sighting,
-                f"cluster already holds {cluster_face_count} faces",
+                True, sighting,
+                f"cluster holds {cluster_face_count} faces but has not been "
+                f"trained into a profile yet",
             )
 
         self._note_capture(name, camera_id, now)

@@ -229,7 +229,18 @@ class FaceCluster(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_seen_at = Column(DateTime, nullable=True)  # Last detection time
-    
+
+    # When this cluster's faces were last exported and trained into the
+    # recogniser — i.e. when it stopped being a loose group of similar faces and
+    # became a profile the recogniser can name on sight.
+    #
+    # This is what lets the capture policy tell "well represented, stop
+    # collecting" apart from "never got promoted, keep collecting". Without it
+    # the two are indistinguishable, and a cluster whose training never ran
+    # would stop gathering faces at the maturity threshold and stay stuck there
+    # forever, with nothing recorded to say why.
+    trained_at = Column(DateTime, nullable=True)
+
     # Clustering algorithm metadata
     clustering_algorithm = Column(String, default="dbscan")  # dbscan, kmeans, etc.
     clustering_params = Column(String, nullable=True)  # JSON string of parameters

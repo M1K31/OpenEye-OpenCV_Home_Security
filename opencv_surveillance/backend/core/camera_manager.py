@@ -14,7 +14,7 @@ import sys
 import threading
 from abc import ABC, abstractmethod
 from collections import deque
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 from pathlib import Path
 from datetime import datetime
 from .motion_detector import MotionDetector
@@ -721,11 +721,13 @@ class Camera(ABC):
         for face in faces:
             self._act_on_face(face)
 
+            cluster_size, cluster_trained = self._cluster_state_for(face)
             decision = self._capture_policy.evaluate(
                 face,
                 camera_id=self.camera_id or "unknown",
                 mode=self.face_capture_mode,
-                cluster_face_count=self._cluster_size_for(face),
+                cluster_face_count=cluster_size,
+                cluster_is_trained=cluster_trained,
             )
 
             snapshot_path = None
@@ -760,28 +762,34 @@ class Camera(ABC):
                     store_encoding=decision.capture,
                 )
 
-    def _cluster_size_for(self, face: dict) -> Optional[int]:
+    def _cluster_state_for(self, face: dict) -> Tuple[Optional[int], Optional[bool]]:
         """
-        How many faces the cluster this detection belongs to already holds.
+        The size of the cluster this detection belongs to, and whether that
+        cluster has been trained into a profile.
 
-        Used to stop enriching a stranger who is already well represented. Only
-        the recogniser's own cluster association is consulted; running a fresh
-        similarity search here would reintroduce exactly the per-frame cost this
-        work exists to remove.
+        Both are needed together: size says the cluster is well represented,
+        trained says there is a route by which it stays current. Stopping
+        collection on size alone would strand a cluster that never got promoted.
+
+        Only the recogniser's own cluster association is consulted; running a
+        fresh similarity search here would reintroduce exactly the per-frame
+        cost this work exists to remove.
         """
         cluster_id = face.get("cluster_id")
         if not cluster_id:
-            return None
+            return None, None
 
         try:
             with get_db_context() as db:
                 cluster = db.query(FaceCluster).filter(
                     FaceCluster.id == cluster_id
                 ).first()
-                return cluster.face_count if cluster else None
+                if cluster is None:
+                    return None, None
+                return cluster.face_count, cluster.trained_at is not None
         except Exception as e:
-            logger.debug("Could not read cluster size: %s", e)
-            return None
+            logger.debug("Could not read cluster state: %s", e)
+            return None, None
 
     def _create_face_detection_event(
         self,

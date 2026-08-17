@@ -56,7 +56,13 @@ def camera(monkeypatch):
 
     cam._save_face_snapshot = MagicMock(return_value="/data/snapshots/x.jpg")
     cam._create_face_detection_event = MagicMock(return_value=1)
-    cam._cluster_size_for = lambda face: face.get("_cluster_size")
+    # Returns (size, trained) — both, because size alone is not what stops
+    # collection. Default trained=True so a test that only sets a size is
+    # describing a well-established cluster, which is what these assert.
+    cam._cluster_state_for = lambda face: (
+        face.get("_cluster_size"),
+        face.get("_cluster_trained", True),
+    )
 
     return types.SimpleNamespace(cam=cam, automations=automations)
 

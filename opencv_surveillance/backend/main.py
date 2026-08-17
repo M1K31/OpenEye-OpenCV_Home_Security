@@ -434,6 +434,36 @@ async def startup_event():
                     ))
                     conn.commit()
                 logger.info(f"✅ Added {column_name} column")
+
+        # Cluster promotion (v3.12). Records when a cluster stopped being a
+        # group of similar faces and became a profile the recogniser can name.
+        #
+        # Carried here as well as in alembic because create_all() only creates
+        # missing TABLES — it will not add a column to a table that already
+        # exists — and an install whose alembic history is behind never reaches
+        # the migration. Without this the column silently never appears and
+        # every cluster read fails on an unknown column.
+        if 'face_clusters' in inspector.get_table_names():
+            cluster_columns = [col['name'] for col in inspector.get_columns('face_clusters')]
+            if 'trained_at' not in cluster_columns:
+                logger.info("Adding trained_at column to face_clusters table...")
+                with engine.connect() as conn:
+                    conn.execute(text(
+                        "ALTER TABLE face_clusters ADD COLUMN trained_at DATETIME"
+                    ))
+                    # Backfill from the two flags the promotion path sets
+                    # together. Inference, not record — but it is the only
+                    # evidence available for clusters promoted before this
+                    # column existed, and it errs towards "already trained",
+                    # which preserves behaviour instead of making established
+                    # clusters suddenly resume collecting faces.
+                    conn.execute(text(
+                        "UPDATE face_clusters "
+                        "SET trained_at = COALESCE(updated_at, created_at) "
+                        "WHERE is_identified = 1 AND label IS NOT NULL AND label != ''"
+                    ))
+                    conn.commit()
+                logger.info("✅ Added trained_at column and backfilled promoted clusters")
     except Exception as e:
         logger.warning(f"Schema migration check failed (non-critical): {e}")
 
