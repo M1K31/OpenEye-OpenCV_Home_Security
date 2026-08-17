@@ -40,13 +40,20 @@ const normalizeSnapshot = (p) =>
 // Rendering nothing in that case made a deliberate absence identical to a
 // broken image: a blank card, no console error, and nothing to indicate the
 // difference. This says so instead.
-const SightingPlaceholder = () => (
+// Shown where a snapshot would be. A detection without an image is not a
+// failure: once a profile is established the capture policy refreshes it at
+// most once per day per camera, so most sightings deliberately keep no new
+// likeness. Naming the profile matters — "seen, not captured" on its own reads
+// as a lost detection, whereas naming who was recognised shows the recognition
+// itself worked and only the photograph was skipped.
+const SightingPlaceholder = ({ name }) => (
   <div style={styles.detectionImage}>
     <div style={styles.sightingPlaceholder}>
       <span style={styles.sightingIcon}>👁</span>
+      {name && <span style={styles.sightingName}>{name}</span>}
       <span style={styles.sightingText}>Seen, not captured</span>
       <span style={styles.sightingHint}>
-        This face is already well recorded, so no new image was saved
+        Already well recorded, so no new image was saved
       </span>
     </div>
   </div>
@@ -540,7 +547,7 @@ const DetectionsPage = () => {
                                   onError={(e) => { e.target.style.display = 'none'; }} />
                               </div>
                             ) : (
-                              <SightingPlaceholder />
+                              <SightingPlaceholder name={detection.person_name} />
                             )}
                             <div style={styles.detectionContent}>
                               <div style={styles.detectionMeta}>
@@ -774,12 +781,15 @@ const DetectionCard = ({ detection, selectable, selected, onToggleSelect, onAssi
           <input type="checkbox" checked={selected} onChange={onToggleSelect} style={styles.selectCheckbox} />
         </label>
       )}
-      {detection.snapshot_path && (
+      {normalizeSnapshot(detection.snapshot_path) ? (
         <div style={styles.detectionImage}>
-          <img src={`/data/snapshots/${detection.snapshot_path}`} alt={detection.name}
+          <img src={`/data/snapshots/${normalizeSnapshot(detection.snapshot_path)}`}
+            alt={detection.name || detection.person_name}
             style={styles.detectionImg}
             onError={(e) => { e.target.style.display = 'none'; }} />
         </div>
+      ) : (
+        <SightingPlaceholder name={detection.name || detection.person_name} />
       )}
 
       <div style={styles.detectionContent}>
@@ -842,7 +852,7 @@ const PersonCard = ({ person, onClick }) => {
             onError={(e) => { e.target.style.display = 'none'; }} />
         </div>
       ) : (
-        <SightingPlaceholder />
+        <SightingPlaceholder name={person.name} />
       )}
 
       <div style={styles.personCardContent}>
@@ -951,6 +961,7 @@ const styles = {
     boxSizing: 'border-box',
   },
   sightingIcon: { fontSize: '28px', opacity: 0.55, lineHeight: 1 },
+  sightingName: { fontSize: '14px', fontWeight: 700, color: 'var(--text-primary, inherit)' },
   sightingText: { fontSize: '13px', fontWeight: 600, color: 'var(--text-primary, inherit)' },
   sightingHint: { fontSize: '11px', opacity: 0.7, color: 'var(--text-secondary, inherit)', lineHeight: 1.3 },
   detectionContent: { padding: '16px' },
