@@ -734,8 +734,21 @@ class Camera(ABC):
                     frame, face.get("location", {})
                 )
             else:
-                logger.debug("Not capturing %s on %s: %s",
-                             face.get("name"), self.camera_id, decision.reason)
+                # Periodically, at a level that is actually visible. This was
+                # debug-only, so an installation where every capture was being
+                # suppressed — the correct behaviour once a person's cluster is
+                # well established — looked from the outside like face capture
+                # had simply stopped working, with nothing in the log to say
+                # otherwise. Rate-limited because the alternative is a line per
+                # detection per camera.
+                self._suppressed_captures = getattr(self, "_suppressed_captures", 0) + 1
+                if self._suppressed_captures % 100 == 1:
+                    logger.info(
+                        "Not capturing %s on %s: %s (%s suppressed so far; "
+                        "sightings are still recorded)",
+                        face.get("name"), self.camera_id, decision.reason,
+                        self._suppressed_captures,
+                    )
 
             if decision.capture or decision.record_sighting:
                 # A sighting keeps the events page, per-person history and an

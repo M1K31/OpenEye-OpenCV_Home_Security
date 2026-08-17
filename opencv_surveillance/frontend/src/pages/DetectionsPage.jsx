@@ -31,6 +31,27 @@ const isKnownPerson = (name) =>
 const normalizeSnapshot = (p) =>
   (p || '').replace(/^\/?(?:data|api)\/snapshots\//, '');
 
+// A detection can legitimately have no image. The capture policy stops saving
+// likenesses once a person's cluster is well established, or before a face has
+// been seen across enough frames to be worth keeping — the sighting is still
+// recorded, because where and when someone was seen is the point, but no
+// snapshot is written.
+//
+// Rendering nothing in that case made a deliberate absence identical to a
+// broken image: a blank card, no console error, and nothing to indicate the
+// difference. This says so instead.
+const SightingPlaceholder = () => (
+  <div style={styles.detectionImage}>
+    <div style={styles.sightingPlaceholder}>
+      <span style={styles.sightingIcon}>👁</span>
+      <span style={styles.sightingText}>Seen, not captured</span>
+      <span style={styles.sightingHint}>
+        This face is already well recorded, so no new image was saved
+      </span>
+    </div>
+  </div>
+);
+
 const DetectionsPage = () => {
   // State
   const [activeTab, setActiveTab] = useState('all'); // all, people, vehicles, animals, packages
@@ -512,12 +533,14 @@ const DetectionsPage = () => {
                                 })}
                                 style={styles.selectCheckbox} />
                             </label>
-                            {snapshotPath && (
+                            {snapshotPath ? (
                               <div style={styles.detectionImage}>
                                 <img src={`/data/snapshots/${snapshotPath}`} alt={detection.person_name}
                                   style={styles.detectionImg}
                                   onError={(e) => { e.target.style.display = 'none'; }} />
                               </div>
+                            ) : (
+                              <SightingPlaceholder />
                             )}
                             <div style={styles.detectionContent}>
                               <div style={styles.detectionMeta}>
@@ -812,12 +835,14 @@ const PersonCard = ({ person, onClick }) => {
   const snapshotPath = normalizeSnapshot(person.lastSnapshot);
   return (
     <button onClick={onClick} style={styles.personCard}>
-      {snapshotPath && (
+      {snapshotPath ? (
         <div style={styles.detectionImage}>
           <img src={`/data/snapshots/${snapshotPath}`} alt={person.name}
             style={styles.detectionImg}
             onError={(e) => { e.target.style.display = 'none'; }} />
         </div>
+      ) : (
+        <SightingPlaceholder />
       )}
 
       <div style={styles.personCardContent}>
@@ -917,6 +942,17 @@ const styles = {
   selectCheckbox: { width: '20px', height: '20px', cursor: 'pointer', accentColor: 'var(--theme-primary)' },
   detectionImage: { width: '100%', height: '200px', overflow: 'hidden', backgroundColor: '#000' },
   detectionImg: { width: '100%', height: '100%', objectFit: 'cover' },
+  sightingPlaceholder: {
+    width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
+    alignItems: 'center', justifyContent: 'center', gap: '6px',
+    padding: '12px', textAlign: 'center',
+    background: 'var(--bg-input, rgba(127,127,127,0.08))',
+    border: '1px dashed var(--border-input, rgba(127,127,127,0.35))',
+    boxSizing: 'border-box',
+  },
+  sightingIcon: { fontSize: '28px', opacity: 0.55, lineHeight: 1 },
+  sightingText: { fontSize: '13px', fontWeight: 600, color: 'var(--text-primary, inherit)' },
+  sightingHint: { fontSize: '11px', opacity: 0.7, color: 'var(--text-secondary, inherit)', lineHeight: 1.3 },
   detectionContent: { padding: '16px' },
   detectionHeader: { display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px' },
   detectionIcon: { fontSize: '20px' },
