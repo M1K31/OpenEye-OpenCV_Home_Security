@@ -102,6 +102,25 @@ KNOWN_INERT = {
     "WEBSOCKET_MAX_CONNECTIONS",
     "WEBSOCKET_PING_INTERVAL_SECONDS",
     "WEBSOCKET_PING_TIMEOUT_SECONDS",
+    # Exposed 2026-08-17 by deleting get_config_summary(), which was itself
+    # unused and merely echoed these into a debugging dict. Nothing enforced
+    # them; the summary only made them LOOK read, which hid them from this
+    # very check. The facade was 11 settings larger than first measured.
+    #
+    # CSRF_PROTECTION_ENABLED is inert by decision, not oversight: CSRF is
+    # deliberately not enabled (docs/development/ADR-001-csrf.md, main.py:210).
+    # It should be deleted rather than wired.
+    "CAMERA_CONNECT_TIMEOUT_SECONDS",
+    "CAMERA_RECONNECT_ATTEMPTS",
+    "CSRF_PROTECTION_ENABLED",
+    "DEFAULT_FPS",
+    "ENABLE_AUTOMATIONS",
+    "ENABLE_FACE_RECOGNITION",
+    "ENABLE_MOTION_DETECTION",
+    "ENABLE_RECORDING",
+    "ENABLE_TWO_FACTOR_AUTH",
+    "ENVIRONMENT",
+    "TESTING",
 }
 
 

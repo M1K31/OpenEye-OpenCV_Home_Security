@@ -34,13 +34,13 @@ def face(name="Unknown", top=100, left=100, size=80):
     }
 
 
-def _confirm(policy, f, now=0.0, passes=None, **kwargs):
+def _confirm(policy, f, now=0.0, passes=None, camera=CAMERA, **kwargs):
     """Run the passes needed for a face to become eligible, returning the last."""
     settings = policy.settings
     passes = settings.required_consecutive_passes if passes is None else passes
     decision = None
     for i in range(passes):
-        decision = policy.evaluate(f, CAMERA, now=now + i, **kwargs)
+        decision = policy.evaluate(f, camera, now=now + i, **kwargs)
     return decision
 
 
@@ -364,6 +364,70 @@ class TestUnrecognisedFacesInTrainedClusters:
             for i in range(policy.settings.required_consecutive_passes)
         ]
         assert any(sightings) is True
+
+
+
+class TestSurvivingARestart:
+    """
+    The policy holds its state in memory, so quitting and reopening forgot that
+    someone had already been captured today. On a server that is rare. In the
+    desktop application, where restarting is a user action, "once a day" became
+    "once a launch".
+
+    Nothing new is stored to fix it: every capture already leaves a detection
+    row, so the timestamp is read back rather than persisted again.
+    """
+
+    def test_a_seeded_capture_suppresses_the_next_one(self):
+        policy = CapturePolicy()
+
+        policy.seed_last_capture("Mikel", CAMERA, when=0.0)
+        decision = _confirm(policy, face("Mikel"), now=60)
+
+        assert decision.capture is False
+        assert "already captured" in decision.reason
+
+    def test_a_seed_older_than_the_interval_does_not_suppress(self):
+        policy = CapturePolicy()
+
+        policy.seed_last_capture("Mikel", CAMERA, when=0.0)
+        decision = _confirm(policy, face("Mikel"), now=86_401)
+
+        assert decision.capture is True
+
+    def test_seeding_is_per_camera(self):
+        policy = CapturePolicy()
+
+        policy.seed_last_capture("Mikel", CAMERA, when=0.0)
+        decision = _confirm(policy, face("Mikel"), now=60, camera="back_door")
+
+        assert decision.capture is True
+
+    def test_a_seed_never_moves_a_capture_backwards(self):
+        """
+        Seeding happens on first sighting after startup, which can be after a
+        capture has already been made. A stale timestamp must not displace a
+        newer one and re-open the daily allowance.
+        """
+        policy = CapturePolicy()
+
+        recent = _confirm(policy, face("Mikel"), now=1000)
+        assert recent.capture is True
+
+        policy.seed_last_capture("Mikel", CAMERA, when=0.0)   # much older
+        again = policy.evaluate(face("Mikel"), CAMERA, now=1010)
+
+        assert again.capture is False
+
+
+def test_the_dead_calendar_day_map_is_gone():
+    """
+    _last_capture_day was declared and never read anywhere in backend/ or
+    tests/, left over from a calendar-day design that the rolling 24-hour
+    interval replaced. A name that looks like policy and does nothing is the
+    same defect already recorded against ENABLE_OBJECT_DETECTION.
+    """
+    assert not hasattr(CapturePolicy(), "_last_capture_day")
 
 
 # ------------------------------------------------------------- camera mode

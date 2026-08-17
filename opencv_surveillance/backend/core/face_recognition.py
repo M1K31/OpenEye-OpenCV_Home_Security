@@ -945,15 +945,6 @@ class FaceRecognitionManager:
 _face_manager: Optional[FaceRecognitionManager] = None
 
 
-def reset_face_manager():
-    """
-    Reset the global face manager instance (useful for testing or path changes)
-    """
-    global _face_manager
-    _face_manager = None
-    logger.info("Face manager singleton reset")
-
-
 def get_face_manager(faces_folder: str = None) -> FaceRecognitionManager:
     """
     Get or create the global face recognition manager instance

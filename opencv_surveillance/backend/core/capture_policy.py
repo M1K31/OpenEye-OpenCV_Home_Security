@@ -24,7 +24,6 @@ recording who was seen, where, and when.
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import date
 from typing import Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -93,9 +92,15 @@ class CapturePolicy:
     """
     Per-camera capture bookkeeping.
 
-    Holds only in-memory state. A restart begins counting passes again, which
-    costs at most one extra confirmation delay and avoids any persistence
-    concern.
+    State is in memory, but not all of it is allowed to be forgotten. Pass
+    counts are: they describe one continuous visit, and a visit does not survive
+    a restart, so beginning again costs at most one extra confirmation.
+
+    Capture times are different. Forgetting them turns "once a day" into "once a
+    launch", which matters in the desktop application where restarting is a user
+    action rather than a rare event. They are seeded back from the detections
+    table on first use — see seed_last_capture — so nothing new is stored and the
+    history that already exists is simply read.
     """
 
     def __init__(self, settings: Optional[CaptureSettings] = None):
@@ -103,7 +108,6 @@ class CapturePolicy:
         self._tracks: Dict[str, _Track] = {}
         self._last_capture: Dict[str, float] = {}
         self._last_sighting: Dict[str, float] = {}
-        self._last_capture_day: Dict[str, date] = {}
 
     # ---------------------------------------------------------------- tracking
 
@@ -319,6 +323,31 @@ class CapturePolicy:
 
     def _note_capture(self, name: str, camera_id: str, now: float) -> None:
         self._last_capture[self._scope(name, camera_id)] = now
+
+    def seed_last_capture(self, name: str, camera_id: str, when: float) -> None:
+        """
+        Tell the policy about a capture it did not make.
+
+        All of this policy's state lives in memory, so a restart forgot that
+        someone had already been captured today and the first sighting after
+        startup captured again. On a server that is rare; in the desktop
+        application, where quitting and reopening is a user action, "once a day"
+        quietly became "once a launch".
+
+        The detections table already records every capture, so nothing new needs
+        storing — the history is simply read back on first use. Only ever moves
+        the timestamp forward, so a stale seed cannot displace a capture made
+        since.
+        """
+        scope = self._scope(name, camera_id)
+        # Compared against None, not against 0.0. Using zero as the "nothing
+        # recorded" default makes it indistinguishable from a real timestamp of
+        # zero, and — more to the point — means a seed is silently dropped
+        # whenever nothing has been recorded yet, which is precisely the case
+        # seeding exists to handle.
+        existing = self._last_capture.get(scope)
+        if existing is None or when > existing:
+            self._last_capture[scope] = when
 
     def _should_record_sighting(self, name: str, camera_id: str, now: float) -> bool:
         scope = self._scope(name, camera_id)

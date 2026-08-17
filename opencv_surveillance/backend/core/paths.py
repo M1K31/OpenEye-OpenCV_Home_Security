@@ -401,22 +401,3 @@ class PathManager:
 paths = PathManager()
 
 
-# Convenience functions for backward compatibility
-def get_project_root() -> Path:
-    """Get the project root directory"""
-    return PROJECT_ROOT
-
-
-def get_recordings_dir() -> Path:
-    """Get the recordings directory"""
-    return paths.recordings_dir
-
-
-def get_snapshots_dir() -> Path:
-    """Get the snapshots directory"""
-    return paths.snapshots_dir
-
-
-def get_faces_dir() -> Path:
-    """Get the faces directory"""
-    return paths.faces_dir

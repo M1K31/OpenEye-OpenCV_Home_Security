@@ -89,6 +89,10 @@ class Camera(ABC):
         # per-camera state, so one policy object per camera and not a shared one.
         # It governs storage only — automation runs from _act_on_face() whatever
         # this decides.
+        # Names whose capture history has been read back from the database.
+        # Seeded lazily and once: the query is cheap but pointless to repeat,
+        # and most cameras see a handful of people.
+        self._seeded_capture_history = set()
         self._capture_policy = CapturePolicy(
             CaptureSettings(
                 required_consecutive_passes=int(
@@ -721,6 +725,8 @@ class Camera(ABC):
         for face in faces:
             self._act_on_face(face)
 
+            self._seed_capture_history(
+                (face.get("name") or "Unknown").strip() or "Unknown")
             cluster_size, cluster_trained = self._cluster_state_for(face)
             decision = self._capture_policy.evaluate(
                 face,
@@ -762,6 +768,50 @@ class Camera(ABC):
                     frame, face, snapshot_path,
                     store_encoding=decision.capture,
                 )
+
+    def _seed_capture_history(self, name: str) -> None:
+        """
+        Recover "already captured today" from what was actually captured.
+
+        The capture policy keeps its state in memory, so quitting and reopening
+        the application forgot that someone had already been photographed today
+        and the next sighting captured again. In the desktop build, where
+        restarting is something a user does rather than a rare event, that made
+        "once a day per camera" behave as "once a launch per camera".
+
+        Nothing new is stored to fix it. Every capture already leaves a detection
+        row carrying a snapshot path, so the most recent one for this person on
+        this camera is exactly the timestamp the policy lost.
+        """
+        if name in self._seeded_capture_history:
+            return
+        self._seeded_capture_history.add(name)
+
+        try:
+            with get_db_context() as db:
+                row = (
+                    db.query(FaceDetectionEvent.detected_at)
+                    .filter(
+                        FaceDetectionEvent.person_name == name,
+                        FaceDetectionEvent.camera_id == self.camera_id,
+                        FaceDetectionEvent.snapshot_path.isnot(None),
+                    )
+                    .order_by(FaceDetectionEvent.detected_at.desc())
+                    .first()
+                )
+        except Exception as e:
+            # Failing to seed only costs one extra capture, so this must never
+            # take the camera down with it.
+            logger.debug("Could not seed capture history for %s: %s", name, e)
+            return
+
+        if row and row[0]:
+            self._capture_policy.seed_last_capture(
+                name, self.camera_id, row[0].timestamp())
+            logger.info(
+                "Capture history for %s on %s resumed from %s",
+                name, self.camera_id, row[0],
+            )
 
     def _cluster_state_for(self, face: dict) -> Tuple[Optional[int], Optional[bool]]:
         """

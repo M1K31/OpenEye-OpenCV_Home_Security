@@ -56,6 +56,11 @@ def camera(monkeypatch):
 
     cam._save_face_snapshot = MagicMock(return_value="/data/snapshots/x.jpg")
     cam._create_face_detection_event = MagicMock(return_value=1)
+    # Seeding reads the detections table to recover "already captured today"
+    # across a restart. There is no database here, and these tests start from a
+    # deliberately empty history, so it is a no-op.
+    cam._seed_capture_history = lambda name: None
+
     # Returns (size, trained) — both, because size alone is not what stops
     # collection. Default trained=True so a test that only sets a size is
     # describing a well-established cluster, which is what these assert.
