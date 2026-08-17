@@ -1,23 +1,28 @@
-# OpenEye — appEcosystem integration (optional)
+# appEcosystem integration — OPTIONAL add-on, not installed by the base setup.
 #
 #     pip install -r requirements-ecosystem.txt
 #
-# Install this alongside requirements.txt to let OpenEye register with an
-# ecosystem registry, publish events, and answer peer requests. Without it
-# OpenEye runs exactly as before: the ecosystem routes report the integration as
-# unavailable rather than failing, so this is additive and safe to skip.
+# OpenEye runs standalone without these: backend/api/routes/ecosystem.py guards
+# the import and answers 503, and the tests that need them skip themselves. An
+# installation that will never join an ecosystem should not carry them.
 #
-# Distribution names differ from import names — appecosystem-client provides
-# ecosystem_client, appecosystem-auth provides ecosystem_auth, and
-# appecosystem-ai provides ecosystem_ai. Searching PyPI for the import name
-# finds nothing, which is worth knowing before concluding they are unpublished.
+# EXACT pins, deliberately. These replaced a git URL pinned to an appEcosystem
+# commit SHA, which was a supply-chain control (F-06: stop an unpinned branch
+# changing the build). A `>=` floor would have weakened that — it admits any
+# future release — so the equivalent guarantee on PyPI is an exact version,
+# which is immutable once published.
 #
-# The `appecosystem` umbrella distribution is deliberately NOT listed. That
-# package is the registry service and its CLI — the thing OpenEye talks *to*,
-# not a library it consumes — and it requires Python >= 3.10, which would rule
-# out OpenEye's current 3.9 runtime for no benefit. The three libraries below
-# each support >= 3.9.
+# Bump these deliberately, the way the SHA used to be bumped.
+#
+# Note this pins the ecosystem packages only. Their transitive dependencies
+# (httpx, fastapi, …) still float within their own ranges, so this is
+# reproducible-by-intent rather than byte-identical. A full lockfile
+# (pip-compile) is the answer if bit-for-bit rebuilds are ever required.
+#
+# Distribution names carry an `appecosystem-` prefix; the IMPORT names do not
+# (`import ecosystem_client`). The prefix stands in for a PyPI organization
+# namespace, which is not available to this project yet.
 
-appecosystem-client>=0.3.1   # service registration, discovery, event publishing
-appecosystem-auth>=0.4.0     # peer authentication, shared identity
-appecosystem-ai>=0.1.0,<0.2       # AI provider bridge used by the ecosystem AI routes
+appecosystem-client==0.3.1   # service registration, discovery, event publishing
+appecosystem-auth==0.4.0     # peer authentication, shared identity
+appecosystem-ai==0.1.0       # AI provider bridge used by the ecosystem AI routes

@@ -190,3 +190,11 @@ harness_bridge.py
 
 # A built application bundle, wherever it is produced.
 *.app/
+
+# Desktop packaging lives in the private openeye-packaging repository: the
+# launcher, the signing and the bundle/AppImage assembly. Listed here so a
+# working copy of it, or a stray build script, cannot drift back in unnoticed.
+/scripts/build-macos-app.sh
+/opencv_surveillance/scripts/build-macos-app.sh
+/opencv_surveillance/packaging/
+/packaging/

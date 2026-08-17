@@ -345,8 +345,18 @@ build_macos_app() {
         log_info "Skipping OpenEye.app (OPENEYE_SKIP_APP_BUNDLE=1); use ./start.sh from a Terminal."
         return 0
     }
+    # The bundle builder is not part of this repository. Desktop applications
+    # are built and distributed separately, so a source install provides the
+    # terminal workflow and says so — silently producing no app is how someone
+    # ends up wondering where OpenEye.app went.
     local builder="$SCRIPT_DIR/build-macos-app.sh"
-    [ -x "$builder" ] || return 0
+    if [ ! -x "$builder" ]; then
+        log_info "No application bundle will be built from source."
+        echo "  Start OpenEye from a Terminal with ./start.sh — the camera grant"
+        echo "  then belongs to Terminal, which is what makes discovery work."
+        echo "  The prebuilt OpenEye.app is a separate download."
+        return 0
+    fi
 
     log_info "Building OpenEye.app (gives the camera permission a home)..."
     if OPENEYE_DATA_ROOT="$DATA_ROOT" OPENEYE_VENV="$VENV" PORT="$PORT" \
@@ -356,8 +366,8 @@ build_macos_app() {
         echo "  prompt once — the grant then persists across restarts."
     else
         log_warn "Could not build OpenEye.app (continuing)."
-        echo "  Run scripts/build-macos-app.sh manually, or start OpenEye from a"
-        echo "  Terminal with ./start.sh so the camera can be authorised."
+        echo "  Start OpenEye from a Terminal with ./start.sh so the camera can"
+        echo "  be authorised."
     fi
 }
 

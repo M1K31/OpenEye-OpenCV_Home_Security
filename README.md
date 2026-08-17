@@ -453,8 +453,11 @@ macOS grants camera access per *app*, and it will only prompt an app that has it
 identity. A plain background/launchd service has none, so camera discovery silently
 finds nothing.
 
-**Recommended — use OpenEye.app** (created automatically by the installer in
-`~/Applications`, or build it with `opencv_surveillance/scripts/build-macos-app.sh`):
+**Recommended — use OpenEye.app**, the prebuilt desktop application. It is
+distributed separately from this repository; this repository is the source, the
+terminal install and the Docker image. Running from source, use the Terminal
+workflow below instead — the camera grant then belongs to Terminal, which works
+just as well for a source install.
 1. Launch **OpenEye** from `~/Applications` or Spotlight.
 2. **Approve the camera prompt** the first time it appears.
 3. The UI opens automatically at http://localhost:8200.
