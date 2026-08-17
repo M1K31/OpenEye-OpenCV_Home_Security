@@ -25,6 +25,7 @@ from backend.core.storage_thinning import (
     ACTION_DELETE,
     ACTION_TRANSCODE,
     ThinningSettings,
+    apply_plan,
     build_plan,
 )
 
@@ -279,3 +280,104 @@ class TestThePlanIsReadOnly:
         text = build_plan(settings, now=NOW, free_bytes=0).describe()
 
         assert "nothing has been changed" in text
+
+
+class TestApplyingAPlan:
+    """
+    Enforcement consumes a plan rather than re-deciding what to remove, so the
+    preview a user reads and the action taken are the same computation. What is
+    asserted here is mostly what survives.
+    """
+
+    def _plan(self, **kwargs):
+        settings = ThinningSettings(enabled=True, **kwargs)
+        return build_plan(settings, now=NOW, free_bytes=0)
+
+    def test_it_deletes_what_the_plan_named(self, library):
+        plan = self._plan(video_retention_days=30, image_retention_days=30)
+
+        result = apply_plan(plan)
+
+        assert result.deleted == 2
+        assert not (library.recordings_dir / "old.mp4").exists()
+        assert (library.recordings_dir / "recent.mp4").exists()
+
+    def test_a_dry_run_removes_nothing(self, library):
+        plan = self._plan(video_retention_days=1, image_retention_days=1)
+
+        result = apply_plan(plan, dry_run=True)
+
+        assert result.deleted > 0
+        assert (library.recordings_dir / "old.mp4").exists()
+
+    def test_a_disabled_plan_does_nothing(self, library):
+        plan = build_plan(ThinningSettings(), now=NOW, free_bytes=0)
+
+        result = apply_plan(plan)
+
+        assert result.deleted == 0
+
+    def test_protections_are_rechecked_at_apply_time(self, library):
+        """
+        A plan can be built, held, and applied later — after a cluster has gained
+        a representative, or a person has been enrolled. Trusting the plan's
+        view of what is protected would delete something that became protected
+        in between, and that is not recoverable.
+        """
+        plan = self._plan(image_retention_days=1, video_retention_days=1)
+        target = library.snapshots_dir / "face_cam_old.jpg"
+        assert target.name in {i.path.name for i in plan.items}, "test premise"
+
+        class DB:  # now claims the file as a cluster representative
+            def query(self, *a, **k):
+                return self
+            def all(self):
+                return [("/data/snapshots/face_cam_old.jpg",)]
+
+        result = apply_plan(plan, db=DB())
+
+        assert target.exists(), "a newly protected file was deleted anyway"
+        assert any("protected" in e for e in result.errors)
+
+    def test_it_refuses_to_act_when_protections_cannot_be_read(self, library):
+        """Better to free nothing than to delete without knowing what to keep."""
+        plan = self._plan(image_retention_days=1, video_retention_days=1)
+
+        class ExplodingDB:
+            def query(self, *a, **k):
+                raise RuntimeError("database unavailable")
+
+        result = apply_plan(plan, db=ExplodingDB())
+
+        assert result.deleted == 0
+        assert any("refusing to act" in e for e in result.errors)
+        assert (library.recordings_dir / "old.mp4").exists()
+
+    def test_transcoding_is_reported_as_unimplemented_not_done(self, library):
+        """
+        Saying a re-encode happened when it did not would be a lie, and silently
+        deleting instead of re-encoding would be much worse.
+        """
+        plan = self._plan(transcode_enabled=True, transcode_after_days=30)
+
+        result = apply_plan(plan)
+
+        assert result.transcoded == 0
+        assert result.deleted == 0
+        assert (library.recordings_dir / "old.mp4").exists()
+        assert any("transcoding not implemented" in e for e in result.errors)
+
+    def test_a_file_already_gone_is_not_a_failure(self, library):
+        plan = self._plan(video_retention_days=30)
+        (library.recordings_dir / "old.mp4").unlink()
+
+        result = apply_plan(plan)
+
+        assert result.failed == 0
+
+    def test_bytes_freed_is_measured_not_estimated(self, library):
+        plan = self._plan(video_retention_days=30)
+
+        result = apply_plan(plan)
+
+        assert result.bytes_freed == 1000

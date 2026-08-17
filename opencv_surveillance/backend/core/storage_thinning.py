@@ -315,6 +315,131 @@ def build_plan(
     return plan
 
 
+# ------------------------------------------------------------------- enforcing
+#
+# Consumes a plan rather than re-deciding. The preview a user reads and the
+# action taken are then the same computation, which is the only way the preview
+# can be trusted — and this deletes footage that cannot be recovered.
+
+
+@dataclass
+class ThinningResult:
+    deleted: int = 0
+    transcoded: int = 0
+    failed: int = 0
+    bytes_freed: int = 0
+    marked_aged_out: int = 0
+    errors: List[str] = field(default_factory=list)
+
+    def describe(self) -> str:
+        return (
+            f"deleted {self.deleted}, transcoded {self.transcoded}, "
+            f"failed {self.failed}, freed {self.bytes_freed / 1024 ** 3:.2f} GB"
+        )
+
+
+def _mark_media_gone(db, paths_removed: Set[str]) -> int:
+    """
+    Record that a recording's file is gone, keeping the event itself.
+
+    Where and when someone was seen is the durable part of a detection and costs
+    bytes; the video is what costs gigabytes. Dropping the rows with the file
+    would erase the history that the capture policy works to preserve, and would
+    leave the timeline with holes it cannot explain.
+    """
+    if db is None or not paths_removed:
+        return 0
+
+    from backend.database.models import RecordingEvent
+
+    marked = 0
+    try:
+        for event in db.query(RecordingEvent).filter(
+                RecordingEvent.recording_path.isnot(None)).all():
+            if not event.recording_path:
+                continue
+            if Path(event.recording_path).name in paths_removed:
+                if getattr(event, "media_state", None) != "aged_out":
+                    event.media_state = "aged_out"
+                    marked += 1
+        if marked:
+            db.commit()
+    except Exception as exc:
+        # The files are already gone; failing to annotate them is worth
+        # reporting but must not look like the deletion failed.
+        logger.error("Could not mark aged-out recordings: %s", exc)
+    return marked
+
+
+def apply_plan(plan: ThinningPlan, db=None, dry_run: bool = False) -> ThinningResult:
+    """
+    Carry out a plan. Deletes files. Not reversible.
+
+    Args:
+        plan: built by build_plan(); nothing is re-decided here
+        db: session used to mark recordings whose media is gone
+        dry_run: go through every step except the removal itself
+    """
+    result = ThinningResult()
+
+    if plan.settings is None or not plan.settings.enabled:
+        logger.info("Storage thinning is disabled; nothing was changed")
+        return result
+
+    # Re-derive the protections and check every path against them again, rather
+    # than trusting that the plan was built with the same rules. A plan can be
+    # built, held, and applied later — after a cluster has gained a new
+    # representative, or a person has been enrolled. The cost is one directory
+    # walk; the cost of the alternative is unrecoverable.
+    try:
+        protected = protected_paths(db)
+    except Exception as exc:
+        result.errors.append(f"refusing to act: protections unreadable ({exc})")
+        logger.error("Refusing to thin: %s", exc)
+        return result
+
+    removed_names: Set[str] = set()
+
+    for item in plan.items:
+        try:
+            resolved = item.path.resolve()
+        except OSError:
+            continue
+
+        if resolved in protected:
+            # Between planning and now, this became something we must keep.
+            result.errors.append(f"skipped protected {item.path.name}")
+            logger.warning("Skipping %s: it is now protected", item.path)
+            continue
+
+        if not item.path.exists():
+            continue
+
+        if item.action == ACTION_TRANSCODE:
+            # Deliberately not implemented yet. Reporting it as done would be a
+            # lie, and silently deleting instead would be very much worse.
+            result.errors.append(f"transcoding not implemented: {item.path.name}")
+            continue
+
+        try:
+            size = item.path.stat().st_size
+            if not dry_run:
+                item.path.unlink()
+            result.deleted += 1
+            result.bytes_freed += size
+            removed_names.add(item.path.name)
+        except OSError as exc:
+            result.failed += 1
+            result.errors.append(f"{item.path.name}: {exc}")
+            logger.error("Could not remove %s: %s", item.path, exc)
+
+    if not dry_run:
+        result.marked_aged_out = _mark_media_gone(db, removed_names)
+
+    logger.info("Storage thinning: %s", result.describe())
+    return result
+
+
 # --------------------------------------------------------------------- preview
 #
 # Deliberately the only entry point that exists so far. Enforcement consumes a
@@ -337,6 +462,10 @@ def _cli() -> int:
                         help="keep at least this many GB free (0 = no floor)")
     parser.add_argument("--verbose", action="store_true",
                         help="list every affected file")
+    parser.add_argument("--apply", action="store_true",
+                        help="actually delete. Requires --yes as well.")
+    parser.add_argument("--yes", action="store_true",
+                        help="confirm deletion; irreversible")
     args = parser.parse_args()
 
     settings = ThinningSettings(
@@ -348,8 +477,8 @@ def _cli() -> int:
         free_space_floor_gb=args.floor_gb,
     )
 
+    from backend.database.utils import get_db_context
     try:
-        from backend.database.utils import get_db_context
         with get_db_context() as db:
             plan = build_plan(settings, db=db)
     except Exception as exc:
@@ -364,8 +493,31 @@ def _cli() -> int:
         for item in sorted(plan.items, key=lambda i: i.modified):
             print(f"  {item.action:<9} {item.size_bytes / 1024**2:>8.1f} MB  "
                   f"{item.modified:%Y-%m-%d}  {item.path.name}  ({item.reason})")
-    print("\nThis was a preview. No files were changed.")
-    return 0
+
+    if not args.apply:
+        print("\nThis was a preview. No files were changed.")
+        return 0
+
+    # Two flags, not one. --apply alone is the shape of a command someone runs
+    # while reading the help text; deleting a video library needs the second,
+    # deliberate keystroke.
+    if not args.yes:
+        print("\nRefusing to delete without --yes. Nothing was changed.")
+        return 1
+
+    if not plan.items:
+        print("\nNothing to do.")
+        return 0
+
+    print(f"\nDeleting {len(plan.by_action(ACTION_DELETE))} file(s). This cannot be undone.")
+    with get_db_context() as db:
+        result = apply_plan(plan, db=db)
+    print(f"  {result.describe()}")
+    if result.marked_aged_out:
+        print(f"  {result.marked_aged_out} recording event(s) marked as aged out")
+    for err in result.errors[:10]:
+        print(f"  ! {err}")
+    return 0 if not result.failed else 1
 
 
 if __name__ == "__main__":

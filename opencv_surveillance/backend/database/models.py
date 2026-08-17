@@ -385,6 +385,19 @@ class RecordingEvent(Base):
 
     # File metadata
     file_size_bytes = Column(Integer, nullable=True)
+
+    # Whether the video file behind this event still exists.
+    #
+    # 'present'    the file is there
+    # 'transcoded' re-encoded smaller; still playable
+    # 'aged_out'   thinned away to reclaim space; the event remains
+    #
+    # The event outlives its media on purpose. Where and when someone was seen
+    # is the durable record and costs bytes; the video is what costs gigabytes.
+    # Deleting the row with the file would erase exactly the history the capture
+    # policy works to preserve, and leave the timeline with gaps it cannot
+    # explain — the UI can say the footage aged out, which a missing row cannot.
+    media_state = Column(String, default="present", nullable=True)
     frame_count = Column(Integer, nullable=True)
     thumbnail_path = Column(String, nullable=True)  # Optional thumbnail for preview
 

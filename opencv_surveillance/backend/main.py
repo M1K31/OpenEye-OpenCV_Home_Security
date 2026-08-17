@@ -491,6 +491,24 @@ async def startup_event():
                     ))
                     conn.commit()
                 logger.info("✅ Added trained_at column and backfilled promoted clusters")
+
+        # Storage thinning (v3.12). Recorded here as well as in alembic for the
+        # same reason as trained_at: create_all() adds tables, never columns.
+        if 'recording_events' in inspector.get_table_names():
+            recording_columns = [c['name'] for c in inspector.get_columns('recording_events')]
+            if 'media_state' not in recording_columns:
+                logger.info("Adding media_state column to recording_events table...")
+                with engine.connect() as conn:
+                    conn.execute(text(
+                        "ALTER TABLE recording_events ADD COLUMN media_state TEXT "
+                        "DEFAULT 'present'"
+                    ))
+                    conn.execute(text(
+                        "UPDATE recording_events SET media_state = 'present' "
+                        "WHERE media_state IS NULL"
+                    ))
+                    conn.commit()
+                logger.info("✅ Added media_state column")
     except Exception as e:
         logger.warning(f"Schema migration check failed (non-critical): {e}")
 
