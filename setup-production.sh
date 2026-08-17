@@ -124,24 +124,36 @@ install_dependencies() {
     fi
     rm -f "$PIP_LOG"
 
-    # Shared ecosystem packages enable inter-service auth + AI-profile sync.
-    # They live in the appEcosystem sibling repo, which is optional: OpenEye runs
-    # standalone without them (the routes that need ecosystem_auth degrade to
-    # 503). Mirrors opencv_surveillance/scripts/install-local.sh so both
-    # installers behave the same. A failure here is non-fatal.
-    ECO_ROOT="${ECOSYSTEM_BASE_PATH:-$PROJECT_ROOT/..}/appEcosystem"
-    if [ -d "$ECO_ROOT/auth/python" ]; then
-        echo "  Installing shared ecosystem packages from $ECO_ROOT..."
-        if pip install "$ECO_ROOT/auth/python" \
-                       "$ECO_ROOT/packages/ecosystem-client" \
-                       "$ECO_ROOT/packages/ecosystem-ai" > /dev/null 2>&1; then
-            echo -e "${GREEN}  ✓ Ecosystem integration enabled${NC}"
-        else
-            echo -e "${YELLOW}  ⚠ Shared-package install failed — running standalone (ecosystem sync off)${NC}"
+    # Shared ecosystem packages are an OPT-IN add-on, published to PyPI as
+    # appecosystem-client / -auth / -ai. Deliberately not installed here:
+    # OpenEye runs standalone (guarded imports; the ecosystem routes answer 503
+    # without them), so an install that will never join an ecosystem should not
+    # carry the dependency. Mirrors opencv_surveillance/scripts/install-local.sh.
+    #
+    #   Enable later:  pip install -r opencv_surveillance/requirements-ecosystem.txt
+    #
+    # ECOSYSTEM_FROM_SOURCE=1 installs them EDITABLE from a local checkout, for
+    # developing the packages themselves, and fails loudly if it is missing —
+    # a silent fallback is how a stale copy gets mistaken for a working install.
+    if [ -n "${ECOSYSTEM_FROM_SOURCE:-}" ]; then
+        ECO_ROOT="${ECOSYSTEM_BASE_PATH:-$PROJECT_ROOT/..}/appEcosystem"
+        if [ ! -d "$ECO_ROOT/auth/python" ]; then
+            echo -e "${RED}  ❌ ECOSYSTEM_FROM_SOURCE=1 but no appEcosystem checkout at $ECO_ROOT${NC}"
+            deactivate
+            cd "$PROJECT_ROOT"
+            exit 1
         fi
-    else
-        echo "  appEcosystem not found at $ECO_ROOT — installing standalone."
-        echo "    (set ECOSYSTEM_BASE_PATH to enable ecosystem sync)"
+        echo "  Installing shared ecosystem packages EDITABLE from $ECO_ROOT..."
+        if pip install -e "$ECO_ROOT/auth/python" \
+                       -e "$ECO_ROOT/packages/ecosystem-client" \
+                       -e "$ECO_ROOT/packages/ecosystem-ai" > /dev/null 2>&1; then
+            echo -e "${GREEN}  ✓ Ecosystem packages installed (editable, from source)${NC}"
+        else
+            echo -e "${RED}  ❌ Editable ecosystem install failed${NC}"
+            deactivate
+            cd "$PROJECT_ROOT"
+            exit 1
+        fi
     fi
 
     echo -e "${GREEN}  ✓ Dependencies installed${NC}"

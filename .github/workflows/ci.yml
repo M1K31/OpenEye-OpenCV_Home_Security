@@ -57,10 +57,12 @@ jobs:
         python -m pip install --upgrade pip
         # Use lightweight CI requirements to avoid disk space issues
         pip install -r requirements-ci.txt
-        # ecosystem_auth (public appEcosystem repo) — pinned to a commit SHA to
-        # prevent an unpinned-branch supply-chain change entering the build (F-06).
-        # Bump this SHA deliberately when appEcosystem is intentionally updated.
-        pip install "ecosystem-auth @ git+https://github.com/M1K31/appEcosystem.git@7bdeed0d2af8d6afbb28ef90bc10687267ab51f6#subdirectory=auth/python"
+        # Ecosystem packages from PyPI. This replaced a git URL pinned to a commit
+        # SHA (F-06: stop an unpinned branch changing the build). PyPI releases are
+        # immutable per version, so the floors in requirements-ecosystem.txt carry
+        # that intent. The old SHA also named the pre-rename `ecosystem-auth`, which
+        # ships the same ecosystem_auth module as the published `appecosystem-auth`.
+        pip install -r requirements-ecosystem.txt
     
     - name: Run linting
       run: |

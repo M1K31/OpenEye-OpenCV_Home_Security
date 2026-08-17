@@ -253,18 +253,31 @@ install_python_deps() {
         pip install -r /tmp/oe_req_core.txt
     fi
 
-    # Shared ecosystem packages — enable inter-service auth + AI-profile sync.
-    # Guarded imports mean a missing/failed install just runs standalone.
-    ECO_ROOT="${ECOSYSTEM_BASE_PATH:-$PROJECT_DIR/../..}/appEcosystem"
-    if [ -d "$ECO_ROOT/auth/python" ]; then
-        log_info "Installing shared ecosystem packages from $ECO_ROOT..."
-        pip install "$ECO_ROOT/auth/python" \
-                    "$ECO_ROOT/packages/ecosystem-client" \
-                    "$ECO_ROOT/packages/ecosystem-ai" \
-            && log_success "Shared ecosystem packages installed" \
-            || log_info "Shared-package install failed; running standalone (ecosystem sync disabled)"
-    else
-        log_info "appEcosystem not found at $ECO_ROOT — standalone (set ECOSYSTEM_BASE_PATH to enable sync)"
+    # Shared ecosystem packages are an OPT-IN add-on, published to PyPI as
+    # appecosystem-client / -auth / -ai. They are deliberately not installed
+    # here: OpenEye runs standalone (the imports are guarded and the ecosystem
+    # routes answer 503 without them), so an installation that will never join
+    # an ecosystem should not carry the dependency. The summary at the end of
+    # this script tells the user how to add them — this block used to
+    # contradict that by silently path-installing whenever a sibling checkout
+    # happened to exist.
+    #
+    # ECOSYSTEM_FROM_SOURCE=1 installs them EDITABLE from a local checkout, for
+    # developing the packages themselves. It fails loudly when the checkout is
+    # missing rather than quietly falling back, because a silent fallback is
+    # how a stale copy gets mistaken for a working install.
+    if [ -n "${ECOSYSTEM_FROM_SOURCE:-}" ]; then
+        ECO_ROOT="${ECOSYSTEM_BASE_PATH:-$PROJECT_DIR/../..}/appEcosystem"
+        if [ ! -d "$ECO_ROOT/auth/python" ]; then
+            log_error "ECOSYSTEM_FROM_SOURCE=1 but no appEcosystem checkout at $ECO_ROOT"
+            return 1
+        fi
+        log_info "Installing shared ecosystem packages EDITABLE from $ECO_ROOT..."
+        pip install -e "$ECO_ROOT/auth/python" \
+                    -e "$ECO_ROOT/packages/ecosystem-client" \
+                    -e "$ECO_ROOT/packages/ecosystem-ai" \
+            && log_success "Shared ecosystem packages installed (editable, from source)" \
+            || { log_error "Editable ecosystem install failed"; return 1; }
     fi
 
     # Cyber Agents — an independent project that also integrates with the

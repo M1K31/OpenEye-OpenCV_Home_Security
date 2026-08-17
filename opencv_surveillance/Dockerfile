@@ -42,11 +42,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /build
 
 # Copy and install Python dependencies
-COPY requirements.txt .
+COPY requirements.txt requirements-ecosystem.txt ./
 RUN pip install --user --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --user --no-cache-dir -r requirements.txt && \
-    pip install --user --no-cache-dir \
-      "ecosystem-auth @ git+https://github.com/M1K31/appEcosystem.git@7bdeed0d2af8d6afbb28ef90bc10687267ab51f6#subdirectory=auth/python"
+    # Ecosystem packages now come from PyPI instead of a git URL pinned to a
+    # commit SHA. That pin named the PRE-RENAME distribution `ecosystem-auth`,
+    # which ships the same `ecosystem_auth` module as the published
+    # `appecosystem-auth` — so once anything in this image installed the
+    # published package, two distributions would have owned the same files.
+    #
+    # The SHA pin was a supply-chain control (F-06: stop an unpinned branch
+    # changing the build). PyPI releases are immutable per version, so the
+    # equivalent control here is the version floor in requirements-ecosystem.txt;
+    # pin exact versions there if you want byte-identical rebuilds.
+    pip install --user --no-cache-dir -r requirements-ecosystem.txt
 
 # ============================================
 # Stage 3: Runtime - Minimal production image
