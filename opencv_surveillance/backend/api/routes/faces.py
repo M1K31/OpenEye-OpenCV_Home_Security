@@ -885,6 +885,74 @@ def get_face_statistics(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/faces/gallery")
+def get_gallery_summary(
+    current_user: user_schema.User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """
+    How many likenesses each profile holds, and the limit they are held against.
+
+    **Authentication Required**: Any authenticated user
+
+    Exists because a gallery that stops growing is a decision, and a decision the
+    user cannot see is indistinguishable from a failure. Recognition compares
+    every detected face against every encoding on every frame, so the gallery is
+    bounded: near-identical encodings are refused at training time, and a cap
+    evicts the least distinctive if a profile still reaches it. Without somewhere
+    to see that, "photos stopped increasing" reads as training being broken.
+
+    Deliberately reports counts rather than the distance threshold that produces
+    them. That threshold is a distance in a 128-dimensional embedding space; it
+    has no intuitive meaning, and its failure modes are silent — too high quietly
+    strips a gallery to a handful of encodings, too low disables the bound and
+    the per-frame cost returns. The number of photos kept is the part a person
+    can reason about.
+    """
+    try:
+        from backend.core.face_recognition import (
+            DUPLICATE_DISTANCE,
+            MAX_ENCODINGS_PER_PERSON,
+        )
+        from backend.database.models import FaceCluster
+
+        face_manager = get_face_manager()
+        names = list(getattr(face_manager, "known_face_names", []) or [])
+
+        counts = {}
+        for name in names:
+            counts[name] = counts.get(name, 0) + 1
+
+        trained_at = {}
+        try:
+            for label, when in db.query(FaceCluster.label, FaceCluster.trained_at).all():
+                if label:
+                    trained_at[label] = when.isoformat() if when else None
+        except Exception as e:
+            # A missing trained_at column must not take the whole page down.
+            logger.debug("Could not read cluster training times: %s", e)
+
+        people = [
+            {
+                "name": name,
+                "encodings": count,
+                "at_cap": count >= MAX_ENCODINGS_PER_PERSON,
+                "last_trained": trained_at.get(name),
+            }
+            for name, count in sorted(counts.items(), key=lambda kv: -kv[1])
+        ]
+
+        return {
+            "people": people,
+            "total_encodings": len(names),
+            "max_per_person": MAX_ENCODINGS_PER_PERSON,
+            "duplicate_distance": DUPLICATE_DISTANCE,
+        }
+    except Exception as e:
+        logger.error(f"Error building gallery summary: {e}")
+        raise HTTPException(status_code=500, detail="Could not read the gallery")
+
+
 @router.get("/faces/settings", response_model=face_schema.FaceSettings)
 def get_face_settings(
     current_user: user_schema.User = Depends(get_current_active_user),

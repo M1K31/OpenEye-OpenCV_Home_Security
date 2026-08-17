@@ -67,6 +67,8 @@ const SystemSettingsPage = ({ embedded = false, initialTab = null }) => {
   const [pathValidation, setPathValidation] = useState({});
   // Ecosystem shared-secret setup
   const [ecoSecretStatus, setEcoSecretStatus] = useState('Checking…');
+  // Whether the optional ecosystem packages are present at all.
+  const [ecoSecretAvailable, setEcoSecretAvailable] = useState(true);
   const [ecoSecretInput, setEcoSecretInput] = useState('');
   const [ecoSecretGenerated, setEcoSecretGenerated] = useState('');
 
@@ -223,12 +225,21 @@ const SystemSettingsPage = ({ embedded = false, initialTab = null }) => {
   const refreshEcoSecretStatus = useCallback(async () => {
     try {
       const { data } = await apiClient.get('/ecosystem/secret');
-      if (data.configured) {
+      if (data.available === false) {
+        // Not installed is a state, not a fault. Most installations are
+        // standalone — the ecosystem packages are an opt-in add-on — so this is
+        // the ordinary case and should read as information rather than an error.
+        setEcoSecretAvailable(false);
+        setEcoSecretStatus(data.detail || 'Ecosystem integration is not installed.');
+      } else if (data.configured) {
+        setEcoSecretAvailable(true);
         setEcoSecretStatus(`Configured (${data.masked}, from ${data.source}). Stored at ${data.path}.`);
       } else {
+        setEcoSecretAvailable(true);
         setEcoSecretStatus(`Not configured. Generate one here (primary device) or paste the shared secret. File: ${data.path}.`);
       }
     } catch (error) {
+      setEcoSecretAvailable(true);
       setEcoSecretStatus(error.response?.data?.detail || 'Could not load secret status.');
     }
   }, []);
@@ -799,24 +810,31 @@ const SystemSettingsPage = ({ embedded = false, initialTab = null }) => {
               <span style={styles.labelText}>Shared secret</span>
               <span style={styles.labelHint}>{ecoSecretStatus}</span>
             </label>
-            <div style={styles.pathInputContainer}>
-              <input
-                type="password"
-                value={ecoSecretInput}
-                onChange={(e) => setEcoSecretInput(e.target.value)}
-                className="form-input"
-                placeholder="Paste shared secret (64 hex chars)"
-                autoComplete="off"
-                spellCheck="false"
-              />
-              <button onClick={() => applyEcoSecret(false)} className="btn btn-secondary" type="button">
-                Save
-              </button>
-              <button onClick={generateEcoSecret} className="btn btn-secondary" type="button"
-                      title="Primary device only — creates a new secret">
-                Generate
-              </button>
-            </div>
+            {/* Hidden rather than disabled when the packages are absent. A
+                disabled control still advertises a feature and invites the
+                question "why can't I use this?"; absent controls say the
+                feature is not part of this installation, which is the truth.
+                The status line above already explains it. */}
+            {ecoSecretAvailable && (
+              <div style={styles.pathInputContainer}>
+                <input
+                  type="password"
+                  value={ecoSecretInput}
+                  onChange={(e) => setEcoSecretInput(e.target.value)}
+                  className="form-input"
+                  placeholder="Paste shared secret (64 hex chars)"
+                  autoComplete="off"
+                  spellCheck="false"
+                />
+                <button onClick={() => applyEcoSecret(false)} className="btn btn-secondary" type="button">
+                  Save
+                </button>
+                <button onClick={generateEcoSecret} className="btn btn-secondary" type="button"
+                        title="Primary device only — creates a new secret">
+                  Generate
+                </button>
+              </div>
+            )}
           </div>
 
           {ecoSecretGenerated && (

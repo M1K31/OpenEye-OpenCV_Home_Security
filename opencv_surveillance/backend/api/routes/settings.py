@@ -271,12 +271,34 @@ class EcosystemSecretApply(BaseModel):
 async def get_ecosystem_secret_status(
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    """Status of the shared secret — configured?, source, path, masked. Never the value."""
+    """
+    Status of the shared secret — configured?, source, path, masked. Never the value.
+
+    Answers 200 with `available: false` when the optional ecosystem packages are
+    not installed, rather than 501.
+
+    This is a question about state, and "the feature is not installed" is a
+    true answer to it, not a failure to answer. Returning 501 made every standalone
+    installation — which is most of them, since the ecosystem packages are an
+    opt-in add-on — log failed requests to the browser console on every visit to
+    the settings page. Correct behaviour that looks like breakage is its own
+    defect, and console noise is worse than cosmetic: it buries the errors that
+    do matter.
+
+    The POST routes below still answer 501. Those are asked to *do* something,
+    and without the package they genuinely cannot.
+    """
     try:
         from ecosystem_auth.setup import secret_status
     except Exception:
-        raise HTTPException(status_code=501, detail="ecosystem_auth not installed")
-    return secret_status()
+        return {
+            "available": False,
+            "configured": False,
+            "detail": "Ecosystem integration is not installed. This device works "
+                      "standalone; install the optional appEcosystem packages to "
+                      "link it with other devices.",
+        }
+    return {"available": True, **secret_status()}
 
 
 @router.post("/ecosystem/secret")
