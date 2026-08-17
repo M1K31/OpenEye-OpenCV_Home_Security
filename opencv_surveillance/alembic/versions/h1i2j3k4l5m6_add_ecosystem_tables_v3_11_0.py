@@ -7,6 +7,12 @@ Create Date: 2025-12-14 12:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
+from backend.database.migration_guards import (
+    add_column_if_missing,
+    create_index_if_missing,
+    create_table_if_missing,
+)
+
 
 
 # revision identifiers, used by Alembic.
@@ -18,7 +24,7 @@ depends_on = None
 
 def upgrade() -> None:
     # Create ecosystem_connections table (v3.11.1: enhanced with multi-device support)
-    op.create_table(
+    create_table_if_missing(
         'ecosystem_connections',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('app_name', sa.String(50), nullable=False, index=True),
@@ -46,7 +52,7 @@ def upgrade() -> None:
     )
     
     # Create notification_dedup table
-    op.create_table(
+    create_table_if_missing(
         'notification_dedup',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('dedupe_key', sa.String(64), nullable=False, unique=True, index=True),
@@ -58,7 +64,7 @@ def upgrade() -> None:
     )
     
     # Create mobile_devices table
-    op.create_table(
+    create_table_if_missing(
         'mobile_devices',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('device_id', sa.String(255), nullable=False, unique=True, index=True),
@@ -74,7 +80,7 @@ def upgrade() -> None:
     )
     
     # Create face_training_sessions table
-    op.create_table(
+    create_table_if_missing(
         'face_training_sessions',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('session_id', sa.String(64), nullable=False, unique=True, index=True),
@@ -92,7 +98,7 @@ def upgrade() -> None:
     )
     
     # v3.11.1: Create user_preferences table
-    op.create_table(
+    create_table_if_missing(
         'user_preferences',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('user_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=False, unique=True, index=True),
@@ -121,17 +127,16 @@ def upgrade() -> None:
     )
     
     # v3.11.1: Add new columns to users table
-    with op.batch_alter_table('users') as batch_op:
-        batch_op.add_column(sa.Column('display_name', sa.String(100), nullable=True))
-        batch_op.add_column(sa.Column('avatar_url', sa.String(255), nullable=True))
-        batch_op.add_column(sa.Column('face_profile_name', sa.String(100), nullable=True))
-        batch_op.add_column(sa.Column('synced_from', sa.String(50), nullable=True))
-        batch_op.add_column(sa.Column('synced_at', sa.DateTime(), nullable=True))
-        batch_op.add_column(sa.Column('external_id', sa.String(255), nullable=True))
-        batch_op.add_column(sa.Column('last_login', sa.DateTime(), nullable=True))
+    add_column_if_missing('users', sa.Column('display_name', sa.String(100), nullable=True))
+    add_column_if_missing('users', sa.Column('avatar_url', sa.String(255), nullable=True))
+    add_column_if_missing('users', sa.Column('face_profile_name', sa.String(100), nullable=True))
+    add_column_if_missing('users', sa.Column('synced_from', sa.String(50), nullable=True))
+    add_column_if_missing('users', sa.Column('synced_at', sa.DateTime(), nullable=True))
+    add_column_if_missing('users', sa.Column('external_id', sa.String(255), nullable=True))
+    add_column_if_missing('users', sa.Column('last_login', sa.DateTime(), nullable=True))
     
     # Create indexes for ecosystem_connections
-    op.create_index('ix_ecosystem_connections_app_host', 'ecosystem_connections', ['app_name', 'host'])
+    create_index_if_missing('ix_ecosystem_connections_app_host', 'ecosystem_connections', ['app_name', 'host'])
 
 
 def downgrade() -> None:

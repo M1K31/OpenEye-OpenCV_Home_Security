@@ -14,6 +14,12 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from backend.database.migration_guards import (
+    add_column_if_missing,
+    create_index_if_missing,
+    create_table_if_missing,
+)
+
 
 
 # revision identifiers, used by Alembic.
@@ -25,22 +31,21 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Add face detection configuration columns to cameras table."""
-    with op.batch_alter_table('cameras', schema=None) as batch_op:
-        # Detection model: "hog" (CPU, fast) or "cnn" (GPU, accurate)
-        batch_op.add_column(sa.Column('face_detection_model', sa.String(),
-                                       nullable=True, server_default='hog'))
+    # Detection model: "hog" (CPU, fast) or "cnn" (GPU, accurate)
+    add_column_if_missing('cameras', sa.Column('face_detection_model', sa.String(),
+                                   nullable=True, server_default='hog'))
 
-        # Upsample times: 0 (fastest), 1 (balanced), 2 (finds smallest faces)
-        batch_op.add_column(sa.Column('face_detection_upsample', sa.Integer(),
-                                       nullable=True, server_default='1'))
+    # Upsample times: 0 (fastest), 1 (balanced), 2 (finds smallest faces)
+    add_column_if_missing('cameras', sa.Column('face_detection_upsample', sa.Integer(),
+                                   nullable=True, server_default='1'))
 
-        # Scale mode: "auto" (adaptive), "none" (native), or "0.5" (manual)
-        batch_op.add_column(sa.Column('face_detection_scale', sa.String(),
-                                       nullable=True, server_default='auto'))
+    # Scale mode: "auto" (adaptive), "none" (native), or "0.5" (manual)
+    add_column_if_missing('cameras', sa.Column('face_detection_scale', sa.String(),
+                                   nullable=True, server_default='auto'))
 
-        # Minimum face size in pixels to detect (filters false positives)
-        batch_op.add_column(sa.Column('min_face_size_pixels', sa.Integer(),
-                                       nullable=True, server_default='20'))
+    # Minimum face size in pixels to detect (filters false positives)
+    add_column_if_missing('cameras', sa.Column('min_face_size_pixels', sa.Integer(),
+                                   nullable=True, server_default='20'))
 
 
 def downgrade() -> None:

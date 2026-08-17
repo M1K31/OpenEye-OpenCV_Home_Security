@@ -723,7 +723,7 @@ print_completion() {
     log_info "Documentation:"
     echo "  - User Guide: docs/USER_GUIDE.md"
     echo "  - Setup Guide: docs/setup_guide.md"
-    echo "  - API Reference: docs/api_reference.md"
+    echo "  - API Reference: docs/API_REFERENCE.md"
     echo ""
     # Both optional sets are named here rather than left to be discovered. The
     # base install deliberately omits them, and someone who wanted object

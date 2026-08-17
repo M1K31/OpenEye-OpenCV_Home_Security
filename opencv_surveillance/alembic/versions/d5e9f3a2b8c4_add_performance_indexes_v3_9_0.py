@@ -9,6 +9,12 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from backend.database.migration_guards import (
+    add_column_if_missing,
+    create_index_if_missing,
+    create_table_if_missing,
+)
+
 
 # revision identifiers, used by Alembic.
 revision: str = 'd5e9f3a2b8c4'
@@ -30,47 +36,42 @@ def upgrade() -> None:
     """
 
     # RecordingEvent indexes
-    with op.batch_alter_table('recording_events', schema=None) as batch_op:
-        # Critical: Used for sorting recordings by date (mentioned in code comments)
-        batch_op.create_index('idx_recording_started_at', ['started_at'], unique=False)
+    # Critical: Used for sorting recordings by date (mentioned in code comments)
+    create_index_if_missing('idx_recording_started_at', 'recording_events', ['started_at'], unique=False)
 
-        # Composite index for camera + time queries (very common pattern)
-        batch_op.create_index('idx_recording_camera_time', ['camera_id', 'started_at'], unique=False)
+    # Composite index for camera + time queries (very common pattern)
+    create_index_if_missing('idx_recording_camera_time', 'recording_events', ['camera_id', 'started_at'], unique=False)
 
-        # Index on ended_at for filtering completed recordings
-        batch_op.create_index('idx_recording_ended_at', ['ended_at'], unique=False)
+    # Index on ended_at for filtering completed recordings
+    create_index_if_missing('idx_recording_ended_at', 'recording_events', ['ended_at'], unique=False)
 
     # FaceDetectionEvent composite indexes
-    with op.batch_alter_table('face_detection_events', schema=None) as batch_op:
-        # Composite index for camera + time queries (face history per camera)
-        batch_op.create_index('idx_face_camera_time', ['camera_id', 'detected_at'], unique=False)
+    # Composite index for camera + time queries (face history per camera)
+    create_index_if_missing('idx_face_camera_time', 'face_detection_events', ['camera_id', 'detected_at'], unique=False)
 
-        # Composite index for person + time queries (face history per person)
-        batch_op.create_index('idx_face_person_time', ['person_name', 'detected_at'], unique=False)
+    # Composite index for person + time queries (face history per person)
+    create_index_if_missing('idx_face_person_time', 'face_detection_events', ['person_name', 'detected_at'], unique=False)
 
     # MotionDetectionEvent composite indexes
-    with op.batch_alter_table('motion_detection_events', schema=None) as batch_op:
-        # Composite index for camera + time queries (motion history per camera)
-        batch_op.create_index('idx_motion_camera_time', ['camera_id', 'detected_at'], unique=False)
+    # Composite index for camera + time queries (motion history per camera)
+    create_index_if_missing('idx_motion_camera_time', 'motion_detection_events', ['camera_id', 'detected_at'], unique=False)
 
     # FaceCluster indexes
-    with op.batch_alter_table('face_clusters', schema=None) as batch_op:
-        # Index for filtering identified vs unidentified clusters
-        batch_op.create_index('idx_cluster_identified', ['is_identified'], unique=False)
+    # Index for filtering identified vs unidentified clusters
+    create_index_if_missing('idx_cluster_identified', 'face_clusters', ['is_identified'], unique=False)
 
-        # Index for sorting clusters by creation date
-        batch_op.create_index('idx_cluster_created_at', ['created_at'], unique=False)
+    # Index for sorting clusters by creation date
+    create_index_if_missing('idx_cluster_created_at', 'face_clusters', ['created_at'], unique=False)
 
-        # Index for finding recently seen clusters
-        batch_op.create_index('idx_cluster_last_seen', ['last_seen_at'], unique=False)
+    # Index for finding recently seen clusters
+    create_index_if_missing('idx_cluster_last_seen', 'face_clusters', ['last_seen_at'], unique=False)
 
     # User indexes (for new lockout feature)
-    with op.batch_alter_table('users', schema=None) as batch_op:
-        # Index for checking account lockout status
-        batch_op.create_index('idx_user_locked_until', ['account_locked_until'], unique=False)
+    # Index for checking account lockout status
+    create_index_if_missing('idx_user_locked_until', 'users', ['account_locked_until'], unique=False)
 
-        # Index for checking active users
-        batch_op.create_index('idx_user_is_active', ['is_active'], unique=False)
+    # Index for checking active users
+    create_index_if_missing('idx_user_is_active', 'users', ['is_active'], unique=False)
 
 
 def downgrade() -> None:

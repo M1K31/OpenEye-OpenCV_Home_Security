@@ -9,6 +9,12 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from backend.database.migration_guards import (
+    add_column_if_missing,
+    create_index_if_missing,
+    create_table_if_missing,
+)
+
 from sqlalchemy.dialects import sqlite
 
 # revision identifiers, used by Alembic.
@@ -22,7 +28,7 @@ def upgrade() -> None:
     """Upgrade schema - Add hardware-aware feature management tables."""
 
     # Create feature_states table
-    op.create_table(
+    create_table_if_missing(
         'feature_states',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('feature_id', sa.String(), nullable=False),
@@ -37,13 +43,12 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
 
-    with op.batch_alter_table('feature_states', schema=None) as batch_op:
-        batch_op.create_index('ix_feature_states_enabled', ['enabled'], unique=False)
-        batch_op.create_index('ix_feature_states_feature_id', ['feature_id'], unique=True)
-        batch_op.create_index('ix_feature_states_id', ['id'], unique=False)
+    create_index_if_missing('ix_feature_states_enabled', 'feature_states', ['enabled'], unique=False)
+    create_index_if_missing('ix_feature_states_feature_id', 'feature_states', ['feature_id'], unique=True)
+    create_index_if_missing('ix_feature_states_id', 'feature_states', ['id'], unique=False)
 
     # Create hardware_scan_history table
-    op.create_table(
+    create_table_if_missing(
         'hardware_scan_history',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('scan_type', sa.String(), nullable=True),
@@ -62,9 +67,8 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
 
-    with op.batch_alter_table('hardware_scan_history', schema=None) as batch_op:
-        batch_op.create_index('ix_hardware_scan_history_id', ['id'], unique=False)
-        batch_op.create_index('ix_hardware_scan_history_scanned_at', ['scanned_at'], unique=False)
+    create_index_if_missing('ix_hardware_scan_history_id', 'hardware_scan_history', ['id'], unique=False)
+    create_index_if_missing('ix_hardware_scan_history_scanned_at', 'hardware_scan_history', ['scanned_at'], unique=False)
 
 
 def downgrade() -> None:

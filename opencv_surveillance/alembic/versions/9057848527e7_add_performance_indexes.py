@@ -9,6 +9,12 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from backend.database.migration_guards import (
+    add_column_if_missing,
+    create_index_if_missing,
+    create_table_if_missing,
+)
+
 
 
 # revision identifiers, used by Alembic.
@@ -21,13 +27,13 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Add performance indexes for common queries"""
     # RecordingEvent indexes
-    op.create_index(
+    create_index_if_missing(
         'idx_recording_camera_time',
         'recording_events',
         ['camera_id', 'started_at'],
         unique=False
     )
-    op.create_index(
+    create_index_if_missing(
         'idx_recording_started_at',
         'recording_events',
         ['started_at'],
@@ -35,19 +41,19 @@ def upgrade() -> None:
     )
 
     # FaceDetectionEvent indexes
-    op.create_index(
+    create_index_if_missing(
         'idx_face_camera_time',
         'face_detection_events',
         ['camera_id', 'detected_at'],
         unique=False
     )
-    op.create_index(
+    create_index_if_missing(
         'idx_face_person_time',
         'face_detection_events',
         ['person_name', 'detected_at'],
         unique=False
     )
-    op.create_index(
+    create_index_if_missing(
         'idx_face_cluster_time',
         'face_detection_events',
         ['cluster_id', 'detected_at'],
@@ -55,13 +61,13 @@ def upgrade() -> None:
     )
 
     # MotionDetectionEvent indexes
-    op.create_index(
+    create_index_if_missing(
         'idx_motion_camera_time',
         'motion_detection_events',
         ['camera_id', 'detected_at'],
         unique=False
     )
-    op.create_index(
+    create_index_if_missing(
         'idx_motion_detected_at',
         'motion_detection_events',
         ['detected_at'],
@@ -69,13 +75,13 @@ def upgrade() -> None:
     )
 
     # FaceCluster indexes
-    op.create_index(
+    create_index_if_missing(
         'idx_cluster_identified',
         'face_clusters',
         ['is_identified'],
         unique=False
     )
-    op.create_index(
+    create_index_if_missing(
         'idx_cluster_updated',
         'face_clusters',
         ['updated_at'],

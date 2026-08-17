@@ -9,6 +9,12 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from backend.database.migration_guards import (
+    add_column_if_missing,
+    create_index_if_missing,
+    create_table_if_missing,
+)
+
 
 # revision identifiers, used by Alembic.
 revision: str = 'f9g6h5i4j3k2'
@@ -21,13 +27,12 @@ def upgrade() -> None:
     """Upgrade schema - Add object detection alert configuration fields."""
 
     # Add object detection alert fields to alert_configurations table
-    with op.batch_alter_table('alert_configurations', schema=None) as batch_op:
-        # v3.10.0: Object Detection Alerts
-        batch_op.add_column(sa.Column('object_detection_alerts_enabled', sa.Boolean(), nullable=True, server_default='1'))
-        batch_op.add_column(sa.Column('vehicle_alerts_enabled', sa.Boolean(), nullable=True, server_default='1'))
-        batch_op.add_column(sa.Column('animal_alerts_enabled', sa.Boolean(), nullable=True, server_default='1'))
-        batch_op.add_column(sa.Column('package_alerts_enabled', sa.Boolean(), nullable=True, server_default='1'))
-        batch_op.add_column(sa.Column('identified_object_alerts_enabled', sa.Boolean(), nullable=True, server_default='1'))
+    # v3.10.0: Object Detection Alerts
+    add_column_if_missing('alert_configurations', sa.Column('object_detection_alerts_enabled', sa.Boolean(), nullable=True, server_default='1'))
+    add_column_if_missing('alert_configurations', sa.Column('vehicle_alerts_enabled', sa.Boolean(), nullable=True, server_default='1'))
+    add_column_if_missing('alert_configurations', sa.Column('animal_alerts_enabled', sa.Boolean(), nullable=True, server_default='1'))
+    add_column_if_missing('alert_configurations', sa.Column('package_alerts_enabled', sa.Boolean(), nullable=True, server_default='1'))
+    add_column_if_missing('alert_configurations', sa.Column('identified_object_alerts_enabled', sa.Boolean(), nullable=True, server_default='1'))
 
     # Update existing rows to have default values (enabled)
     op.execute("UPDATE alert_configurations SET object_detection_alerts_enabled = 1 WHERE object_detection_alerts_enabled IS NULL")

@@ -13,6 +13,12 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from backend.database.migration_guards import (
+    add_column_if_missing,
+    create_index_if_missing,
+    create_table_if_missing,
+)
+
 from datetime import datetime
 
 # revision identifiers, used by Alembic.
@@ -30,7 +36,7 @@ def upgrade() -> None:
     """
 
     # Create identified_objects table
-    op.create_table(
+    create_table_if_missing(
         'identified_objects',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('object_id', sa.String(), nullable=False),
@@ -51,14 +57,13 @@ def upgrade() -> None:
     )
 
     # Create indexes for identified_objects
-    with op.batch_alter_table('identified_objects', schema=None) as batch_op:
-        batch_op.create_index('idx_identified_object_id', ['object_id'], unique=True)
-        batch_op.create_index('idx_identified_object_name', ['name'], unique=False)
-        batch_op.create_index('idx_identified_object_class', ['object_class'], unique=False)
-        batch_op.create_index('idx_identified_object_active', ['is_active'], unique=False)
+    create_index_if_missing('idx_identified_object_id', 'identified_objects', ['object_id'], unique=True)
+    create_index_if_missing('idx_identified_object_name', 'identified_objects', ['name'], unique=False)
+    create_index_if_missing('idx_identified_object_class', 'identified_objects', ['object_class'], unique=False)
+    create_index_if_missing('idx_identified_object_active', 'identified_objects', ['is_active'], unique=False)
 
     # Create object_detection_events table
-    op.create_table(
+    create_table_if_missing(
         'object_detection_events',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('camera_id', sa.String(), nullable=False),
@@ -84,18 +89,16 @@ def upgrade() -> None:
     )
 
     # Create indexes for object_detection_events
-    with op.batch_alter_table('object_detection_events', schema=None) as batch_op:
-        batch_op.create_index('idx_object_camera_id', ['camera_id'], unique=False)
-        batch_op.create_index('idx_object_class', ['object_class'], unique=False)
-        batch_op.create_index('idx_object_detected_at', ['detected_at'], unique=False)
-        batch_op.create_index('idx_object_camera_time', ['camera_id', 'detected_at'], unique=False)
-        batch_op.create_index('idx_object_recording_id', ['recording_id'], unique=False)
-        batch_op.create_index('idx_object_identified_id', ['identified_object_id'], unique=False)
+    create_index_if_missing('idx_object_camera_id', 'object_detection_events', ['camera_id'], unique=False)
+    create_index_if_missing('idx_object_class', 'object_detection_events', ['object_class'], unique=False)
+    create_index_if_missing('idx_object_detected_at', 'object_detection_events', ['detected_at'], unique=False)
+    create_index_if_missing('idx_object_camera_time', 'object_detection_events', ['camera_id', 'detected_at'], unique=False)
+    create_index_if_missing('idx_object_recording_id', 'object_detection_events', ['recording_id'], unique=False)
+    create_index_if_missing('idx_object_identified_id', 'object_detection_events', ['identified_object_id'], unique=False)
 
     # Add object detection columns to recording_events table
-    with op.batch_alter_table('recording_events', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('objects_detected', sa.Integer(), default=0))
-        batch_op.add_column(sa.Column('identified_objects_detected', sa.Integer(), default=0))
+    add_column_if_missing('recording_events', sa.Column('objects_detected', sa.Integer(), default=0))
+    add_column_if_missing('recording_events', sa.Column('identified_objects_detected', sa.Integer(), default=0))
 
 
 def downgrade() -> None:

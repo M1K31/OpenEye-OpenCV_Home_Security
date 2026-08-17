@@ -369,27 +369,54 @@ async def startup_event():
     """
     logger.info("Starting OpenEye Surveillance System...")
 
-    # Run database migrations automatically
-    logger.info("Running database migrations...")
-    try:
-        from alembic.config import Config
-        from alembic import command
-
-        # Get the path to alembic.ini
-        alembic_cfg = Config(str(Path(__file__).parent.parent / "alembic.ini"))
-
-        # Run migrations to latest version
-        command.upgrade(alembic_cfg, "head")
-        logger.info("Database migrations completed successfully")
-    except Exception as e:
-        logger.warning(f"Migration warning (non-critical): {e}")
-        logger.info("Falling back to legacy table creation...")
-
-    # Create database tables (fallback for safety, but migrations should handle this)
+    # Tables first, migrations second. This order matters and used to be the
+    # other way round.
+    #
+    # No migration creates the `cameras` table — or most of the others. The base
+    # schema comes from create_all(); the migration chain only applies
+    # increments on top of it and assumes those tables already exist. Running
+    # alembic first therefore failed on a fresh database ("no such table:
+    # cameras"), the failure was swallowed as "non-critical", and
+    # alembic_version was never stamped. Every later start repeated it, so the
+    # chain could never advance and every column-adding migration silently did
+    # nothing.
     logger.info("Ensuring database tables exist...")
     models.Base.metadata.create_all(bind=engine)
     alert_models.Base.metadata.create_all(bind=engine)
     logger.info("Database tables verified successfully")
+
+    logger.info("Running database migrations...")
+    try:
+        from alembic.config import Config
+        from alembic import command
+        from sqlalchemy import inspect as sa_inspect
+
+        alembic_cfg = Config(str(Path(__file__).parent.parent / "alembic.ini"))
+
+        inspector = sa_inspect(engine)
+        tables = set(inspector.get_table_names())
+
+        if "alembic_version" not in tables and tables:
+            # create_all() just built the schema from the current models, so
+            # every migration in the chain is already satisfied by definition.
+            # Stamping records that fact; running the chain instead would try to
+            # create tables that exist. This is the case that previously left an
+            # install permanently unversioned.
+            command.stamp(alembic_cfg, "head")
+            logger.info("Database schema built from models; stamped at head")
+        else:
+            command.upgrade(alembic_cfg, "head")
+            logger.info("Database migrations completed successfully")
+    except Exception as e:
+        # Not "non-critical". A failed migration is precisely why schema changes
+        # stop landing, and calling it harmless is how that went unnoticed
+        # through several releases. The startup column-adder below is a backstop
+        # for the columns it knows about, not a substitute for this working.
+        logger.error(
+            "DATABASE MIGRATION FAILED — schema changes will not be applied: %s", e)
+        logger.error(
+            "The application will continue, but any migration after the failure "
+            "point has not run. This needs investigation.")
     
     # Add missing columns for audio recording (migration)
     logger.info("Checking for database schema updates...")

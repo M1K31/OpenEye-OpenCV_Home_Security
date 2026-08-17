@@ -101,8 +101,21 @@ dist/
 build/
 *.egg-info/
 
-# Documentation - Ignore all except essential docs
-# Root level - keep only main docs
+# Documentation — an ALLOWLIST, deliberately.
+#
+# Everything .md is ignored and shipped documents are re-admitted one by one
+# below. This keeps planning material, audits and working notes out of the
+# public repository, which is the point.
+#
+# The cost, worth knowing before adding a document: a NEW file needs an
+# explicit "!" line here or it is silently dropped. `git add -A` stages nothing
+# and `git commit` reports a clean tree, which reads as "already committed"
+# rather than "never added". If a document you wrote is not appearing in the
+# repository, this rule is why.
+#
+# That has already happened once: docs/development/ADR-001-csrf.md is cited by
+# main.py as the reason CSRF is disabled, and was not in the repository at all,
+# so anyone cloning found a comment pointing at a document that did not exist.
 *.md
 *.md.*
 !/README.md
@@ -126,6 +139,9 @@ build/
 !/docs/development/
 /docs/development/*
 !/docs/development/WEBSOCKET_IMPLEMENTATION.md
+# Cited by backend/main.py:210 as the justification for CSRF being off.
+# A decision the code points at must be readable by anyone reading the code.
+!/docs/development/ADR-001-csrf.md
 
 # Ignore non-essential doc subdirectories entirely
 /docs/archived-releases/

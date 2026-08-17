@@ -9,6 +9,12 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from backend.database.migration_guards import (
+    add_column_if_missing,
+    create_index_if_missing,
+    create_table_if_missing,
+)
+
 
 # revision identifiers, used by Alembic.
 revision: str = 'b9c5e7f3d4a6'
@@ -21,7 +27,7 @@ def upgrade() -> None:
     """Upgrade schema - Add refresh_tokens table for JWT token rotation."""
 
     # Create refresh_tokens table
-    op.create_table(
+    create_table_if_missing(
         'refresh_tokens',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('user_id', sa.Integer(), nullable=False),
@@ -35,12 +41,11 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
 
-    with op.batch_alter_table('refresh_tokens', schema=None) as batch_op:
-        batch_op.create_index('ix_refresh_tokens_expires_at', ['expires_at'], unique=False)
-        batch_op.create_index('ix_refresh_tokens_id', ['id'], unique=False)
-        batch_op.create_index('ix_refresh_tokens_revoked', ['revoked'], unique=False)
-        batch_op.create_index('ix_refresh_tokens_token', ['token'], unique=True)
-        batch_op.create_index('ix_refresh_tokens_user_id', ['user_id'], unique=False)
+    create_index_if_missing('ix_refresh_tokens_expires_at', 'refresh_tokens', ['expires_at'], unique=False)
+    create_index_if_missing('ix_refresh_tokens_id', 'refresh_tokens', ['id'], unique=False)
+    create_index_if_missing('ix_refresh_tokens_revoked', 'refresh_tokens', ['revoked'], unique=False)
+    create_index_if_missing('ix_refresh_tokens_token', 'refresh_tokens', ['token'], unique=True)
+    create_index_if_missing('ix_refresh_tokens_user_id', 'refresh_tokens', ['user_id'], unique=False)
 
 
 def downgrade() -> None:

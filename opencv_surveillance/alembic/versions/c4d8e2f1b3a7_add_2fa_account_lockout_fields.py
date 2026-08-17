@@ -9,6 +9,12 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from backend.database.migration_guards import (
+    add_column_if_missing,
+    create_index_if_missing,
+    create_table_if_missing,
+)
+
 
 # revision identifiers, used by Alembic.
 revision: str = 'c4d8e2f1b3a7'
@@ -21,11 +27,10 @@ def upgrade() -> None:
     """Upgrade schema - Add 2FA account lockout tracking fields to users table."""
 
     # Add account lockout fields to users table
-    with op.batch_alter_table('users', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('failed_2fa_attempts', sa.Integer(), nullable=True, server_default='0'))
-        batch_op.add_column(sa.Column('last_failed_2fa_attempt', sa.DateTime(), nullable=True))
-        batch_op.add_column(sa.Column('account_locked_until', sa.DateTime(), nullable=True))
-        batch_op.add_column(sa.Column('lockout_count', sa.Integer(), nullable=True, server_default='0'))
+    add_column_if_missing('users', sa.Column('failed_2fa_attempts', sa.Integer(), nullable=True, server_default='0'))
+    add_column_if_missing('users', sa.Column('last_failed_2fa_attempt', sa.DateTime(), nullable=True))
+    add_column_if_missing('users', sa.Column('account_locked_until', sa.DateTime(), nullable=True))
+    add_column_if_missing('users', sa.Column('lockout_count', sa.Integer(), nullable=True, server_default='0'))
 
     # Update existing rows to have default values
     op.execute("UPDATE users SET failed_2fa_attempts = 0 WHERE failed_2fa_attempts IS NULL")

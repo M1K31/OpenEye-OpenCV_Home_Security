@@ -21,6 +21,12 @@ Revises: 6704ce3e211d
 """
 from alembic import op
 import sqlalchemy as sa
+from backend.database.migration_guards import (
+    add_column_if_missing,
+    create_index_if_missing,
+    create_table_if_missing,
+)
+
 
 
 revision = '9c1d47f0be31'
@@ -30,8 +36,7 @@ depends_on = None
 
 
 def upgrade():
-    with op.batch_alter_table('face_clusters') as batch_op:
-        batch_op.add_column(sa.Column('trained_at', sa.DateTime(), nullable=True))
+    add_column_if_missing('face_clusters', sa.Column('trained_at', sa.DateTime(), nullable=True))
 
     # Backfill: a cluster that carries a label and is marked identified went
     # through the promotion path, which is the only thing that sets both.
