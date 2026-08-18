@@ -172,11 +172,22 @@ class Recorder:
             print(f"Error: Could not open video writer for {self.filename} with any available codec")
             return
 
-        self.is_recording = True
+        # Everything this recording needs is set BEFORE is_recording is raised.
+        #
+        # The order used to be the other way round, which published the recorder
+        # as running one statement before it had a start time. Anything reading
+        # the recorder in that window saw is_recording=True with
+        # recording_start_time=None and raised
+        #
+        #     unsupported operand type(s) for -: 'datetime.datetime' and 'NoneType'
+        #
+        # A one-statement window sounds harmless; the streaming loop reads at
+        # 30 FPS, and it landed four times in one afternoon.
         self.recording_start_time = datetime.now()
         self.frame_count = 0
         self.detected_faces = []
         self.associated_motion_event_ids = []
+        self.is_recording = True
 
         print(f"Started recording to {self.filename}")
 
@@ -264,10 +275,14 @@ class Recorder:
         if writer:
             writer.release()
 
-            # Calculate recording duration
+            # Guarded as well as ordered. stop() can be reached from the camera
+            # thread and from shutdown, and a recording with no start time is a
+            # recording of nothing — worth zero, not worth an exception that
+            # loses the file's metadata entirely.
             duration = (
-                datetime.now() -
-                self.recording_start_time).total_seconds()
+                (datetime.now() - self.recording_start_time).total_seconds()
+                if self.recording_start_time else 0.0
+            )
 
             # Get file size
             file_size = (
@@ -414,7 +429,7 @@ class Recorder:
         """
         NEW: Get information about the current recording
         """
-        if not self.is_recording:
+        if not self.is_recording or not self.recording_start_time:
             return None
 
         duration = (datetime.now() - self.recording_start_time).total_seconds()
