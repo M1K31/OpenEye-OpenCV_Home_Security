@@ -79,6 +79,23 @@ class FaceClusteringService:
         """
         self.eps = eps
         self.min_samples = min_samples
+
+        # Below this distance a newly formed cluster is the same person as an
+        # existing one, and joins it instead of becoming a second row.
+        #
+        # Measured on a real installation carrying two people across five
+        # clusters:
+        #
+        #     same person   0.18, 0.23, 0.28, 0.31
+        #     different     0.58, 0.58, 0.60, 0.61, 0.62
+        #
+        # 0.40 sits in that gap with margin on both sides — comfortably above
+        # the worst same-person pair and well below the closest different-person
+        # pair. It is deliberately stricter than DBSCAN's eps (0.5), because
+        # merging two people is far worse than leaving one person split: a split
+        # is visible and repairable, a merge silently teaches one profile
+        # another person's face.
+        self.merge_distance = 0.40
         self.auto_export_enabled = auto_export_enabled
         self.auto_export_threshold = auto_export_threshold
         self.auto_train_enabled = auto_train_enabled
@@ -219,6 +236,43 @@ class FaceClusteringService:
         
         next_num = max(existing_numbers) + 1
         return f"unknown{next_num}"
+
+    def _find_matching_cluster(self, db: Session, centroid: np.ndarray):
+        """
+        An existing cluster that is the same person as this centroid, if any.
+
+        Clustering only ever looked at faces that had no cluster yet, and created
+        a new row for whatever it found. It never asked whether that person
+        already had a cluster — so the same person acquired a new row on every
+        run, all inheriting the same auto-assigned name. One installation reached
+        five clusters for two people that way.
+
+        Returns the nearest cluster within merge_distance, or None.
+        """
+        candidates = db.query(FaceCluster).filter(
+            FaceCluster.representative_encoding.isnot(None)
+        ).all()
+
+        best, best_distance = None, None
+        for candidate in candidates:
+            try:
+                other = self.decode_face_encoding(candidate.representative_encoding)
+            except Exception:
+                continue
+            if other is None or other.shape != centroid.shape:
+                continue
+            distance = float(np.linalg.norm(centroid - other))
+            if best_distance is None or distance < best_distance:
+                best, best_distance = candidate, distance
+
+        if best is not None and best_distance is not None and best_distance < self.merge_distance:
+            logger.info(
+                "Cluster centroid matches existing cluster %s (%s) at distance "
+                "%.2f — joining it rather than creating a duplicate",
+                best.id, best.label, best_distance,
+            )
+            return best
+        return None
 
     def _export_cluster_faces(self, db: Session, cluster_id: int, person_name: str, update_existing: bool = True) -> Dict:
         """
@@ -534,6 +588,7 @@ class FaceClusteringService:
         faces_clustered = 0
         auto_exports = 0
         auto_names = 0
+        clusters_merged = 0
         
         for cluster_label in cluster_labels:
             # Get all faces in this cluster
@@ -580,6 +635,58 @@ class FaceClusteringService:
                 else:
                     cluster_person_name = "Unknown"
             
+            # Join an existing cluster for this person, if there is one.
+            #
+            # Checked before creating, because the alternative is what produced
+            # five clusters for two people: every run made a new row, each
+            # inheriting the same name from the faces it contained, and nothing
+            # ever noticed they were the same person.
+            existing = self._find_matching_cluster(db, centroid)
+            if existing is not None:
+                db.query(FaceDetectionEvent).filter(
+                    FaceDetectionEvent.id.in_(cluster_face_ids)
+                ).update({"cluster_id": existing.id}, synchronize_session=False)
+
+                if existing.label:
+                    # The established cluster's name wins. These faces are the
+                    # same person, and a second name for them is the bug.
+                    db.query(FaceDetectionEvent).filter(
+                        FaceDetectionEvent.id.in_(cluster_face_ids)
+                    ).update({"person_name": existing.label},
+                             synchronize_session=False)
+                    cluster_person_name = existing.label
+
+                existing.face_count = db.query(FaceDetectionEvent).filter(
+                    FaceDetectionEvent.cluster_id == existing.id
+                ).count()
+                if last_seen and (existing.last_seen_at is None
+                                  or last_seen > existing.last_seen_at):
+                    existing.last_seen_at = last_seen
+                existing.updated_at = datetime.utcnow()
+
+                # Deliberately NOT updating representative_encoding. The
+                # established centroid is computed from far more faces than this
+                # batch; replacing it with a small sample's centroid would let
+                # the cluster drift toward whatever was seen most recently.
+                clusters_merged += 1
+                faces_clustered += len(cluster_face_ids)
+                logger.info(
+                    "Merged %s face(s) into existing cluster %s (%s), now %s faces",
+                    len(cluster_face_ids), existing.id, existing.label,
+                    existing.face_count,
+                )
+
+                if (self.auto_export_enabled
+                        and len(cluster_face_ids) >= self.auto_export_threshold):
+                    try:
+                        self._auto_export_and_train_cluster(
+                            db, existing.id, cluster_person_name,
+                            update_existing=True)
+                        auto_exports += 1
+                    except Exception as e:
+                        logger.error("Auto-export failed for merged cluster: %s", e)
+                continue
+
             # Create cluster
             cluster = FaceCluster(
                 face_count=len(cluster_face_ids),
@@ -657,6 +764,7 @@ class FaceClusteringService:
             "auto_exports": auto_exports,
             "auto_trains": self.statistics.get("auto_trains", 0),
             "auto_names": auto_names,
+                "clusters_merged": clusters_merged,
             "last_clustering_time": datetime.now().isoformat()
         }
         
@@ -668,6 +776,7 @@ class FaceClusteringService:
             "faces_unclustered": noise_count,
             "auto_exports": auto_exports,
             "auto_names": auto_names,
+                "clusters_merged": clusters_merged,
             "clustering_time": clustering_time,
             "success": True,
             "message": f"Successfully created {clusters_created} clusters from {faces_clustered} faces "
