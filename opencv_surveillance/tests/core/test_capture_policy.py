@@ -430,6 +430,108 @@ def test_the_dead_calendar_day_map_is_gone():
     assert not hasattr(CapturePolicy(), "_last_capture_day")
 
 
+
+class TestBorderlineMatchesAreKeptForReview:
+    """
+    A detection with no image cannot be reviewed, because nobody can identify a
+    face they cannot see. The policy previously ignored confidence entirely, so
+    a 0.41 match and a 0.95 match were throttled identically — which left the
+    detections most likely to need human correction among the least likely to
+    have a photo.
+    """
+
+    def test_a_borderline_match_is_captured(self):
+        policy = CapturePolicy()
+
+        f = face("Mikel")
+        f["confidence"] = 0.44
+        decision = _confirm(policy, f, now=0)
+
+        assert decision.capture is True
+        assert "low-confidence match" in decision.reason
+
+    def test_it_beats_the_daily_throttle(self):
+        """The whole point: already captured today must not silence a doubt."""
+        policy = CapturePolicy()
+
+        confident = face("Mikel")
+        confident["confidence"] = 0.95
+        assert _confirm(policy, confident, now=0).capture is True
+
+        doubtful = face("Mikel")
+        doubtful["confidence"] = 0.44
+        later = policy.evaluate(doubtful, CAMERA, now=30)
+
+        assert later.capture is True
+        assert "review" in later.reason
+
+    def test_a_confident_match_is_unaffected(self):
+        policy = CapturePolicy()
+
+        f = face("Mikel")
+        f["confidence"] = 0.92
+        first = _confirm(policy, f, now=0)
+        second = policy.evaluate(f, CAMERA, now=30)
+
+        assert first.capture is True
+        assert "refreshing an enrolled likeness" in first.reason
+        assert second.capture is False
+
+    def test_the_review_budget_is_bounded(self):
+        """Reviewable, not unlimited: a changed appearance is borderline on
+        every single pass."""
+        policy = CapturePolicy()
+
+        f = face("Mikel")
+        f["confidence"] = 0.44
+        first = _arrive(policy, f, now=0)
+        immediately_after = policy.evaluate(f, CAMERA, now=30)
+
+        assert first.capture is True
+        assert immediately_after.capture is False
+
+    def test_the_budget_renews_within_the_hour(self):
+        policy = CapturePolicy()
+
+        f = face("Mikel")
+        f["confidence"] = 0.44
+        _arrive(policy, f, now=0)
+        later = _arrive(policy, f, now=3601)
+
+        assert later.capture is True
+
+    def test_a_cluster_labelled_row_is_not_treated_as_borderline(self):
+        """
+        Detections renamed by clustering carry confidence exactly 0.0 — they were
+        never recognised, so that zero is not a confidence and must not be read
+        as one. 701 rows on the reporting install look like this.
+        """
+        policy = CapturePolicy()
+
+        f = face("unknown1")
+        f["confidence"] = 0.0
+        decision = _confirm(policy, f, now=0)
+
+        assert "low-confidence match" not in decision.reason
+
+    def test_a_detection_without_confidence_is_not_treated_as_borderline(self):
+        policy = CapturePolicy()
+
+        decision = _confirm(policy, face("Mikel"), now=0)
+
+        assert "low-confidence match" not in decision.reason
+
+    def test_the_threshold_is_configurable(self):
+        policy = CapturePolicy(CaptureSettings(review_confidence=0.9))
+
+        f = face("Mikel")
+        f["confidence"] = 0.85
+        decision = _confirm(policy, f, now=0)
+
+        assert decision.capture is True
+        assert "low-confidence match" in decision.reason
+
+
 # ------------------------------------------------------------- camera mode
 
 class TestCameraMode:

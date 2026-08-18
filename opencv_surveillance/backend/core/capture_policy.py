@@ -69,6 +69,20 @@ class CaptureSettings:
     # otherwise be competing with the people it recognises perfectly well.
     hard_case_interval_seconds: int = 24 * 60 * 60
 
+    # Below this confidence a match is not trusted enough to act on without a
+    # human looking, so it must leave an image behind for them to look AT.
+    #
+    # Recognition admits a match at distance <= 0.6, i.e. confidence >= 0.40, so
+    # this covers the 0.40-0.55 band: matched, but not convincingly.
+    review_confidence: float = 0.55
+
+    # Borderline matches get their own budget, and a shorter one than the daily
+    # refresh. A review queue needs enough examples to be worth opening, and a
+    # person whose appearance has changed is borderline on every pass — one
+    # image a day would take a week to become reviewable. Bounded at 24 per
+    # person per camera per day.
+    review_capture_interval_seconds: int = 60 * 60
+
 
 @dataclass
 class CaptureDecision:
@@ -222,7 +236,22 @@ class CapturePolicy:
         # re-earn confirmation on every visit would be wasted bookkeeping and
         # would report a misleading reason — "unconfirmed" rather than the truth,
         # which is that we simply have a recent enough photograph of them.
-        if known and self._captured_recently(name, camera_id, now):
+        # A match the recogniser is unsure about needs a human to look, and a
+        # human cannot identify a face they cannot see. The policy did not read
+        # confidence at all: a 0.41 match and a 0.95 match were throttled
+        # identically, so the detections most likely to need correction were
+        # among the least likely to have a photo.
+        #
+        # Suppression exists to avoid storing the hundredth identical likeness of
+        # someone already well recorded. A face the recogniser doubts is the
+        # opposite case, so the daily throttle should not silence it.
+        confidence = face.get("confidence")
+        borderline = (
+            known and confidence is not None
+            and 0 < confidence < self.settings.review_confidence
+        )
+
+        if known and not borderline and self._captured_recently(name, camera_id, now):
             return CaptureDecision(False, sighting,
                                    "already captured for this person today")
 
@@ -232,6 +261,23 @@ class CapturePolicy:
                 f"seen {track.consecutive} of "
                 f"{self.settings.required_consecutive_passes} passes",
             )
+
+        if borderline:
+            # After the persistence gate on purpose. A doubtful match should not
+            # bypass confirmation as well as the throttle — that would let a
+            # single bad frame put an image in the review queue.
+            scope = self._review_name(name)
+            if not self._captured_recently(
+                    scope, camera_id, now,
+                    interval=self.settings.review_capture_interval_seconds):
+                self._note_capture(scope, camera_id, now)
+                self._note_capture(name, camera_id, now)
+                return CaptureDecision(
+                    True, sighting,
+                    f"low-confidence match ({confidence:.0%}) — kept for review")
+            if self._captured_recently(name, camera_id, now):
+                return CaptureDecision(False, sighting,
+                                       "already captured for this person today")
 
         if known:
             self._note_capture(name, camera_id, now)
@@ -311,6 +357,11 @@ class CapturePolicy:
         of them at once.
         """
         return f"\x00hardcase:{cluster_id if cluster_id is not None else 'none'}"
+
+    @staticmethod
+    def _review_name(name: str) -> str:
+        """A budget scope for borderline matches, separate from the refresh."""
+        return f"\x00review:{name}"
 
     def _captured_recently(self, name: str, camera_id: str, now: float,
                            interval: Optional[float] = None) -> bool:
