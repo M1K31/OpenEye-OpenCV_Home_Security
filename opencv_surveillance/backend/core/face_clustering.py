@@ -274,6 +274,117 @@ class FaceClusteringService:
             return best
         return None
 
+    def consolidate_duplicate_clusters(self, db: Session, dry_run: bool = True) -> Dict:
+        """
+        Merge clusters that are the same person into one.
+
+        A one-time repair for installations that ran before clustering learned to
+        join an existing cluster. Uses the same threshold as that check, so it
+        cannot disagree with it.
+
+        Anchored on the largest cluster rather than chained. Chaining — merging A
+        into B because they are close, then C into B because C is close to A —
+        can walk two genuinely different people together in a few steps. Each
+        surviving cluster absorbs only those within merge_distance of ITS OWN
+        centroid, so every merge is justified by a direct comparison.
+
+        Args:
+            db: database session
+            dry_run: when True, report what would happen and change nothing
+        """
+        clusters = db.query(FaceCluster).filter(
+            FaceCluster.representative_encoding.isnot(None)
+        ).all()
+
+        decoded = []
+        for cluster in clusters:
+            try:
+                centroid = self.decode_face_encoding(cluster.representative_encoding)
+            except Exception as e:
+                logger.warning("Skipping cluster %s: unreadable centroid (%s)",
+                               cluster.id, e)
+                continue
+            if centroid is None:
+                continue
+            decoded.append((cluster, centroid))
+
+        # Largest first: the biggest cluster has the best-supported centroid, so
+        # it makes the most trustworthy anchor for everything that joins it.
+        decoded.sort(key=lambda pair: -(pair[0].face_count or 0))
+
+        absorbed_ids = set()
+        merges = []
+
+        for survivor, survivor_centroid in decoded:
+            if survivor.id in absorbed_ids:
+                continue
+            for other, other_centroid in decoded:
+                if other.id == survivor.id or other.id in absorbed_ids:
+                    continue
+                if other_centroid.shape != survivor_centroid.shape:
+                    continue
+                distance = float(np.linalg.norm(survivor_centroid - other_centroid))
+                if distance < self.merge_distance:
+                    absorbed_ids.add(other.id)
+                    merges.append({
+                        "into": survivor.id,
+                        "into_label": survivor.label,
+                        "absorbed": other.id,
+                        "absorbed_label": other.label,
+                        "distance": round(distance, 3),
+                        "faces": other.face_count or 0,
+                        "label_conflict": bool(
+                            survivor.label and other.label
+                            and survivor.label != other.label),
+                    })
+
+        result = {
+            "clusters_examined": len(decoded),
+            "merges": merges,
+            "clusters_removed": len(absorbed_ids),
+            "clusters_remaining": len(decoded) - len(absorbed_ids),
+            "dry_run": dry_run,
+        }
+
+        if dry_run or not merges:
+            return result
+
+        faces_moved = 0
+        for merge in merges:
+            moved = db.query(FaceDetectionEvent).filter(
+                FaceDetectionEvent.cluster_id == merge["absorbed"]
+            ).update({"cluster_id": merge["into"]}, synchronize_session=False)
+            faces_moved += moved
+
+            survivor = db.query(FaceCluster).filter(
+                FaceCluster.id == merge["into"]).first()
+            if survivor and survivor.label:
+                # The survivor's name wins. Renaming the detections too is the
+                # point: leaving them under the absorbed cluster's name is the
+                # split this repair exists to remove.
+                db.query(FaceDetectionEvent).filter(
+                    FaceDetectionEvent.cluster_id == merge["into"]
+                ).update({"person_name": survivor.label}, synchronize_session=False)
+
+            db.query(FaceCluster).filter(
+                FaceCluster.id == merge["absorbed"]).delete(synchronize_session=False)
+
+        # Recount from the detections themselves rather than by adding the
+        # absorbed counts. face_count can already be stale, and adding two stale
+        # numbers produces a number that is wrong in a new way.
+        for cluster_id in {m["into"] for m in merges}:
+            cluster = db.query(FaceCluster).filter(FaceCluster.id == cluster_id).first()
+            if cluster:
+                cluster.face_count = db.query(FaceDetectionEvent).filter(
+                    FaceDetectionEvent.cluster_id == cluster_id).count()
+                cluster.updated_at = datetime.utcnow()
+
+        db.commit()
+        result["faces_moved"] = faces_moved
+        logger.info("Consolidated %s duplicate cluster(s), moving %s face(s)",
+                    len(merges), faces_moved)
+        return result
+
     def _export_cluster_faces(self, db: Session, cluster_id: int, person_name: str, update_existing: bool = True) -> Dict:
         """
         Export faces from a cluster to a person folder (internal method)
@@ -1144,3 +1255,52 @@ class FaceClusteringService:
             "unclustered_faces": unclustered,
             "clustering_rate": round((clustered / total_unknown * 100) if total_unknown > 0 else 0, 2)
         }
+
+
+# --------------------------------------------------------------------------
+# One-off repair, run by hand.
+#
+#   python -m backend.core.face_clustering consolidate          (preview)
+#   python -m backend.core.face_clustering consolidate --apply  (do it)
+#
+# Not run automatically at startup. It deletes cluster rows, and a repair that
+# happens without being asked for is a repair nobody can decline.
+
+def _cli() -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Merge duplicate face clusters belonging to the same person.")
+    parser.add_argument("command", choices=["consolidate"])
+    parser.add_argument("--apply", action="store_true",
+                        help="perform the merges (otherwise preview only)")
+    args = parser.parse_args()
+
+    from backend.database.utils import get_db_context
+
+    service = FaceClusteringService()
+    with get_db_context() as db:
+        before = db.query(FaceCluster).count()
+        result = service.consolidate_duplicate_clusters(db, dry_run=not args.apply)
+
+    print(f"Clusters examined: {result['clusters_examined']}")
+    if not result["merges"]:
+        print("No duplicates found — every cluster is a distinct person.")
+        return 0
+
+    for merge in result["merges"]:
+        conflict = "  ** DIFFERENT LABELS **" if merge["label_conflict"] else ""
+        print(f"  cluster {merge['absorbed']} ({merge['absorbed_label']}, "
+              f"{merge['faces']} faces) -> cluster {merge['into']} "
+              f"({merge['into_label']}) at distance {merge['distance']}{conflict}")
+
+    print(f"\n{before} clusters -> {result['clusters_remaining']}")
+    if result["dry_run"]:
+        print("Preview only. Nothing was changed. Re-run with --apply.")
+    else:
+        print(f"Done. {result.get('faces_moved', 0)} detection(s) reassigned.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(_cli())
