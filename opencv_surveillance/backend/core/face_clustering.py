@@ -1041,6 +1041,8 @@ class FaceClusteringService:
             f"{f', {images_skipped} skipped (duplicates)' if images_skipped > 0 else ''}"
         )
 
+        previous_label = cluster.label
+
         # Update cluster in database
         cluster.label = clean_name
         cluster.is_identified = True
@@ -1053,11 +1055,101 @@ class FaceClusteringService:
             "person_name": clean_name
         }, synchronize_session=False)
 
+        # Sweep by NAME as well as by cluster, because a detection can carry the
+        # name without carrying the cluster.
+        #
+        # Renaming used to filter on cluster_id alone, which left every detection
+        # whose clustering had not run — 93 of 796 for one person on a real
+        # install — sitting under the old name forever. The person's history then
+        # appeared split between two people, one of whom did not exist.
+        #
+        # Guarded: only sweep when no OTHER cluster still claims that name. If
+        # two clusters share a label, renaming one must not drag the other's
+        # detections along.
+        swept_count = 0
+        if previous_label and previous_label != clean_name:
+            others_with_label = db.query(FaceCluster).filter(
+                FaceCluster.label == previous_label,
+                FaceCluster.id != cluster_id,
+            ).count()
+            if others_with_label:
+                logger.warning(
+                    "Not sweeping detections named '%s': %s other cluster(s) "
+                    "still carry that label. Consolidate them first.",
+                    previous_label, others_with_label,
+                )
+            else:
+                # or_(IS NULL, != id) rather than just != id.
+                #
+                # In SQL, NULL != 1 evaluates to NULL, not true, so a row with no
+                # cluster is excluded by a plain inequality — and rows with no
+                # cluster are precisely the ones this sweep exists to catch. It
+                # silently swept nothing on the install that motivated it: 95
+                # detections named unknown1, every one of them with a null
+                # cluster_id, all skipped by a filter that looked correct.
+                from sqlalchemy import or_
+                swept_count = db.query(FaceDetectionEvent).filter(
+                    FaceDetectionEvent.person_name == previous_label,
+                    or_(
+                        FaceDetectionEvent.cluster_id.is_(None),
+                        FaceDetectionEvent.cluster_id != cluster_id,
+                    ),
+                ).update({"person_name": clean_name}, synchronize_session=False)
+
         db.commit()
+
+        # Move the old gallery across rather than leaving a second copy.
+        #
+        # Only snapshots were copied above, so the images that had already been
+        # exported and TRAINED under the old name stayed where they were. The old
+        # folder therefore survived every rename — 701 files in one case — still
+        # feeding the recogniser under a name the user thought they had replaced,
+        # and doubling the disk it occupied.
+        images_moved = 0
+        if previous_label and previous_label != clean_name:
+            old_gallery = paths.faces_dir / previous_label
+            if old_gallery.is_dir() and old_gallery.resolve() != person_path.resolve():
+                for item in old_gallery.iterdir():
+                    if not item.is_file():
+                        continue
+                    destination = person_path / item.name
+                    if destination.exists():
+                        # Same photograph under both names; the copy above
+                        # already placed it.
+                        item.unlink()
+                        continue
+                    try:
+                        shutil.move(str(item), str(destination))
+                        images_moved += 1
+                    except Exception as e:
+                        logger.warning("Could not move %s: %s", item, e)
+                try:
+                    old_gallery.rmdir()
+                    logger.info("Removed the old gallery folder %s", old_gallery)
+                except OSError as e:
+                    # Left in place rather than forced: something unexpected is
+                    # in there, and deleting what we did not put there is not
+                    # this function's business.
+                    logger.warning("Left %s in place: %s", old_gallery, e)
+
+        # Rename the loaded encodings instead of retraining from scratch.
+        #
+        # A full retrain re-encodes every photograph of everyone to change one
+        # label, and answers with the OLD name until it finishes — which is the
+        # window in which someone decides the rename did not work.
+        encodings_renamed = 0
+        if previous_label and previous_label != clean_name:
+            try:
+                face_manager = get_face_manager()
+                if hasattr(face_manager, "rename_person"):
+                    encodings_renamed = face_manager.rename_person(
+                        previous_label, clean_name).get("encodings_renamed", 0)
+            except Exception as e:
+                logger.error("Could not rename encodings: %s", e)
 
         training_result = None
         training_required = images_copied > 0  # Training needed if images were copied
-        
+
         # Optionally trigger face recognition retraining (can be slow, caller should use background task)
         if auto_train and training_required:
             try:
@@ -1079,8 +1171,12 @@ class FaceClusteringService:
             "success": True,
             "message": f"{merge_message} from cluster {cluster_id}",
             "faces_updated": updated_count,
+            "faces_swept_by_name": swept_count,
             "images_copied": images_copied,
+            "images_moved": images_moved,
             "images_skipped": images_skipped,
+            "encodings_renamed": encodings_renamed,
+            "previous_label": previous_label,
             "person_created": not is_existing_person,
             "is_merge": is_existing_person,
             "training_required": training_required,

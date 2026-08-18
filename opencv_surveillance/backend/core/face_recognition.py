@@ -380,6 +380,31 @@ class FaceRecognitionManager:
             _training_in_progress = False
             return result
 
+    def rename_person(self, old_name: str, new_name: str) -> dict:
+        """
+        Rename a person in the loaded gallery, keeping their encodings.
+
+        The alternative is a full retrain, which re-encodes every photograph of
+        everyone to change one label — minutes of work to alter a string. It also
+        leaves the recogniser answering the old name until it finishes, which is
+        precisely the window in which someone looks at the screen and concludes
+        the rename did not work.
+
+        The encodings are unchanged; only what they are called changes.
+        """
+        with _face_recognition_lock:
+            indices = [i for i, n in enumerate(self.known_face_names) if n == old_name]
+            for i in indices:
+                self.known_face_names[i] = new_name
+
+            if indices:
+                self.save_encodings()
+                self.statistics["total_people"] = len(set(self.known_face_names))
+                logger.info("Renamed %s encoding(s) from '%s' to '%s'",
+                            len(indices), old_name, new_name)
+
+        return {"encodings_renamed": len(indices)}
+
     def _indices_for(self, person_name: str) -> list:
         return [i for i, n in enumerate(self.known_face_names) if n == person_name]
 
