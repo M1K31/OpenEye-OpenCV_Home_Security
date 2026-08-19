@@ -154,6 +154,56 @@ class UserPreferences(Base):
         return f"<UserPreferences(user_id={self.user_id})>"
 
 
+class Person(Base):
+    """
+    A person the system knows about.
+
+    Added because there was no such thing. A person was emergent from three
+    unlinked places — a gallery folder name, a cluster's label, and a
+    person_name string repeated on every detection — with no id and no row. That
+    is why renaming had to sweep three stores and still missed one, and why
+    "is this a real person or a placeholder?" was answered by pattern-matching
+    the name against ^unknown\d*$.
+
+    The name is still carried on detections alongside person_id for now, so both
+    mechanisms work while the transition settles.
+    """
+
+    __tablename__ = "persons"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True, nullable=False)
+
+    # 'cluster' — the system grouped these faces and named them itself
+    # 'user'    — a human created this person deliberately
+    #
+    # Recorded rather than inferred. The old test asked whether the NAME looked
+    # like a placeholder, which meant a person genuinely called "unknown5" was
+    # treated as one, and a cluster the user had confirmed could never stop
+    # being treated as provisional.
+    #
+    # This drives retention: an unconfirmed cluster-created person keeps every
+    # snapshot, because those are exactly the faces a human still has to
+    # identify and cannot identify without a picture. A user-created or
+    # confirmed person falls back to the ordinary refresh rule.
+    origin = Column(String, default="cluster", nullable=False)
+
+    # When a human vouched for this identity — named it, or confirmed the
+    # system's guess. Null means nobody has yet.
+    confirmed_at = Column(DateTime, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<Person(id={self.id}, name={self.name!r}, origin={self.origin})>"
+
+    @property
+    def is_confirmed(self) -> bool:
+        """Whether a human has vouched for this identity."""
+        return self.origin == "user" or self.confirmed_at is not None
+
+
 class FaceDetectionEvent(Base):
     """
     NEW: Model for storing face detection events
@@ -164,7 +214,10 @@ class FaceDetectionEvent(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     camera_id = Column(String, index=True)
+    # Kept alongside person_id while both mechanisms coexist. person_id is the
+    # identity; person_name is what every existing query still reads.
     person_name = Column(String, index=True)
+    person_id = Column(Integer, ForeignKey("persons.id"), nullable=True, index=True)
     confidence = Column(Float)
     detected_at = Column(DateTime, default=datetime.utcnow, index=True)
 
@@ -215,6 +268,7 @@ class FaceCluster(Base):
     
     # Cluster information
     label = Column(String, nullable=True)  # User-assigned label/name
+    person_id = Column(Integer, ForeignKey("persons.id"), nullable=True, index=True)
     is_identified = Column(Boolean, default=False)  # Whether cluster has been identified
     
     # Cluster statistics

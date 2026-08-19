@@ -509,6 +509,22 @@ async def startup_event():
                     ))
                     conn.commit()
                 logger.info("✅ Added media_state column")
+
+        # Person identity (v3.12). Added at startup as well as in alembic for
+        # the same reason as trained_at and media_state: create_all() creates
+        # missing TABLES, so it makes `persons`, but it will never add
+        # person_id to tables that already exist.
+        for table, column in (("face_detection_events", "person_id"),
+                              ("face_clusters", "person_id")):
+            if table in inspector.get_table_names():
+                columns = [c['name'] for c in inspector.get_columns(table)]
+                if column not in columns:
+                    logger.info("Adding %s column to %s table...", column, table)
+                    with engine.connect() as conn:
+                        conn.execute(text(
+                            f"ALTER TABLE {table} ADD COLUMN {column} INTEGER"))
+                        conn.commit()
+                    logger.info("✅ Added %s to %s", column, table)
     except Exception as e:
         logger.warning(f"Schema migration check failed (non-critical): {e}")
 
