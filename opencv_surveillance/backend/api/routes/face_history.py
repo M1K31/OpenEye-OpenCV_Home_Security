@@ -510,39 +510,41 @@ def reassign_face_detection(
         if not new_person_name:
             raise HTTPException(status_code=400, detail="Person name cannot be empty")
 
-        # Update the person_name
-        face_event.person_name = new_person_name
+        old_cluster_id = face_event.cluster_id
 
-        # If reassigning away from a cluster, clear the cluster_id
-        if new_person_name != old_person_name and face_event.cluster_id:
-            old_cluster = db.query(models.FaceCluster).filter(
-                models.FaceCluster.id == face_event.cluster_id
-            ).first()
+        # Same path as the bulk route, so assigning one detection and assigning
+        # fifty behave identically. They previously diverged: this one relabelled
+        # and enrolled, the bulk one relabelled and did not, and neither moved
+        # training data away from the person losing it.
+        from backend.core.person_reassignment import reassign
 
-            # Remove from old cluster
-            face_event.cluster_id = None
+        result = reassign(db, [face_id], new_person_name,
+                          dry_run=False, retrain=True)
 
-            # Update old cluster face count
-            if old_cluster:
-                remaining_faces = db.query(models.FaceDetectionEvent).filter(
-                    models.FaceDetectionEvent.cluster_id == old_cluster.id
-                ).count()
-                old_cluster.face_count = remaining_faces
-
-        db.commit()
-
-        # Teach the recogniser what the user just told it. Without this the
-        # person gains a detection but no photo and no encoding, and stays
-        # unrecognisable.
-        enrolment = _enrol_detections(db, [face_id], new_person_name)
+        # Keep the vacated cluster's count honest.
+        if old_cluster_id:
+            remaining_faces = db.query(models.FaceDetectionEvent).filter(
+                models.FaceDetectionEvent.cluster_id == old_cluster_id
+            ).count()
+            db.query(models.FaceCluster).filter(
+                models.FaceCluster.id == old_cluster_id
+            ).update({models.FaceCluster.face_count: remaining_faces},
+                     synchronize_session=False)
+            db.commit()
 
         return FaceReassignResponse(
             success=True,
-            message=f"Face reassigned from '{old_person_name}' to '{new_person_name}'",
+            message=(
+                f"Face reassigned from '{old_person_name}' to "
+                f"'{new_person_name}'. Rebuilt "
+                f"{len(result.people_affected)} gallery/galleries; retraining "
+                f"in the background."
+            ),
             face_id=face_id,
             old_person_name=old_person_name,
             new_person_name=new_person_name,
-            enrolment=enrolment,
+            enrolment={"people_affected": result.people_affected,
+                       "gallery_after": result.gallery_after},
         )
 
     except HTTPException:
@@ -702,16 +704,21 @@ def bulk_reassign_face_detections(
         reassigned_count = len(face_events)
         not_found_count = len(request.face_ids) - reassigned_count
 
-        # Bulk update: set person_name and clear cluster_id in single operations
-        db.query(models.FaceDetectionEvent).filter(
-            models.FaceDetectionEvent.id.in_(request.face_ids)
-        ).update(
-            {
-                models.FaceDetectionEvent.person_name: new_person_name,
-                models.FaceDetectionEvent.cluster_id: None
-            },
-            synchronize_session=False
-        )
+        # Move the training data with the detections, not just the labels.
+        #
+        # This used to set person_name, clear cluster_id, and stop. The gallery
+        # and the encodings stayed where they were, so the same face ended up
+        # trained under two identities and the placeholder kept collecting new
+        # detections — the loop behind "unknown1 still shows 701 photos".
+        #
+        # reassign() rebuilds BOTH people's detected/ galleries from their own
+        # detections and retrains them in the background. uploaded/ is never
+        # touched.
+        from backend.core.person_reassignment import reassign
+
+        result = reassign(db, list(request.face_ids), new_person_name,
+                          dry_run=False, retrain=True)
+        logger.info("Reassignment: %s", result.describe().replace("\n", " | "))
 
         # Update face counts for affected clusters (batch update)
         for cluster_id in affected_clusters:
@@ -731,18 +738,26 @@ def bulk_reassign_face_detections(
         if not_found_count > 0:
             errors.append(f"{not_found_count} face(s) not found")
 
-        enrolment = _enrol_detections(db, request.face_ids, new_person_name)
+        # _enrol_detections is deliberately NOT called here any more.
+        #
+        # It copied each snapshot into the person's folder, which after the
+        # gallery split lands loose in the root — where files are treated as
+        # uploaded and never cleaned up automatically. reassign() has already
+        # rebuilt detected/ from the detections themselves, which is both
+        # correct and self-correcting.
 
         return {
             "success": True,
             "message": (
-                f"Reassigned {reassigned_count} face(s) to '{new_person_name}'"
-                + (f"; enrolled {enrolment['enrolled']} photo(s)"
-                   if enrolment.get("enrolled") else "")
+                f"Reassigned {reassigned_count} face(s) to '{new_person_name}'. "
+                f"Rebuilt {len(result.people_affected)} gallery/galleries; "
+                f"retraining in the background."
             ),
-            "enrolment": enrolment,
             "reassigned_count": reassigned_count,
             "new_person_name": new_person_name,
+            "people_affected": result.people_affected,
+            "gallery_before": result.gallery_before,
+            "gallery_after": result.gallery_after,
             "errors": errors,
         }
 
