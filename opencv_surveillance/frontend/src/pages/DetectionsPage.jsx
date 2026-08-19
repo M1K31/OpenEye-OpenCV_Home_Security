@@ -21,6 +21,7 @@
 import React, { useState, useEffect } from 'react';
 import apiClient from '../api/apiClient';
 import { Button } from '../components/universal';
+import { formatTimestampShort } from '../utils/dateUtils';
 
 // A person is "known" only if they have a real name. Auto-enumerated placeholders
 // ("Unknown", "unknown1", "unknown2", ...) produced by clustering are NOT known.
@@ -46,6 +47,73 @@ const normalizeSnapshot = (p) =>
 // likeness. Naming the profile matters — "seen, not captured" on its own reads
 // as a lost detection, whereas naming who was recognised shows the recognition
 // itself worked and only the photograph was skipped.
+// Below this, a match is not trusted enough to act on without a human looking.
+// Mirrors review_confidence in backend/core/capture_policy.py, which is what
+// decides to keep an image for exactly these.
+const REVIEW_CONFIDENCE = 0.55;
+
+/**
+ * Split detections into the two things a person does with them.
+ *
+ * This page previously listed every detection as its own card with an "Assign
+ * to person" button, including the ones carrying no image — which asks somebody
+ * to identify a face they cannot see. Most detections are also a confident
+ * match to a profile and need no decision at all; they need a count.
+ *
+ * So: recognitions are summarised per person, and only the detections that
+ * genuinely need a human — unrecognised or borderline, AND carrying an image —
+ * form a queue short enough to work through.
+ */
+export function splitDetections(detections) {
+  const review = [];
+  const byPerson = new Map();
+
+  for (const detection of detections) {
+    const name = detection.name || detection.person_name || 'Unknown';
+    const image = normalizeSnapshot(detection.snapshot_path);
+    const confidence = typeof detection.confidence === 'number' ? detection.confidence : null;
+
+    // A confidence of exactly 0 means "never recognised" — clustering named
+    // these afterwards and never touched the column. Reading that zero as a
+    // confidence would put 700 rows in a queue meant to hold a handful.
+    const clustered = confidence === 0;
+    const unrecognised = name === 'Unknown';
+    const borderline = confidence !== null && confidence > 0 && confidence < REVIEW_CONFIDENCE;
+
+    // Only with an image. Without one there is nothing to identify from, so it
+    // cannot be reviewed however badly we want it reviewed.
+    if (image && (unrecognised || borderline)) {
+      review.push({ ...detection, _image: image, _reason: unrecognised ? 'not recognised' : 'uncertain match' });
+      continue;
+    }
+
+    const entry = byPerson.get(name) || {
+      name, total: 0, withImages: 0, clustered: 0,
+      firstSeen: null, lastSeen: null, thumbnail: null, bestConfidence: null,
+    };
+    entry.total += 1;
+    if (image) {
+      entry.withImages += 1;
+      if (!entry.thumbnail) entry.thumbnail = image;
+    }
+    if (clustered) entry.clustered += 1;
+    if (confidence !== null && confidence > 0) {
+      entry.bestConfidence = Math.max(entry.bestConfidence ?? 0, confidence);
+    }
+    const when = detection.timestamp || detection.detected_at;
+    if (when) {
+      if (!entry.lastSeen || when > entry.lastSeen) entry.lastSeen = when;
+      if (!entry.firstSeen || when < entry.firstSeen) entry.firstSeen = when;
+    }
+    byPerson.set(name, entry);
+  }
+
+  return {
+    review,
+    people: [...byPerson.values()].sort((a, b) => b.total - a.total),
+  };
+}
+
 const SightingPlaceholder = ({ name }) => (
   <div style={styles.detectionImage}>
     <div style={styles.sightingPlaceholder}>
@@ -623,32 +691,71 @@ const DetectionsPage = () => {
             </div>
           )}
 
-          {!loading && !error && activeTab !== 'people' && detections.length > 0 && (
+          {!loading && !error && activeTab !== 'people' && detections.length > 0 && (() => {
+            const { review, people } = splitDetections(detections);
+            return (
             <>
-              <div style={styles.detectionGrid}>
-                {detections.map(detection => {
-                  const selectable = detection.type === 'person';
-                  return (
-                    <DetectionCard
-                      key={detection.id}
-                      detection={detection}
-                      selectable={selectable}
-                      selected={!!selected[detection.id]}
-                      onToggleSelect={() => toggleSelect(detection.id, {
-                        snapshot_path: detection.snapshot_path,
-                        cluster_id: detection.cluster_id,
-                        name: detection.name,
-                      })}
-                      onAssign={() => openAssign([{
-                        snapshot_path: detection.snapshot_path,
-                        cluster_id: detection.cluster_id,
-                        name: detection.name,
-                      }])}
-                      onViewHistory={() => { setActiveTab('people'); loadPersonDetections(detection.name); }}
-                    />
-                  );
-                })}
-              </div>
+              {/* Needs review: the only detections a human can actually act on.
+                  Unrecognised or uncertain, AND carrying an image — because
+                  "Assign to person" asks somebody to identify a face, and a
+                  card with no face cannot be identified. */}
+              {review.length > 0 && (
+                <>
+                  <h3 style={styles.sectionHeading}>
+                    Needs review ({review.length})
+                  </h3>
+                  <p style={styles.sectionHint}>
+                    Faces the system could not place. Assign one to a person and
+                    it will be recognised next time.
+                  </p>
+                  <div style={styles.detectionGrid}>
+                    {review.map(detection => (
+                      <DetectionCard
+                        key={detection.id}
+                        detection={detection}
+                        selectable={detection.type === 'person'}
+                        selected={!!selected[detection.id]}
+                        onToggleSelect={() => toggleSelect(detection.id, {
+                          snapshot_path: detection.snapshot_path,
+                          cluster_id: detection.cluster_id,
+                          name: detection.name,
+                        })}
+                        onAssign={() => openAssign([{
+                          snapshot_path: detection.snapshot_path,
+                          cluster_id: detection.cluster_id,
+                          name: detection.name,
+                        }])}
+                        onViewHistory={() => { setActiveTab('people'); loadPersonDetections(detection.name); }}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {/* Everyone the system did place, summarised. One row per person
+                  rather than one card per detection: a confident recognition
+                  needs a count, not a decision. */}
+              {people.length > 0 && (
+                <>
+                  <h3 style={styles.sectionHeading}>
+                    Recognised ({people.length} {people.length === 1 ? 'person' : 'people'})
+                  </h3>
+                  {review.length === 0 && (
+                    <p style={styles.sectionHint}>
+                      Nothing needs review — every detection was placed.
+                    </p>
+                  )}
+                  <div style={styles.detectionGrid}>
+                    {people.map(person => (
+                      <PersonSummaryCard
+                        key={person.name}
+                        person={person}
+                        onViewHistory={() => { setActiveTab('people'); loadPersonDetections(person.name); }}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
 
               {/* Pagination */}
               {totalPages > 1 && (
@@ -665,7 +772,8 @@ const DetectionsPage = () => {
                 </div>
               )}
             </>
-          )}
+          );
+          })()}
         </div>
       </div>
 
@@ -766,6 +874,57 @@ const AssignPersonModal = ({ count, savedPeople, busy, onCancel, onConfirm }) =>
 };
 
 // Detection Card Component
+const PersonSummaryCard = ({ person, onViewHistory }) => (
+  <div style={styles.detectionCard}>
+    {person.thumbnail ? (
+      <div style={styles.detectionImage}>
+        <img src={`/data/snapshots/${person.thumbnail}`} alt={person.name}
+          style={styles.detectionImg}
+          onError={(e) => { e.target.style.display = 'none'; }} />
+      </div>
+    ) : (
+      <SightingPlaceholder name={person.name} />
+    )}
+    <div style={styles.detectionContent}>
+      <div style={styles.detectionHeader}>
+        <span style={styles.detectionIcon}>👤</span>
+        <span style={{ ...styles.detectionBadge, backgroundColor: '#007AFF' }}>person</span>
+      </div>
+      <h4 style={styles.detectionName}>{person.name}</h4>
+      <div style={styles.detectionMeta}>
+        <div style={styles.metaRow}>
+          <span>Detections:</span><span>{person.total}</span>
+        </div>
+        <div style={styles.metaRow}>
+          <span>With photos:</span><span>{person.withImages}</span>
+        </div>
+        {person.clustered > 0 && (
+          <div style={styles.metaRow}>
+            {/* Not "Confidence: 0.0%". These were never recognised — clustering
+                grouped them by similarity afterwards, and showing that zero as a
+                confidence reads as "the system is certain it is wrong". */}
+            <span>Grouped by similarity:</span><span>{person.clustered}</span>
+          </div>
+        )}
+        {person.bestConfidence !== null && (
+          <div style={styles.metaRow}>
+            <span>Best match:</span><span>{(person.bestConfidence * 100).toFixed(0)}%</span>
+          </div>
+        )}
+        {person.lastSeen && (
+          <div style={styles.metaRow}>
+            <span>Last seen:</span><span>{formatTimestampShort(person.lastSeen)}</span>
+          </div>
+        )}
+      </div>
+      <button onClick={onViewHistory} className="btn btn-secondary" type="button"
+              style={{ width: '100%', marginTop: '8px' }}>
+        View detections
+      </button>
+    </div>
+  </div>
+);
+
 const DetectionCard = ({ detection, selectable, selected, onToggleSelect, onAssign, onViewHistory }) => {
   const getTypeColor = (type) => ({
     person: '#007AFF', vehicle: '#FFCC00', animal: '#FF3B30', package: '#34C759',
@@ -952,6 +1111,8 @@ const styles = {
   selectCheckbox: { width: '20px', height: '20px', cursor: 'pointer', accentColor: 'var(--theme-primary)' },
   detectionImage: { width: '100%', height: '200px', overflow: 'hidden', backgroundColor: '#000' },
   detectionImg: { width: '100%', height: '100%', objectFit: 'cover' },
+  sectionHeading: { margin: '24px 0 4px', fontSize: '18px', fontWeight: 700 },
+  sectionHint: { margin: '0 0 12px', fontSize: '13px', opacity: 0.7 },
   sightingPlaceholder: {
     width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
     alignItems: 'center', justifyContent: 'center', gap: '6px',
