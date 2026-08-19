@@ -241,3 +241,109 @@ def reassign(db, face_ids: List[int], target_name: str,
         plan.notes.append("retraining both sides in the background")
 
     return plan
+
+
+@dataclass
+class RetirementPlan:
+    person: str = ""
+    detections: int = 0
+    detected_images: int = 0
+    uploaded_images: int = 0
+    encodings: int = 0
+    clusters: List[int] = field(default_factory=list)
+    refused: Optional[str] = None
+    dry_run: bool = True
+
+    def describe(self) -> str:
+        if self.refused:
+            return f"Refusing to retire '{self.person}': {self.refused}"
+        verb = "Would retire" if self.dry_run else "Retired"
+        return (
+            f"{verb} '{self.person}'\n"
+            f"  detections    {self.detections}\n"
+            f"  detected/     {self.detected_images} image(s)\n"
+            f"  uploaded/     {self.uploaded_images} image(s)\n"
+            f"  encodings     {self.encodings}\n"
+            f"  clusters      {self.clusters or 'none'}"
+        )
+
+
+def retire_person(db, person_name: str, dry_run: bool = True,
+                  force: bool = False) -> RetirementPlan:
+    """
+    Remove a placeholder identity whose faces now belong to real people.
+
+    An auto-named cluster that has been fully reassigned leaves an empty
+    identity behind: no detections, but a gallery and a set of encodings that
+    the recogniser still matches against. That is a smaller version of the
+    problem reassignment exists to fix — a face competing with itself under two
+    names — so the identity has to go, not just its detections.
+
+    Refuses by default when the person still has detections, or holds uploaded
+    photographs. Detections mean they are still somebody; uploaded photographs
+    mean a person deliberately put them there, and deleting those is not a
+    cleanup, it is data loss. `force` overrides, for a caller that has asked.
+    """
+    from backend.core.gallery import detected_dir, person_dir, uploaded_dir, images_in
+    from backend.core.face_recognition import get_face_manager
+    from backend.database.models import FaceCluster, FaceDetectionEvent, Person
+
+    plan = RetirementPlan(person=person_name, dry_run=dry_run)
+
+    plan.detections = db.query(FaceDetectionEvent).filter(
+        FaceDetectionEvent.person_name == person_name).count()
+    plan.detected_images = len(images_in(detected_dir(person_name)))
+    plan.uploaded_images = len(images_in(uploaded_dir(person_name)))
+    plan.clusters = [c.id for c in db.query(FaceCluster).filter(
+        FaceCluster.label == person_name).all()]
+
+    manager = get_face_manager()
+    names = list(getattr(manager, "known_face_names", []) or [])
+    plan.encodings = names.count(person_name)
+
+    if plan.detections and not force:
+        plan.refused = (f"{plan.detections} detection(s) still carry this name — "
+                        f"reassign them first")
+        return plan
+    if plan.uploaded_images and not force:
+        plan.refused = (f"{plan.uploaded_images} uploaded photograph(s) — somebody "
+                        f"chose those, so removing them is not a cleanup")
+        return plan
+
+    if dry_run:
+        return plan
+
+    # Encodings first: while they are loaded, the recogniser can still match
+    # this identity, and a training run could write them back out.
+    if plan.encodings:
+        with _training_lock():
+            keep = [(e, n) for e, n in zip(manager.known_face_encodings,
+                                           manager.known_face_names)
+                    if n != person_name]
+            manager.known_face_encodings = [e for e, _ in keep]
+            manager.known_face_names = [n for _, n in keep]
+            manager.save_encodings()
+
+    root = person_dir(person_name)
+    if root.exists():
+        shutil.rmtree(root, ignore_errors=True)
+
+    for cluster_id in plan.clusters:
+        db.query(FaceCluster).filter(FaceCluster.id == cluster_id).delete(
+            synchronize_session=False)
+
+    db.query(Person).filter(Person.name == person_name).delete(
+        synchronize_session=False)
+    db.commit()
+
+    plan.dry_run = False
+    logger.info("Retired '%s': %s encoding(s), %s image(s), %s cluster(s)",
+                person_name, plan.encodings,
+                plan.detected_images + plan.uploaded_images, len(plan.clusters))
+    return plan
+
+
+def _training_lock():
+    """The face manager's lock, so encodings are not rewritten mid-edit."""
+    from backend.core.face_recognition import _face_recognition_lock
+    return _face_recognition_lock
