@@ -195,9 +195,30 @@ class FaceClusteringService:
         # Get unknown faces
         unknown_faces = self.get_unknown_faces(db, limit)
         
-        # Get known faces if clustering enabled
+        # Known faces, EXCLUDING anyone a human has confirmed.
+        #
+        # This is the root of a class of failures rather than one bug. Clustering
+        # was pulling in confirmed people — 286 of them in one run — grouping
+        # them by resemblance, and then three separate code paths renamed them
+        # after the cluster. Each path had to be guarded in turn, and a fourth
+        # would have appeared eventually.
+        #
+        # A confirmed person is not a question. Their faces are already
+        # answered, and clustering exists to answer questions. Excluding them
+        # removes the opportunity for any writer downstream to rename them,
+        # rather than defending every writer individually.
+        #
+        # Unconfirmed people — an auto-named cluster nobody has vouched for —
+        # ARE still clustered: that is exactly the work clustering is for.
         known_faces = []
         if self.cluster_known_faces:
+            from backend.database.models import Person
+
+            confirmed = {
+                p.name for p in db.query(Person).all()
+                if p.is_confirmed and p.name
+            }
+
             query = db.query(FaceDetectionEvent).filter(
                 and_(
                     FaceDetectionEvent.person_name != "Unknown",
@@ -205,9 +226,16 @@ class FaceClusteringService:
                     FaceDetectionEvent.cluster_id.is_(None)
                 )
             )
+            if confirmed:
+                query = query.filter(
+                    FaceDetectionEvent.person_name.notin_(confirmed))
             if limit:
                 query = query.limit(limit)
             known_faces = query.all()
+            if confirmed:
+                logger.debug(
+                    "Clustering skipped confirmed people: %s",
+                    ", ".join(sorted(confirmed)))
         
         return unknown_faces, known_faces
 
@@ -436,8 +464,16 @@ class FaceClusteringService:
         is_existing_person = any(iter_images(clean_name))
 
         # Get all face detections in this cluster
+        # Only the faces that actually carry this person's name.
+        #
+        # Cluster membership is a statement about resemblance, not ownership.
+        # Copying every member into this person's gallery is how unknown1
+        # acquired 708 images including 205 that belong to Mikel — training one
+        # identity on another person's face, which is precisely the confusion
+        # the whole clustering effort exists to remove.
         faces = db.query(FaceDetectionEvent).filter(
-            FaceDetectionEvent.cluster_id == cluster_id
+            FaceDetectionEvent.cluster_id == cluster_id,
+            FaceDetectionEvent.person_name == clean_name,
         ).all()
 
         # Copy face snapshots to person folder
@@ -454,9 +490,12 @@ class FaceClusteringService:
             _snap_fs = _resolve_snapshot_path(face.snapshot_path)
             if _snap_fs and os.path.exists(_snap_fs):
                 try:
+                    # By detection id, matching rebuild_gallery and the other
+                    # export path — one filename per detection, whichever writer
+                    # gets there first.
                     timestamp = face.detected_at.strftime("%Y%m%d_%H%M%S")
                     camera_id = face.camera_id.replace("/", "_")
-                    dest_filename = f"{timestamp}_{camera_id}_{idx}.jpg"
+                    dest_filename = f"{timestamp}_{camera_id}_{face.id}.jpg"
                     dest_path = person_path / dest_filename
                     
                     # Skip if file already exists (for known persons updating their profile)
@@ -474,14 +513,52 @@ class FaceClusteringService:
         cluster.is_identified = True
         cluster.updated_at = datetime.utcnow()
 
-        # Update all faces in cluster with the new name (if not already set)
-        # For known persons, faces might already have the correct name
-        updated_count = db.query(FaceDetectionEvent).filter(
+        # Adopt the cluster's name — but a placeholder still may not overwrite a
+        # name a person chose.
+        #
+        # This is the THIRD path that renamed faces, and the one that actually
+        # did the damage on 2026-08-19. The merge check correctly reported
+        # "Kept 205 human-assigned name(s)", and then this line renamed exactly
+        # those 205 to unknown1 anyway. Guarding one writer is not enough when
+        # three of them share the same bad assumption: that cluster membership
+        # decides what a face is called.
+        #
+        # It does not. Membership says these faces look alike; the NAME is a
+        # claim about who they are, and only a person gets to make it.
+        # An automatic path may only claim faces nobody has claimed.
+        #
+        # The earlier version allowed a REAL cluster label to claim anything, on
+        # the reasoning that only a human produces a real name. That is false: a
+        # cluster also acquires a real label by majority vote among its members.
+        # On 2026-08-19 a cluster voted itself "Yalena" and renamed 19 of
+        # Yaleska's detections — one real person absorbing another, by
+        # arithmetic.
+        #
+        # A cluster label is ALWAYS derived, whether generated or voted. It is
+        # never a statement about who these particular faces are. Naming a
+        # cluster deliberately is a different operation
+        # (assign_name_to_cluster), and that one may claim anything, because
+        # there a person really did say so.
+        candidates = db.query(FaceDetectionEvent).filter(
             FaceDetectionEvent.cluster_id == cluster_id,
-            FaceDetectionEvent.person_name != clean_name
-        ).update({
-            "person_name": clean_name
-        }, synchronize_session=False)
+            FaceDetectionEvent.person_name != clean_name,
+        ).all()
+        renameable = [
+            f.id for f in candidates
+            if not f.person_name
+            or f.person_name == "Unknown"
+            or AUTO_UNKNOWN_NAME.match(f.person_name)
+        ]
+        kept = len(candidates) - len(renameable)
+        updated_count = 0
+        if renameable:
+            updated_count = db.query(FaceDetectionEvent).filter(
+                FaceDetectionEvent.id.in_(renameable)
+            ).update({"person_name": clean_name}, synchronize_session=False)
+        if kept:
+            logger.info(
+                "Export kept %s human-assigned name(s) in cluster %s (%s)",
+                kept, cluster_id, clean_name)
 
         db.commit()
 
@@ -786,39 +863,37 @@ class FaceClusteringService:
                     faces_to_rename = db.query(FaceDetectionEvent).filter(
                         FaceDetectionEvent.id.in_(cluster_face_ids))
 
-                    if AUTO_UNKNOWN_NAME.match(existing.label or ""):
-                        # The cluster's own name is a placeholder, so it may
-                        # only claim faces that are themselves unclaimed.
-                        # LIKE 'unknown%' rather than a regex because SQLite has
-                        # no REGEXP by default; the pattern is checked properly
-                        # in Python below for anything it lets through.
-                        candidates = faces_to_rename.filter(
-                            or_(
-                                FaceDetectionEvent.person_name.is_(None),
-                                FaceDetectionEvent.person_name == "Unknown",
-                                FaceDetectionEvent.person_name.like("unknown%"),
-                            )
-                        ).all()
-                        renameable = [
-                            f.id for f in candidates
-                            if not f.person_name
-                            or f.person_name == "Unknown"
-                            or AUTO_UNKNOWN_NAME.match(f.person_name)
-                        ]
-                        if renameable:
-                            db.query(FaceDetectionEvent).filter(
-                                FaceDetectionEvent.id.in_(renameable)
-                            ).update({"person_name": existing.label},
-                                     synchronize_session=False)
-                        kept = len(cluster_face_ids) - len(renameable)
-                        if kept:
-                            logger.info(
-                                "Kept %s human-assigned name(s) while merging into "
-                                "cluster %s (%s)", kept, existing.id, existing.label)
-                    else:
-                        # A real name may claim anything: a person said so.
-                        faces_to_rename.update({"person_name": existing.label},
-                                               synchronize_session=False)
+                    # Same rule as the export path: an automatic name may only
+                    # claim unclaimed faces. A cluster label is derived even when
+                    # it looks real, because it can be voted from its members.
+                    # The cluster's own name is a placeholder, so it may
+                    # only claim faces that are themselves unclaimed.
+                    # LIKE 'unknown%' rather than a regex because SQLite has
+                    # no REGEXP by default; the pattern is checked properly
+                    # in Python below for anything it lets through.
+                    candidates = faces_to_rename.filter(
+                        or_(
+                            FaceDetectionEvent.person_name.is_(None),
+                            FaceDetectionEvent.person_name == "Unknown",
+                            FaceDetectionEvent.person_name.like("unknown%"),
+                        )
+                    ).all()
+                    renameable = [
+                        f.id for f in candidates
+                        if not f.person_name
+                        or f.person_name == "Unknown"
+                        or AUTO_UNKNOWN_NAME.match(f.person_name)
+                    ]
+                    if renameable:
+                        db.query(FaceDetectionEvent).filter(
+                            FaceDetectionEvent.id.in_(renameable)
+                        ).update({"person_name": existing.label},
+                                 synchronize_session=False)
+                    kept = len(cluster_face_ids) - len(renameable)
+                    if kept:
+                        logger.info(
+                            "Kept %s human-assigned name(s) while merging into "
+                            "cluster %s (%s)", kept, existing.id, existing.label)
                     cluster_person_name = existing.label
 
                 existing.face_count = db.query(FaceDetectionEvent).filter(
@@ -917,6 +992,18 @@ class FaceClusteringService:
         
         db.commit()
         
+        # Confirmed people are excluded from clustering, so their profiles are
+        # refreshed here instead — from their own detections, never from
+        # resemblance to anyone else. Without this the daily refresh capture
+        # would never reach the recogniser.
+        try:
+            from backend.core.person_reassignment import refresh_confirmed_people
+            refreshed = refresh_confirmed_people(db)
+            if refreshed:
+                logger.info("Refreshed %s confirmed profile(s)", len(refreshed))
+        except Exception as e:
+            logger.error("Could not refresh confirmed people: %s", e)
+
         clustering_time = (datetime.now() - start_time).total_seconds()
         
         # Update statistics
@@ -1075,10 +1162,18 @@ class FaceClusteringService:
             _snap_fs = _resolve_snapshot_path(face.snapshot_path)
             if _snap_fs and os.path.exists(_snap_fs):
                 try:
-                    # Create unique filename: timestamp_camera_idx.jpg
+                    # Named by DETECTION ID, not by loop index.
+                    #
+                    # rebuild_gallery names the same snapshot the same way, so
+                    # the two writers converge on one filename per detection.
+                    # With a loop index they did not: an export after a rebuild
+                    # laid down a second copy of every image under a different
+                    # number, and one gallery reached 1210 files for 502
+                    # detections. A derived filename has to be a function of the
+                    # thing it derives from, or it is not derived at all.
                     timestamp = face.detected_at.strftime("%Y%m%d_%H%M%S")
                     camera_id = face.camera_id.replace("/", "_")
-                    dest_filename = f"{timestamp}_{camera_id}_{idx}.jpg"
+                    dest_filename = f"{timestamp}_{camera_id}_{face.id}.jpg"
                     dest_path = person_path / dest_filename
 
                     # Skip if file already exists (when merging with existing person)

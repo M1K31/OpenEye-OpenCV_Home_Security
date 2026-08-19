@@ -347,3 +347,42 @@ def _training_lock():
     """The face manager's lock, so encodings are not rewritten mid-edit."""
     from backend.core.face_recognition import _face_recognition_lock
     return _face_recognition_lock
+
+
+def refresh_confirmed_people(db, retrain: bool = True) -> Dict[str, int]:
+    """
+    Keep confirmed people's training current, without clustering touching them.
+
+    Clustering used to do this: it pulled in known faces, exported them, and
+    retrained. That is also how it renamed three real people by majority vote,
+    so confirmed people are now excluded from it entirely.
+
+    Excluding them would otherwise break the refresh loop. The capture policy
+    keeps taking one fresh likeness per person per camera per day precisely so a
+    profile stays current as somebody's appearance drifts — and if nothing ever
+    trains on those captures, the whole daily refresh is wasted effort.
+
+    So the refresh happens here instead, from each person's OWN detections. No
+    resemblance, no voting, no cross-person naming: a confirmed person's gallery
+    is rebuilt from the detections that carry their name, and they are retrained
+    only if that actually changed anything.
+    """
+    from backend.core.gallery import count_images
+    from backend.database.models import Person
+
+    changed: Dict[str, int] = {}
+    confirmed = [p.name for p in db.query(Person).all() if p.is_confirmed and p.name]
+
+    for person in confirmed:
+        before = count_images(person)
+        after = rebuild_gallery(person, db, dry_run=False)
+        if after != before:
+            changed[person] = after - before
+
+    if changed and retrain:
+        logger.info("Refreshing confirmed people after new detections: %s",
+                    ", ".join(f"{k} {v:+d}" for k, v in changed.items()))
+        thread = threading.Thread(target=_retrain, args=(list(changed),), daemon=True)
+        thread.start()
+
+    return changed
