@@ -61,6 +61,12 @@ def camera(monkeypatch):
     # deliberately empty history, so it is a no-op.
     cam._seed_capture_history = lambda name: None
 
+    # Confirmation state comes from the persons table, which is not present
+    # here. None means "no record", which is what an installation from before
+    # the person migration reports — and these tests assert the behaviour that
+    # must be unchanged for exactly that case.
+    cam._is_person_confirmed = lambda name: None
+
     # Returns (size, trained) — both, because size alone is not what stops
     # collection. Default trained=True so a test that only sets a size is
     # describing a well-established cluster, which is what these assert.

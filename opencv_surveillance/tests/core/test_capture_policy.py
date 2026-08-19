@@ -532,6 +532,90 @@ class TestBorderlineMatchesAreKeptForReview:
         assert "low-confidence match" in decision.reason
 
 
+
+class TestUnconfirmedIdentitiesKeepEverything:
+    """
+    A face nobody has vouched for is the work still outstanding, and it cannot be
+    done from a detection that kept no picture.
+
+    Keyed on confirmation rather than on the name, deliberately. The system
+    auto-names a cluster and trains it, which used to make it LOOK named and
+    switch it to the economical rules — turning retention off at exactly the
+    moment the identification work began.
+    """
+
+    def test_an_unconfirmed_identity_is_always_captured(self):
+        policy = CapturePolicy()
+
+        f = face("unknown1")
+        first = _arrive(policy, f, now=0, person_confirmed=False)
+        immediately_after = policy.evaluate(f, CAMERA, now=5, person_confirmed=False)
+
+        assert first.capture is True
+        assert immediately_after.capture is True
+        assert "unconfirmed identity" in immediately_after.reason
+
+    def test_the_daily_throttle_does_not_apply_to_it(self):
+        policy = CapturePolicy()
+
+        f = face("unknown1")
+        _arrive(policy, f, now=0, person_confirmed=False)
+        # Within the motion-sticky window, so the track survives and the
+        # throttle — not the persistence gate — is what answers.
+        later = policy.evaluate(f, CAMERA, now=10, person_confirmed=False)
+
+        assert later.capture is True
+        assert "already captured" not in later.reason
+
+    def test_a_mature_cluster_does_not_silence_it(self):
+        """The maturity stop assumes the person is settled. Nobody has said so."""
+        policy = CapturePolicy()
+
+        decision = _arrive(policy, face("unknown1"), now=0,
+                           cluster_face_count=701, cluster_is_trained=True,
+                           cluster_id=1, person_confirmed=False)
+
+        assert decision.capture is True
+        assert "unconfirmed identity" in decision.reason
+
+    def test_a_confirmed_person_follows_the_ordinary_rules(self):
+        policy = CapturePolicy()
+
+        f = face("Mikel")
+        first = _arrive(policy, f, now=0, person_confirmed=True)
+        again = policy.evaluate(f, CAMERA, now=60, person_confirmed=True)
+
+        assert first.capture is True
+        assert again.capture is False
+        assert "already captured for this person today" in again.reason
+
+    def test_an_unknown_confirmation_state_changes_nothing(self):
+        """
+        None means no person record — an installation from before the migration.
+        It must behave exactly as it did, not silently start hoarding.
+        """
+        policy = CapturePolicy()
+
+        f = face("Mikel")
+        _arrive(policy, f, now=0, person_confirmed=None)
+        again = policy.evaluate(f, CAMERA, now=60, person_confirmed=None)
+
+        assert again.capture is False
+
+    def test_it_still_earns_confirmation_first(self):
+        """
+        Retention is not a licence to capture a single bad frame. The persistence
+        gate still applies — that is what keeps door edges and wall patches out.
+        """
+        policy = CapturePolicy()
+
+        first_pass = policy.evaluate(face("unknown1"), CAMERA, now=0,
+                                     person_confirmed=False)
+
+        assert first_pass.capture is False
+        assert "of 3 passes" in first_pass.reason
+
+
 # ------------------------------------------------------------- camera mode
 
 class TestCameraMode:

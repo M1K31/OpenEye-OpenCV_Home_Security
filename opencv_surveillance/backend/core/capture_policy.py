@@ -182,6 +182,7 @@ class CapturePolicy:
         cluster_is_trained: Optional[bool] = None,
         cluster_id: Optional[int] = None,
         person_is_known: Optional[bool] = None,
+        person_confirmed: Optional[bool] = None,
         now: Optional[float] = None,
     ) -> CaptureDecision:
         """
@@ -201,6 +202,10 @@ class CapturePolicy:
             cluster_id: which cluster this face matched, used to budget hard
                 cases per cluster rather than per the literal name 'Unknown'
             person_is_known: whether the name corresponds to an enrolled person
+            person_confirmed: whether a human has vouched for this identity. An
+                unconfirmed, system-named person keeps every likeness, because
+                those are the faces somebody still has to identify — and a face
+                cannot be identified from a record that kept no picture of it.
             now: injected clock, for tests
         """
         now = time.time() if now is None else now
@@ -251,7 +256,12 @@ class CapturePolicy:
             and 0 < confidence < self.settings.review_confidence
         )
 
-        if known and not borderline and self._captured_recently(name, camera_id, now):
+        # Neither a doubtful match nor an unconfirmed identity is silenced by
+        # "already captured today". Both describe work still outstanding, and
+        # the daily throttle exists for people whose likeness is already
+        # settled.
+        if (known and not borderline and person_confirmed is not False
+                and self._captured_recently(name, camera_id, now)):
             return CaptureDecision(False, sighting,
                                    "already captured for this person today")
 
@@ -261,6 +271,24 @@ class CapturePolicy:
                 f"seen {track.consecutive} of "
                 f"{self.settings.required_consecutive_passes} passes",
             )
+
+        # An identity nobody has vouched for keeps everything.
+        #
+        # The suppression rules below all assume the person is settled: their
+        # likeness is current, their cluster is well represented, there is
+        # nothing left to decide. None of that is true of a face the system
+        # named itself and a human has not yet confirmed — that is precisely the
+        # work still outstanding, and it cannot be done from a detection with no
+        # picture attached.
+        #
+        # Deliberately keyed on confirmation rather than on the name. The system
+        # auto-names a cluster and trains it, which used to make it LOOK named
+        # and silently switch it to the economical rules — turning off retention
+        # exactly when the identification work began.
+        if person_confirmed is False:
+            self._note_capture(name, camera_id, now)
+            return CaptureDecision(
+                True, sighting, "unconfirmed identity — keeping every likeness")
 
         if borderline:
             # After the persistence gate on purpose. A doubtful match should not

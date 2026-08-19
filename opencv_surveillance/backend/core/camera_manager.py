@@ -40,6 +40,7 @@ from backend.database.models import (
     MotionDetectionEvent,
     FaceDetectionEvent,
     FaceCluster,
+    Person,
 )
 from backend.core.capture_policy import (
     CapturePolicy,
@@ -93,6 +94,10 @@ class Camera(ABC):
         # Seeded lazily and once: the query is cheap but pointless to repeat,
         # and most cameras see a handful of people.
         self._seeded_capture_history = set()
+        # name -> whether a human has vouched for that identity. Cached because
+        # this is consulted for every recognised face on every frame, and the
+        # answer changes only when somebody names or confirms a person.
+        self._person_confirmed: Dict[str, Optional[bool]] = {}
         self._capture_policy = CapturePolicy(
             CaptureSettings(
                 required_consecutive_passes=int(
@@ -735,6 +740,8 @@ class Camera(ABC):
                 cluster_face_count=cluster_size,
                 cluster_is_trained=cluster_trained,
                 cluster_id=face.get("cluster_id"),
+                person_confirmed=self._is_person_confirmed(
+                    (face.get("name") or "").strip()),
             )
 
             snapshot_path = None
@@ -812,6 +819,43 @@ class Camera(ABC):
                 "Capture history for %s on %s resumed from %s",
                 name, self.camera_id, row[0],
             )
+
+    def _is_person_confirmed(self, name: str) -> Optional[bool]:
+        """
+        Whether a human has vouched for this identity.
+
+        None when there is no person record — an older installation before the
+        migration, or a name nothing has registered yet. The capture policy
+        treats None as "do not know" and applies the ordinary rules, so an
+        un-migrated install behaves exactly as it did.
+        """
+        if not name or name == "Unknown":
+            return None
+        if name in self._person_confirmed:
+            return self._person_confirmed[name]
+
+        answer: Optional[bool] = None
+        try:
+            with get_db_context() as db:
+                person = db.query(Person).filter(Person.name == name).first()
+                if person is not None:
+                    answer = person.is_confirmed
+        except Exception as e:
+            logger.debug("Could not read person '%s': %s", name, e)
+
+        self._person_confirmed[name] = answer
+        return answer
+
+    def forget_person_cache(self) -> None:
+        """
+        Drop the confirmation cache.
+
+        Called after a person is named or confirmed, so the change takes effect
+        on the next frame rather than the next restart — the difference between
+        naming somebody and watching capture behaviour change, and naming
+        somebody and wondering whether it worked.
+        """
+        self._person_confirmed.clear()
 
     def _cluster_state_for(self, face: dict) -> Tuple[Optional[int], Optional[bool]]:
         """
