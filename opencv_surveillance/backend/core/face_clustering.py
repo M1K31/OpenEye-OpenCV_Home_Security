@@ -6,6 +6,7 @@ Implements AI-powered clustering to group similar unknown faces
 """
 
 import logging
+import re
 import base64
 import json
 import numpy as np
@@ -18,6 +19,11 @@ from sqlalchemy import and_, or_
 from backend.database.models import FaceDetectionEvent, FaceCluster
 
 logger = logging.getLogger(__name__)
+
+# An auto-generated placeholder name. Only these may be overwritten by
+# clustering, and only these may overwrite another placeholder — a name a person
+# typed is never replaced by a guess.
+AUTO_UNKNOWN_NAME = re.compile(r"^unknown\d+$", re.IGNORECASE)
 
 
 def _resolve_snapshot_path(stored: Optional[str]) -> Optional[str]:
@@ -759,12 +765,55 @@ class FaceClusteringService:
                 ).update({"cluster_id": existing.id}, synchronize_session=False)
 
                 if existing.label:
-                    # The established cluster's name wins. These faces are the
-                    # same person, and a second name for them is the bug.
-                    db.query(FaceDetectionEvent).filter(
-                        FaceDetectionEvent.id.in_(cluster_face_ids)
-                    ).update({"person_name": existing.label},
-                             synchronize_session=False)
+                    # Adopt the established cluster's name — but NEVER over a
+                    # name a human chose.
+                    #
+                    # This previously overwrote unconditionally, and destroyed
+                    # real work: 383 faces were merged into cluster 1 and all of
+                    # them renamed to "unknown1", including 283 that a user had
+                    # just assigned to Mikel, Yalena and Yaleska. An
+                    # auto-generated placeholder overwrote three real people.
+                    #
+                    # The rule is one-directional. A placeholder may be replaced
+                    # by anything; a real name may not be replaced by a
+                    # placeholder. Recognition and clustering are guesses, and a
+                    # guess does not get to overrule a person.
+                    faces_to_rename = db.query(FaceDetectionEvent).filter(
+                        FaceDetectionEvent.id.in_(cluster_face_ids))
+
+                    if AUTO_UNKNOWN_NAME.match(existing.label or ""):
+                        # The cluster's own name is a placeholder, so it may
+                        # only claim faces that are themselves unclaimed.
+                        # LIKE 'unknown%' rather than a regex because SQLite has
+                        # no REGEXP by default; the pattern is checked properly
+                        # in Python below for anything it lets through.
+                        candidates = faces_to_rename.filter(
+                            or_(
+                                FaceDetectionEvent.person_name.is_(None),
+                                FaceDetectionEvent.person_name == "Unknown",
+                                FaceDetectionEvent.person_name.like("unknown%"),
+                            )
+                        ).all()
+                        renameable = [
+                            f.id for f in candidates
+                            if not f.person_name
+                            or f.person_name == "Unknown"
+                            or AUTO_UNKNOWN_NAME.match(f.person_name)
+                        ]
+                        if renameable:
+                            db.query(FaceDetectionEvent).filter(
+                                FaceDetectionEvent.id.in_(renameable)
+                            ).update({"person_name": existing.label},
+                                     synchronize_session=False)
+                        kept = len(cluster_face_ids) - len(renameable)
+                        if kept:
+                            logger.info(
+                                "Kept %s human-assigned name(s) while merging into "
+                                "cluster %s (%s)", kept, existing.id, existing.label)
+                    else:
+                        # A real name may claim anything: a person said so.
+                        faces_to_rename.update({"person_name": existing.label},
+                                               synchronize_session=False)
                     cluster_person_name = existing.label
 
                 existing.face_count = db.query(FaceDetectionEvent).filter(
