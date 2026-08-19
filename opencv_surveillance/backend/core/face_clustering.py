@@ -425,11 +425,15 @@ class FaceClusteringService:
             return {"success": False, "message": "Invalid person name"}
 
         # Create person directory (or use existing)
-        person_path = paths.faces_dir / clean_name
+        # Camera exports are derived data and go in detected/, so a rebuild can
+        # regenerate them without touching photographs somebody chose.
+        from backend.core.gallery import detected_dir, ensure_layout, iter_images
+        ensure_layout(clean_name)
+        person_path = detected_dir(clean_name)
         person_path.mkdir(parents=True, exist_ok=True)
         
         # Check if person folder already exists (for known persons)
-        is_existing_person = person_path.exists() and any(person_path.iterdir())
+        is_existing_person = any(iter_images(clean_name))
 
         # Get all face detections in this cluster
         faces = db.query(FaceDetectionEvent).filter(
@@ -444,7 +448,7 @@ class FaceClusteringService:
         
         if is_existing_person and update_existing:
             # Get list of existing files to avoid duplicates
-            existing_files = {f.name for f in person_path.iterdir() if f.is_file()}
+            existing_files = {f.name for f in iter_images(clean_name)}
 
         for idx, face in enumerate(faces):
             _snap_fs = _resolve_snapshot_path(face.snapshot_path)
@@ -538,7 +542,8 @@ class FaceClusteringService:
                 face_manager = get_face_manager()
 
                 # Collect paths of newly exported photos for incremental training
-                person_dir = paths.faces_dir / person_name
+                from backend.core.gallery import detected_dir as _detected_dir
+                person_dir = _detected_dir(person_name)
                 images_copied = export_result.get("images_copied", 0)
 
                 if images_copied > 0 and person_dir.exists():
@@ -1040,8 +1045,12 @@ class FaceClusteringService:
             }
 
         # Check if person folder already exists (merging with existing known person)
-        person_path = paths.faces_dir / clean_name
-        is_existing_person = person_path.exists() and any(person_path.iterdir()) if person_path.exists() else False
+        # Camera exports are derived data and go in detected/, so a rebuild can
+        # regenerate them without touching photographs somebody chose.
+        from backend.core.gallery import detected_dir, ensure_layout, iter_images
+        ensure_layout(clean_name)
+        person_path = detected_dir(clean_name)
+        is_existing_person = any(iter_images(clean_name)) if person_path.exists() else False
         person_path.mkdir(parents=True, exist_ok=True)
 
         if is_existing_person:
@@ -1057,7 +1066,7 @@ class FaceClusteringService:
         # Get list of existing files to avoid duplicates when merging with existing person
         existing_files = set()
         if is_existing_person:
-            existing_files = {f.name for f in person_path.iterdir() if f.is_file()}
+            existing_files = {f.name for f in iter_images(clean_name)}
 
         # Copy face snapshots to person folder
         images_copied = 0

@@ -227,11 +227,14 @@ class FaceRecognitionManager:
                 people_count += 1
                 logger.info(f"Processing images for: {person_name}")
 
-                # Load all images for this person
-                for image_file_path in person_path.iterdir():
-                    if not image_file_path.name.lower().endswith((".jpg", ".jpeg", ".png")):
-                        continue
+                # Every image for this person, from detected/, uploaded/, or
+                # loose in the folder on an installation that predates the
+                # split. Training reads all of them — the split governs what may
+                # be DELETED, not what counts. A person's face is their face
+                # however the picture arrived.
+                from backend.core.gallery import iter_images
 
+                for image_file_path in iter_images(person_name):
                     image_path = image_file_path
 
                     try:
@@ -333,7 +336,8 @@ class FaceRecognitionManager:
             photos_processed = 0
             photos_failed = 0
 
-            for image_file_path in person_path.iterdir():
+            from backend.core.gallery import iter_images
+            for image_file_path in iter_images(person_name):
                 if not image_file_path.name.lower().endswith((".jpg", ".jpeg", ".png")):
                     continue
 

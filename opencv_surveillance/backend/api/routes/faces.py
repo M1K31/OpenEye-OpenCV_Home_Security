@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from backend.api.schemas import face as face_schema
 from backend.api.schemas.pagination import PaginatedResponse
 from backend.core.face_recognition import get_face_manager, is_training_in_progress
+from backend.core.gallery import count_images, iter_images, uploaded_dir
 from backend.core.paths import paths
 from backend.core.camera_manager import manager as camera_manager
 from backend.core.auth import get_current_active_user, require_user, require_admin
@@ -111,8 +112,11 @@ def add_person(
             elif person.merge_if_exists:
                 # Count existing photos and get preview
                 photo_files = [
-                    f for f in os.listdir(person_path)
-                    if f.lower().endswith((".jpg", ".jpeg", ".png"))
+                    # Relative to the person folder, so a sorted gallery
+                    # yields 'detected/x.jpg' and a legacy flat one still
+                    # yields 'x.jpg' — both resolve under /faces/<name>/.
+                    str(image.relative_to(person_path))
+                    for image in iter_images(clean_name)
                 ]
                 photo_count = len(photo_files)
                 
@@ -134,8 +138,11 @@ def add_person(
             else:
                 # Count existing photos and get preview
                 photo_files = [
-                    f for f in os.listdir(person_path)
-                    if f.lower().endswith((".jpg", ".jpeg", ".png"))
+                    # Relative to the person folder, so a sorted gallery
+                    # yields 'detected/x.jpg' and a legacy flat one still
+                    # yields 'x.jpg' — both resolve under /faces/<name>/.
+                    str(image.relative_to(person_path))
+                    for image in iter_images(clean_name)
                 ]
                 photo_count = len(photo_files)
                 
@@ -199,16 +206,17 @@ def get_person(
         photo_count = 0
         preview_photo_url = None
         if os.path.isdir(person_path):
-            photo_files = [
-                f
-                for f in os.listdir(person_path)
-                if f.lower().endswith((".jpg", ".jpeg", ".png"))
-            ]
+            # Relative to the person folder, so a sorted gallery yields
+            # "detected/x.jpg" and a legacy flat one still yields "x.jpg" —
+            # both resolve under /faces/<name>/.
+            photo_files = sorted(
+                str(image.relative_to(person_path))
+                for image in iter_images(person_name)
+            )
             photo_count = len(photo_files)
-            
+
             # Get preview photo URL
             if photo_files:
-                photo_files.sort()
                 preview_photo_url = f"/faces/{person_name}/{photo_files[0]}"
 
         return face_schema.Person(
@@ -411,19 +419,17 @@ def list_person_photos(
         # Get all photos
         photos = []
         if os.path.isdir(person_path):
-            for filename in os.listdir(person_path):
-                if filename.lower().endswith((".jpg", ".jpeg", ".png")):
-                    file_path = os.path.join(person_path, filename)
-                    file_stats = os.stat(file_path)
-
-                    photos.append(
-                        face_schema.PhotoInfo(
-                            filename=filename,
-                            path=file_path,
-                            size_bytes=file_stats.st_size,
-                            uploaded_at=datetime.fromtimestamp(
-                                file_stats.st_mtime),
-                        ))
+            for image in iter_images(person_name):
+                file_stats = image.stat()
+                photos.append(
+                    face_schema.PhotoInfo(
+                        # Relative, so detected/ and uploaded/ are visible in
+                        # the listing and the URL still resolves.
+                        filename=str(image.relative_to(person_path)),
+                        path=str(image),
+                        size_bytes=file_stats.st_size,
+                        uploaded_at=datetime.fromtimestamp(file_stats.st_mtime),
+                    ))
 
         # Sort by upload date (newest first)
         photos.sort(key=lambda x: x.uploaded_at, reverse=True)
@@ -464,7 +470,17 @@ async def upload_photos(
     """
     try:
         face_manager = get_face_manager()
-        person_path = paths.faces_dir / person_name
+        # Uploads go to uploaded/, and nothing automatic may ever delete them.
+        #
+        # This is the half of the split that matters. Rebuilding a person's
+        # gallery from their detections is the only reliable way to move
+        # training data when detections are reassigned — gallery filenames
+        # cannot be traced back to the detections they came from — but a blind
+        # rebuild would destroy exactly these: the photographs somebody chose,
+        # which are usually far better than a 144x144 camera crop.
+        from backend.core.gallery import ensure_layout, uploaded_dir as _uploaded
+        ensure_layout(person_name)
+        person_path = _uploaded(person_name)
 
         if not os.path.exists(person_path):
             raise HTTPException(

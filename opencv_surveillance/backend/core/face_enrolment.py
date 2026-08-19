@@ -72,7 +72,8 @@ def enrol_detections(db: Session, face_ids: List[int], person_name: str) -> dict
 
         person_path = paths.faces_dir / clean
         person_path.mkdir(parents=True, exist_ok=True)
-        existing = set(os.listdir(person_path))
+        from backend.core.gallery import iter_images
+        existing = {f.name for f in iter_images(person_name)}
 
         faces = db.query(models.FaceDetectionEvent).filter(
             models.FaceDetectionEvent.id.in_(face_ids)
@@ -188,11 +189,8 @@ def repair_people_missing_encodings(db: Session, limit_per_person: int = 40) -> 
 
     for name in broken:
         try:
-            person_path = paths.faces_dir / name
-            photos = []
-            if person_path.is_dir():
-                photos = [f for f in os.listdir(person_path)
-                          if f.lower().endswith((".jpg", ".jpeg", ".png"))]
+            from backend.core.gallery import iter_images
+            photos = [image.name for image in iter_images(name)]
 
             if photos:
                 # Gallery exists but never encoded — retrain from what is there.
