@@ -21,6 +21,7 @@ import asyncio
 import threading
 import queue
 from datetime import datetime
+from backend.core.timeutil import utcnow
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 import numpy as np
@@ -403,7 +404,7 @@ class FFmpegRecorder:
 
             # Initialize state
             self.is_recording = True
-            self.recording_start_time = datetime.now()
+            self.recording_start_time = utcnow()
             self.frame_count = 0
             self.detected_faces = []
             self.associated_motion_event_ids = []  # Reset for new recording
@@ -474,7 +475,7 @@ class FFmpegRecorder:
             for face in faces:
                 self.detected_faces.append({
                     'frame_number': self.frame_count,
-                    'timestamp': (datetime.now() - self.recording_start_time).total_seconds(),
+                    'timestamp': (utcnow() - self.recording_start_time).total_seconds(),
                     'person_name': face.get('name', 'Unknown'),
                     'confidence': face.get('confidence', 0.0)
                 })
@@ -531,7 +532,7 @@ class FFmpegRecorder:
         # Calculate duration
         duration_seconds = 0
         if self.recording_start_time:
-            duration_seconds = (datetime.now() - self.recording_start_time).total_seconds()
+            duration_seconds = (utcnow() - self.recording_start_time).total_seconds()
 
         # Save metadata
         metadata = {
@@ -582,7 +583,7 @@ class FFmpegRecorder:
                     "camera_id": camera_id,
                     "recording_path": relative_path,
                     "started_at": self.recording_start_time,
-                    "ended_at": datetime.now(),
+                    "ended_at": utcnow(),
                     "duration_seconds": duration_seconds,
                     "motion_detected": True,  # Always true if we're recording
                     "faces_detected": len(self.detected_faces),
@@ -611,7 +612,7 @@ class FFmpegRecorder:
                     face_linked_count = db.query(FaceDetectionEvent).filter(
                         FaceDetectionEvent.camera_id == camera_id,
                         FaceDetectionEvent.detected_at >= self.recording_start_time,
-                        FaceDetectionEvent.detected_at <= datetime.now(),
+                        FaceDetectionEvent.detected_at <= utcnow(),
                         FaceDetectionEvent.recording_id.is_(None)
                     ).update(
                         {"recording_id": db_event.id, "recording_path": relative_path},
@@ -641,7 +642,7 @@ class FFmpegRecorder:
         """Get current recording duration in seconds"""
         if not self.is_recording or not self.recording_start_time:
             return 0.0
-        return (datetime.now() - self.recording_start_time).total_seconds()
+        return (utcnow() - self.recording_start_time).total_seconds()
 
     def should_stop_recording(self) -> bool:
         """
@@ -653,7 +654,7 @@ class FFmpegRecorder:
         if not self.is_recording or not self.recording_start_time:
             return False
 
-        duration = (datetime.now() - self.recording_start_time).total_seconds()
+        duration = (utcnow() - self.recording_start_time).total_seconds()
         if duration >= self.max_recording_duration:
             logger.info(f"⏱️ Max recording duration ({self.max_recording_duration}s) reached")
             return True
@@ -670,7 +671,7 @@ class FFmpegRecorder:
         if self.is_recording:
             face_data_copy = face_data.copy()
             face_data_copy["frame_number"] = self.frame_count
-            face_data_copy["timestamp"] = (datetime.now() - self.recording_start_time).total_seconds() if self.recording_start_time else 0
+            face_data_copy["timestamp"] = (utcnow() - self.recording_start_time).total_seconds() if self.recording_start_time else 0
             self.detected_faces.append(face_data_copy)
 
     def add_motion_event_id(self, motion_event_id: int):

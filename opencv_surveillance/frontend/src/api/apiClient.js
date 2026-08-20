@@ -111,8 +111,41 @@ apiClient.interceptors.request.use(
  * Note: The main 401 handling with automatic token refresh is done
  * in authService.js. This interceptor provides fallback behavior.
  */
+/**
+ * Mark server timestamps as UTC.
+ *
+ * The backend stores every instant in UTC, but SQLite has no timezone type, so
+ * what arrives over the wire is "2026-08-19T23:44:09" with nothing to say which
+ * zone that is. JavaScript reads an ISO string WITHOUT an offset as local time
+ * and one ending in Z as UTC, so leaving it bare makes the browser render a UTC
+ * instant as though it were already local — every timestamp shifted by the
+ * viewer's offset, and correct only in London.
+ *
+ * Appending Z here rather than at 60-odd `new Date(...)` call sites, or on every
+ * field of every response schema, because there is one rule and it belongs in
+ * one place. Anything that is already marked, or is not an ISO instant, is left
+ * alone.
+ */
+const BARE_ISO_INSTANT = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?$/;
+
+const markUtc = (value) => {
+  if (typeof value === 'string') {
+    return BARE_ISO_INSTANT.test(value) ? `${value.replace(' ', 'T')}Z` : value;
+  }
+  if (Array.isArray(value)) return value.map(markUtc);
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const key of Object.keys(value)) out[key] = markUtc(value[key]);
+    return out;
+  }
+  return value;
+};
+
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (response?.data) response.data = markUtc(response.data);
+    return response;
+  },
   async (error) => {
     const { config, response } = error;
 

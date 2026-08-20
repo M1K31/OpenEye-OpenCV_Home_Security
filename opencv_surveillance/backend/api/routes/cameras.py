@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy.orm import Session
 from datetime import datetime
+from backend.core.timeutil import utcnow
 import cv2
 import asyncio
 import os
@@ -762,7 +763,7 @@ def capture_snapshot_voice(
         success=True,
         snapshot_url=f"/api/snapshots/{filename}",
         camera_id=camera_id,
-        timestamp=datetime.now(),
+        timestamp=utcnow(),
         resolution=f"{width}x{height}"
     )
 
@@ -798,7 +799,7 @@ def start_recording(
                 success=True,
                 recording_id=None,
                 camera_id=camera_id,
-                started_at=datetime.now()
+                started_at=utcnow()
             )
         
         # Start recording
@@ -816,7 +817,7 @@ def start_recording(
             success=True,
             recording_id=None,  # Will be assigned when recording completes
             camera_id=camera_id,
-            started_at=datetime.now()
+            started_at=utcnow()
         )
         
     except Exception as e:

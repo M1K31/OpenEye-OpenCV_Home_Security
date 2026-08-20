@@ -7,7 +7,8 @@ Manages scheduled events like model retraining, retroactive face search, and cle
 
 import logging
 import asyncio
-from datetime import datetime, time, timedelta
+from backend.core.timeutil import utcnow
+from datetime import datetime, time, timedelta, timezone
 from typing import Optional, List, Dict, Any, Callable
 from enum import Enum
 import json
@@ -65,6 +66,10 @@ class ScheduledTask:
         if not self.enabled:
             return False
 
+        # LOCAL, deliberately. A schedule of "run at 3 AM" means 3 AM where
+        # the machine is, not 3 AM UTC. This is wall-clock intent rather than a
+        # stored instant, and it pairs with task.last_run below, which uses the
+        # same clock. Do not "fix" these to UTC.
         now = datetime.now()
 
         # Check schedule_time (daily at specific time)
@@ -368,17 +373,17 @@ class ScheduledTasksManager:
             max_events = config.get("max_events", 1000)
             search_unknown_only = config.get("search_unknown_only", False)
 
-            cutoff_time = datetime.now() - timedelta(hours=hours_back)
+            cutoff_time = utcnow() - timedelta(hours=hours_back)
 
             query = db.query(FaceDetectionEvent).filter(
-                FaceDetectionEvent.timestamp >= cutoff_time,
+                FaceDetectionEvent.detected_at >= cutoff_time,
                 FaceDetectionEvent.face_encoding.isnot(None)
             )
 
             if search_unknown_only:
                 query = query.filter(FaceDetectionEvent.person_name == "Unknown")
 
-            events = query.order_by(FaceDetectionEvent.timestamp.desc()).limit(max_events).all()
+            events = query.order_by(FaceDetectionEvent.detected_at.desc()).limit(max_events).all()
             result["events_searched"] = len(events)
 
             # Check face_recognition availability before entering the loop
@@ -448,7 +453,7 @@ class ScheduledTasksManager:
 
         with get_db_context() as db:
             min_age_days = config.get("min_cluster_age_days", 7)
-            cutoff_date = datetime.now() - timedelta(days=min_age_days)
+            cutoff_date = utcnow() - timedelta(days=min_age_days)
 
             if config.get("remove_empty_clusters", True):
                 # Find and remove empty clusters
@@ -476,17 +481,17 @@ class ScheduledTasksManager:
 
         with get_db_context() as db:
             retention_days = config.get("retention_days", 30)
-            cutoff_date = datetime.now() - timedelta(days=retention_days)
+            cutoff_date = utcnow() - timedelta(days=retention_days)
 
             if config.get("cleanup_motion_events", True):
                 deleted = db.query(MotionDetectionEvent).filter(
-                    MotionDetectionEvent.timestamp < cutoff_date
+                    MotionDetectionEvent.detected_at < cutoff_date
                 ).delete()
                 result["motion_events_deleted"] = deleted
 
             if config.get("cleanup_face_events", False):
                 deleted = db.query(FaceDetectionEvent).filter(
-                    FaceDetectionEvent.timestamp < cutoff_date
+                    FaceDetectionEvent.detected_at < cutoff_date
                 ).delete()
                 result["face_events_deleted"] = deleted
 
@@ -505,8 +510,12 @@ class ScheduledTasksManager:
         }
 
         retention_days = config.get("retention_days", 7)
-        cutoff_time = datetime.now() - timedelta(days=retention_days)
-        cutoff_timestamp = cutoff_time.timestamp()
+        cutoff_time = utcnow() - timedelta(days=retention_days)
+        # Marked UTC before converting to an epoch, because datetime.timestamp()
+        # reads a NAIVE value as local. Left bare, a UTC cutoff would be read as
+        # local and land the file-deletion boundary hours away from where it was
+        # meant to be — in the wrong direction for a routine that deletes.
+        cutoff_timestamp = cutoff_time.replace(tzinfo=timezone.utc).timestamp()
 
         snapshots_dir = paths.snapshots_dir
         if not snapshots_dir.exists():

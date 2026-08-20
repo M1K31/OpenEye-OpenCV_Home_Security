@@ -17,6 +17,7 @@ from collections import deque
 from typing import Optional, Dict, Any, Tuple
 from pathlib import Path
 from datetime import datetime
+from backend.core.timeutil import utcnow
 from .motion_detector import MotionDetector
 from .image_processor import ImageProcessor
 from .paths import paths  # single source of truth for snapshot/recording dirs
@@ -568,11 +569,16 @@ class Camera(ABC):
                 # Create motion event
                 motion_event = MotionDetectionEvent(
                     camera_id=self.camera_id,
-                    # Use LOCAL time to match face detection events (which use
-                    # datetime.now()). The model default is datetime.utcnow, so
-                    # without this motion timestamps were stored in UTC — hours off
-                    # from face events and shown as "future" times in the UI.
-                    detected_at=datetime.now(),
+                    # UTC, like every other persisted timestamp.
+                    #
+                    # This previously used local time deliberately, to match
+                    # face events which also used it — correct in that the two
+                    # finally agreed, wrong in which direction they were made to
+                    # agree. Storage should not know where the viewer is. The
+                    # display problem that motivated it is solved at the API
+                    # boundary instead, where timestamps are marked as UTC and
+                    # the browser converts them.
+                    detected_at=utcnow(),
                     motion_area=total_motion_area,
                     motion_percentage=motion_percentage,
                     contour_count=len(motion_areas),
@@ -708,7 +714,7 @@ class Camera(ABC):
                 person_name=person_name,
                 camera_id=self.camera_id,
                 confidence=face.get("confidence", 0.0),
-                detected_at=datetime.now(),
+                detected_at=utcnow(),
             )
         except Exception as e:
             print(f"Error processing automation rules for {person_name}: {e}")
@@ -924,7 +930,7 @@ class Camera(ABC):
                     camera_id=self.camera_id,
                     person_name=face.get("name", "Unknown"),
                     confidence=face.get("confidence", 0.0),
-                    detected_at=datetime.now(),
+                    detected_at=utcnow(),
                     location_top=location.get("top", 0),
                     location_right=location.get("right", 0),
                     location_bottom=location.get("bottom", 0),

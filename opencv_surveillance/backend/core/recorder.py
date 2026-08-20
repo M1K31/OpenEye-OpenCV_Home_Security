@@ -14,6 +14,7 @@ import time
 import json
 import threading
 from datetime import datetime
+from backend.core.timeutil import utcnow
 import asyncio
 from backend.core.alert_manager import get_alert_manager
 
@@ -183,7 +184,7 @@ class Recorder:
         #
         # A one-statement window sounds harmless; the streaming loop reads at
         # 30 FPS, and it landed four times in one afternoon.
-        self.recording_start_time = datetime.now()
+        self.recording_start_time = utcnow()
         self.frame_count = 0
         self.detected_faces = []
         self.associated_motion_event_ids = []
@@ -239,7 +240,7 @@ class Recorder:
         """
         if self.is_recording:
             face_data["frame_number"] = self.frame_count
-            face_data["timestamp"] = datetime.now().isoformat()
+            face_data["timestamp"] = utcnow().isoformat()
             self.detected_faces.append(face_data)
 
     def should_stop_recording(self):
@@ -252,7 +253,7 @@ class Recorder:
         if not self.is_recording or not self.recording_start_time:
             return False
 
-        duration = (datetime.now() - self.recording_start_time).total_seconds()
+        duration = (utcnow() - self.recording_start_time).total_seconds()
         if duration >= self.max_recording_duration:
             print(f"Maximum recording duration ({self.max_recording_duration}s) reached. Stopping recording.")
             return True
@@ -280,7 +281,7 @@ class Recorder:
             # recording of nothing — worth zero, not worth an exception that
             # loses the file's metadata entirely.
             duration = (
-                (datetime.now() - self.recording_start_time).total_seconds()
+                (utcnow() - self.recording_start_time).total_seconds()
                 if self.recording_start_time else 0.0
             )
 
@@ -326,7 +327,7 @@ class Recorder:
         Add detected face information to the recording metadata.
         """
         if self.is_recording:
-            timestamp = datetime.now().isoformat()
+            timestamp = utcnow().isoformat()
             face_entry = {
                 "timestamp": timestamp,
                 "frame_number": self.frame_count,
@@ -357,7 +358,7 @@ class Recorder:
                 "recording": {
                     "filename": os.path.basename(self.filename),
                     "started_at": self.recording_start_time.isoformat(),
-                    "ended_at": datetime.now().isoformat(),
+                    "ended_at": utcnow().isoformat(),
                     "duration_seconds": duration,
                     "frame_count": self.frame_count,
                     "file_size_bytes": file_size,
@@ -394,7 +395,7 @@ class Recorder:
                         "camera_id": camera_id,
                         "recording_path": relative_path,
                         "started_at": self.recording_start_time,
-                        "ended_at": datetime.now(),
+                        "ended_at": utcnow(),
                         "duration_seconds": duration,
                         "motion_detected": True,  # Always true if we're recording
                         "faces_detected": len(self.detected_faces),
@@ -432,7 +433,7 @@ class Recorder:
         if not self.is_recording or not self.recording_start_time:
             return None
 
-        duration = (datetime.now() - self.recording_start_time).total_seconds()
+        duration = (utcnow() - self.recording_start_time).total_seconds()
         unique_people = set(face.get("name", "Unknown")
                             for face in self.detected_faces)
 
