@@ -102,6 +102,15 @@ class FaceClusteringService:
         # is visible and repairable, a merge silently teaches one profile
         # another person's face.
         self.merge_distance = 0.40
+
+        # How close a new cluster must sit to a person somebody named before it
+        # is treated as that person rather than as a new stranger.
+        #
+        # Same scale and same reasoning as merge_distance, kept separate so it
+        # can be tightened without also changing how clusters combine. Claiming
+        # a cluster for the wrong person is the worse error of the two, since it
+        # trains a real profile on somebody else's face.
+        self.known_person_distance = 0.40
         self.auto_export_enabled = auto_export_enabled
         self.auto_export_threshold = auto_export_threshold
         self.auto_train_enabled = auto_train_enabled
@@ -270,6 +279,74 @@ class FaceClusteringService:
         
         next_num = max(existing_numbers) + 1
         return f"unknown{next_num}"
+
+    def _match_confirmed_person(self, db: Session, centroid: np.ndarray) -> Optional[str]:
+        """
+        A person somebody already named who is the same face as this centroid.
+
+        Recognition compares one face against every encoding and takes the
+        nearest, so a new face IS measured against named people. What never
+        happened is the comparison at the level of identities: nothing asked
+        whether a whole cluster was somebody already known.
+
+        The consequence was a placeholder that could not be dislodged. One
+        installation held 503 faces as 'unknown1' and 205 of the same face as
+        'Mikel'; every new sighting matched the larger pile, so the placeholder
+        kept growing while the real profile starved. Renaming did not fix it,
+        because the next clustering run minted the placeholder again.
+
+        Confirmed people are also excluded from clustering input, which is
+        correct — it stops a cluster stealing their detections — but it also
+        means a cluster can never meet them by accident. This is the deliberate
+        meeting.
+
+        Returns the nearest confirmed person within known_person_distance, or
+        None. Distance is the mean of the ten nearest encodings rather than the
+        single nearest, so one lucky frame cannot hand a cluster to the wrong
+        person, and rather than the mean of all, which a large gallery of varied
+        poses would inflate past any usable threshold.
+        """
+        from backend.core.face_recognition import get_face_manager
+        from backend.database.models import Person
+
+        confirmed = {
+            p.name for p in db.query(Person).all()
+            if p.name and p.is_confirmed and not AUTO_UNKNOWN_NAME.match(p.name)
+        }
+        if not confirmed:
+            return None
+
+        manager = get_face_manager()
+        encodings = getattr(manager, "known_face_encodings", None) or []
+        names = getattr(manager, "known_face_names", None) or []
+        if not encodings or len(encodings) != len(names):
+            return None
+
+        by_person: Dict[str, List[float]] = {}
+        for name, encoding in zip(names, encodings):
+            if name in confirmed:
+                by_person.setdefault(name, []).append(
+                    self.compute_face_distance(centroid, encoding))
+
+        best_name, best_distance = None, None
+        for name, distances in by_person.items():
+            nearest = sorted(distances)[:10]
+            score = float(np.mean(nearest))
+            if best_distance is None or score < best_distance:
+                best_name, best_distance = name, score
+
+        if best_name is not None and best_distance < self.known_person_distance:
+            logger.info(
+                "Cluster matches confirmed person '%s' at distance %.3f — "
+                "adopting that name instead of a new placeholder",
+                best_name, best_distance)
+            return best_name
+
+        if best_distance is not None:
+            logger.debug("Nearest confirmed person was %s at %.3f, over the %.2f "
+                         "threshold — treating as a new person",
+                         best_name, best_distance, self.known_person_distance)
+        return None
 
     def _find_matching_cluster(self, db: Session, centroid: np.ndarray):
         """
@@ -821,8 +898,16 @@ class FaceClusteringService:
                 # For unknown clusters, use existing name if already assigned, or get next unknown name
                 existing_person_name = cluster_faces_db[0].person_name if cluster_faces_db else "Unknown"
                 if existing_person_name == "Unknown" and self.auto_name_enabled:
-                    cluster_person_name = self._get_next_unknown_name(db)
-                    auto_names += 1
+                    # Somebody the user already named takes precedence over a
+                    # new placeholder. Asked before minting, because once
+                    # unknownN exists it competes with the real profile for
+                    # every future sighting and wins on gallery size alone.
+                    claimed_by = self._match_confirmed_person(db, centroid)
+                    if claimed_by:
+                        cluster_person_name = claimed_by
+                    else:
+                        cluster_person_name = self._get_next_unknown_name(db)
+                        auto_names += 1
                 else:
                     cluster_person_name = existing_person_name
             else:
