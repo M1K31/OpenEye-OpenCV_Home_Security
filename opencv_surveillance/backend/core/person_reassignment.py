@@ -106,7 +106,38 @@ def rebuild_gallery(person_name: str, db, dry_run: bool = True) -> int:
     if dry_run:
         return len(wanted)
 
+    import os
+
     existing = {p.name: p for p in images_in(target_dir)}
+
+    # Refuse to empty a gallery that still has images.
+    #
+    # If a person has no snapshot-carrying detections but their gallery is full,
+    # something upstream is wrong — a rename in flight, a half-finished
+    # reassignment — and "delete everything" is far more likely to be a mistake
+    # than an instruction. This happened: a rebuild run while Mikel's detections
+    # had just been renamed away took his gallery from 205 images to 0.
+    if not wanted and existing:
+        logger.warning(
+            "Refusing to empty %s's gallery: %s image(s) present but no "
+            "snapshot-carrying detections. Fix the detections first.",
+            person_name, len(existing))
+        return len(existing)
+
+    # Copy BEFORE deleting, so a missing source can never leave a gap. The old
+    # order deleted the stale set first and then discovered it could not write
+    # the replacements.
+    copied = 0
+    for name, source in wanted.items():
+        destination = target_dir / name
+        if destination.exists():
+            continue
+        try:
+            if os.path.exists(source):
+                shutil.copy2(source, destination)
+                copied += 1
+        except Exception as e:
+            logger.warning("Could not copy %s into %s: %s", source, person_name, e)
 
     for name, path in existing.items():
         if name not in wanted:
@@ -115,18 +146,10 @@ def rebuild_gallery(person_name: str, db, dry_run: bool = True) -> int:
             except OSError as e:
                 logger.warning("Could not remove stale gallery image %s: %s", path, e)
 
-    import os
-    for name, source in wanted.items():
-        destination = target_dir / name
-        if destination.exists():
-            continue
-        try:
-            if os.path.exists(source):
-                shutil.copy2(source, destination)
-        except Exception as e:
-            logger.warning("Could not copy %s into %s: %s", source, person_name, e)
-
-    return len(images_in(target_dir))
+    final = len(images_in(target_dir))
+    logger.debug("Rebuilt %s: %s wanted, %s copied, %s held",
+                 person_name, len(wanted), copied, final)
+    return final
 
 
 def _retrain(people: List[str]) -> None:

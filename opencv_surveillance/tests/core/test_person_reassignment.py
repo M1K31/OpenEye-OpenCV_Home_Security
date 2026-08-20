@@ -163,3 +163,69 @@ class TestRebuildBoundaries:
         source = inspect.getsource(person_reassignment.rebuild_gallery)
 
         assert "row.id" in source
+
+
+class TestRebuildCannotEmptyAGallery:
+    """
+    A rebuild deletes images whose detection has gone. That is correct — the
+    gallery is derived — but it must never be the whole gallery on the strength
+    of finding nothing to replace it with.
+
+    This happened: a rebuild ran while Mikel's detections had just been renamed
+    away by a clustering bug, found no snapshot-carrying detections for him, and
+    took his gallery from 205 images to 0.
+    """
+
+    @pytest.fixture
+    def person(self, tmp_path, monkeypatch):
+        class FakePaths:
+            faces_dir = tmp_path
+        monkeypatch.setattr("backend.core.paths.paths", FakePaths)
+        gallery = tmp_path / "Mikel" / "detected"
+        gallery.mkdir(parents=True)
+        for i in range(3):
+            (gallery / f"20260815_21260{i}_cam_{i}.jpg").write_bytes(b"\xff\xd8\xff")
+        return tmp_path
+
+    def test_it_refuses_when_there_is_nothing_to_replace_them_with(self, person):
+        """No detections, but images present — that is a mistake, not a command."""
+        class Query:
+            def filter(self, *a, **k): return self
+            def all(self): return []
+
+        class DB:
+            def query(self, *a, **k): return Query()
+
+        from backend.core.person_reassignment import rebuild_gallery
+
+        remaining = rebuild_gallery("Mikel", DB(), dry_run=False)
+
+        assert remaining == 3, "the gallery was emptied"
+        assert len(list((person / "Mikel" / "detected").iterdir())) == 3
+
+    def test_an_empty_gallery_and_no_detections_is_fine(self, person):
+        """Nothing to protect, so nothing to refuse."""
+        class Query:
+            def filter(self, *a, **k): return self
+            def all(self): return []
+
+        class DB:
+            def query(self, *a, **k): return Query()
+
+        from backend.core.person_reassignment import rebuild_gallery
+
+        assert rebuild_gallery("Nobody", DB(), dry_run=False) == 0
+
+    def test_copies_happen_before_deletions(self):
+        """
+        Ordering, not just outcome. Deleting first means a source that cannot be
+        read leaves a hole; copying first means the worst case is a stale extra.
+        """
+        import inspect
+        from backend.core import person_reassignment
+
+        source = inspect.getsource(person_reassignment.rebuild_gallery)
+        copy_at = source.index("shutil.copy2")
+        delete_at = source.index("path.unlink()")
+
+        assert copy_at < delete_at, "deletion still happens before copying"
