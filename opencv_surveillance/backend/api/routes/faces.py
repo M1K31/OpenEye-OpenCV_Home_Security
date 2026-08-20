@@ -449,7 +449,18 @@ async def upload_photos(
     person_name: str,
     background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(...),
-    auto_train: bool = Form(False),
+    # Defaults to TRUE. Uploading photographs of somebody is a request for the
+    # system to recognise them; a copy sitting untrained in a folder is not what
+    # anyone was asking for.
+    #
+    # It defaulted to False, and the Faces page did not send it, so uploads there
+    # never trained. That is the entire reason a "Train Model" button existed:
+    # a step the user had to know to take, with nothing saying so, and which
+    # retrained every person in the system to add three photographs of one.
+    #
+    # Pass auto_train=false explicitly to upload without training — useful when
+    # adding photographs in several batches.
+    auto_train: bool = Form(True),
     skip_validation: bool = Form(False),
     current_user: user_schema.User = Depends(require_user),
 ):
@@ -463,7 +474,8 @@ async def upload_photos(
     - **no_face**: No face detected — photo is rejected
 
     **Parameters:**
-    - **auto_train**: If true, trigger training for this person after upload
+    - **auto_train**: Train this person after the upload. Defaults to true;
+      pass false to add photographs without training yet.
     - **skip_validation**: If true, save all photos without face checks
 
     **Authentication Required**: Admin or User role
@@ -644,8 +656,11 @@ async def upload_photos(
         msg = f"Uploaded {uploaded_count}, rejected {rejected_count} photo(s)"
 
         if auto_train and uploaded_count > 0:
+            # This person only. A full retrain re-encodes every photograph of
+            # everybody to learn three new faces, and answers with stale results
+            # until it finishes.
             background_tasks.add_task(face_manager.train_person, person_name)
-            msg += " — training started in background"
+            msg += f" — learning {person_name}'s face in the background"
 
         return face_schema.ValidatedUploadResponse(
             uploaded_count=uploaded_count,

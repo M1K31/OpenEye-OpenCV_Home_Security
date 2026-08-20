@@ -56,6 +56,29 @@ const FaceManagementPage = ({ embedded = false }) => {
     return () => clearInterval(interval);
   }, []);
 
+  // Follow training that is already running, wherever it was started.
+  //
+  // Training now fires from several places — an upload, a reassignment, a
+  // clustering pass — so an indicator driven only by this page's own actions
+  // would be wrong more often than right. /faces/training-status has existed
+  // and gone unused; it reports the truth for all of them.
+  const followTraining = async () => {
+    setIsTraining(true);
+    const deadline = Date.now() + 5 * 60 * 1000;   // give up after 5 minutes
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 2000));
+      try {
+        const { data } = await apiClient.get('/faces/training-status');
+        if (!data.training_in_progress) break;
+      } catch {
+        break;   // if the check itself fails, stop claiming to know
+      }
+    }
+    setIsTraining(false);
+    loadPeople();
+    loadStatistics();
+  };
+
   const loadPeople = async () => {
     try {
       const response = await apiClient.get('/faces/people');
@@ -309,6 +332,12 @@ const FaceManagementPage = ({ embedded = false }) => {
           formData.append('files', file);
         });
 
+        // Train once, after the last batch. The server trains by default, and
+        // training after every batch would re-encode the whole person each time
+        // — five batches meaning five full passes to learn one set of photos.
+        const isLastBatch = batchIndex === batches.length - 1;
+        formData.append('auto_train', isLastBatch ? 'true' : 'false');
+
         showMessage(
           `Uploading batch ${batchIndex + 1}/${batches.length} (${totalUploaded + batch.length}/${uploadFiles.length} files)...`,
           'warning'
@@ -323,30 +352,21 @@ const FaceManagementPage = ({ embedded = false }) => {
         logger.log(`[FaceManagement] Batch ${batchIndex + 1} uploaded:`, response.data);
       }
 
-      showMessage(`Successfully uploaded ${totalUploaded} photo(s)`, 'success');
+      showMessage(
+        `Uploaded ${totalUploaded} photo(s) — learning ${personName}'s face now. ` +
+        `Recognition will use them shortly.`,
+        'success'
+      );
       setUploadFiles([]);
       setSelectedPerson(null);
       loadPeople();
+      followTraining();
     } catch (error) {
       logger.error('[FaceManagement] Upload error:', error);
       logger.error('[FaceManagement] Error response:', error.response?.data);
       showMessage('Error uploading photos: ' + (error.response?.data?.detail || error.message), 'error');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const trainModel = async () => {
-    setIsTraining(true);
-    showMessage('🔄 Training model... This may take a minute.', 'warning');
-    try {
-      const response = await apiClient.post('/faces/train', {});
-      showMessage('✅ ' + response.data.message, 'success');
-      loadStatistics();
-    } catch (error) {
-      showMessage('❌ Error training model: ' + error.message, 'error');
-    } finally {
-      setIsTraining(false);
     }
   };
 
@@ -571,13 +591,20 @@ const FaceManagementPage = ({ embedded = false }) => {
       <section className="people-section">
         <div className="section-header">
           <h2>People ({people.length})</h2>
-          <button onClick={trainModel} disabled={isTraining || people.length === 0} className="btn btn-warning">
-            {isTraining ? (
-              <>
-                <span className="spinner">◐</span> Training Model...
-              </>
-            ) : 'Train Model'}
-          </button>
+          {/* The "Train Model" button is gone.
+              It retrained EVERY person to add photographs of one — 1,062 images
+              on one installation — and nothing in the interface said so. Worse,
+              it was a required step nobody was told about: uploads did not train,
+              so a person added photographs, saw "Photos: 3", and wondered why
+              recognition never improved.
+              Uploading now trains that person automatically, in the background.
+              The per-person Train button below remains as a repair tool for when
+              something has drifted. */}
+          {isTraining && (
+            <span className="training-indicator">
+              <span className="spinner">◐</span> Learning faces…
+            </span>
+          )}
         </div>
 
         {people.length === 0 ? (
@@ -665,8 +692,8 @@ const FaceManagementPage = ({ embedded = false }) => {
         <ol>
           <li>Add a person by entering their name</li>
           <li>Upload 3-5 clear photos of their face from different angles</li>
-          <li>Click "Train Model" to generate face encodings</li>
-          <li>Face recognition will now work automatically on your camera streams</li>
+          <li>That is it — their face is learned automatically as the photos upload</li>
+          <li>Face recognition then works on your camera streams</li>
         </ol>
         <div className="tips">
           <strong>Tips:</strong>
