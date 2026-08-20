@@ -1058,6 +1058,17 @@ app.include_router(setup.router, prefix="/api/setup", tags=["First-Run Setup"])
 app.include_router(ai_providers.router, prefix="/api/ai", tags=["AI Providers"])
 
 
+# index.html names every other file, and those names carry a content hash that
+# changes on each build. A browser holding a stale index.html therefore asks for
+# chunks that no longer exist and the app fails to load — after an update, on a
+# machine where nothing is wrong. FileResponse sets an ETag but no Cache-Control,
+# which leaves the decision to heuristic caching, and browsers guess "reuse".
+#
+# no-cache does not mean do not store; it means revalidate before use. The ETag
+# makes that a 304 in the common case.
+INDEX_HEADERS = {"Cache-Control": "no-cache, must-revalidate"}
+
+
 @app.get("/")
 async def read_root():
     """
@@ -1067,7 +1078,7 @@ async def read_root():
     index_file = frontend_path / "index.html"
 
     if index_file.exists():
-        return FileResponse(index_file)
+        return FileResponse(index_file, headers=INDEX_HEADERS)
     else:
         # Fallback to API info if frontend not built
         return {
@@ -1219,6 +1230,21 @@ if frontend_path.exists():
                 "assets")),
         name="assets")
 
+    @app.middleware("http")
+    async def cache_hashed_assets(request, call_next):
+        """
+        Everything under /assets carries a content hash in its filename, so a
+        given URL's bytes can never change. Those are safe to keep for a year;
+        a new build produces new URLs rather than new contents at old ones.
+
+        Applied here rather than by subclassing StaticFiles, whose
+        file_response() signature is a Starlette internal.
+        """
+        response = await call_next(request)
+        if request.url.path.startswith("/assets/") and response.status_code == 200:
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
+
     # Catch-all route for SPA - must be last
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
@@ -1236,7 +1262,7 @@ if frontend_path.exists():
 
         index_file = frontend_path / "index.html"
         if index_file.exists():
-            return FileResponse(index_file)
+            return FileResponse(index_file, headers=INDEX_HEADERS)
         raise HTTPException(status_code=404, detail="Frontend not found")
 
 
