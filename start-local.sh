@@ -3,6 +3,15 @@
 
 set -e
 
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/lib/openeye-port.sh
+source "$SCRIPT_DIR/scripts/lib/openeye-port.sh"
+# The canonical port, resolved exactly as the application resolves it. This
+# script used to launch uvicorn on 8000 while backend/core/config.py defaults to
+# 8200, so the server ran on a different port from the one everything else
+# advertised.
+PORT="$(openeye_resolve_port)"
 # Global variable to track uvicorn PID
 UVICORN_PID=""
 
@@ -36,10 +45,11 @@ cleanup() {
     echo "   Cleaning up child processes..."
     pkill -9 -f "uvicorn backend.main:app" 2>/dev/null || true
 
-    # Also kill by port to be sure
-    PORT_PIDS=$(lsof -ti :8000 2>/dev/null || true)
+    # Also kill by port to be sure — but only our own processes. Matching every
+    # PID on the port would kill unrelated software that happens to use it.
+    PORT_PIDS=$(openeye_service_pids "$PORT")
     if [ -n "$PORT_PIDS" ]; then
-        echo "   Killing processes on port 8000..."
+        echo "   Killing OpenEye processes on port $PORT..."
         for pid in $PORT_PIDS; do
             kill -9 "$pid" 2>/dev/null || true
         done
@@ -97,8 +107,7 @@ EOF
     echo ""
 fi
 
-# Check if port 8000 is already in use
-PORT=8000
+# Check if the service port is already in use
 check_port() {
     if lsof -i :$PORT >/dev/null 2>&1; then
         return 0  # Port is in use
@@ -141,7 +150,7 @@ if check_port; then
 fi
 
 # Start the application
-echo "🎯 Starting OpenEye on http://localhost:8000"
+echo "🎯 Starting OpenEye on http://localhost:$PORT"
 echo "   Press Ctrl+C to stop"
 echo ""
 
@@ -154,7 +163,7 @@ export OPENBLAS_NUM_THREADS=1
 
 # Start uvicorn in background and capture PID
 # Use venv's python to run uvicorn module
-$PYTHON_CMD -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload &
+$PYTHON_CMD -m uvicorn backend.main:app --host 0.0.0.0 --port "$PORT" --reload &
 UVICORN_PID=$!
 
 echo "   ✓ Server started with PID: $UVICORN_PID"

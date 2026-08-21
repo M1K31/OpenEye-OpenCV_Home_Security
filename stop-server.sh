@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2025 M1K31
+# Copyright (c) 2025 Smart Industries LLC (Mikel Smart)
 # OpenEye Surveillance System - Graceful Shutdown Script
 #
 # This script gracefully stops the OpenEye server by:
@@ -10,6 +10,11 @@
 # 5. Cleaning up any orphaned processes
 
 set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/lib/openeye-port.sh
+source "$SCRIPT_DIR/scripts/lib/openeye-port.sh"
+PORT="$(openeye_resolve_port)"
 
 # Color codes for output
 RED='\033[0;31m'
@@ -32,8 +37,10 @@ process_exists() {
 find_uvicorn_pids() {
     # Find by command pattern
     PIDS=$(ps aux | grep -E "(uvicorn.*backend\.main:app|python.*backend/main\.py)" | grep -v grep | awk '{print $2}')
-    # Also find by port
-    PORT_PIDS=$(lsof -ti :8000 2>/dev/null || true)
+    # Also find by port — but only processes that are actually OpenEye.
+    # `lsof -ti` alone also returns processes that merely hold a CONNECTION to
+    # the port, which is how this script came to threaten unrelated software.
+    PORT_PIDS=$(openeye_service_pids "$PORT")
     # Combine and deduplicate
     echo "$PIDS $PORT_PIDS" | tr ' ' '\n' | sort -u | tr '\n' ' '
 }
@@ -137,24 +144,35 @@ else
     echo -e "${GREEN}✓ No orphaned processes found${NC}"
 fi
 
-# Use pkill as a fallback to catch any remaining processes
+# Verify the port is free.
+#
+# The unconditional `pkill -9 -f "uvicorn backend.main:app"` that used to run
+# here has been removed. It fired even when the graceful path had already
+# succeeded, and it matched on a command-line pattern across the whole host
+# rather than the PIDs this script tracked — so a second OpenEye instance (a
+# developer checkout beside an installed copy, which this project supports) was
+# killed as collateral.
 echo ""
-echo -e "${BLUE}Running pkill cleanup...${NC}"
-pkill -9 -f "uvicorn backend.main:app" 2>/dev/null && echo "  ✓ Killed uvicorn processes via pkill" || echo "  ✓ No additional uvicorn processes found"
-
-# Verify port 8000 is free
-echo ""
-echo -e "${BLUE}Verifying port 8000 is available...${NC}"
+echo -e "${BLUE}Verifying port $PORT is available...${NC}"
 sleep 1  # Brief pause to let OS release the port
-PORT_CHECK=$(lsof -ti:8000 || true)
-if [ -n "$PORT_CHECK" ]; then
-    echo -e "${YELLOW}⚠ Port 8000 still in use by PID: $PORT_CHECK${NC}"
-    echo "  Killing process on port 8000..."
-    kill -9 $PORT_CHECK 2>/dev/null || true
+REMAINING=$(openeye_service_pids "$PORT")
+if [ -n "$REMAINING" ]; then
+    echo -e "${YELLOW}⚠ OpenEye still on port $PORT (PID: $REMAINING) — force killing${NC}"
+    kill -9 $REMAINING 2>/dev/null || true
     sleep 1
-    echo -e "${GREEN}  ✓ Port 8000 freed${NC}"
+    echo -e "${GREEN}  ✓ Port $PORT freed${NC}"
 else
-    echo -e "${GREEN}✓ Port 8000 is available${NC}"
+    OTHERS=$(lsof -ti:"$PORT" 2>/dev/null || true)
+    if [ -n "$OTHERS" ]; then
+        # Report it; do not kill it. Another application holding our port is a
+        # conflict worth surfacing, not something to terminate silently.
+        echo -e "${YELLOW}⚠ Port $PORT is held by another application (left untouched):${NC}"
+        for pid in $OTHERS; do
+            echo "    PID $pid: $(ps -o command= -p "$pid" 2>/dev/null | cut -c1-80)"
+        done
+    else
+        echo -e "${GREEN}✓ Port $PORT is available${NC}"
+    fi
 fi
 
 echo ""
