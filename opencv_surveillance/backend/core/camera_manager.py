@@ -254,6 +254,60 @@ class Camera(ABC):
         if "post_motion_cooldown" in settings:
             self.post_motion_cooldown = settings["post_motion_cooldown"]
 
+        # ------------------------------------------------------------------
+        # Published-frame buffer
+        #
+        # The last processed frame, so HTTP handlers can serve video WITHOUT
+        # calling get_frame() and therefore without ever reaching
+        # VideoCapture.read().
+        #
+        # This exists because OpenEye segfaulted twice on 2026-08-19/20 inside
+        # OpenCV's AVFoundation backend. Both crashes were read() called from a
+        # request thread against a capture whose device had gone away: once from
+        # the MJPEG stream when a human opened the dashboard, once from the same
+        # stream after a reconnect handed back a dead capture. A segfault kills
+        # the process outright, so this has to be prevented structurally rather
+        # than caught.
+        # ------------------------------------------------------------------
+        self._published_lock = threading.Condition()
+        self._published_frame = None
+        self._published_motion = False
+        self._published_at = None
+        self._published_seq = 0
+
+    def _publish_frame(self, frame, motion_detected: bool) -> None:
+        """Make a processed frame available to consumers that must not capture."""
+        with self._published_lock:
+            self._published_frame = frame
+            self._published_motion = bool(motion_detected)
+            self._published_at = time.time()
+            self._published_seq += 1
+            self._published_lock.notify_all()
+
+    def get_published_frame(self, since_seq: int = None, timeout: float = 0.0):
+        """
+        Return the most recent processed frame without touching the capture.
+
+        Returns (frame, motion_detected, seq), or None when nothing newer than
+        since_seq arrived within timeout. Safe to call from any thread — that is
+        the entire point of it.
+        """
+        with self._published_lock:
+            if since_seq is not None and self._published_seq <= since_seq and timeout:
+                self._published_lock.wait(timeout)
+            if self._published_frame is None:
+                return None
+            if since_seq is not None and self._published_seq <= since_seq:
+                return None
+            return self._published_frame, self._published_motion, self._published_seq
+
+    def seconds_since_last_frame(self):
+        """Age of the published frame, or None if no frame has ever arrived."""
+        with self._published_lock:
+            if self._published_at is None:
+                return None
+            return time.time() - self._published_at
+
     def _record_frame_tick(self) -> None:
         """Record the timestamp of a processed frame (feeds measured_fps)."""
         self._recent_frame_times.append(time.time())
@@ -1196,6 +1250,10 @@ class MockCamera(Camera):
             font_color=self.overlay_font_color
         )
 
+        # Publish alongside RTSPCamera so consumers have one interface for both
+        # camera types and never need to know which they are talking to.
+        self._publish_frame(processed_frame, self.motion_detected)
+
         return processed_frame, self.motion_detected
 
 
@@ -1230,12 +1288,64 @@ class RTSPCamera(Camera):
         self._reconnect_attempts = 0
         self._was_connected = False
 
+        # Set once the capture is judged unusable. While set, get_frame() returns
+        # immediately and NEVER calls read(). Only _reopen_capture() clears it,
+        # and only after proving a new capture delivers a frame.
+        self._capture_dead = threading.Event()
+
+        # Thread id of the capture loop. Any other thread calling get_frame() is
+        # a bug, and is refused rather than allowed to reach read(). Both
+        # segfaults came through a request thread; naming the owner turns "only
+        # the capture loop reads" from a convention into something enforced.
+        self._capture_owner_thread = None
+
     # Consecutive failed reads before the capture is considered lost and reopened.
     # ~2s at the background loop's cadence: long enough to ride out a dropped
     # frame, short enough that a real disconnect is handled promptly.
     RECONNECT_AFTER_FAILURES = int(os.getenv("OPENEYE_RECONNECT_AFTER_FAILURES", "20"))
     RECONNECT_BACKOFF_MAX = float(os.getenv("OPENEYE_RECONNECT_BACKOFF_MAX", "60"))
     FAILURE_LOG_INTERVAL = 60.0   # seconds between "still down" heartbeats
+
+    # Consecutive failed reads before the capture is declared DEAD and released.
+    # Much smaller than RECONNECT_AFTER_FAILURES on purpose: that counter governs
+    # how often we retry, this one governs how long we keep messaging a possibly
+    # freed object. At the loop's ~10fps this is about a third of a second, well
+    # inside the six seconds that separated the first failed read from the
+    # segfault on 2026-08-20.
+    FATAL_AFTER_FAILURES = int(os.getenv("OPENEYE_FATAL_AFTER_FAILURES", "3"))
+
+    # How long a proven-working reopen may spend waiting for its first frame.
+    REOPEN_PROVE_SECONDS = float(os.getenv("OPENEYE_REOPEN_PROVE_SECONDS", "2"))
+
+    def is_capture_dead(self) -> bool:
+        """True when the capture has been released and must not be read."""
+        return self._capture_dead.is_set()
+
+    def _mark_capture_dead(self, reason: str) -> None:
+        """
+        Declare the capture unusable, release it, and stop reading from it.
+
+        Releasing here is deliberate and is the last time we touch the object.
+        The alternative — leaving it open and retrying — is what killed the
+        process twice: capture.isOpened() keeps returning True for a device that
+        has gone away, so every subsequent read() is a message to freed memory.
+        """
+        if self._capture_dead.is_set():
+            return
+        self._capture_dead.set()
+        logger.error(
+            "Camera %s: capture marked DEAD (%s). No further reads will be "
+            "attempted until a reopen proves a working capture.",
+            self._describe_self(), reason)
+
+        with self._frame_lock:
+            capture, self.capture = self.capture, None
+        if capture is not None:
+            try:
+                capture.release()
+            except Exception as e:
+                logger.debug("Releasing dead capture for %s raised %s",
+                             self.camera_id, e)
 
     def _describe_self(self) -> str:
         """Camera id and its real source type, for log messages."""
@@ -1269,6 +1379,14 @@ class RTSPCamera(Camera):
             logger.warning(
                 "Camera %s still down after %ss (%s failed reads)",
                 self._describe_self(), down_for, self._consecutive_failures)
+
+        # Stop reading before the next read can hit freed memory. The device may
+        # simply be busy, in which case the reopen below brings it straight back
+        # — that costs a couple of seconds. Guessing wrong the other way costs
+        # the whole process.
+        if self._consecutive_failures >= self.FATAL_AFTER_FAILURES:
+            self._mark_capture_dead(
+                f"{self._consecutive_failures} consecutive failed reads")
 
     def _note_frame_success(self):
         """Record a good read, and announce recovery if we had been failing."""
@@ -1322,8 +1440,46 @@ class RTSPCamera(Camera):
                 capture.release()
             return False
 
+        # Prove it before trusting it.
+        #
+        # isOpened() is not evidence: a capture bound to a device that has gone
+        # away opens happily and then never delivers. That is exactly what the
+        # reconnect endpoint used to hand back with a 200 — and streaming from
+        # that capture is what killed the process at 00:17 on 2026-08-20. A
+        # capture is only accepted once it has produced a real frame.
+        deadline = time.time() + self.REOPEN_PROVE_SECONDS
+        proven = False
+        while time.time() < deadline:
+            try:
+                ret, frame = capture.read()
+            except Exception as e:
+                logger.warning("Proving read for %s raised %s",
+                               self._describe_self(), e)
+                break
+            if ret and frame is not None:
+                proven = True
+                break
+            time.sleep(0.1)
+
+        if not proven:
+            logger.warning(
+                "Camera %s: reopened capture delivered no frame within %.1fs — "
+                "discarding it rather than reporting a working camera.",
+                self._describe_self(), self.REOPEN_PROVE_SECONDS)
+            try:
+                capture.release()
+            except Exception:
+                pass
+            return False
+
         with self._frame_lock:
             self.capture = capture
+        # Only a proven capture revives the camera.
+        self._capture_dead.clear()
+        self._consecutive_failures = 0
+        self._failure_since = None
+        logger.info("Camera %s: reopened capture delivered a frame; camera is live",
+                    self._describe_self())
         return True
 
     def _background_processor(self):
@@ -1332,6 +1488,9 @@ class RTSPCamera(Camera):
         This ensures surveillance runs 24/7 regardless of stream viewers.
         """
         print(f"🎥 [BACKGROUND] Starting background processor for camera {self.camera_id}")
+        # Claim the capture. From here on get_frame() refuses any other thread,
+        # so the only path to VideoCapture.read() is this loop.
+        self._capture_owner_thread = threading.get_ident()
         frame_interval = 1.0 / 10  # Process at ~10 FPS for efficiency
 
         while not self._stop_background.is_set():
@@ -1493,7 +1652,26 @@ class RTSPCamera(Camera):
         print("RTSP camera stopped.")
 
     def get_frame(self):
-        if not self.is_running or not self.capture.isOpened():
+        # A dead capture is never read from again. Checked before everything
+        # else, including isOpened(), which cannot be trusted: it returned True
+        # throughout both segfaults while the underlying device was gone.
+        if self._capture_dead.is_set():
+            return None, False
+
+        # Only the capture-owning thread may reach read(). Both crashes arrived
+        # here from com.apple.main-thread — an HTTP handler serving the MJPEG
+        # stream. Request handlers must use get_published_frame() instead.
+        owner = self._capture_owner_thread
+        if owner is not None and threading.get_ident() != owner:
+            logger.error(
+                "Camera %s: get_frame() called from thread %s, but the capture is "
+                "owned by thread %s. Refusing. Request handlers must call "
+                "get_published_frame(); reading the capture off-thread is what "
+                "segfaulted the process on 2026-08-19 and 2026-08-20.",
+                self.camera_id, threading.get_ident(), owner)
+            return None, False
+
+        if not self.is_running or self.capture is None or not self.capture.isOpened():
             return None, False
 
         # Check if we should process this frame based on FPS target
@@ -1502,7 +1680,10 @@ class RTSPCamera(Camera):
 
         # Thread-safe frame capture and processing
         with self._frame_lock:
-            ret, frame = self.capture.read()
+            capture = self.capture
+            if capture is None:
+                return None, False
+            ret, frame = capture.read()
         if not ret:
             self._note_frame_failure()
             return None, False
@@ -1655,6 +1836,11 @@ class RTSPCamera(Camera):
             font_size=self.overlay_font_size,
             font_color=self.overlay_font_color
         )
+
+        # Publish so HTTP handlers can serve this frame without ever reaching
+        # the capture. This is the mechanism that makes the stream and snapshot
+        # endpoints incapable of segfaulting the process.
+        self._publish_frame(processed_frame, self.motion_detected)
 
         return processed_frame, self.motion_detected
 

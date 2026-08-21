@@ -19,6 +19,7 @@ from backend.core.face_recognition import get_face_manager, is_training_in_progr
 from backend.core.gallery import count_images, iter_images, uploaded_dir
 from backend.core.paths import paths
 from backend.core.camera_manager import manager as camera_manager
+from backend.core.live_frame import get_live_frame
 from backend.core.auth import get_current_active_user, require_user, require_admin
 from backend.api.schemas import user as user_schema
 from backend.database.session import get_db
@@ -1185,9 +1186,7 @@ def capture_training_photo(
         if not camera:
             raise HTTPException(status_code=503, detail="No camera available for capture")
         
-        frame, _ = camera.get_frame()
-        if frame is None:
-            raise HTTPException(status_code=500, detail="Failed to capture frame")
+        frame = get_live_frame(camera, getattr(camera, "camera_id", "unknown"))
         
         # Check for face in frame
         face_manager = get_face_manager()
@@ -1318,9 +1317,7 @@ def identify_face_in_frame(
         if not camera:
             raise HTTPException(status_code=404, detail=f"Camera '{request.camera_id}' not found")
         
-        frame, _ = camera.get_frame()
-        if frame is None:
-            raise HTTPException(status_code=500, detail="Failed to capture frame")
+        frame = get_live_frame(camera, getattr(camera, "camera_id", "unknown"))
         
         # Run face recognition
         face_manager = get_face_manager()

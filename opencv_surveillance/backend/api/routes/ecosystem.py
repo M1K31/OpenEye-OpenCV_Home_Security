@@ -53,6 +53,7 @@ from backend.database import models
 from backend.api.schemas import ecosystem as eco_schema
 from backend.api.schemas import user as user_schema
 from backend.core.paths import paths
+from backend.core.live_frame import get_live_frame, try_live_frame
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -841,10 +842,14 @@ async def ecosystem_camera_stream(
         """Generate frames with quality/size options for ecosystem streaming."""
         try:
             while True:
-                frame, _ = camera_instance.get_frame()
-                if frame is None:
+                # Published frame only. This is a second MJPEG generator on a
+                # request thread — the same shape as the one that crashed the
+                # process, and it would have been the next one to do so.
+                published = camera_instance.get_published_frame()
+                if published is None:
                     await asyncio.sleep(0.1)
                     continue
+                frame, _motion, _seq = published
                 
                 # Resize if needed
                 if settings["size"]:
@@ -914,9 +919,7 @@ async def ecosystem_camera_snapshot(
     if not camera_instance or not camera_instance.is_running:
         raise HTTPException(status_code=503, detail=f"Camera '{camera_id}' is not running")
     
-    frame, _ = camera_instance.get_frame()
-    if frame is None:
-        raise HTTPException(status_code=500, detail="Failed to capture frame")
+    frame = get_live_frame(camera_instance, camera_id)
     
     # Quality settings
     quality_settings = {
@@ -1570,7 +1573,7 @@ async def get_camera_thumbnail(
     active_camera = camera_manager.get_camera(camera_id)
     if active_camera:
         import cv2
-        frame, _ = active_camera.get_frame()
+        frame = try_live_frame(active_camera, camera_id)
         if frame is not None:
             # Resize for thumbnail
             thumbnail = cv2.resize(frame, (320, 240))

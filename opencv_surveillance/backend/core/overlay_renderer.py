@@ -213,3 +213,51 @@ def render_overlay(
         )
 
     return frame
+
+
+def render_offline_frame(
+    camera_id: str,
+    down_for_seconds: Optional[float] = None,
+    width: int = 640,
+    height: int = 480,
+) -> np.ndarray:
+    """
+    Build a placeholder frame for a camera that is not delivering video.
+
+    The stream serves this instead of freezing on the last good frame. Freezing
+    is what made a dead camera indistinguishable from a working one — the defect
+    that took two days to diagnose, because every signal a viewer could see said
+    the camera was fine.
+
+    Returns a BGR frame ready for JPEG encoding.
+    """
+    frame = np.zeros((height, width, 3), dtype=np.uint8)
+    frame[:] = (32, 32, 32)  # dark grey, distinct from a black "no signal" frame
+
+    def _centred(text, y, scale, color, thickness=2):
+        (text_w, _), _ = cv2.getTextSize(
+            text, cv2.FONT_HERSHEY_SIMPLEX, scale, thickness)
+        cv2.putText(
+            frame, text, ((width - text_w) // 2, y),
+            cv2.FONT_HERSHEY_SIMPLEX, scale, color, thickness, cv2.LINE_AA)
+
+    _centred("CAMERA OFFLINE", int(height * 0.40), 0.9, (80, 80, 220))
+    _centred(str(camera_id), int(height * 0.52), 0.6, (200, 200, 200), 1)
+
+    if down_for_seconds is not None and down_for_seconds >= 0:
+        total = int(down_for_seconds)
+        if total < 60:
+            elapsed = f"No frames for {total}s"
+        elif total < 3600:
+            elapsed = f"No frames for {total // 60}m {total % 60}s"
+        else:
+            elapsed = f"No frames for {total // 3600}h {(total % 3600) // 60}m"
+    else:
+        elapsed = "No frames received"
+    _centred(elapsed, int(height * 0.62), 0.5, (150, 150, 150), 1)
+
+    _centred(
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        int(height * 0.72), 0.45, (120, 120, 120), 1)
+
+    return frame

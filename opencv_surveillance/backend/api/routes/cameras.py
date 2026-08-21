@@ -19,6 +19,8 @@ from backend.database import crud, models
 from backend.api.schemas import camera as camera_schema
 
 from backend.core.paths import paths
+from backend.core.live_frame import get_live_frame
+from backend.core.overlay_renderer import render_offline_frame
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -578,9 +580,27 @@ def get_camera_status(camera_id: str, db: Session = Depends(get_db), current_use
 # ============================================================================
 
 
+# How long the published frame may go unrefreshed before the stream shows the
+# camera as offline rather than continuing to serve a stale image.
+STREAM_STALE_AFTER_SECONDS = 2.0
+
+
 async def generate_frames(camera_id: str):
     """
-    Async generator function to yield frames from a camera as MJPEG
+    Yield frames as MJPEG from the camera's published-frame buffer.
+
+    This generator MUST NOT call camera.get_frame(). It runs on a request thread,
+    and get_frame() reaches cv2.VideoCapture.read(); OpenEye segfaulted twice on
+    2026-08-19/20 doing exactly that against a capture whose device had gone
+    away. A segfault kills the process, so this cannot be handled defensively —
+    it has to be structurally impossible.
+
+    Note what actually triggered the crashes: not unplugging the camera, but
+    opening this stream while the capture was already dead. In the 22:49 case
+    the camera had been failing for fourteen hours and a person simply loaded the
+    dashboard.
+
+    The camera's own capture loop produces frames; this only consumes them.
     """
     camera = camera_manager.get_camera(camera_id)
     if not camera:
@@ -590,14 +610,31 @@ async def generate_frames(camera_id: str):
         logger.error(f"Camera '{camera_id}' is not running")
         return
 
+    last_seq = None
+    last_offline_render = 0.0
+
     try:
         while True:
-            frame, motion_detected = camera.get_frame()
-            if frame is None:
-                await asyncio.sleep(0.1)
-                continue
+            published = camera.get_published_frame(since_seq=last_seq, timeout=1.0)
 
-            # Encode frame as JPEG
+            if published is not None:
+                frame, _motion, last_seq = published
+            else:
+                # Nothing new. Keep the connection alive but stop pretending:
+                # once the frame is stale, say so. Serving the last good frame
+                # forever is what made a dead camera look healthy.
+                age = camera.seconds_since_last_frame()
+                if age is not None and age < STREAM_STALE_AFTER_SECONDS:
+                    await asyncio.sleep(0.05)
+                    continue
+
+                now = time.time()
+                if now - last_offline_render < 1.0:
+                    await asyncio.sleep(0.1)
+                    continue
+                last_offline_render = now
+                frame = render_offline_frame(camera_id, age)
+
             ret, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
             if not ret:
                 logger.warning(f"Failed to encode frame for camera {camera_id}")
@@ -607,7 +644,7 @@ async def generate_frames(camera_id: str):
             frame_bytes = buffer.tobytes()
             # MJPEG stream format
             yield (
-                b"--frame\r\n" 
+                b"--frame\r\n"
                 b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n"
             )
             await asyncio.sleep(0.033)  # Limit to ~30 FPS
@@ -668,12 +705,10 @@ def capture_snapshot(camera_id: str, db: Session = Depends(get_db), current_user
             detail=f"Camera '{camera_id}' is not running",
         )
 
-    frame, _ = active_camera.get_frame()
-    if frame is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to capture frame from camera '{camera_id}'",
-        )
+    # Published frame only — never get_frame() from a request thread.
+    # See backend/core/live_frame.py: that path reaches VideoCapture.read()
+    # and segfaulted the process twice on 2026-08-19/20.
+    frame = get_live_frame(active_camera, camera_id)
 
     # Create snapshots directory
     snapshots_dir = paths.snapshots_dir
@@ -735,12 +770,10 @@ def capture_snapshot_voice(
             detail=f"Camera '{camera_id}' is not running",
         )
 
-    frame, _ = active_camera.get_frame()
-    if frame is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to capture frame from camera '{camera_id}'",
-        )
+    # Published frame only — never get_frame() from a request thread.
+    # See backend/core/live_frame.py: that path reaches VideoCapture.read()
+    # and segfaulted the process twice on 2026-08-19/20.
+    frame = get_live_frame(active_camera, camera_id)
 
     # Create snapshots directory
     snapshots_dir = paths.snapshots_dir
