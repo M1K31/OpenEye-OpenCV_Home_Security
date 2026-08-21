@@ -472,3 +472,47 @@ def refresh_access_token(
 
     # Create new token pair
     return create_tokens(db, user, device_info, ip_address)
+
+
+# Name of the cookie get_current_user_media falls back to. Kept here so the
+# setter and the reader cannot drift apart.
+MEDIA_COOKIE_NAME = "access_token"
+
+
+def set_media_auth_cookie(response, access_token: str) -> None:
+    """
+    Mirror the access token into a cookie so the browser can load media.
+
+    get_current_user_media has always accepted an `access_token` cookie, but
+    nothing ever set one — the frontend keeps its token in localStorage, which a
+    plain <img>/<video> tag cannot attach to a request. The result was that every
+    media route protected by that dependency answered 401 to the tags that needed
+    it, and inline recording playback did not work.
+
+    HttpOnly, because JavaScript already has the token in localStorage for the
+    Authorization header and does not need a second copy it can read — this one
+    exists purely so the browser attaches it automatically.
+
+    SameSite=Strict, because it is the CSRF control for these routes: the cookie
+    is not sent on cross-site requests, so another site cannot use it to pull
+    footage. See docs/development/ADR-001-csrf.md.
+
+    Secure is set only when not serving over plain HTTP on localhost. Most
+    installs are http://<lan-ip>:8000 with no certificate, and a Secure cookie
+    would simply never be sent there, which would silently reintroduce the bug.
+    """
+    secure = os.getenv("OPENEYE_HTTPS", "false").lower() == "true"
+    response.set_cookie(
+        key=MEDIA_COOKIE_NAME,
+        value=access_token,
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        httponly=True,
+        samesite="strict",
+        secure=secure,
+        path="/",
+    )
+
+
+def clear_media_auth_cookie(response) -> None:
+    """Remove the media cookie on logout, so the browser stops sending it."""
+    response.delete_cookie(key=MEDIA_COOKIE_NAME, path="/")

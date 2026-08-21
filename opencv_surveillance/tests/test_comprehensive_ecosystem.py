@@ -352,7 +352,22 @@ class TestStatisticsN1Fix:
         db_session.add(cam)
         db_session.commit()
 
-        resp = client.get("/api/statistics", params={"hours": 24})
+        # /api/statistics now requires an ecosystem HMAC signature (2026-08-20):
+        # it was anonymous, and it reports camera inventory and activity volume.
+        # Verified safe to secure — OpenEye's own frontend does not call it; only
+        # companion apps do, and they already sign their requests. This test is
+        # about the N+1 query shape, so satisfy the dependency and move on.
+        from backend.main import app as real_app
+        from backend.api.routes import ecosystem as eco_routes
+
+        real_app.dependency_overrides[eco_routes.require_ecosystem_auth] = (
+            lambda: {"auth_method": "test", "app_name": "test"}
+        )
+        try:
+            resp = client.get("/api/statistics", params={"hours": 24})
+        finally:
+            real_app.dependency_overrides.pop(eco_routes.require_ecosystem_auth, None)
+
         assert resp.status_code == 200
         data = resp.json()
         assert "cameras" in data

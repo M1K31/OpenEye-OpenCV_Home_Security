@@ -32,7 +32,7 @@ import signal
 import sys
 import os
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, WebSocket, Request
+from fastapi import FastAPI, HTTPException, WebSocket, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -51,6 +51,7 @@ from backend.core.config_loader import load_configuration
 load_configuration()
 
 from backend.database.session import engine, SessionLocal
+from backend.core.auth import get_current_active_user, get_current_user_media
 from backend.database.utils import get_db_context
 from backend.database import models, alert_models
 from backend.api.routes import (
@@ -282,35 +283,47 @@ def _serve_from(base_dir_getter, relative_path: str):
     return FileResponse(str(candidate))
 
 
+# Every route below serves real footage, face images or snapshots off disk, so
+# each one requires an authenticated viewer.
+#
+# These were reachable anonymously until 2026-08-20. The 2026-08-02 audit secured
+# the `recordings` ROUTER but not these, because they are declared on `app`
+# rather than on a router and so were invisible to a per-router review. Guessing
+# a name was not hard either — snapshots are written as
+# `{camera_id}_{YYYYmmdd_HHMMSS}.jpg`, which is enumerable by timestamp.
+#
+# get_current_user_media (not get_current_active_user) is the right dependency
+# here: <img> and <video> tags cannot send an Authorization header, so it also
+# accepts the SameSite=Strict access_token cookie. See ADR-001.
 @app.get("/recordings/{file_path:path}", include_in_schema=False)
-def serve_recording_file(file_path: str):
+def serve_recording_file(file_path: str, current_user=Depends(get_current_user_media)):
     return _serve_from(lambda: paths.recordings_dir, file_path)
 
 
 @app.get("/faces/{file_path:path}", include_in_schema=False)
-def serve_face_file(file_path: str):
+def serve_face_file(file_path: str, current_user=Depends(get_current_user_media)):
     return _serve_from(lambda: paths.faces_dir, file_path)
 
 
 @app.get("/api/snapshots/{file_path:path}", include_in_schema=False)
-def serve_snapshot_file(file_path: str):
+def serve_snapshot_file(file_path: str, current_user=Depends(get_current_user_media)):
     return _serve_from(lambda: paths.snapshots_dir, file_path)
 
 
 # Legacy snapshot paths, kept because stored snapshot_path values in the database
 # still carry them.
 @app.get("/data/snapshots/{file_path:path}", include_in_schema=False)
-def serve_snapshot_file_legacy_data(file_path: str):
+def serve_snapshot_file_legacy_data(file_path: str, current_user=Depends(get_current_user_media)):
     return _serve_from(lambda: paths.snapshots_dir, file_path)
 
 
 @app.get("/legacy/snapshots/{file_path:path}", include_in_schema=False)
-def serve_snapshot_file_legacy(file_path: str):
+def serve_snapshot_file_legacy(file_path: str, current_user=Depends(get_current_user_media)):
     return _serve_from(lambda: paths.snapshots_dir, file_path)
 
 
 @app.get("/data/thumbnails/{file_path:path}", include_in_schema=False)
-def serve_thumbnail_file(file_path: str):
+def serve_thumbnail_file(file_path: str, current_user=Depends(get_current_user_media)):
     return _serve_from(lambda: paths.thumbnails_dir, file_path)
 
 
@@ -960,7 +973,10 @@ app.include_router(users.router, prefix="/api", tags=["Authentication"])
 app.include_router(two_factor_auth.router, prefix="/api/auth/2fa", tags=["Two-Factor Authentication"])
 
 # Camera Discovery - MUST be before /api/cameras to avoid route conflicts
-app.include_router(discovery.router, prefix="/api", tags=["Camera Discovery"])
+app.include_router(
+    discovery.router,
+    prefix="/api",
+    dependencies=[Depends(get_current_active_user)], tags=["Camera Discovery"])
 
 app.include_router(cameras.router, prefix="/api/cameras", tags=["Cameras"])
 
@@ -992,7 +1008,7 @@ app.include_router(
 app.include_router(
     analytics.router,
     prefix="/api",
-    tags=["Advanced Analytics"])
+    dependencies=[Depends(get_current_active_user)], tags=["Advanced Analytics"])
 
 # Motion Detection Events - NEW
 app.include_router(
@@ -1018,7 +1034,10 @@ app.include_router(websockets.router, prefix="/api", tags=["WebSockets"])
 app.include_router(settings.router, prefix="/api", tags=["System Settings"])
 
 # Notification Provider Configuration
-app.include_router(notification_providers.router, prefix="/api", tags=["Notification Providers"])
+app.include_router(
+    notification_providers.router,
+    prefix="/api",
+    dependencies=[Depends(get_current_active_user)], tags=["Notification Providers"])
 
 # Automation Rules - Person-Based Automations
 app.include_router(automations.router, prefix="/api", tags=["Automations"])
@@ -1027,7 +1046,10 @@ app.include_router(automations.router, prefix="/api", tags=["Automations"])
 app.include_router(timeline.router, prefix="/api", tags=["Timeline & Playback"])
 
 # Performance Metrics & Monitoring
-app.include_router(metrics.router, prefix="/api", tags=["Performance Metrics"])
+app.include_router(
+    metrics.router,
+    prefix="/api",
+    dependencies=[Depends(get_current_active_user)], tags=["Performance Metrics"])
 
 # PTZ Control - Pan-Tilt-Zoom Camera Control
 app.include_router(ptz.router, prefix="/api", tags=["PTZ Control"])
@@ -1045,13 +1067,19 @@ app.include_router(objects.router, prefix="/api/objects", tags=["Object Detectio
 app.include_router(ecosystem.router, prefix="/api", tags=["Ecosystem Integration"])
 
 # v3.11.4: Network Discovery with Fing integration
-app.include_router(network_discovery.router, prefix="/api", tags=["Network Discovery"])
+app.include_router(
+    network_discovery.router,
+    prefix="/api",
+    dependencies=[Depends(get_current_active_user)], tags=["Network Discovery"])
 
 # v3.12.0: Scheduled Tasks - Model retraining, retroactive search, cleanup
 app.include_router(scheduled_tasks.router, prefix="/api/scheduled-tasks", tags=["Scheduled Tasks"])
 
 # v3.11.7: License Plate Recognition (ALPR)
-app.include_router(license_plates.router, prefix="/api/alpr", tags=["License Plate Recognition"])
+app.include_router(
+    license_plates.router,
+    prefix="/api/alpr",
+    dependencies=[Depends(get_current_active_user)], tags=["License Plate Recognition"])
 
 # First-Run Setup (with /api/setup prefix for consistency)
 app.include_router(setup.router, prefix="/api/setup", tags=["First-Run Setup"])
@@ -1178,8 +1206,19 @@ async def health_check():
 
 
 @app.post("/ecosystem/events")
-async def ecosystem_webhook(request: Request):
-    """Receive ecosystem events via webhook and broadcast to connected clients."""
+async def ecosystem_webhook(
+    request: Request,
+    _auth: dict = Depends(ecosystem.require_ecosystem_auth),
+):
+    """
+    Receive ecosystem events via webhook and broadcast to connected clients.
+
+    Signed requests only. Until 2026-08-20 this was unauthenticated, and because
+    it forwards the payload straight to broadcast_alert, any anonymous caller
+    could push a fabricated alert to every logged-in dashboard. On a standalone
+    install (no appEcosystem) the dependency answers 503, which is the correct
+    outcome — there is no ecosystem to receive events from.
+    """
     if getattr(app.state, "ecosystem", None):
         body = await request.json()
         await app.state.ecosystem.handle_webhook(body)
@@ -1194,9 +1233,12 @@ async def ecosystem_webhook(request: Request):
 
 
 @app.get("/api/system/info")
-async def system_info():
+async def system_info(current_user=Depends(get_current_active_user)):
     """
-    Get system information and statistics
+    Get system information and statistics.
+
+    Requires authentication: the response enumerates camera names, whether each
+    is running or recording, and per-camera face statistics.
     """
     cameras_info = {}
 

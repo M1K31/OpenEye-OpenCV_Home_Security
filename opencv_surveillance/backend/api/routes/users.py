@@ -1,6 +1,6 @@
 # Copyright (c) 2025 Mikel Smart
 # This file is part of OpenEye-OpenCV_Home_Security
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 import json
@@ -22,7 +22,19 @@ audit_logger = get_audit_logger()
 
 
 @router.post("/users/", response_model=user_schema.User)
-def create_user(user: user_schema.UserCreate, db: Session = Depends(get_db)):
+def create_user(
+    user: user_schema.UserCreate,
+    db: Session = Depends(get_db),
+    _admin: user_schema.User = Depends(auth.require_admin),
+):
+    """
+    Create a user account. Administrators only.
+
+    This was reachable anonymously until 2026-08-20, which let anyone on the
+    network add accounts to an installed system. The first account is not
+    created here — it comes from the first-run wizard (`POST /api/setup/initialize`),
+    which refuses once an admin exists — so requiring admin here locks nobody out.
+    """
     db_user = crud.get_user_by_username(db, username=user.username)
     if db_user:
         raise HTTPException(
@@ -34,6 +46,7 @@ def create_user(user: user_schema.UserCreate, db: Session = Depends(get_db)):
 @router.post("/token")
 def login_for_access_token(
         request: Request,
+        response: Response,
         form_data: OAuth2PasswordRequestForm = Depends(),
         db: Session = Depends(get_db)):
     user = auth.authenticate_user(db, form_data.username, form_data.password)
@@ -61,12 +74,16 @@ def login_for_access_token(
     # Log successful login
     audit_logger.log_login(user.username, ip_address or "unknown", success=True)
 
+    # Also hand the browser a cookie copy so <img>/<video> tags can load media.
+    auth.set_media_auth_cookie(response, tokens["access_token"])
+
     return tokens
 
 
 @router.post("/auth/login-2fa")
 def login_with_2fa(
     http_request: Request,
+    response: Response,
     request: twofa_schema.Login2FARequest,
     db: Session = Depends(get_db)
 ):
@@ -105,6 +122,7 @@ def login_with_2fa(
         # v3.8.0: Create both access and refresh tokens
         tokens = auth.create_tokens(db, user, device_info, ip_address)
         audit_logger.log_login(user.username, ip_address or "unknown", success=True)
+        auth.set_media_auth_cookie(response, tokens["access_token"])
         tokens["requires_2fa"] = False
         return tokens
 
@@ -233,6 +251,8 @@ def login_with_2fa(
     # Log successful 2FA login
     audit_logger.log_login(user.username, ip_address or "unknown", success=True)
 
+    auth.set_media_auth_cookie(response, tokens["access_token"])
+
     tokens["requires_2fa"] = False
     return tokens
 
@@ -252,6 +272,7 @@ def read_users_me(
 @router.post("/token/refresh")
 def refresh_token(
     http_request: Request,
+    response: Response,
     refresh_token: str,
     db: Session = Depends(get_db)
 ):
@@ -276,6 +297,10 @@ def refresh_token(
 
     # Refresh tokens using refresh token rotation
     tokens = auth.refresh_access_token(db, refresh_token, device_info, ip_address)
+
+    # Refresh the cookie too, or media requests start failing 30 minutes into a
+    # session that the client believes is still valid.
+    auth.set_media_auth_cookie(response, tokens["access_token"])
 
     return tokens
 
@@ -1189,12 +1214,23 @@ async def update_camera_permissions(
 @router.post("/users/sync", response_model=user_schema.UserSyncResponse)
 async def sync_user_from_ecosystem(
     request: user_schema.UserSyncRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _admin: user_schema.User = Depends(auth.require_admin),
 ):
     """
-    Create or update a user synced from a companion app.
-    
-    Used by MagicMirror ecosystem module to sync users bidirectionally.
+    Create or update a user synced from a companion app. Administrators only.
+
+    Used by the MagicMirror ecosystem module to sync users bidirectionally.
+
+    This endpoint was unauthenticated until 2026-08-20 and accepted a
+    caller-supplied `role`, so an anonymous caller on the network could create an
+    administrator account, or take the update branch below to overwrite an
+    existing administrator's email address and redirect their alerting.
+
+    Two things changed. Authentication is now required, and the requested role is
+    ignored — see below. Verified before locking it down: appEcosystem does not
+    call this endpoint (no reference to /users/sync or /api/users anywhere in
+    it), so no companion app breaks.
     """
     # Check if user already exists by external_id or username
     existing = None
@@ -1231,13 +1267,19 @@ async def sync_user_from_ecosystem(
         )
     
     # Create new user
+    #
+    # The role is deliberately NOT taken from the request. A sync is an assertion
+    # that a person exists in a companion app; it is not an authorization
+    # decision, and letting the caller name the role made this endpoint a
+    # privilege-escalation primitive. A synced account starts as a viewer and is
+    # promoted through the normal user routes, where the change is audited.
     import secrets
     new_user = models.User(
         username=request.username,
         email=request.email,
         display_name=request.display_name,
         hashed_password=auth.hash_password(secrets.token_urlsafe(32)),  # Random password
-        role=request.role.value,
+        role=user_schema.UserRole.viewer.value,
         face_profile_name=request.face_profile_name,
         synced_from=request.source_app,
         synced_at=datetime.utcnow(),
@@ -1264,12 +1306,15 @@ async def sync_user_from_ecosystem(
 @router.post("/users/sync/bulk", response_model=user_schema.UserBulkSyncResponse)
 async def bulk_sync_users(
     request: user_schema.UserBulkSyncRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _admin: user_schema.User = Depends(auth.require_admin),
 ):
     """
-    Bulk sync users from a companion app.
-    
-    Efficiently syncs multiple users in a single request.
+    Bulk sync users from a companion app. Administrators only.
+
+    Efficiently syncs multiple users in a single request. This delegates to
+    sync_user_from_ecosystem for each entry, so it carried exactly the same
+    anonymous privilege-escalation exposure and is closed the same way.
     """
     results = []
     errors = []

@@ -290,7 +290,7 @@ async def get_auth_user(db: Session = Depends(get_db)):
     return await get_current_active_user()
 
 
-@router.get("/ecosystem/status", response_model=eco_schema.EcosystemStatusResponse)
+@router.get("/ecosystem/status", dependencies=[Depends(require_ecosystem_auth)], response_model=eco_schema.EcosystemStatusResponse)
 async def get_ecosystem_status(
     db: Session = Depends(get_db)
 ):
@@ -324,7 +324,7 @@ async def get_ecosystem_status(
     )
 
 
-@router.delete("/ecosystem/disconnect/{app_name}")
+@router.delete("/ecosystem/disconnect/{app_name}", dependencies=[Depends(require_ecosystem_auth)])
 async def disconnect_ecosystem_app(
     app_name: str,
     device_id: Optional[str] = None,
@@ -355,7 +355,7 @@ async def disconnect_ecosystem_app(
     return {"success": True, "message": f"Disconnected {len(connections)} device(s) for {app_name}"}
 
 
-@router.patch("/ecosystem/device/{device_id}/subscriptions")
+@router.patch("/ecosystem/device/{device_id}/subscriptions", dependencies=[Depends(require_ecosystem_auth)])
 async def update_device_subscriptions(
     device_id: str,
     associated_users: Optional[List[str]] = None,
@@ -418,7 +418,7 @@ async def update_device_subscriptions(
     }
 
 
-@router.get("/ecosystem/devices")
+@router.get("/ecosystem/devices", dependencies=[Depends(require_ecosystem_auth)])
 async def list_ecosystem_devices(
     db: Session = Depends(get_db)
 ):
@@ -658,7 +658,7 @@ async def receive_notification(
     )
 
 
-@router.get("/notifications/settings", response_model=eco_schema.NotificationSettings)
+@router.get("/notifications/settings", dependencies=[Depends(require_ecosystem_auth)], response_model=eco_schema.NotificationSettings)
 async def get_notification_settings(db: Session = Depends(get_db)):
     """Get notification preferences for ecosystem (persisted)."""
     from backend.database.alert_models import EcosystemNotificationSettings
@@ -956,7 +956,7 @@ async def ecosystem_camera_snapshot(
 # ============================================================================
 
 
-@router.get("/status", response_model=eco_schema.SystemStatusResponse)
+@router.get("/status", dependencies=[Depends(require_ecosystem_auth)], response_model=eco_schema.SystemStatusResponse)
 async def get_system_status(db: Session = Depends(get_db)):
     """
     Get comprehensive system status.
@@ -1033,7 +1033,7 @@ async def get_system_status(db: Session = Depends(get_db)):
     )
 
 
-@router.get("/statistics")
+@router.get("/statistics", dependencies=[Depends(require_ecosystem_auth)])
 def get_ecosystem_statistics(
     hours: int = Query(24, ge=1, le=168, description="Hours to look back"),
     db: Session = Depends(get_db)
@@ -1450,7 +1450,7 @@ async def _send_push_notification(
 # ============================================================================
 
 
-@router.post("/devices/register", response_model=eco_schema.DeviceRegisterResponse)
+@router.post("/devices/register", dependencies=[Depends(require_ecosystem_auth)], response_model=eco_schema.DeviceRegisterResponse)
 async def register_mobile_device(
     request: eco_schema.DeviceRegisterRequest,
     db: Session = Depends(get_db)
@@ -1498,7 +1498,7 @@ async def register_mobile_device(
     )
 
 
-@router.get("/cameras/{camera_id}/stream/mobile", response_model=eco_schema.MobileStreamResponse)
+@router.get("/cameras/{camera_id}/stream/mobile", dependencies=[Depends(require_ecosystem_auth)], response_model=eco_schema.MobileStreamResponse)
 async def get_mobile_stream(
     camera_id: str,
     quality: str = "medium",
@@ -1537,7 +1537,7 @@ async def get_mobile_stream(
     )
 
 
-@router.get("/cameras/{camera_id}/thumbnail", response_model=eco_schema.ThumbnailResponse)
+@router.get("/cameras/{camera_id}/thumbnail", dependencies=[Depends(require_ecosystem_auth)], response_model=eco_schema.ThumbnailResponse)
 async def get_camera_thumbnail(
     camera_id: str,
     db: Session = Depends(get_db)
@@ -1586,7 +1586,7 @@ async def get_camera_thumbnail(
     raise HTTPException(status_code=503, detail="Camera offline or unavailable")
 
 
-@router.get("/events/timeline", response_model=eco_schema.TimelineResponse)
+@router.get("/events/timeline", dependencies=[Depends(require_ecosystem_auth)], response_model=eco_schema.TimelineResponse)
 async def get_events_timeline(
     page: int = 1,
     per_page: int = 20,
@@ -1663,7 +1663,7 @@ async def get_events_timeline(
 # ============================================================================
 
 
-@router.get("/faces/search")
+@router.get("/faces/search", dependencies=[Depends(require_ecosystem_auth)])
 async def search_face_detections(
     person_name: Optional[str] = Query(None, description="Person name to search for"),
     date: Optional[str] = Query(None, description="Specific date (YYYY-MM-DD) or relative (today, yesterday)"),
@@ -1873,7 +1873,7 @@ def _generate_voice_response(
             return f"I found {total_count} face detections of {len(persons)} different people during that time."
 
 
-@router.get("/recordings/{recording_id}/play", response_model=eco_schema.RecordingPlaybackResponse)
+@router.get("/recordings/{recording_id}/play", dependencies=[Depends(require_ecosystem_auth)], response_model=eco_schema.RecordingPlaybackResponse)
 async def get_recording_playback(
     recording_id: int,
     db: Session = Depends(get_db)
