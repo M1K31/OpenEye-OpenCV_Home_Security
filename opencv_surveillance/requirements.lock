@@ -1,0 +1,160 @@
+# OpenEye — pinned dependency set
+#
+# WHAT THIS IS
+# Captured from the shipped macOS .app bundle on 2026-08-22, which is a
+# known-good, running combination: camera capture, face recognition, auth and
+# the ecosystem client were all verified working against exactly these versions.
+#
+# WHY IT EXISTS
+# requirements.txt uses `>=` with almost no upper bounds and there was no lock,
+# so two installs a week apart produced different software. That is not
+# hypothetical: the shipped bundle runs fastapi 0.141.1 / starlette 1.6.0 while
+# the test suite was running fastapi 0.128.8 / starlette 0.49.3 — a major
+# Starlette apart. The suite was certifying a combination no user had.
+#
+# PLATFORM
+# macOS / arm64 / CPython 3.12.8. Linux and Docker need their own lock generated
+# on that platform; do not assume this file resolves there. Regenerate with:
+#   pip-compile requirements.txt -o requirements.lock --generate-hashes
+# run on the target platform and Python version.
+#
+# HOW TO USE
+# Builds install from this file, not from requirements.txt:
+#   pip install --no-deps -r requirements.lock
+# requirements.txt stays the human-edited input describing intent.
+#
+aiohappyeyeballs==2.7.1
+aiohttp-retry==2.9.1
+aiohttp==3.14.3
+aioice==0.10.2
+aiortc==1.15.0
+aiosignal==1.4.0
+aiosmtplib==5.1.2
+alembic==1.19.1
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.14.2
+appecosystem-ai==0.1.0
+appecosystem-auth==0.4.0
+appecosystem-client==0.3.1
+attrs==26.1.0
+av==17.1.0
+azure-core==1.41.0
+azure-storage-blob==12.30.0
+base36==0.1.1
+bcrypt==5.0.0
+boto3==1.43.75
+botocore==1.43.75
+CacheControl==0.14.4
+certifi==2026.7.22
+cffi==2.1.1
+chacha20poly1305-reuseable==0.13.2
+charset-normalizer==3.5.1
+click==8.4.2
+cryptography==50.0.0
+dlib==20.0.1
+dnspython==2.8.0
+ecdsa==0.19.2
+email-validator==2.3.0
+face-recognition==1.3.0
+face_recognition_models==0.3.0
+fastapi==0.141.1
+firebase_admin==7.5.0
+frozenlist==1.8.0
+google-api-core==2.34.0
+google-auth-oauthlib==1.4.0
+google-auth==2.56.3
+google-cloud-core==2.6.1
+google-cloud-firestore==2.28.1
+google-cloud-pubsub==2.39.1
+google-cloud-storage==3.13.1
+google-crc32c==1.8.0
+google-resumable-media==2.10.1
+googleapis-common-protos==1.75.1
+grpc-google-iam-v1==0.14.5
+grpcio-status==1.83.0
+grpcio==1.83.0
+h11==0.16.0
+h2==4.4.1
+HAP-python==5.0.0
+hiredis==3.4.1
+hpack==4.2.0
+httpcore==1.0.9
+httptools==0.8.0
+httpx==0.28.1
+hyperframe==6.1.0
+idna==3.19
+ifaddr==0.2.0
+isodate==0.7.2
+Jinja2==3.1.6
+jmespath==1.1.0
+joblib==1.5.3
+lxml==6.1.2
+Mako==1.4.1
+MarkupSafe==3.0.3
+msgpack==1.2.1
+multidict==6.7.1
+narwhals==2.24.0
+netifaces==0.11.0
+numpy==1.26.4
+oauthlib==3.3.1
+onvif_zeep==0.2.12
+opencv-contrib-python==4.10.0.84
+opentelemetry-api==1.44.0
+opentelemetry-sdk==1.44.0
+opentelemetry-semantic-conventions==0.65b0
+orjson==3.12.0
+packaging==26.3
+paho-mqtt==2.1.0
+passlib==1.7.4
+pillow==12.3.0
+platformdirs==4.11.3
+propcache==0.5.2
+proto-plus==1.28.3
+protobuf==7.35.1
+psutil==7.2.2
+psycopg2-binary==2.9.12
+pyasn1==0.6.4
+pyasn1_modules==0.4.2
+PyAudio==0.2.14
+pycparser==3.0
+pydantic==2.13.4
+pydantic_core==2.46.4
+pyee==14.0.0
+PyJWT==2.13.0
+pylibsrtp==1.0.0
+pyOpenSSL==26.4.0
+PyOTP==2.10.0
+PyQRCode==1.2.1
+python-dateutil==2.9.0.post0
+python-dotenv==1.2.3
+python-jose==3.5.0
+python-multipart==0.0.32
+PyYAML==6.0.3
+qrcode==8.2
+redis==8.1.0
+requests-file==3.0.1
+requests-oauthlib==2.0.0
+requests-toolbelt==1.0.0
+requests==2.34.2
+rsa==4.9.1
+s3transfer==0.19.2
+scikit-learn==1.9.0
+scipy==1.17.1
+setuptools==81.0.0
+six==1.17.0
+SQLAlchemy==2.0.52
+starlette==1.6.0
+threadpoolctl==3.6.0
+twilio==9.11.0
+typing-inspection==0.4.4
+typing_extensions==4.16.0
+urllib3==2.7.0
+uvicorn==0.52.4
+uvloop==0.22.1
+watchfiles==1.2.0
+websockets==17.0.1
+wheel==0.48.0
+yarl==1.24.5
+zeep==4.3.3
+zeroconf==0.150.0
