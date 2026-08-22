@@ -165,3 +165,8 @@ logs/
 *.backup
 *.bak
 *~
+
+# Test scratch, local caches and backups — never belong in a build context.
+pytest-of-*/
+node-compile-cache/
+openeye_backup_*/

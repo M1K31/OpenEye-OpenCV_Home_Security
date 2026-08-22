@@ -214,3 +214,15 @@ harness_bridge.py
 /opencv_surveillance/scripts/build-macos-app.sh
 /opencv_surveillance/packaging/
 /packaging/
+
+# ---------------------------------------------------------------------------
+# Build output, test scratch and local caches.
+#
+# These were tracked until 2026-08-22 and made up 2,055 of 2,495 tracked files —
+# 82% of the repository — while carrying nothing anyone needs to check out.
+# pytest-of-* also embeds the developer's local username in every path.
+# Untracked with `git rm -r --cached`; the files stay on disk.
+# ---------------------------------------------------------------------------
+pytest-of-*/
+/node-compile-cache/
+openeye_backup_*/
