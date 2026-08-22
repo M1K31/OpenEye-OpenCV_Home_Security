@@ -889,22 +889,43 @@ async def shutdown_event():
         logger.error(f"✗ Error stopping audio sessions: {e}")
 
     # Step 7: Stop cloud storage upload threads
+    #
+    # cloud_storage_system defines CloudStorageManager but nothing in the
+    # application ever constructs one — the only instantiation is inside that
+    # module's `if __name__ == "__main__"` example. This step previously did
+    # `from backend.core.cloud_storage_system import cloud_storage`, a name that
+    # does not exist, so it raised ImportError on every shutdown and was hidden
+    # by the except below.
+    #
+    # Rather than import a name that cannot exist, look for a manager the
+    # application actually registered. When cloud storage is wired up it should
+    # publish its manager on app.state, and this step will start doing real work
+    # without further change.
     try:
         logger.info("[7/9] Stopping cloud storage threads...")
-        from backend.core.cloud_storage_system import cloud_storage
-
-        if hasattr(cloud_storage, 'stop_upload_worker'):
-            cloud_storage.stop_upload_worker()
+        storage_manager = getattr(app.state, "cloud_storage", None)
+        if storage_manager is None:
+            logger.info("✓ No cloud storage manager active - nothing to stop")
+        elif hasattr(storage_manager, "stop_upload_worker"):
+            storage_manager.stop_upload_worker()
             logger.info("✓ Cloud storage threads stopped")
         else:
-            logger.warning("⚠ Cloud storage doesn't have stop_upload_worker method")
+            logger.warning("⚠ Cloud storage manager has no stop_upload_worker method")
     except Exception as e:
         logger.error(f"✗ Error stopping cloud storage: {e}")
 
     # Step 8: Close database connections
+    #
+    # Imported from backend.database.session, which is where the engine lives —
+    # backend.database does not export it, so this step raised ImportError on
+    # every shutdown and dispose() never ran. Connections were released by
+    # process death instead of closed.
+    #
+    # Imported here rather than used from the module-level import at the top so
+    # that a test can substitute the engine and observe dispose() being called.
     try:
         logger.info("[8/9] Closing database connections...")
-        from backend.database import engine
+        from backend.database.session import engine
 
         if engine:
             engine.dispose()
