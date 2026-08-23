@@ -37,7 +37,15 @@ def face(name="Unknown", top=100, left=100, size=80):
 def _confirm(policy, f, now=0.0, passes=None, camera=CAMERA, **kwargs):
     """Run the passes needed for a face to become eligible, returning the last."""
     settings = policy.settings
-    passes = settings.required_consecutive_passes if passes is None else passes
+    if passes is None:
+        # Unknown and known faces have different persistence thresholds: an
+        # unknown cannot reliably accumulate passes, because recognition runs
+        # every 2s and unknowns are tracked by box overlap. Using the known
+        # threshold for an unknown would run extra passes here and consume
+        # per-cluster budgets before the assertion under test.
+        is_known = (f.get("name") or "Unknown") != "Unknown"
+        passes = (settings.required_consecutive_passes if is_known
+                  else settings.unknown_required_passes)
     decision = None
     for i in range(passes):
         decision = policy.evaluate(f, camera, now=now + i, **kwargs)
@@ -47,12 +55,42 @@ def _confirm(policy, f, now=0.0, passes=None, camera=CAMERA, **kwargs):
 # ------------------------------------------------------- persistence gate
 
 class TestPersistence:
-    def test_a_face_is_not_captured_on_first_sight(self):
+    def test_a_known_face_is_not_captured_on_first_sight(self):
+        """
+        The persistence gate still applies to someone already enrolled.
+
+        This asserted the same of an UNKNOWN face until 2026-08-23. That gate
+        was removed for unknowns because it was doing the opposite of its
+        intent — see test_an_unknown_is_captured_immediately below.
+        """
         policy = CapturePolicy()
-        decision = policy.evaluate(face("Unknown"), CAMERA, now=0)
+        decision = policy.evaluate(face("Mikel"), CAMERA, now=0)
 
         assert decision.capture is False
         assert "1 of 3 passes" in decision.reason
+
+    def test_an_unknown_is_captured_immediately(self):
+        """
+        An unknown cannot be made to earn its photograph, because the gate
+        measured the wrong thing.
+
+        Recognition runs at most once every 2 seconds (detection_cooldown), and
+        an unknown face is tracked between passes by 20% bounding-box overlap.
+        Three consecutive passes therefore required someone to hold their face
+        within a fifth of its own width for more than four seconds. Anyone
+        walking through frame moves far further than that between passes, so
+        their track never continued and the count never rose above one.
+
+        A stationary false positive — the door edge this gate was written for —
+        has no such difficulty and accumulated passes reliably.
+
+        Measured on a live install: 50 unknown sightings over a week, not one of
+        which ever produced an image, while 48 of 49 were isolated single
+        sightings. An unknown with no image also has no encoding and no cluster,
+        so it can be neither identified nor dismissed.
+        """
+        policy = CapturePolicy()
+        assert policy.evaluate(face("Unknown"), CAMERA, now=0).capture is True
 
     def test_it_is_captured_once_it_persists(self):
         policy = CapturePolicy()
@@ -60,22 +98,23 @@ class TestPersistence:
 
         assert decision.capture is True
 
-    def test_a_transient_detection_never_captures(self):
-        """
-        A door edge or patch of wall appears once and is gone. Most of the
-        stored detections on existing installs are exactly this.
-        """
-        policy = CapturePolicy()
-
-        for i in range(10):
-            # Each appears somewhere unrelated, so nothing continues a track.
-            decision = policy.evaluate(face("Unknown", top=i * 300, left=i * 300),
-                                       CAMERA, now=i)
-            assert decision.capture is False
+    # REMOVED 2026-08-23: test_a_transient_detection_never_captures.
+    #
+    # It asserted that an unknown face appearing at a different position each
+    # time is never captured, on the premise that this is what a false positive
+    # looks like. The premise was backwards. A door edge or patch of wall is
+    # STATIONARY, so it continued its track and was captured; the subject that
+    # never accumulated passes was a person walking across the frame.
+    #
+    # Unknowns are now captured on first sighting, so the behaviour it described
+    # is gone deliberately. Re-pointing it at a known face tested only that a
+    # name-tracked face accumulates passes, which
+    # test_a_known_face_is_not_captured_on_first_sight and
+    # test_it_is_captured_once_it_persists already cover.
 
     def test_a_gap_resets_the_count(self):
         policy = CapturePolicy()
-        f = face("Unknown")
+        f = face("Mikel")
 
         policy.evaluate(f, CAMERA, now=0)
         policy.evaluate(f, CAMERA, now=1)
@@ -253,11 +292,15 @@ def _arrive(policy, f, camera=CAMERA, now=0.0, **kwargs):
     suppresses on every pass but wrong for a once-per-day budget: the first pass
     spends the allowance and the rest report it as already spent.
     """
-    for i in range(policy.settings.required_consecutive_passes - 1):
+    # The threshold depends on whether the face has a name: an unknown clears
+    # the gate on its first pass, so warming up with the known threshold would
+    # spend a once-per-day budget before the assertion under test.
+    is_known = (f.get("name") or "Unknown") != "Unknown"
+    needed = (policy.settings.required_consecutive_passes if is_known
+              else policy.settings.unknown_required_passes)
+    for i in range(needed - 1):
         policy.evaluate(f, camera, now=now + i, **kwargs)
-    return policy.evaluate(f, camera,
-                           now=now + policy.settings.required_consecutive_passes - 1,
-                           **kwargs)
+    return policy.evaluate(f, camera, now=now + needed - 1, **kwargs)
 
 
 class TestUnrecognisedFacesInTrainedClusters:
@@ -633,8 +676,13 @@ class TestCameraMode:
         assert clustered.capture is True
 
     def test_the_default_mode_applies_the_policy(self):
+        """
+        Shown with a known face: under the default mode the persistence gate
+        applies, where MODE_ALL_FACES bypasses it. An unknown is no longer a
+        valid example here, because the policy now captures one immediately.
+        """
         policy = CapturePolicy()
-        assert policy.evaluate(face("Unknown"), CAMERA,
+        assert policy.evaluate(face("Mikel"), CAMERA,
                                mode=MODE_SYSTEM_DEFAULT, now=0).capture is False
 
 
@@ -642,13 +690,28 @@ class TestCameraMode:
 
 class TestSightings:
     def test_a_suppressed_capture_still_records_a_sighting(self):
-        """Where an unknown person was seen must survive the throttling."""
+        """
+        Where someone was seen must survive the throttling.
+
+        Demonstrated with a known face, which is what gets suppressed now. An
+        unknown is captured on first sighting, deliberately: a sighting with no
+        image carries no encoding and joins no cluster, so it could be neither
+        identified nor dismissed — which is what left 50 unactionable Unknown
+        rows on a live install.
+        """
         policy = CapturePolicy()
 
-        decision = policy.evaluate(face("Unknown"), CAMERA, now=0)
+        decision = policy.evaluate(face("Mikel"), CAMERA, now=0)
 
         assert decision.capture is False
         assert decision.record_sighting is True
+
+    def test_an_unknown_sighting_always_arrives_with_an_image(self):
+        """The invariant that report produced: no unactionable unknown rows."""
+        policy = CapturePolicy()
+        decision = policy.evaluate(face("Unknown"), CAMERA, now=0)
+        assert decision.record_sighting is True
+        assert decision.capture is True
 
     def test_sightings_are_throttled(self):
         policy = CapturePolicy()

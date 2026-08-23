@@ -39,6 +39,8 @@ import shutil
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
+
+from sqlalchemy import or_
 from typing import Dict, Iterable, List, Optional, Set
 
 logger = logging.getLogger(__name__)
@@ -195,6 +197,94 @@ def protected_paths(db=None) -> Set[Path]:
         except Exception as exc:  # a planning failure must never delete more
             logger.error("Could not read cluster representatives: %s", exc)
             raise
+
+    # 3. Snapshots of people who have not been identified yet.
+
+    #
+
+    #    Thinning exists to stop a settled profile hoarding its thousandth
+
+    #    likeness. Someone unidentified is the opposite case: the snapshot is
+
+    #    the only thing that makes the sighting actionable, and deleting it
+
+    #    removes the sole route to assigning them to a person or creating a
+
+    #    profile. Their image is also not in faces_dir, so rule 1 does not
+
+    #    cover it, and it is usually not a cluster representative either.
+
+    if db is not None:
+
+        try:
+
+            from backend.database.models import FaceDetectionEvent
+
+
+            snapshots_dir = Path(paths.snapshots_dir)
+
+            unknown_rows = (
+
+                db.query(FaceDetectionEvent.snapshot_path)
+
+                .filter(
+
+                    or_(
+
+                        FaceDetectionEvent.person_name.is_(None),
+
+                        FaceDetectionEvent.person_name == "Unknown",
+
+                    )
+
+                )
+
+                .all()
+
+            )
+
+            for (stored,) in unknown_rows:
+
+                if not stored:
+
+                    continue
+
+                # Stored as the URL the frontend fetches, so protect both the
+
+                # literal path and the file of that name in snapshots_dir —
+
+                # the same two-way handling rule 2 needs.
+
+                protected.add((snapshots_dir / Path(stored).name).resolve())
+
+                literal = Path(stored)
+
+                if literal.is_absolute():
+
+                    protected.add(literal.resolve())
+
+        except Exception as e:  # pragma: no cover - defensive
+
+            # Failing closed matters here: if the unidentified faces cannot be
+
+            # listed, delete nothing rather than risk deleting them.
+
+            logger.warning(
+
+                "Could not list unidentified faces to protect them; "
+
+                "treating all snapshots as protected: %s", e)
+
+            snapshots_dir = Path(paths.snapshots_dir)
+
+            if snapshots_dir.exists():
+
+                for item in snapshots_dir.rglob("*"):
+
+                    if item.is_file():
+
+                        protected.add(item.resolve())
+
 
     return protected
 

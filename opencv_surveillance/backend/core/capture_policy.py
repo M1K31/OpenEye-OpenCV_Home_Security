@@ -45,6 +45,27 @@ class CaptureSettings:
     # that make up most of the stored detections on existing installs.
     required_consecutive_passes: int = 3
 
+    # The same gate for an unknown face, deliberately lower.
+    #
+    # A known person is tracked BY NAME between passes, so they accumulate
+    # persistence reliably, and a missed capture costs nothing because their
+    # profile already exists. An unknown has only the overlap of its bounding
+    # box to go on, and a subject who moves resets that track — so in practice
+    # unknowns often never reached three passes at all. Measured on a live
+    # install 2026-08-23: 50 unknown sightings over a week, not one of which
+    # ever produced an image.
+    #
+    # That is worse than losing a photograph. An unknown sighting with no
+    # snapshot also carries no encoding and joins no cluster, so it cannot be
+    # reviewed, assigned to a person, or turned into a new profile. The only
+    # reason to keep an unknown sighting is to be able to identify it later,
+    # and that needs a picture.
+    #
+    # Raise this if an installation is genuinely plagued by false positives;
+    # the cost of the default is one image per unknown sighting, bounded by the
+    # sighting throttle below.
+    unknown_required_passes: int = 1
+
     # Once a cluster holds this many faces it has a usable profile, and further
     # likenesses buy nothing while still costing clustering and training time.
     cluster_maturity: int = 25
@@ -265,11 +286,14 @@ class CapturePolicy:
             return CaptureDecision(False, sighting,
                                    "already captured for this person today")
 
-        if track.consecutive < self.settings.required_consecutive_passes:
+        # An unknown gets a lower bar than someone already enrolled: see
+        # unknown_required_passes for why the two cannot share a threshold.
+        needed = (self.settings.required_consecutive_passes if known
+                  else self.settings.unknown_required_passes)
+        if track.consecutive < needed:
             return CaptureDecision(
                 False, sighting,
-                f"seen {track.consecutive} of "
-                f"{self.settings.required_consecutive_passes} passes",
+                f"seen {track.consecutive} of {needed} passes",
             )
 
         # An identity nobody has vouched for keeps everything.
