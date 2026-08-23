@@ -129,3 +129,32 @@ html[class$="-theme"] body {
   --transition-fast: var(--anim-fast, 0.15s) var(--anim-ease, ease);
   --transition-normal: var(--anim-normal, 0.25s) var(--anim-ease, ease);
 }
+
+/* --- Native form controls ---------------------------------------------------
+ *
+ * A <select>'s option list renders with no background of its own — computed
+ * `rgba(0, 0, 0, 0)` — so on a dark theme the popup appears translucent and the
+ * text sits on whatever is behind it. The closed control was always themed
+ * correctly, which is why this looked like a theming failure only when the menu
+ * was open.
+ *
+ * Two components had already patched this for themselves
+ * (.reassign-select option, .quick-reassign-select option). There are 27 select
+ * elements across 17 files, so the other 25 had the same problem. Styling the
+ * element type once fixes all of them and stops the next one inheriting the
+ * bug.
+ *
+ * Native menus are not fully styleable on every platform, but a background and
+ * colour are respected, which is what this needs.
+ */
+select option,
+select optgroup {
+  background-color: var(--bg-panel);
+  color: var(--text-primary);
+}
+
+/* Keep the closed control consistent too, so a select that sets no styles of
+ * its own still matches the theme rather than falling back to a system default. */
+select {
+  color-scheme: dark;
+}

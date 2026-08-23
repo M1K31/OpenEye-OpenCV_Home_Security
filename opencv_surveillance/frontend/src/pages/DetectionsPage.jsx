@@ -395,7 +395,30 @@ const DetectionsPage = () => {
         await apiClient.post('/faces/people', { name });
       }
 
+      // Reassign the selected detections themselves.
+      //
+      // This was missing, and its absence is why a reassignment could report
+      // success while nothing moved. The handler named any CLUSTER the
+      // selection belonged to and uploaded the snapshots as training photos,
+      // but never touched the detection rows. When the detections were not in
+      // a cluster — or when the cluster rename was refused by the guard that
+      // protects human-assigned names, added after one person's history was
+      // absorbed into another's — the rows kept pointing at the old person
+      // while the upload succeeded and the interface said it had worked.
+      //
+      // Done first, so a failure here surfaces as an error instead of being
+      // masked by the training upload that follows.
+      const faceIds = dets.map(d => d.id).filter(id => id !== undefined && id !== null);
+      if (faceIds.length > 0) {
+        await apiClient.post('/faces/history/bulk-reassign', {
+          face_ids: faceIds,
+          new_person_name: name,
+        });
+      }
+
       // Name any clusters represented in the selection (relabels their history).
+      // Best-effort: the reassignment above is what the operator asked for, and
+      // a cluster whose name is protected must not fail the whole action.
       const clusterIds = [...new Set(dets.map(d => d.cluster_id).filter(Boolean))];
       for (const cid of clusterIds) {
         try {
