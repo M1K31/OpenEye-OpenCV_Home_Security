@@ -1424,6 +1424,33 @@ class RTSPCamera(Camera):
                 logger.debug("Releasing dead capture for %s raised %s",
                              self.camera_id, e)
 
+    def _device_listed_by_os(self) -> str:
+        """
+        Whether the OS still lists this device, for the open-failure log.
+
+        "Open failed" and "open failed while the OS can still see the device"
+        are different problems: the first is an absent camera, the second is a
+        stuck capture subsystem that no amount of retrying inside this process
+        will fix. Distinguishing them in the log is the difference between a
+        two-minute diagnosis and an hour of guessing — on 2026-08-23 these
+        attempts were logged with print(), which the .app does not capture, so
+        the reason was invisible while the retry loop ran for ten minutes.
+        """
+        try:
+            int(self.source)
+        except (ValueError, TypeError):
+            return "n/a (stream)"
+        if sys.platform != "darwin":
+            return "unknown"
+        try:
+            import subprocess
+            out = subprocess.run(
+                ["system_profiler", "SPCameraDataType"],
+                capture_output=True, text=True, timeout=8).stdout
+            return "yes" if out.strip() and "Model ID" in out else "no"
+        except Exception:
+            return "unknown"
+
     def _describe_self(self) -> str:
         """Camera id and its real source type, for log messages."""
         try:
@@ -1726,8 +1753,8 @@ class RTSPCamera(Camera):
             try:
                 # Try to convert to int - if successful, it's a USB device
                 device_index = int(self.source)
-                print(f"Connecting to USB camera at index: {device_index} "
-                      f"(attempt {attempt}/{max_attempts})")
+                logger.info("Camera %s: connecting to USB device index %s (attempt %s/%s)",
+                            self.camera_id, device_index, attempt, max_attempts)
                 # Default backend. On macOS this resolves to AVFoundation and handles
                 # capture-by-index correctly (forcing CAP_AVFOUNDATION explicitly warns
                 # "can't be used to capture by index" and just falls back here anyway).
@@ -1743,7 +1770,7 @@ class RTSPCamera(Camera):
                     self.capture = cv2.VideoCapture(device_index)
             except (ValueError, TypeError):
                 # Not a number, assume it's an RTSP URL or device path
-                print(f"Connecting to RTSP stream: {self.source}")
+                logger.info("Camera %s: connecting to stream %s", self.camera_id, self.source)
                 if CAPTURE_ISOLATION:
                     self.capture = CaptureClient(
                         source=self.source, camera_id=self.camera_id or "camera",
@@ -1754,7 +1781,10 @@ class RTSPCamera(Camera):
 
             if self.capture is not None and self.capture.isOpened():
                 break
-            print(f"Camera open attempt {attempt}/{max_attempts} failed for {self.source}")
+            logger.warning(
+                "Camera %s: open attempt %s/%s failed for %s (device listed by the OS: %s)",
+                self.camera_id, attempt, max_attempts, self.source,
+                self._device_listed_by_os())
             if self.capture is not None:
                 self.capture.release()
             if attempt < max_attempts:
