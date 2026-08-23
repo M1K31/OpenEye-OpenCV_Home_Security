@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useEscapeToClose } from '../hooks/useEscapeToClose';
 import { useNavigate } from 'react-router-dom';
 import { logger } from '../utils/logger';
 import apiClient from '../api/apiClient';
@@ -149,6 +150,15 @@ const EventDetailModal = ({ event, onClose, onDelete }) => {
 
     return details;
   };
+
+  // Escape closes this dialog. It renders its own overlay rather than using
+
+  // the shared Modal component, so without this a keyboard user could open
+
+  // it and have no way to dismiss it.
+
+  useEscapeToClose(onClose);
+
 
   return (
     <div className="modal-overlay" onClick={onClose}>

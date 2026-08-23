@@ -2,6 +2,7 @@
 // This file is part of OpenEye-OpenCV_Home_Security
 
 import React, { useState } from 'react';
+import { useEscapeToClose } from '../hooks/useEscapeToClose';
 import './DeleteClusterModal.css';
 
 /**
@@ -14,6 +15,15 @@ const DeleteClusterModal = ({ cluster, onConfirm, onCancel }) => {
   const handleConfirm = () => {
     onConfirm(deleteFaces);
   };
+
+  // Escape closes this dialog. It renders its own overlay rather than using
+
+  // the shared Modal component, so without this a keyboard user could open
+
+  // it and have no way to dismiss it.
+
+  useEscapeToClose(onCancel);
+
 
   return (
     <div className="modal-overlay" onClick={onCancel}>

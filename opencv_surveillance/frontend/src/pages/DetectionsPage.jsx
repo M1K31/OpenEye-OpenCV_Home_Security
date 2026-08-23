@@ -19,6 +19,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { activateOnKey } from '../utils/a11y';
 import apiClient from '../api/apiClient';
 import { Button } from '../components/universal';
 import { formatTimestampShort } from '../utils/dateUtils';
@@ -824,7 +825,10 @@ const AssignPersonModal = ({ count, savedPeople, busy, onCancel, onConfirm }) =>
   const canConfirm = mode === 'existing' ? !!existing : !!newName.trim();
 
   return (
-    <div style={styles.modalOverlay} onClick={busy ? undefined : onCancel}>
+    <div style={styles.modalOverlay} onClick={busy ? undefined : onCancel}
+    onKeyDown={activateOnKey(busy ? undefined : onCancel)}
+    role="button"
+    tabIndex={0}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
         <h3 style={styles.modalTitle}>
           Assign {count} detection{count !== 1 ? 's' : ''} to a person

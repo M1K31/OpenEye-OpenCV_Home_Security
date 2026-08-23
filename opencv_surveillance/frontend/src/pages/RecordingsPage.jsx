@@ -1,6 +1,7 @@
 // Copyright (c) 2025 Mikel Smart
 // This file is part of OpenEye-OpenCV_Home_Security
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { activateOnKey } from '../utils/a11y';
 import { logger } from '../utils/logger';
 import apiClient from '../api/apiClient';
 import { useNavigate } from 'react-router-dom';
@@ -818,7 +819,10 @@ const RecordingsPage = () => {
 
       {/* Image Modal */}
       {selectedRecording && selectedRecording.snapshot_path && (
-        <div style={styles.modal} onClick={() => setSelectedRecording(null)}>
+        <div style={styles.modal} onClick={() => setSelectedRecording(null)}
+        onKeyDown={activateOnKey(() => setSelectedRecording(null))}
+        role="button"
+        tabIndex={0}>
           <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
             <Button
               variant="tertiary"

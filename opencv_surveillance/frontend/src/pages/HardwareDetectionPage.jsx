@@ -2,6 +2,7 @@
 // This file is part of OpenEye-OpenCV_Home_Security
 
 import React, { useState, useEffect } from 'react';
+import { activateOnKey } from '../utils/a11y';
 import { useNavigate } from 'react-router-dom';
 import { useCachedApi } from '../hooks/useCachedApi';
 import { CacheTTL } from '../services/apiCache';
@@ -304,6 +305,9 @@ const HardwareDetectionPage = () => {
                     key={featureId}
                     className="feature-card recommended clickable"
                     onClick={() => handleFeatureClick(featureId, true)}
+                    onKeyDown={activateOnKey(() => handleFeatureClick(featureId, true))}
+                    role="button"
+                    tabIndex={0}
                     style={{ cursor: 'pointer' }}
                     title="Click to view settings"
                   >
@@ -337,6 +341,9 @@ const HardwareDetectionPage = () => {
                   key={featureId}
                   className="feature-card not-recommended clickable"
                   onClick={() => handleFeatureClick(featureId, false)}
+                  onKeyDown={activateOnKey(() => handleFeatureClick(featureId, false))}
+                  role="button"
+                  tabIndex={0}
                   style={{ cursor: 'pointer' }}
                   title="Click to view details"
                 >

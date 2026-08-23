@@ -2,6 +2,7 @@
 // This file is part of OpenEye-OpenCV_Home_Security
 
 import React, { useState, useEffect } from 'react';
+import { useEscapeToClose } from '../hooks/useEscapeToClose';
 import { logger } from '../utils/logger';
 import clusteringService from '../services/clusteringService';
 import apiClient from '../api/apiClient';
@@ -78,6 +79,15 @@ const AssignNameModal = ({ clusterId, onClose, onSuccess }) => {
   };
 
   const isValid = selectedPerson === '__create_new__' ? personName.trim().length > 0 : selectedPerson.length > 0;
+
+  // Escape closes this dialog. It renders its own overlay rather than using
+
+  // the shared Modal component, so without this a keyboard user could open
+
+  // it and have no way to dismiss it.
+
+  useEscapeToClose(onClose);
+
 
   return (
     <div className="modal-overlay" onClick={onClose}>

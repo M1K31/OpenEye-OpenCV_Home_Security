@@ -2,6 +2,7 @@
 // This file is part of OpenEye-OpenCV_Home_Security
 
 import React, { useState, useEffect } from 'react';
+import { useEscapeToClose } from '../hooks/useEscapeToClose';
 import clusteringService from '../services/clusteringService';
 import './Modal.css';
 
@@ -60,6 +61,15 @@ const MergeClustersModal = ({ clusterIds, onClose, onSuccess }) => {
   };
 
   const totalFaces = clusters.reduce((sum, c) => sum + (c?.face_count || 0), 0);
+
+  // Escape closes this dialog. It renders its own overlay rather than using
+
+  // the shared Modal component, so without this a keyboard user could open
+
+  // it and have no way to dismiss it.
+
+  useEscapeToClose(onClose);
+
 
   return (
     <div className="modal-overlay" onClick={onClose}>

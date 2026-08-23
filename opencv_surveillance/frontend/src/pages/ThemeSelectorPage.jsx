@@ -1,6 +1,7 @@
 // Copyright (c) 2025 Mikel Smart
 // This file is part of OpenEye-OpenCV_Home_Security
 import React, { useState } from 'react';
+import { activateOnKey } from '../utils/a11y';
 import { useNavigate } from 'react-router-dom';
 import { useTheme, THEMES } from '../context/ThemeContext';
 import HelpButton from '../components/HelpButton';
@@ -117,6 +118,9 @@ const ThemeSelectorPage = ({ embedded = false }) => {
                 ...(isPreviewing ? styles.themeCardPreview : {}),
               }}
               onClick={() => setPreviewTheme(themeId)}
+              onKeyDown={activateOnKey(() => setPreviewTheme(themeId))}
+              role="button"
+              tabIndex={0}
             >
               <div style={styles.cardHeader}>
                 <div style={styles.themeIcon}>{info.icon}</div>

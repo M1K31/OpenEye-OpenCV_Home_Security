@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useEscapeToClose } from '../hooks/useEscapeToClose';
 import apiClient from '../api/apiClient';
 import MotionZoneEditor from './MotionZoneEditor';
 import Switch from './Switch';
@@ -763,6 +764,15 @@ const CameraSettingsModal = ({ camera, onClose, onSave }) => {
   );
 
   if (!camera) return null;
+
+  // Escape closes this dialog. It renders its own overlay rather than using
+
+  // the shared Modal component, so without this a keyboard user could open
+
+  // it and have no way to dismiss it.
+
+  useEscapeToClose(onClose);
+
 
   return (
     <div className="modal-overlay" onClick={onClose}>

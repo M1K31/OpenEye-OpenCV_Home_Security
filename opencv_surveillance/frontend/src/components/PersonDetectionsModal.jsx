@@ -2,6 +2,8 @@
 // This file is part of OpenEye-OpenCV_Home_Security
 
 import React, { useState, useEffect } from 'react';
+import { activateOnKey } from '../utils/a11y';
+import { useEscapeToClose } from '../hooks/useEscapeToClose';
 import { logger } from '../utils/logger';
 import faceHistoryService from '../services/faceHistoryService';
 import apiClient from '../api/apiClient';
@@ -186,6 +188,15 @@ const PersonDetectionsModal = ({ personName, allPeople, onClose, onUpdate }) => 
     setNewPersonName('');
   };
 
+  // Escape closes this dialog. It renders its own overlay rather than using
+
+  // the shared Modal component, so without this a keyboard user could open
+
+  // it and have no way to dismiss it.
+
+  useEscapeToClose(onClose);
+
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-large person-detections-modal" onClick={(e) => e.stopPropagation()}>
@@ -344,6 +355,10 @@ const PersonDetectionsModal = ({ personName, allPeople, onClose, onUpdate }) => 
                     key={detection.id}
                     className={`detection-item ${reviewMode ? 'review-mode' : ''} ${selectedFaces.has(detection.id) ? 'selected' : ''}`}
                     onClick={reviewMode ? () => toggleFaceSelection(detection.id) : undefined}
+                    // Only interactive while reviewing; see ClusterDetailModal for the same rule.
+                    onKeyDown={reviewMode ? activateOnKey(() => toggleFaceSelection(detection.id)) : undefined}
+                    role={reviewMode ? 'button' : undefined}
+                    tabIndex={reviewMode ? 0 : undefined}
                   >
                     {/* Selection checkbox in review mode */}
                     {reviewMode && (

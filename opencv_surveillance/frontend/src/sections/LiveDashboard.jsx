@@ -2,6 +2,7 @@
 // This file is part of OpenEye-OpenCV_Home_Security
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { activateOnKey } from '../utils/a11y';
 import { logger } from '../utils/logger';
 import { formatTimestampShort } from '../utils/dateUtils';
 import apiClient, { isAuthenticated } from '../api/apiClient';
@@ -764,6 +765,9 @@ const LiveDashboard = () => {
                     key={event.id || index}
                     className={`timeline-item ${event.recording_id || event.snapshot_path || event.hasSnapshot ? 'clickable' : ''}`}
                     onClick={() => handleEventClick(event)}
+                    onKeyDown={activateOnKey(() => handleEventClick(event))}
+                    role="button"
+                    tabIndex={0}
                     title={
                       event.recording_id
                         ? 'Click to view recording'

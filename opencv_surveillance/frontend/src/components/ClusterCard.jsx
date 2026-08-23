@@ -2,6 +2,7 @@
 // This file is part of OpenEye-OpenCV_Home_Security
 
 import React from 'react';
+import { activateOnKey } from '../utils/a11y';
 import './ClusterCard.css';
 
 /**
@@ -70,6 +71,7 @@ const ClusterCard = ({ cluster, selected, onSelect, onView, onAssignName, onDele
       <div 
         className="cluster-image"
         onClick={() => onView(id)}
+        onKeyDown={activateOnKey(() => onView(id))}
         role="button"
         tabIndex={0}
       >

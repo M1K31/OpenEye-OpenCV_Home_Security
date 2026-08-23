@@ -2,6 +2,7 @@
 // This file is part of OpenEye-OpenCV_Home_Security
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { activateOnKey } from '../utils/a11y';
 import { logger } from '../utils/logger';
 import apiClient from '../api/apiClient';
 import { Button } from '../components/universal';
@@ -835,6 +836,9 @@ const TimelineView = () => {
           ref={timelineCanvasRef}
           onMouseDown={handleMouseDown}
           onClick={handleSeek}
+          onKeyDown={activateOnKey(handleSeek)}
+          role="button"
+          tabIndex={0}
           style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
         >
           {/* Scrollable Timeline Container */}

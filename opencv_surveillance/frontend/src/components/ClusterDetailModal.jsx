@@ -2,6 +2,8 @@
 // This file is part of OpenEye-OpenCV_Home_Security
 
 import React, { useState, useEffect } from 'react';
+import { activateOnKey } from '../utils/a11y';
+import { useEscapeToClose } from '../hooks/useEscapeToClose';
 import { logger } from '../utils/logger';
 import clusteringService from '../services/clusteringService';
 import apiClient from '../api/apiClient';
@@ -244,6 +246,15 @@ const ClusterDetailModal = ({ clusterId, onClose, onAssignName, onClusterUpdated
     return `/${snapshotPath}`;
   };
 
+  // Escape closes this dialog. It renders its own overlay rather than using
+
+  // the shared Modal component, so without this a keyboard user could open
+
+  // it and have no way to dismiss it.
+
+  useEscapeToClose(onClose);
+
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-large cluster-detail-modal" onClick={(e) => e.stopPropagation()}>
@@ -462,6 +473,12 @@ const ClusterDetailModal = ({ clusterId, onClose, onAssignName, onClusterUpdated
                     <div
                       className="face-image-container"
                       onClick={reviewMode ? () => toggleFaceSelection(face.id) : undefined}
+                      // Only interactive while reviewing. Outside review mode there is no
+                      // click handler, so it must not be focusable either — a tab stop that
+                      // does nothing is its own accessibility problem.
+                      onKeyDown={reviewMode ? activateOnKey(() => toggleFaceSelection(face.id)) : undefined}
+                      role={reviewMode ? 'button' : undefined}
+                      tabIndex={reviewMode ? 0 : undefined}
                     >
                       <img
                         src={getImageUrl(face.snapshot_path)}

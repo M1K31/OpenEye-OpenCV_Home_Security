@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { activateOnKey } from '../utils/a11y';
 import { logger } from '../utils/logger';
 import notificationService from '../services/notificationService';
 import { Button, Switch } from '../components/universal';
@@ -278,7 +279,10 @@ const NotificationSettingsPage = () => {
         <h2>Add Notification Provider</h2>
         <div className="template-grid">
           {templates.map(template => (
-            <div key={template.provider_type} className="template-card" onClick={() => openCreateModal(template)}>
+            <div key={template.provider_type} className="template-card" onClick={() => openCreateModal(template)}
+            onKeyDown={activateOnKey(() => openCreateModal(template))}
+            role="button"
+            tabIndex={0}>
               <div className="template-icon">{template.icon}</div>
               <h3>{template.display_name}</h3>
               <p>{template.description}</p>

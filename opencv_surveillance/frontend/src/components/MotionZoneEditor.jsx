@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { activateOnKey } from '../utils/a11y';
 import motionZonesService from '../services/motionZonesService';
 import Switch from './Switch';
 import './MotionZoneEditor.css';
@@ -419,6 +420,9 @@ const MotionZoneEditor = ({ cameraId, onClose }) => {
                   key={zone.id}
                   className={`zone-item ${selectedZone?.id === zone.id ? 'selected' : ''}`}
                   onClick={() => setSelectedZone(zone)}
+                  onKeyDown={activateOnKey(() => setSelectedZone(zone))}
+                  role="button"
+                  tabIndex={0}
                 >
                   <div className="zone-item-header">
                     <div className="zone-item-name">
