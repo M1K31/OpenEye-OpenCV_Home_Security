@@ -1533,6 +1533,21 @@ class RTSPCamera(Camera):
                 frame, motion_detected = self.get_frame()
 
                 if frame is None:
+                    # Isolated capture is checked FIRST, ahead of the
+                    # failure-count shortcut below.
+                    #
+                    # With isolation on, an empty read is not counted as a
+                    # failure (the worker may simply have nothing new yet), so
+                    # _consecutive_failures stays 0 — and the early `continue`
+                    # below then meant a worker that had DIED was never noticed.
+                    # The client tracks its own health, so ask it directly.
+                    if CAPTURE_ISOLATION and isinstance(self.capture, CaptureClient):
+                        if self.capture.restart_if_needed():
+                            self._capture_dead.clear()
+                            self._consecutive_failures = 0
+                            self._failure_since = None
+                            continue
+
                     # A None frame is not always a failure — the FPS limiter
                     # returns one too — so only react once reads are genuinely
                     # failing, which _note_frame_failure has counted.
@@ -1741,6 +1756,15 @@ class RTSPCamera(Camera):
                 return None, False
             ret, frame = capture.read()
         if not ret:
+            # With an isolated capture, "no new frame right now" is not a
+            # failure. The worker takes a moment to open the device after spawn,
+            # and between frames there is simply nothing new to read — counting
+            # those as failed reads marked the capture dead one second after
+            # startup. The client is the authority on its own health, and it
+            # judges by whether frames are arriving.
+            if isinstance(capture, CaptureClient):
+                if not capture.needs_restart():
+                    return None, False
             self._note_frame_failure()
             return None, False
 

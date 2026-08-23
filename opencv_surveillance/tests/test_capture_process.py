@@ -159,3 +159,27 @@ def test_stop_releases_shared_memory(monkeypatch):
     from multiprocessing.shared_memory import SharedMemory
     with pytest.raises(FileNotFoundError):
         SharedMemory(name=name)
+
+
+def test_a_worker_that_never_opens_the_camera_is_eventually_restarted(monkeypatch):
+    """
+    A worker that produces nothing must not be left alive forever.
+
+    needs_restart() previously returned False whenever no frame had ever
+    arrived, to allow for a slow device open. That grace had no deadline, so a
+    camera that failed to open left a worker running and useless with nothing to
+    retry it — the exact "reports healthy, delivers nothing" shape this design
+    is meant to eliminate.
+    """
+    _configure_fake(monkeypatch, frames=0, then="hang")
+    monkeypatch.setattr(CaptureClient, "STALL_TIMEOUT", 1.0)
+    client = CaptureClient(source="0", camera_id="test_cam", target_fps=30)
+    assert client.start()
+    try:
+        assert client.needs_restart() is False, "should be given a startup grace"
+        time.sleep(1.5)
+        assert client.needs_restart() is True, (
+            "a worker that never produced a frame must eventually be replaced"
+        )
+    finally:
+        client.stop()

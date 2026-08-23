@@ -259,6 +259,7 @@ class CaptureClient:
         self._restart_count = 0
         self._next_restart_allowed = 0.0
         self._backoff = self.RESTART_BACKOFF_MIN
+        self._started_at = 0.0
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -282,6 +283,7 @@ class CaptureClient:
                 name=f"capture_{self.camera_id}",
             )
             self._process.start()
+            self._started_at = time.time()
             logger.info(
                 "Camera %s: capture worker started (pid %s, source %s)",
                 self.camera_id, self._process.pid, self.source)
@@ -384,9 +386,14 @@ class CaptureClient:
             return True
         age = self.seconds_since_frame()
         if age is None:
-            # Never produced. Give it the stall window from spawn to open the
-            # device, which on macOS can include a permission prompt.
-            return False
+            # Never produced anything. Allow the stall window from spawn for the
+            # device to open — on macOS that can include a permission prompt —
+            # but do not wait forever. Returning False unconditionally here left
+            # a worker that never opened its camera alive and useless with
+            # nothing ever retrying it.
+            if not self._started_at:
+                return False
+            return (time.time() - self._started_at) > self.STALL_TIMEOUT
         return age > self.STALL_TIMEOUT
 
     def restart_if_needed(self) -> bool:
