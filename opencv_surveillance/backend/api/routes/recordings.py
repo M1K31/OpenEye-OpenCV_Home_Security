@@ -31,6 +31,30 @@ logger = logging.getLogger(__name__)
 
 
 # Security: Path Traversal Protection Helper
+def is_within_directory(candidate, allowed_dir) -> bool:
+    """
+    True when `candidate` is inside `allowed_dir`.
+
+    Compares resolved path COMPONENTS, not string prefixes. The previous test,
+
+        str(full_path).startswith(str(allowed_dir))
+
+    is satisfied by a sibling directory whose name merely begins with the
+    allowed one: with `/var/openeye/media` allowed, `/var/openeye/media-backup`
+    and `/var/openeye/media.old` both passed. Neither is inside the media
+    directory. Audit finding M-1.
+
+    Both call sites take their value from the database rather than the request,
+    so this is defence in depth rather than a hole anyone can reach — but it is
+    the wrong test, and the right one costs a method call.
+    """
+    try:
+        return Path(candidate).resolve().is_relative_to(Path(allowed_dir).resolve())
+    except (OSError, ValueError):
+        # A path that cannot be resolved is not inside anything we allow.
+        return False
+
+
 def safe_file_response(
     file_path: str,
     allowed_dir: Path,
@@ -57,7 +81,7 @@ def safe_file_response(
         full_path = paths.resolve_path(file_path)
         allowed_dir_resolved = allowed_dir.resolve()
 
-        if not str(full_path).startswith(str(allowed_dir_resolved)):
+        if not is_within_directory(full_path, allowed_dir_resolved):
             # This path came out of our own database, not from the request, so a
             # value outside the media directory is far more likely to be a stale
             # row than an attack — a recording written before storage moved, or
@@ -309,7 +333,7 @@ def stream_recording(recording_id: int, db: Session = Depends(get_db),
         full_path = paths.resolve_path(recording.recording_path)
         allowed_dir = paths.recordings_dir.resolve()
 
-        if not str(full_path).startswith(str(allowed_dir)):
+        if not is_within_directory(full_path, allowed_dir):
             # Same reasoning as safe_file_response: the value came from our own
             # database, so outside the media directory means stale history, not
             # an intruder. Recover by name where possible, and otherwise say the

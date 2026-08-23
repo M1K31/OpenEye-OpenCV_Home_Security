@@ -19,7 +19,10 @@ alembic>=1.13.0,<2.0  # Database migrations
 
 # Authentication & Security
 passlib[bcrypt]>=1.7.4,<2.0
-python-jose[cryptography]>=3.5.0,<4.0
+# python-jose removed 2026-08-22 (audit P2-2): unmaintained, with published
+# algorithm-confusion and DoS advisories. All JWT handling moved to pyjwt,
+# which was already declared below and previously unused.
+cryptography>=41.0.7,<51  # still needed directly; was also a jose extra
 
 # Environment variables
 python-dotenv>=1.0.0
@@ -141,7 +144,6 @@ redis>=5.0.1  # Redis client
 hiredis>=2.2.3  # C parser for faster Redis operations
 
 # Additional Security (Phase 6) - FREE & OPEN SOURCE
-cryptography>=41.0.7,<51  # Cryptographic operations
 pyjwt>=2.8.0,<3.0  # JSON Web Token handling
 pyotp>=2.9.0  # TOTP-based 2FA
 qrcode[pil]>=7.4.2  # QR code generation for 2FA setup

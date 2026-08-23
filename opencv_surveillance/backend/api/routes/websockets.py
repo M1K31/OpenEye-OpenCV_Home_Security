@@ -11,7 +11,17 @@ import logging
 from typing import Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query, status
 from sqlalchemy.orm import Session
-from jose import JWTError, jwt
+# PyJWT rather than python-jose (audit P2-2). python-jose verified every token
+# in this application and is effectively unmaintained, with published advisories
+# for algorithm confusion (CVE-2024-33663) and a decompression denial of service
+# (CVE-2024-33664). PyJWT was already a declared dependency with no importers.
+#
+# PyJWTError is aliased to JWTError so existing `except JWTError:` clauses keep
+# working and the change stays confined to the import. The call surface is
+# identical: encode(payload, key, algorithm=...) and
+# decode(token, key, algorithms=[...]).
+import jwt
+from jwt import PyJWTError as JWTError
 
 from backend.core.websocket_manager import ws_manager
 from backend.core.auth import get_current_active_user, SECRET_KEY, ALGORITHM
