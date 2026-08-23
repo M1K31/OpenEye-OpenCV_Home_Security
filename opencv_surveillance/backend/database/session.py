@@ -123,6 +123,65 @@ engine = create_engine(
     poolclass=NullPool,  # Creates new connection per request (prevents thread safety issues)
     echo=False  # Set to True for SQL debugging
 )
+
+
+def apply_sqlite_pragmas(target_engine) -> bool:
+    """
+    Configure SQLite for concurrent readers and writers. No-op for other engines.
+
+    Measured on the live database 2026-08-22: `journal_mode = delete` — the
+    default rollback journal — and no pragma set anywhere in the codebase.
+
+    Under that journal a writer takes an exclusive lock over the whole database,
+    so readers block the writer and the writer blocks readers. OpenEye writes
+    continuously from camera threads (motion events, face detections, recording
+    rows) while the dashboard reads. A single camera masks this. A second camera
+    doubles the write rate and adds a second writer, which is where
+    "database is locked" starts appearing — and it would look like a fault in
+    whatever was added last rather than a storage setting.
+
+    Returns True if the pragmas were installed.
+
+    Set on every new connection because busy_timeout and synchronous are
+    per-connection, and the engine uses NullPool, so every session opens a fresh
+    one. journal_mode is a property of the database FILE and persists once set,
+    but is issued here too so a fresh install is correct without a migration.
+
+    Not enabled here, deliberately: `foreign_keys=ON`. SQLite does not enforce
+    foreign keys unless asked, so this database has never had them enforced, and
+    turning them on could start rejecting writes that reference rows which are
+    already missing. That needs an audit of existing data first — recorded in
+    todos_changelog.md rather than done quietly as part of a performance change.
+    """
+    if not target_engine.url.drivername.startswith("sqlite"):
+        return False
+
+    from sqlalchemy import event
+
+    @event.listens_for(target_engine, "connect")
+    def _set_sqlite_pragmas(dbapi_connection, _connection_record):
+        cursor = dbapi_connection.cursor()
+        try:
+            # Readers no longer block the writer, and the writer no longer
+            # blocks readers.
+            cursor.execute("PRAGMA journal_mode=WAL")
+            # Wait for a contended lock rather than failing instantly.
+            cursor.execute(
+                f"PRAGMA busy_timeout={int(os.getenv('OPENEYE_SQLITE_BUSY_TIMEOUT_MS', '10000'))}")
+            # The standard companion to WAL: durable across an application
+            # crash, trading only a power-loss window that an appliance already
+            # accepts for its video files.
+            cursor.execute("PRAGMA synchronous=NORMAL")
+        except Exception as e:  # pragma: no cover - defensive
+            logger.warning("Could not apply SQLite pragmas: %s", e)
+        finally:
+            cursor.close()
+
+    return True
+
+
+if apply_sqlite_pragmas(engine):
+    logger.info("SQLite configured for concurrent access (WAL, busy_timeout, synchronous=NORMAL)")
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
