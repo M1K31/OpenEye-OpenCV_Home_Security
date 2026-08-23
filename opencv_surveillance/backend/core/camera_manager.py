@@ -2093,6 +2093,126 @@ class CameraManager:
             print(f"Error loading camera settings from database: {e}")
             return None
 
+    # Retry cadence for cameras that failed to open at startup. Starts fast, so a
+    # device that is merely settling comes up within seconds, and settles at one
+    # attempt a minute so an absent camera costs almost nothing.
+    RETRY_BACKOFF_MIN = 2.0
+    RETRY_BACKOFF_MAX = float(os.getenv("OPENEYE_STARTUP_RETRY_MAX", "60"))
+
+    def register_pending_camera(self, camera_id: str, camera_type: str, source: str,
+                                enable_face_detection: bool = True,
+                                reason: str = "") -> None:
+        """
+        Record a camera that could not be opened, so it can be retried.
+
+        Without this a startup failure was permanent for the life of the
+        process: the retry that handles a camera dying lives in that camera's
+        capture loop, and a camera that never opened has no loop. Observed
+        2026-08-22 — the server came up with 0/1 cameras and sat idle until a
+        human clicked reconnect four minutes later.
+        """
+        if not hasattr(self, "_pending_cameras") or self._pending_cameras is None:
+            self._pending_cameras = {}
+
+        self._pending_cameras[camera_id] = {
+            "camera_type": camera_type,
+            "source": source,
+            "enable_face_detection": enable_face_detection,
+            "reason": reason,
+            "next_attempt": time.time() + self.RETRY_BACKOFF_MIN,
+            "backoff": self.RETRY_BACKOFF_MIN,
+            "attempts": 0,
+        }
+        logger.info(
+            "Camera %s registered for automatic retry (%s)", camera_id, reason or "unavailable")
+
+    def retry_pending_cameras(self) -> int:
+        """
+        Retry cameras whose backoff has elapsed. Returns how many started.
+
+        Safe to call often; it does nothing until an entry is due.
+        """
+        pending = getattr(self, "_pending_cameras", None)
+        if not pending:
+            return 0
+
+        started = 0
+        now = time.time()
+
+        for camera_id, info in list(pending.items()):
+            # Another route may have started it — the reconnect endpoint, or an
+            # operator adding it again. Opening a second capture on the same
+            # device would be worse than never retrying.
+            existing = self.cameras.get(camera_id)
+            if existing is not None and getattr(existing, "is_running", False):
+                logger.info("Camera %s started by another route; no longer pending", camera_id)
+                pending.pop(camera_id, None)
+                continue
+
+            if now < info["next_attempt"]:
+                continue
+
+            info["attempts"] += 1
+            logger.info("Camera %s: automatic retry #%s", camera_id, info["attempts"])
+            try:
+                success, message = self.add_camera(
+                    camera_id=camera_id,
+                    camera_type=info["camera_type"],
+                    source=info["source"],
+                    enable_face_detection=info["enable_face_detection"],
+                )
+            except Exception as e:
+                success, message = False, str(e)
+
+            if success:
+                logger.info("Camera %s recovered automatically after %s attempt(s)",
+                            camera_id, info["attempts"])
+                pending.pop(camera_id, None)
+                started += 1
+            else:
+                info["backoff"] = min(info["backoff"] * 2, self.RETRY_BACKOFF_MAX)
+                info["next_attempt"] = time.time() + info["backoff"]
+                logger.debug("Camera %s still unavailable (%s); next try in %.0fs",
+                             camera_id, message, info["backoff"])
+        return started
+
+    def start_pending_camera_retries(self) -> None:
+        """
+        Run retry_pending_cameras() on a background thread for the process life.
+
+        Threading note: main.py warns that opening a camera off the main thread
+        segfaults on macOS. That is not borne out — the reconnect endpoint is a
+        sync `def`, which FastAPI runs in a threadpool worker, and it opened a
+        camera successfully from there on 2026-08-22. This uses the same model.
+        """
+        if getattr(self, "_retry_thread", None) is not None:
+            return
+
+        self._retry_stop = threading.Event()
+
+        def _loop():
+            while not self._retry_stop.is_set():
+                try:
+                    self.retry_pending_cameras()
+                except Exception as e:
+                    logger.error("Camera retry loop error: %s", e)
+                self._retry_stop.wait(5.0)
+
+        self._retry_thread = threading.Thread(
+            target=_loop, daemon=True, name="camera_retry")
+        self._retry_thread.start()
+        logger.info("Automatic camera retry started")
+
+    def stop_pending_camera_retries(self) -> None:
+        """Stop the retry thread during shutdown."""
+        stop = getattr(self, "_retry_stop", None)
+        if stop is not None:
+            stop.set()
+        thread = getattr(self, "_retry_thread", None)
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=3.0)
+        self._retry_thread = None
+
     def add_camera(
         self,
         camera_id: str,

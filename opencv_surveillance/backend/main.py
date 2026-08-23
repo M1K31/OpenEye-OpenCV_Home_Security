@@ -662,6 +662,17 @@ async def startup_event():
                             "source": db_camera.source,
                             "reason": message
                         })
+                        # Keep trying in the background. Without this a startup
+                        # failure was permanent for the life of the process and
+                        # a human had to click reconnect — which is no good for
+                        # an appliance that boots before its camera is ready.
+                        camera_manager.register_pending_camera(
+                            camera_id=db_camera.camera_id,
+                            camera_type=db_camera.camera_type,
+                            source=db_camera.source,
+                            enable_face_detection=db_camera.face_detection_enabled,
+                            reason=message,
+                        )
                 except Exception as e:
                     failed_cameras.append({
                         "id": db_camera.camera_id,
@@ -669,12 +680,20 @@ async def startup_event():
                         "source": db_camera.source,
                         "reason": str(e)
                     })
+                    camera_manager.register_pending_camera(
+                        camera_id=db_camera.camera_id,
+                        camera_type=db_camera.camera_type,
+                        source=db_camera.source,
+                        enable_face_detection=db_camera.face_detection_enabled,
+                        reason=str(e),
+                    )
 
         # Summary logging
         total_cameras = len(db_cameras)
         if failed_cameras:
             logger.warning("=" * 60)
             logger.warning(f"CAMERA STARTUP SUMMARY: {loaded_count}/{total_cameras} cameras loaded")
+            camera_manager.start_pending_camera_retries()
             logger.warning("=" * 60)
             for cam in failed_cameras:
                 logger.warning(f"  ✗ {cam['id']} ({cam['type']}): {cam['reason']}")
@@ -873,6 +892,7 @@ async def shutdown_event():
             except Exception as e:
                 logger.error(f"  Error stopping camera {camera_id}: {e}")
 
+        camera_manager.stop_pending_camera_retries()
         logger.info(f"✓ Stopped {camera_count} camera(s)")
     except Exception as e:
         logger.error(f"✗ Error stopping cameras: {e}")
