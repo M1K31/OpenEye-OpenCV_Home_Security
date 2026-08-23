@@ -1,6 +1,6 @@
 """
 OpenEye Statistics Broadcasting Service
-Copyright (c) 2025 M1K31
+Copyright (c) 2025 Mikel Smart
 
 Background service that periodically broadcasts statistics via WebSocket.
 Optimized with caching and change detection (v3.9.0).

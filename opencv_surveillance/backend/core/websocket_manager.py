@@ -1,6 +1,6 @@
 """
 OpenEye WebSocket Connection Manager
-Copyright (c) 2025 M1K31
+Copyright (c) 2025 Mikel Smart
 
 Manages WebSocket connections for real-time statistics updates.
 Provides connection lifecycle management, authentication, and event broadcasting.

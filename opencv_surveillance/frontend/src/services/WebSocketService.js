@@ -1,6 +1,6 @@
 /**
  * OpenEye WebSocket Service
- * Copyright (c) 2025 M1K31
+ * Copyright (c) 2025 Mikel Smart
  *
  * Manages WebSocket connection for real-time statistics and event streaming.
  * Features:

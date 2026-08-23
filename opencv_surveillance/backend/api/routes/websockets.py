@@ -1,6 +1,6 @@
 """
 OpenEye WebSocket API Routes
-Copyright (c) 2025 M1K31
+Copyright (c) 2025 Mikel Smart
 
 WebSocket endpoints for real-time statistics and event streaming.
 """

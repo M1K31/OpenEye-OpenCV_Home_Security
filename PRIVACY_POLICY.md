@@ -3,9 +3,9 @@
 **Owner / Data Controller:** Smart Industries LLC (owner: Mikel Smart)
 **Product:** OpenEye — OpenCV Home Security
 **Effective date:** 2026-07-24
-**Contact:** privacy@smartindustries.example (update to your official address before publication)
+**Contact:** *[PLACEHOLDER — see section 13; a monitored address is required before public distribution]*
 
-> This policy is written for a **self-hosted, privacy-first** surveillance application distributed via direct download and, where applicable, the Apple App Store and Google Play Store. OpenEye is designed so that video, images, and biometric data remain on hardware the user controls. Smart Industries LLC does not operate a central server that receives your footage unless you explicitly configure an optional third-party cloud provider.
+> This policy is written for a **self-hosted, privacy-first** surveillance application distributed as a **direct download**. It is not currently distributed through the Apple App Store or Google Play. OpenEye is designed so that video, images, and biometric data remain on hardware the user controls. Smart Industries LLC does not operate a central server that receives your footage unless you explicitly configure an optional third-party cloud provider.
 
 ---
 
@@ -37,7 +37,7 @@ By default, **none of your surveillance data reaches Smart Industries.** We may 
 
 - **Optional cloud storage / notifications (opt-in):** If you configure a third-party provider (e.g., AWS S3, an SMTP server, MQTT broker, push service), data is transmitted **directly from your instance to that provider** under that provider's own privacy policy. Smart Industries is not an intermediary.
 - **Optional diagnostics/crash reporting (opt-in):** If enabled, anonymized error traces (no video/biometric content) may be sent to help improve stability. This is off unless you turn it on.
-- **App store metadata:** When distributed via the App Store or Play Store, the store platform collects install/analytics data governed by Apple's and Google's respective privacy policies, not this one.
+- **Distribution metadata:** OpenEye is distributed as a direct download, so no app-store platform collects install or analytics data about you. If OpenEye is ever offered through an app store, that store will collect such data under its own privacy policy rather than this one, and this policy will be updated before that happens.
 
 We do **not** use your data for advertising, profiling, or training AI models.
 
@@ -73,9 +73,13 @@ Surveillance laws vary. As the operator you are responsible for compliance with 
 
 ## 11. Platform-specific disclosures
 
-- **Apple App Store:** No data collected by Smart Industries by default; "Data Not Collected" applies unless you enable opt-in diagnostics. Face data is processed on-device.
-- **Google Play:** Data Safety section reflects local processing; no data shared/sold by Smart Industries.
-- **Direct/self-hosted:** This policy governs the official build; forks/modifications are the responsibility of their distributor.
+- **Direct download (the current and only channel):** This policy governs the official build. Forks and modifications are the responsibility of whoever distributes them.
+
+The entries below are **not in effect today**. They are recorded so they are ready if OpenEye is ever submitted to an app store; until such a submission happens, OpenEye makes no claims to either platform.
+
+- *If submitted to the Apple App Store:* the privacy nutrition label would read "Data Not Collected" for Smart Industries, unless opt-in diagnostics are enabled.
+- *If submitted to Google Play:* the Data Safety declaration would reflect local processing, with no data shared or sold by Smart Industries.
+- *Either submission would additionally require* explicit consent capture for biometric (face) processing and a stated retention period. Neither is specified here, because in a self-hosted deployment both remain under the operator's control.
 
 ## 12. Changes to this policy
 
@@ -84,7 +88,9 @@ We will update the effective date above and, for material changes, provide in-ap
 ## 13. Contact
 
 Smart Industries LLC — Attn: Privacy (Mikel Smart)
-Email: privacy@smartindustries.example *(replace with your official contact before store submission)*
+Email: **[PLACEHOLDER — a monitored address is required before public distribution]**
+
+> A privacy policy without a working contact route is not a usable policy: a data-subject request, a security report or a regulator's enquiry has nowhere to go. This must be replaced before the first external download — not before store submission, as the note here previously said. The direct-download channel carries the same obligation.
 
 ---
 
