@@ -126,3 +126,52 @@ def test_non_sqlite_engines_are_left_alone():
     engine = create_engine("postgresql://user:pass@localhost/does_not_exist")
     # Must not raise, and must not attach a listener that would fire on connect.
     apply_sqlite_pragmas(engine)
+
+
+# ---------------------------------------------------------------------------
+# Engine construction must suit the database being opened.
+# ---------------------------------------------------------------------------
+
+def test_sqlite_gets_sqlite_specific_connect_args():
+    """check_same_thread is required for SQLite under a threaded server."""
+    from backend.database.session import engine_kwargs_for
+
+    kwargs = engine_kwargs_for("sqlite:////tmp/x.db")
+    assert kwargs["connect_args"].get("check_same_thread") is False
+    assert kwargs.get("poolclass") is not None, "SQLite needs NullPool"
+
+
+def test_postgres_is_not_given_sqlite_arguments():
+    """
+    PostgreSQL must not receive check_same_thread.
+
+    psycopg2 rejects it outright — `invalid dsn: invalid connection option
+    "check_same_thread"` — so every connection attempt failed. DATABASE_URL
+    accepts a postgresql:// URL and .env.example documents it as the production
+    option, so this was a documented path that could not work.
+
+    NullPool is also dropped: it exists to keep SQLite's single-writer model out
+    of trouble, and using it with PostgreSQL discards connection pooling for no
+    benefit.
+    """
+    kwargs = __import__(
+        "backend.database.session", fromlist=["engine_kwargs_for"]
+    ).engine_kwargs_for("postgresql://user:pass@localhost/openeye")
+
+    assert "check_same_thread" not in kwargs.get("connect_args", {})
+    assert "poolclass" not in kwargs, "PostgreSQL should keep normal pooling"
+
+
+def test_the_rejected_argument_is_actually_rejected_by_the_driver():
+    """
+    Pins why this matters, rather than asserting a dict shape in the abstract.
+
+    If a future change reintroduces the argument, this documents the exact
+    failure it causes.
+    """
+    psycopg2 = __import__("pytest").importorskip("psycopg2")
+    with __import__("pytest").raises(psycopg2.ProgrammingError, match="check_same_thread"):
+        psycopg2.connect(
+            host="127.0.0.1", port=59999, dbname="x", user="u", password="p",
+            check_same_thread=False,
+        )

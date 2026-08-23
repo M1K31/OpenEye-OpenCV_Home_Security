@@ -117,12 +117,36 @@ SQLALCHEMY_DATABASE_URL = _resolve_database_url()
 # FIXED: 16 session leaks eliminated with context managers (see database/utils.py)
 from sqlalchemy.pool import NullPool
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    poolclass=NullPool,  # Creates new connection per request (prevents thread safety issues)
-    echo=False  # Set to True for SQL debugging
-)
+def engine_kwargs_for(url: str) -> dict:
+    """
+    Engine arguments appropriate to the database in `url`.
+
+    These used to be applied unconditionally, which made PostgreSQL unusable.
+    `check_same_thread` is a SQLite driver option; psycopg2 rejects it outright —
+    `invalid dsn: invalid connection option "check_same_thread"` — so every
+    connection attempt failed. `DATABASE_URL` accepts a `postgresql://` URL and
+    `.env.example` documents PostgreSQL as the production option, so this was a
+    documented path that could not work.
+
+    NullPool is likewise SQLite-specific here. It exists because 25+ background
+    threads open sessions and SQLite tolerates that badly; applying it to
+    PostgreSQL would throw away connection pooling for no benefit.
+    """
+    if url.startswith("sqlite"):
+        return {
+            # SQLite refuses cross-thread use by default; the server is threaded.
+            "connect_args": {"check_same_thread": False},
+            # A fresh connection per request, rather than sharing one across
+            # background threads.
+            "poolclass": NullPool,
+            "echo": False,
+        }
+
+    # PostgreSQL and anything else: driver defaults, with real pooling.
+    return {"echo": False}
+
+
+engine = create_engine(SQLALCHEMY_DATABASE_URL, **engine_kwargs_for(SQLALCHEMY_DATABASE_URL))
 
 
 def apply_sqlite_pragmas(target_engine) -> bool:
