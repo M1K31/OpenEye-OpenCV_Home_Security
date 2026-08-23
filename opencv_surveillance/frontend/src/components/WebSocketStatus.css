@@ -117,23 +117,7 @@
 }
 
 /* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .ws-status-connected {
-    background: rgba(72, 187, 120, 0.2);
-    color: #68d391;
-  }
 
-  .ws-status-connecting {
-    background: rgba(237, 137, 54, 0.2);
-    color: #f6ad55;
-  }
-
-  .ws-status-disconnected,
-  .ws-status-error {
-    background: rgba(245, 101, 101, 0.2);
-    color: #fc8181;
-  }
-}
 
 /* Responsive - smaller on mobile */
 @media (max-width: 768px) {
@@ -146,3 +130,12 @@
     font-size: 10px;
   }
 }
+
+/* The `@media (prefers-color-scheme: dark)` block that used to live here was
+ * removed on 2026-08-22. It carried a parallel set of hardcoded dark colours,
+ * which made this component follow the OPERATING SYSTEM instead of the palette
+ * the user picked in Settings. Because the default palette is dark, a user on a
+ * light OS saw this component render light inside a dark application.
+ *
+ * Colours now come from theme tokens via theme-bridge.css, so the palette is
+ * the single decision. Do not reintroduce an OS media query for colour. */

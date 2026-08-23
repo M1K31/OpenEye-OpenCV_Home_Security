@@ -186,11 +186,7 @@
 }
 
 /* Dark Mode Adjustments */
-@media (prefers-color-scheme: dark) {
-  .hig-textfield__input {
-    color-scheme: dark;
-  }
-}
+
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
@@ -199,3 +195,7 @@
     transition: none;
   }
 }
+
+/* An `@media (prefers-color-scheme: dark)` block was removed here on
+ * 2026-08-22. Appearance is decided by the palette the user selects, never by
+ * the operating system; see theme-bridge.css. */

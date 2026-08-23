@@ -241,28 +241,12 @@
 }
 
 /* Dark theme support */
-@media (prefers-color-scheme: dark) {
-  .warning-message {
-    background: rgba(255, 193, 7, 0.2);
-    color: #ffc107;
-    border-left-color: #ffc107;
-  }
 
-  .deletion-explanation.safe {
-    background: rgba(40, 167, 69, 0.2);
-    border-left-color: #28a745;
-  }
-
-  .deletion-explanation.safe p {
-    color: #4caf50;
-  }
-
-  .deletion-explanation.danger {
-    background: rgba(220, 53, 69, 0.2);
-    border-left-color: #dc3545;
-  }
-
-  .deletion-explanation.danger p {
-    color: #ff6b6b;
-  }
-}
+/* The `@media (prefers-color-scheme: dark)` block that used to live here was
+ * removed on 2026-08-22. It carried a parallel set of hardcoded dark colours,
+ * which made this component follow the OPERATING SYSTEM instead of the palette
+ * the user picked in Settings. Because the default palette is dark, a user on a
+ * light OS saw this component render light inside a dark application.
+ *
+ * Colours now come from theme tokens via theme-bridge.css, so the palette is
+ * the single decision. Do not reintroduce an OS media query for colour. */

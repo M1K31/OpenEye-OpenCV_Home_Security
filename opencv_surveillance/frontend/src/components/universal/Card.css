@@ -174,19 +174,7 @@
 }
 
 /* Dark Mode Adjustments */
-@media (prefers-color-scheme: dark) {
-  .hig-card__loading-overlay {
-    background-color: rgba(0, 0, 0, 0.6);
-  }
 
-  .hig-card--elevated {
-    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-  }
-
-  .hig-card--elevated:hover {
-    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-  }
-}
 
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
@@ -203,3 +191,12 @@
     border-top-color: var(--accent-color, #007AFF);
   }
 }
+
+/* The `@media (prefers-color-scheme: dark)` block that used to live here was
+ * removed on 2026-08-22. It carried a parallel set of hardcoded dark colours,
+ * which made this component follow the OPERATING SYSTEM instead of the palette
+ * the user picked in Settings. Because the default palette is dark, a user on a
+ * light OS saw this component render light inside a dark application.
+ *
+ * Colours now come from theme tokens via theme-bridge.css, so the palette is
+ * the single decision. Do not reintroduce an OS media query for colour. */

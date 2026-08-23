@@ -158,33 +158,7 @@
 }
 
 /* Dark Mode Support */
-@media (prefers-color-scheme: dark) {
-  .hig-switch__track {
-    background-color: var(--switch-track-off, rgba(120, 120, 128, 0.38));
-  }
 
-  .hig-switch--checked .hig-switch__track {
-    background-color: var(--switch-track-on, #32D74B);
-  }
-
-  .hig-switch__thumb {
-    background-color: var(--switch-thumb, #1C1C1E);
-  }
-
-  .hig-switch--disabled .hig-switch__thumb {
-    background-color: var(--switch-thumb-disabled, #2C2C2E);
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .hig-switch:hover:not(.hig-switch--disabled) .hig-switch__track {
-      background-color: var(--switch-track-off-hover, rgba(120, 120, 128, 0.48));
-    }
-
-    .hig-switch--checked:hover:not(.hig-switch--disabled) .hig-switch__track {
-      background-color: var(--switch-track-on-hover, #30D158);
-    }
-  }
-}
 
 /* Reduced Motion Support */
 @media (prefers-reduced-motion: reduce) {
@@ -208,3 +182,12 @@
     border: 2px solid var(--text-primary, #000000);
   }
 }
+
+/* The `@media (prefers-color-scheme: dark)` block that used to live here was
+ * removed on 2026-08-22. It carried a parallel set of hardcoded dark colours,
+ * which made this component follow the OPERATING SYSTEM instead of the palette
+ * the user picked in Settings. Because the default palette is dark, a user on a
+ * light OS saw this component render light inside a dark application.
+ *
+ * Colours now come from theme tokens via theme-bridge.css, so the palette is
+ * the single decision. Do not reintroduce an OS media query for colour. */

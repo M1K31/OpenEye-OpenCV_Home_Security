@@ -1,0 +1,131 @@
+/* Copyright (c) 2025 Smart Industries LLC (Mikel Smart)
+ * This file is part of OpenEye-OpenCV_Home_Security
+ *
+ * THEME BRIDGE — connects component CSS to the palette system.
+ *
+ * The problem this solves
+ * -----------------------
+ * The app grew two disjoint token vocabularies. themes.css defines the palette
+ * as --bg-main / --bg-panel / --bg-input / --text-primary / --accent-color,
+ * while 20 component stylesheets consume a different set: --card-bg,
+ * --input-bg, --button-bg, --primary-color, --text-color and 58 others.
+ *
+ * None of those 63 names were ever defined. Every `var(--card-bg, #ffffff)`
+ * therefore fell through to its hardcoded fallback, so that component was
+ * invisible to the theme system — picking a palette changed the page chrome and
+ * left the component alone.
+ *
+ * Several files papered over this with `@media (prefers-color-scheme: dark)`
+ * blocks carrying a parallel set of hardcoded dark values (--card-bg-dark and
+ * friends). That made the components track the OPERATING SYSTEM rather than the
+ * user's chosen palette. Since the default palette is dark, a user on a light
+ * OS got white pagination bars and a white-and-purple error screen inside an
+ * otherwise dark application.
+ *
+ * The fix
+ * -------
+ * Define the orphan names in terms of the real ones, once. Because custom
+ * properties resolve through the cascade, `--card-bg: var(--bg-panel)` follows
+ * whichever palette is active, so all 20 files start responding to the theme
+ * without editing their colours one by one.
+ *
+ * Those OS media blocks are now gone — no stylesheet keys appearance off
+ * `prefers-color-scheme` any more. The `*-dark` aliases are kept because
+ * component CSS still references the names in ordinary rules, and they map to
+ * the SAME values as their non-dark counterparts: the palette decides light or
+ * dark, and the operating system does not get a second vote. They can be
+ * retired once those references are renamed.
+ *
+ * Adding a new token: define it in themes.css per palette. Add an alias here
+ * only when adopting existing component CSS that uses a different name.
+ */
+
+:root,
+html[class$="-theme"],
+html[class$="-theme"] body {
+  /* Native control rendering (autofill, scrollbars, date pickers) follows the
+   * palette, not the operating system. Every OpenEye palette is dark, so a
+   * light-OS user was getting light native chrome inside dark fields. If a
+   * light palette is ever added, this moves into that palette's block. */
+  color-scheme: dark;
+
+  /* --- Surfaces --------------------------------------------------------- */
+  --bg-primary: var(--bg-main);
+  --bg-secondary: var(--bg-panel);
+  --bg-active: var(--bg-hover);
+  --bg-dark: var(--bg-main);
+  --surface-bg: var(--bg-panel);
+  --secondary-bg: var(--bg-panel);
+  --card-bg: var(--bg-panel);
+  --card-bg-secondary: var(--bg-input);
+  --card-bg-dark: var(--bg-panel);
+  --card-bg-secondary-dark: var(--bg-input);
+  --color-bg-secondary: var(--bg-panel);
+  --color-bg-elevated: var(--bg-hover);
+  --input-bg: var(--bg-input);
+  --input-bg-dark: var(--bg-input);
+  --progress-bg: var(--bg-input);
+  --active-tab-bg: var(--bg-hover);
+  --hover-bg: var(--bg-hover);
+  --hover-bg-dark: var(--bg-hover);
+  --hover-background: var(--bg-hover);
+  --danger-bg: rgba(220, 53, 69, 0.15);
+
+  /* --- Text ------------------------------------------------------------- */
+  --text-color: var(--text-primary);
+  --text-muted: var(--text-secondary);
+  --text-primary-dark: var(--text-primary);
+  --text-secondary-dark: var(--text-secondary);
+  --color-label-primary: var(--text-primary);
+  --color-label-secondary: var(--text-secondary);
+  --color-label-tertiary: var(--text-secondary);
+  --hover-color: var(--text-primary);
+
+  /* --- Borders ---------------------------------------------------------- */
+  --border-color-dark: var(--border-panel);
+  --border-color-light: var(--border-panel);
+  --color-separator: var(--border-panel);
+
+  /* --- Accent and interactive ------------------------------------------- */
+  --primary-color: var(--accent-color);
+  --primary-hover: var(--accent-color);
+  --primary-dark: var(--accent-color);
+  --primary-color-dark: var(--accent-color);
+  --primary-color-alpha: var(--accent-color-alpha);
+  --accent-primary: var(--accent-color);
+  --accent-secondary: var(--accent-color);
+  --accent-hover: var(--accent-color);
+  --secondary-color: var(--text-secondary);
+  --button-bg: var(--button-primary-bg, var(--accent-color));
+  --button-background: var(--button-primary-bg, var(--accent-color));
+  --button-bg-dark: var(--button-primary-bg, var(--accent-color));
+  --button-hover-bg: var(--bg-hover);
+  --button-hover-bg-dark: var(--bg-hover);
+  --button-secondary-hover: var(--bg-hover);
+  --focus-glow: 0 0 0 3px var(--accent-color-alpha, rgba(0, 122, 255, 0.3));
+
+  /* --- Status ------------------------------------------------------------
+   * Semantic colours are deliberately NOT palette-derived: success must stay
+   * green and danger must stay red in every theme, or the interface stops
+   * communicating state. They live here so components stop hardcoding them.
+   */
+  --success-color: #28a745;
+  --state-success: #28a745;
+  --warning-color: #ffc107;
+  --danger-color: #dc3545;
+  --error-color: #dc3545;
+  --error-color-dark: #dc3545;
+  --state-error: #dc3545;
+
+  /* --- Switch ------------------------------------------------------------ */
+  --switch-track-off-hover: var(--bg-hover);
+  --switch-track-on-hover: var(--accent-color);
+  --switch-track-disabled: var(--bg-input);
+  --switch-thumb-disabled: var(--text-secondary);
+
+  /* --- Shape and motion -------------------------------------------------- */
+  --radius-full: var(--radius-pill, 999px);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.1);
+  --transition-fast: var(--anim-fast, 0.15s) var(--anim-ease, ease);
+  --transition-normal: var(--anim-normal, 0.25s) var(--anim-ease, ease);
+}

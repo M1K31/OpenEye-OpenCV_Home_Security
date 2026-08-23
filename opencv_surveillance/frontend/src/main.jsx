@@ -7,6 +7,9 @@ import App from './App.jsx'
 // CRITICAL: Import themes.css FIRST to establish CSS variable system
 // This replaces the old global-theme.css
 import './themes.css'
+// Bridge must come AFTER themes.css: it defines the token names component CSS
+// actually consumes, in terms of the palette tokens themes.css just declared.
+import './theme-bridge.css'
 
 // Import global component styles (buttons, modals, forms, etc.)
 import './styles/global-components.css'

@@ -140,38 +140,7 @@
 }
 
 /* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .pagination {
-    background: var(--card-bg-dark, #1a1a1a);
-    border-top-color: var(--border-color-dark, #333333);
-  }
 
-  .pagination-info,
-  .pagination-page-size,
-  .pagination-page-info {
-    color: var(--text-secondary-dark, #999999);
-  }
-
-  .page-size-select {
-    background: var(--input-bg-dark, #2a2a2a);
-    color: var(--text-primary-dark, #ffffff);
-    border-color: var(--border-color-dark, #333333);
-  }
-
-  .pagination-btn {
-    background: var(--button-bg-dark, #2a2a2a);
-    color: var(--text-primary-dark, #ffffff);
-    border-color: var(--border-color-dark, #333333);
-  }
-
-  .pagination-btn:hover:not(:disabled) {
-    background: var(--button-hover-bg-dark, #3a3a3a);
-  }
-
-  .pagination-ellipsis {
-    color: var(--text-secondary-dark, #999999);
-  }
-}
 
 /* Accessibility */
 .pagination-btn:focus-visible {
@@ -185,3 +154,12 @@
     display: none;
   }
 }
+
+/* The `@media (prefers-color-scheme: dark)` block that used to live here was
+ * removed on 2026-08-22. It carried a parallel set of hardcoded dark colours,
+ * which made this component follow the OPERATING SYSTEM instead of the palette
+ * the user picked in Settings. Because the default palette is dark, a user on a
+ * light OS saw this component render light inside a dark application.
+ *
+ * Colours now come from theme tokens via theme-bridge.css, so the palette is
+ * the single decision. Do not reintroduce an OS media query for colour. */

@@ -4,11 +4,11 @@
   justify-content: center;
   min-height: 100vh;
   padding: 24px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--bg-main, #262626);
 }
 
 .error-boundary-container {
-  background: white;
+  background: var(--bg-panel, #333333);
   border-radius: 16px;
   padding: 48px;
   max-width: 600px;
@@ -32,13 +32,13 @@
 .error-boundary-title {
   font-size: 28px;
   font-weight: 700;
-  color: #1a202c;
+  color: var(--text-primary, #ffffff);
   margin: 0 0 16px 0;
 }
 
 .error-boundary-message {
   font-size: 16px;
-  color: #4a5568;
+  color: var(--text-secondary, #cccccc);
   margin: 0 0 32px 0;
   line-height: 1.6;
 }
@@ -47,31 +47,31 @@
   text-align: left;
   margin: 24px 0;
   padding: 16px;
-  background: #f7fafc;
+  background: var(--bg-input, #2a2a2a);
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-panel, #4d4d4d);
 }
 
 .error-boundary-details summary {
   cursor: pointer;
   font-weight: 600;
-  color: #2d3748;
+  color: var(--text-primary, #ffffff);
   padding: 8px;
   user-select: none;
 }
 
 .error-boundary-details summary:hover {
-  color: #667eea;
+  color: var(--accent-color, #007bff);
 }
 
 .error-boundary-stack {
   margin-top: 16px;
   padding: 16px;
-  background: white;
+  background: var(--bg-input, #2a2a2a);
   border-radius: 4px;
   font-family: 'Courier New', monospace;
   font-size: 12px;
-  color: #2d3748;
+  color: var(--text-primary, #ffffff);
   overflow-x: auto;
 }
 
@@ -99,87 +99,55 @@
 }
 
 .btn-reset {
-  background: #667eea;
-  color: white;
+  background: var(--accent-color, #007bff);
+  color: var(--button-primary-text, #ffffff);
 }
 
 .btn-reset:hover {
-  background: #5a67d8;
+  background: var(--bg-hover, #404040);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
 .btn-reload {
-  background: #48bb78;
+  background: var(--success-color, #28a745);
   color: white;
 }
 
 .btn-reload:hover {
-  background: #38a169;
+  background: var(--success-color, #28a745); filter: brightness(0.9);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(72, 187, 120, 0.4);
 }
 
 .btn-back {
-  background: #edf2f7;
-  color: #2d3748;
+  background: var(--bg-input, #2a2a2a);
+  color: var(--text-primary, #ffffff);
 }
 
 .btn-back:hover {
-  background: #e2e8f0;
+  background: var(--bg-hover, #404040);
   transform: translateY(-2px);
 }
 
 .error-boundary-warning {
   margin-top: 24px;
   padding: 12px 16px;
-  background: #fff5f5;
+  background: var(--danger-bg, rgba(220, 53, 69, 0.15));
   border: 1px solid #fc8181;
   border-radius: 8px;
-  color: #c53030;
+  color: var(--danger-color, #dc3545);
   font-size: 14px;
   font-weight: 500;
 }
 
 /* Dark mode support (if using theme context) */
-@media (prefers-color-scheme: dark) {
-  .error-boundary {
-    background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
-  }
 
-  .error-boundary-container {
-    background: #2d3748;
-    color: #e2e8f0;
-  }
-
-  .error-boundary-title {
-    color: #f7fafc;
-  }
-
-  .error-boundary-message {
-    color: #cbd5e0;
-  }
-
-  .error-boundary-details {
-    background: #1a202c;
-    border-color: #4a5568;
-  }
-
-  .error-boundary-details summary {
-    color: #e2e8f0;
-  }
-
-  .error-boundary-stack {
-    background: #2d3748;
-    color: #e2e8f0;
-  }
-
-  .btn-back {
-    background: #4a5568;
-    color: #e2e8f0;
-  }
-
-  .btn-back:hover {
-    background: #2d3748;
-  }
-}
+/* The `@media (prefers-color-scheme: dark)` block that used to live here was
+ * removed on 2026-08-22. It carried a parallel set of hardcoded dark colours,
+ * which made this component follow the OPERATING SYSTEM instead of the palette
+ * the user picked in Settings. Because the default palette is dark, a user on a
+ * light OS saw this component render light inside a dark application.
+ *
+ * Colours now come from theme tokens via theme-bridge.css, so the palette is
+ * the single decision. Do not reintroduce an OS media query for colour. */
