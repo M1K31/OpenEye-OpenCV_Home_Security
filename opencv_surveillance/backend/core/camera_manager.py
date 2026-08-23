@@ -1567,6 +1567,18 @@ class RTSPCamera(Camera):
 
         while not self._stop_background.is_set():
             try:
+                # A dead capture is handled BEFORE the guard below.
+                #
+                # Marking the capture dead sets self.capture to None, and that
+                # guard short-circuits on a null capture — so once dead, every
+                # iteration returned here and the retry was never reached. On
+                # real hardware exactly one attempt fired, during the iteration
+                # in which the capture died, and the camera never came back.
+                if self._capture_dead.is_set():
+                    self._maybe_reopen_dead_capture()
+                    self._stop_background.wait(0.5)
+                    continue
+
                 if not self.is_running or not self.capture or not self.capture.isOpened():
                     time.sleep(0.5)
                     continue
@@ -1575,15 +1587,6 @@ class RTSPCamera(Camera):
                 frame, motion_detected = self.get_frame()
 
                 if frame is None:
-                    # A dead capture is retried on its own schedule. This has to
-                    # come first: once the capture is dead nothing counts
-                    # failures any more, so every counter-driven branch below is
-                    # unreachable.
-                    if self._capture_dead.is_set():
-                        self._maybe_reopen_dead_capture()
-                        self._stop_background.wait(0.5)
-                        continue
-
                     # Isolated capture is checked FIRST, ahead of the
                     # failure-count shortcut below.
                     #

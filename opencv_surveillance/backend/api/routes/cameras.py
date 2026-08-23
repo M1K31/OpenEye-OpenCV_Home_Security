@@ -24,6 +24,12 @@ from backend.core.overlay_renderer import render_offline_frame
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# How long the reconnect endpoint waits for a real frame before deciding the
+# camera is not actually back. Reporting success without this is the defect that
+# took two days to diagnose: every signal a caller could see said the camera was
+# fine while no video was flowing.
+RECONNECT_PROVE_SECONDS = float(os.getenv("OPENEYE_RECONNECT_PROVE_SECONDS", "4"))
+
 # ============================================================================
 # CAMERA CRUD ENDPOINTS
 # ============================================================================
@@ -522,7 +528,37 @@ def reconnect_camera(
             ),
         }
 
-    logger.info("Camera '%s' reconnected on request", camera_id)
+    # is_running only means the camera object started — it says nothing about
+    # whether the device is delivering. Reporting success on that alone is what
+    # made a dead camera indistinguishable from a working one, and it is what
+    # sent the interface to open a stream against a capture bound to a device
+    # that was gone. Wait for an actual frame before claiming success.
+    deadline = time.time() + RECONNECT_PROVE_SECONDS
+    proven = False
+    while time.time() < deadline:
+        age = camera.seconds_since_last_frame()
+        if age is not None and age <= RECONNECT_PROVE_SECONDS:
+            proven = True
+            break
+        time.sleep(0.2)
+
+    if not proven:
+        logger.warning(
+            "Camera '%s' reopened but delivered no frame within %ss — reporting failure",
+            camera_id, RECONNECT_PROVE_SECONDS)
+        return {
+            "success": False,
+            "camera_id": camera_id,
+            "connected": False,
+            "message": (
+                f"Camera '{camera_id}' was reopened but is not delivering video. "
+                "On macOS a USB camera that was unplugged while in use often "
+                "cannot be reopened by this process; restarting OpenEye picks it "
+                "up again."
+            ),
+        }
+
+    logger.info("Camera '%s' reconnected on request and is delivering frames", camera_id)
     return {
         "success": True,
         "camera_id": camera_id,

@@ -32,6 +32,7 @@ So the invariant these tests protect is:
 """
 
 import threading
+import time
 
 import numpy as np
 import pytest
@@ -309,3 +310,51 @@ def test_reopen_backoff_grows_and_is_capped(camera, monkeypatch):
 
     assert delays == sorted(delays), "backoff should grow monotonically"
     assert max(delays) <= camera.RECONNECT_BACKOFF_MAX
+
+
+def test_the_capture_loop_keeps_retrying_a_dead_capture(camera, monkeypatch):
+    """
+    The background loop must keep retrying, not retry once and go quiet.
+
+    Regression found on real hardware 2026-08-22. Marking the capture dead sets
+    self.capture = None, and the loop's opening guard is
+
+        if not self.is_running or not self.capture or not self.capture.isOpened():
+            time.sleep(0.5); continue
+
+    so once dead, every iteration short-circuited before reaching the retry.
+    Exactly one attempt fired — the iteration during which the capture died —
+    and then nothing for 99 seconds. The camera never came back.
+
+    Drives the real loop rather than the helper, because the helper was already
+    correct; the defect was that nothing called it.
+    """
+    import threading as _t
+
+    attempts = {"n": 0}
+
+    def _fake_reopen():
+        attempts["n"] += 1
+        return False                      # device still absent
+
+    monkeypatch.setattr(camera, "_reopen_capture", _fake_reopen)
+    monkeypatch.setattr(RTSPCamera, "RECONNECT_BACKOFF_MAX", 0.05)
+
+    camera._mark_capture_dead("test")
+    camera._reopen_backoff = 0.01
+    assert camera.capture is None, "marking dead should drop the capture"
+
+    thread = _t.Thread(target=camera._background_processor, daemon=True)
+    thread.start()
+    try:
+        deadline = time.time() + 4
+        while attempts["n"] < 3 and time.time() < deadline:
+            time.sleep(0.05)
+    finally:
+        camera._stop_background.set()
+        thread.join(timeout=3)
+
+    assert attempts["n"] >= 3, (
+        f"loop attempted only {attempts['n']} reopen(s); a dead capture must be "
+        "retried repeatedly, not once"
+    )
