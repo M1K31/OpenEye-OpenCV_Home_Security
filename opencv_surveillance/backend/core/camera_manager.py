@@ -1330,16 +1330,69 @@ class RTSPCamera(Camera):
     RECONNECT_BACKOFF_MAX = float(os.getenv("OPENEYE_RECONNECT_BACKOFF_MAX", "60"))
     FAILURE_LOG_INTERVAL = 60.0   # seconds between "still down" heartbeats
 
-    # Consecutive failed reads before the capture is declared DEAD and released.
-    # Much smaller than RECONNECT_AFTER_FAILURES on purpose: that counter governs
-    # how often we retry, this one governs how long we keep messaging a possibly
-    # freed object. At the loop's ~10fps this is about a third of a second, well
-    # inside the six seconds that separated the first failed read from the
-    # segfault on 2026-08-20.
-    FATAL_AFTER_FAILURES = int(os.getenv("OPENEYE_FATAL_AFTER_FAILURES", "3"))
+    # ---- Recovery timings -------------------------------------------------
+    #
+    # These differ by source type because the two backends fail differently.
+    #
+    # A numeric source opens through AVFoundation on macOS. A failed read there
+    # means the device is GONE, and every further read risks messaging a freed
+    # Objective-C object — the use-after-free that killed the process twice on
+    # 2026-08-19/20. So: give up after three reads and release immediately.
+    #
+    # A URL opens through FFmpeg. A failed read there usually means a network
+    # stall, and the stream recovers on its own. Applying the local thresholds
+    # would tear down and rebuild a healthy stream on every hiccup — and worse,
+    # would judge every reopen a failure, because an RTSP reopen needs a TCP
+    # connect, an RTSP handshake and a keyframe before the first frame arrives.
+    # That does not degrade recovery, it prevents it.
 
-    # How long a proven-working reopen may spend waiting for its first frame.
+    # Local device: consecutive failed reads before the capture is declared dead.
+    FATAL_AFTER_FAILURES = int(os.getenv("OPENEYE_FATAL_AFTER_FAILURES", "3"))
+    # Network stream: ~3s of stall at the loop's ~10fps before giving up.
+    FATAL_AFTER_FAILURES_STREAM = int(
+        os.getenv("OPENEYE_FATAL_AFTER_FAILURES_STREAM", "30"))
+
+    # How long a reopen may spend waiting for its first frame before being
+    # discarded as not actually working.
     REOPEN_PROVE_SECONDS = float(os.getenv("OPENEYE_REOPEN_PROVE_SECONDS", "2"))
+    REOPEN_PROVE_SECONDS_STREAM = float(
+        os.getenv("OPENEYE_REOPEN_PROVE_SECONDS_STREAM", "10"))
+
+    def _is_stream_source(self) -> bool:
+        """
+        True when this camera opens through FFmpeg rather than a local device.
+
+        Uses the same test as _describe_self(), so the two can never disagree
+        about what kind of camera this is.
+        """
+        try:
+            int(self.source)
+            return False
+        except (ValueError, TypeError):
+            return True
+
+    # The two getters below read the environment at CALL time rather than using
+    # the class attributes directly. The class attributes fix the defaults at
+    # import; reading here as well means an operator can retune a long-running
+    # appliance whose network turned out to be worse than expected, without a
+    # restart. Both are only reached on failure paths, so the lookup costs
+    # nothing that matters.
+
+    def _fatal_after_failures(self) -> int:
+        """Consecutive failed reads tolerated before declaring the capture dead."""
+        if self._is_stream_source():
+            return int(os.getenv("OPENEYE_FATAL_AFTER_FAILURES_STREAM",
+                                 self.FATAL_AFTER_FAILURES_STREAM))
+        return int(os.getenv("OPENEYE_FATAL_AFTER_FAILURES",
+                             self.FATAL_AFTER_FAILURES))
+
+    def _reopen_prove_seconds(self) -> float:
+        """How long to wait for a reopened capture to deliver its first frame."""
+        if self._is_stream_source():
+            return float(os.getenv("OPENEYE_REOPEN_PROVE_SECONDS_STREAM",
+                                   self.REOPEN_PROVE_SECONDS_STREAM))
+        return float(os.getenv("OPENEYE_REOPEN_PROVE_SECONDS",
+                               self.REOPEN_PROVE_SECONDS))
 
     def is_capture_dead(self) -> bool:
         """True when the capture has been released and must not be read."""
@@ -1408,7 +1461,7 @@ class RTSPCamera(Camera):
         # simply be busy, in which case the reopen below brings it straight back
         # — that costs a couple of seconds. Guessing wrong the other way costs
         # the whole process.
-        if self._consecutive_failures >= self.FATAL_AFTER_FAILURES:
+        if self._consecutive_failures >= self._fatal_after_failures():
             self._mark_capture_dead(
                 f"{self._consecutive_failures} consecutive failed reads")
 
@@ -1519,7 +1572,8 @@ class RTSPCamera(Camera):
         # reconnect endpoint used to hand back with a 200 — and streaming from
         # that capture is what killed the process at 00:17 on 2026-08-20. A
         # capture is only accepted once it has produced a real frame.
-        deadline = time.time() + self.REOPEN_PROVE_SECONDS
+        prove_seconds = self._reopen_prove_seconds()
+        deadline = time.time() + prove_seconds
         proven = False
         while time.time() < deadline:
             try:
@@ -1537,7 +1591,7 @@ class RTSPCamera(Camera):
             logger.warning(
                 "Camera %s: reopened capture delivered no frame within %.1fs — "
                 "discarding it rather than reporting a working camera.",
-                self._describe_self(), self.REOPEN_PROVE_SECONDS)
+                self._describe_self(), prove_seconds)
             try:
                 capture.release()
             except Exception:

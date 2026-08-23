@@ -533,19 +533,31 @@ def reconnect_camera(
     # made a dead camera indistinguishable from a working one, and it is what
     # sent the interface to open a stream against a capture bound to a device
     # that was gone. Wait for an actual frame before claiming success.
-    deadline = time.time() + RECONNECT_PROVE_SECONDS
+    # Ask the camera how long its kind of source needs. A USB device delivers
+    # almost immediately; an RTSP stream must connect, handshake and wait for a
+    # keyframe, which commonly takes several seconds. A single hardcoded window
+    # would either report a working RTSP camera as broken, or make a genuinely
+    # dead USB camera take far too long to report.
+    prove_seconds = RECONNECT_PROVE_SECONDS
+    if hasattr(camera, "_reopen_prove_seconds"):
+        try:
+            prove_seconds = max(prove_seconds, float(camera._reopen_prove_seconds()))
+        except Exception:
+            pass
+
+    deadline = time.time() + prove_seconds
     proven = False
     while time.time() < deadline:
         age = camera.seconds_since_last_frame()
-        if age is not None and age <= RECONNECT_PROVE_SECONDS:
+        if age is not None and age <= prove_seconds:
             proven = True
             break
         time.sleep(0.2)
 
     if not proven:
         logger.warning(
-            "Camera '%s' reopened but delivered no frame within %ss — reporting failure",
-            camera_id, RECONNECT_PROVE_SECONDS)
+            "Camera '%s' reopened but delivered no frame within %.1fs — reporting failure",
+            camera_id, prove_seconds)
         return {
             "success": False,
             "camera_id": camera_id,
@@ -618,7 +630,12 @@ def get_camera_status(camera_id: str, db: Session = Depends(get_db), current_use
 
 # How long the published frame may go unrefreshed before the stream shows the
 # camera as offline rather than continuing to serve a stale image.
-STREAM_STALE_AFTER_SECONDS = 2.0
+#
+# Configurable because a congested network stream can legitimately pause longer
+# than a local webcam ever would, and showing the offline card during a brief
+# stall is its own kind of wrong answer.
+STREAM_STALE_AFTER_SECONDS = float(
+    os.getenv("OPENEYE_STREAM_STALE_SECONDS", "2"))
 
 
 async def generate_frames(camera_id: str):
