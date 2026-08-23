@@ -16,9 +16,16 @@ const LoginPage = ({ setToken }) => {
   const [useBackupCode, setUseBackupCode] = useState(false);
   const [showPasswordResetModal, setShowPasswordResetModal] = useState(false);
 
-  // Clear any expired or invalid tokens when login page loads
+  // Clear any expired or invalid tokens when login page loads.
+  //
+  // This read 'token' until 2026-08-23, a key the application stopped writing
+  // when v3.8.0 moved to 'access_token' for refresh-token rotation. It
+  // therefore never found anything and never ran: an expired token was left
+  // in place and the 'your session has expired' message never appeared. The
+  // authService tests would have caught it, but that file failed to load, so
+  // nothing exercised the key name.
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('access_token');
     if (token) {
       try {
         // Decode JWT token to check expiration
@@ -27,14 +34,15 @@ const LoginPage = ({ setToken }) => {
         
         if (isExpired) {
           console.log('Clearing expired token');
-          localStorage.removeItem('token');
+          localStorage.removeItem('access_token');
           localStorage.removeItem('token_timestamp');
+          localStorage.removeItem('token_expires_at');
           setError('Your session has expired. Please log in again.');
         }
       } catch (e) {
         // Token is malformed, clear it
         console.log('Clearing invalid token');
-        localStorage.removeItem('token');
+        localStorage.removeItem('access_token');
         localStorage.removeItem('token_timestamp');
       }
     }

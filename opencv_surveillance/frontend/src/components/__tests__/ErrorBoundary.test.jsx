@@ -23,12 +23,18 @@ describe('ErrorBoundary', () => {
     console.error = () => {};
 
     render(
-      <ErrorBoundary fallbackMessage="Something went wrong">
+      <ErrorBoundary fallbackMessage="A distinctive fallback notice">
         <ThrowError />
       </ErrorBoundary>
     );
 
-    expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+    // The message must be distinct from the boundary's own heading. Asserting on
+    // /Something went wrong/i matched BOTH the built-in "Oops! Something went
+    // wrong" title and the fallbackMessage, so getByText threw "Found multiple
+    // elements" — the test failed while the component was working correctly.
+    expect(screen.getByText('A distinctive fallback notice')).toBeInTheDocument();
+    // The default heading is still shown alongside the custom message.
+    expect(screen.getByText(/Oops! Something went wrong/i)).toBeInTheDocument();
 
     // Restore console.error
     console.error = originalError;

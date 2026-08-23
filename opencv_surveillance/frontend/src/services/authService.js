@@ -477,7 +477,11 @@ class AuthService {
    */
   isAuthenticated() {
     const token = this.getToken();
-    return token && !this.isTokenExpired();
+    // Boolean(), not the bare value: `token && ...` returns null when there is
+    // no token, so this predicate answered null rather than false. Callers
+    // testing truthiness were unaffected, but anything comparing strictly or
+    // serialising the result was not.
+    return Boolean(token) && !this.isTokenExpired();
   }
 }
 
