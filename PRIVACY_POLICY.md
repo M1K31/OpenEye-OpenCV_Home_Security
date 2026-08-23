@@ -3,7 +3,7 @@
 **Owner / Data Controller:** Smart Industries LLC (owner: Mikel Smart)
 **Product:** OpenEye — OpenCV Home Security
 **Effective date:** 2026-07-24
-**Contact:** *[PLACEHOLDER — see section 13; a monitored address is required before public distribution]*
+**Contact:** mikel.smart@smartindustriesllc.com · https://smartindustriesllc.com
 
 > This policy is written for a **self-hosted, privacy-first** surveillance application distributed as a **direct download**. It is not currently distributed through the Apple App Store or Google Play. OpenEye is designed so that video, images, and biometric data remain on hardware the user controls. Smart Industries LLC does not operate a central server that receives your footage unless you explicitly configure an optional third-party cloud provider.
 
@@ -88,9 +88,10 @@ We will update the effective date above and, for material changes, provide in-ap
 ## 13. Contact
 
 Smart Industries LLC — Attn: Privacy (Mikel Smart)
-Email: **[PLACEHOLDER — a monitored address is required before public distribution]**
+Email: mikel.smart@smartindustriesllc.com
+Company: https://smartindustriesllc.com
 
-> A privacy policy without a working contact route is not a usable policy: a data-subject request, a security report or a regulator's enquiry has nowhere to go. This must be replaced before the first external download — not before store submission, as the note here previously said. The direct-download channel carries the same obligation.
+**Which policy governs OpenEye.** Smart Industries LLC publishes a separate privacy policy at https://smartindustriesllc.com covering the Smart Industries website, the Smart Industries Android app and their backend API. That policy does not cover OpenEye: it does not address video, cameras, biometric data or face recognition, and it describes advertising and analytics that OpenEye does not use. **This document is the governing privacy policy for OpenEye**, and takes precedence for anything concerning this application.
 
 ---
 
