@@ -32,6 +32,21 @@ from .recorder import Recorder
 from .ffmpeg_recorder import FFmpegRecorder, EncoderCapabilities
 from .face_detection import FaceDetector
 from .overlay_renderer import render_overlay
+from .capture_process import CaptureClient
+
+# Run capture in a child process instead of in this one.
+#
+# The in-process fixes (single owning thread, dead-capture flag, published
+# frames) closed every crash path we found after the 2026-08-19/20 segfaults.
+# They cannot close the next one: the fault is in C code Python cannot inspect.
+# With isolation on, that crash kills a worker the parent restarts, and a fresh
+# child also re-enumerates AVFoundation devices — which is the only thing that
+# makes a camera attached AFTER launch visible.
+#
+# Default off. The in-process path is the one with real-world hours on it; this
+# is opt-in until it has the same.
+CAPTURE_ISOLATION = os.getenv("OPENEYE_CAPTURE_ISOLATION", "false").lower() == "true"
+
 import asyncio
 from backend.core.alert_manager import get_alert_manager
 from backend.core.automation_engine import process_face_detection
@@ -1428,9 +1443,24 @@ class RTSPCamera(Camera):
         try:
             try:
                 device_index = int(self.source)
-                capture = cv2.VideoCapture(device_index)
+                if CAPTURE_ISOLATION:
+                    # A NEW child process, which is what re-enumerates devices.
+                    # This is why isolation also fixes "camera attached after
+                    # launch is never seen".
+                    capture = CaptureClient(
+                        source=self.source, camera_id=self.camera_id or "camera",
+                        target_fps=self.video_processor.settings.fps_target or 15)
+                    capture.start()
+                else:
+                    capture = cv2.VideoCapture(device_index)
             except (ValueError, TypeError):
-                capture = cv2.VideoCapture(self.source, cv2.CAP_FFMPEG)
+                if CAPTURE_ISOLATION:
+                    capture = CaptureClient(
+                        source=self.source, camera_id=self.camera_id or "camera",
+                        target_fps=self.video_processor.settings.fps_target or 15)
+                    capture.start()
+                else:
+                    capture = cv2.VideoCapture(self.source, cv2.CAP_FFMPEG)
         except Exception as e:
             logger.warning("Reopen of %s raised %s", self._describe_self(), e)
             return False
@@ -1511,6 +1541,17 @@ class RTSPCamera(Camera):
                         time.sleep(0.1)
                         continue
 
+                    # With isolation on, a dead or wedged worker is replaced
+                    # here. The client decides when that is warranted, judging
+                    # liveness by whether frames are arriving rather than by
+                    # whether the process exists.
+                    if CAPTURE_ISOLATION and isinstance(self.capture, CaptureClient):
+                        if self.capture.restart_if_needed():
+                            self._capture_dead.clear()
+                            self._consecutive_failures = 0
+                            self._failure_since = None
+                            continue
+
                     if fails % self.RECONNECT_AFTER_FAILURES == 0:
                         self._reconnect_attempts += 1
                         logger.info(
@@ -1567,11 +1608,26 @@ class RTSPCamera(Camera):
                 # Default backend. On macOS this resolves to AVFoundation and handles
                 # capture-by-index correctly (forcing CAP_AVFOUNDATION explicitly warns
                 # "can't be used to capture by index" and just falls back here anyway).
-                self.capture = cv2.VideoCapture(device_index)
+                if CAPTURE_ISOLATION:
+                    # CaptureClient is VideoCapture-shaped, so everything below
+                    # this point works unchanged — but read() now crosses a
+                    # process boundary and cannot segfault this process.
+                    self.capture = CaptureClient(
+                        source=self.source, camera_id=self.camera_id or "camera",
+                        target_fps=self.video_processor.settings.fps_target or 15)
+                    self.capture.start()
+                else:
+                    self.capture = cv2.VideoCapture(device_index)
             except (ValueError, TypeError):
                 # Not a number, assume it's an RTSP URL or device path
                 print(f"Connecting to RTSP stream: {self.source}")
-                self.capture = cv2.VideoCapture(self.source, cv2.CAP_FFMPEG)
+                if CAPTURE_ISOLATION:
+                    self.capture = CaptureClient(
+                        source=self.source, camera_id=self.camera_id or "camera",
+                        target_fps=self.video_processor.settings.fps_target or 15)
+                    self.capture.start()
+                else:
+                    self.capture = cv2.VideoCapture(self.source, cv2.CAP_FFMPEG)
 
             if self.capture is not None and self.capture.isOpened():
                 break
