@@ -13,6 +13,7 @@ does not fail — the test runner dies. That is a louder signal than an assertio
 and an accurate reproduction of what used to happen to the server.
 """
 
+import os
 import time
 
 import numpy as np
@@ -21,6 +22,21 @@ import pytest
 from backend.core import capture_process
 from backend.core.capture_process import CaptureClient
 from tests import fake_capture
+
+
+SEGFAULT_TESTS_ENABLED = os.getenv("OPENEYE_RUN_SEGFAULT_TESTS", "").lower() in ("1", "true", "yes")
+
+needs_segfault = pytest.mark.skipif(
+    not SEGFAULT_TESTS_ENABLED,
+    reason=(
+        "Deliberately crashes a child process. macOS files a crash report and "
+        "shows a 'Python quit unexpectedly' dialog every time, which is "
+        "indistinguishable at a glance from the production crash this project "
+        "is fixing — it caused two false alarms on 2026-08-22. "
+        "Run with OPENEYE_RUN_SEGFAULT_TESTS=1 when you want the containment "
+        "proof; CI should set it."
+    ),
+)
 
 
 def _configure_fake(monkeypatch, frames=1000, then="fail", size="48x64"):
@@ -74,6 +90,7 @@ def test_read_only_returns_new_frames(monkeypatch):
         client.stop()
 
 
+@needs_segfault
 def test_a_segfaulting_worker_does_not_kill_the_parent(monkeypatch):
     """
     The whole point. A SIGSEGV in capture must be survivable.
@@ -104,6 +121,7 @@ def test_a_segfaulting_worker_does_not_kill_the_parent(monkeypatch):
         client.stop()
 
 
+@needs_segfault
 def test_a_dead_worker_is_restarted(monkeypatch):
     """A crashed worker is replaced, which is what makes the crash survivable."""
     _configure_fake(monkeypatch, frames=3, then="segfault")
