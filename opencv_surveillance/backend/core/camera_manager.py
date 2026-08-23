@@ -1314,6 +1314,15 @@ class RTSPCamera(Camera):
         # the capture loop reads" from a convention into something enforced.
         self._capture_owner_thread = None
 
+        # Retrying a dead capture is driven by the clock, not by the failure
+        # counter. Once the capture is marked dead, get_frame() returns before
+        # _note_frame_failure() runs, so _consecutive_failures stops growing —
+        # and the old trigger (`failures % RECONNECT_AFTER_FAILURES == 0`) could
+        # then never fire again. An unplugged camera went dead and stayed dead
+        # until the process restarted. Confirmed against real hardware.
+        self._next_reopen_attempt = 0.0
+        self._reopen_backoff = 1.0
+
     # Consecutive failed reads before the capture is considered lost and reopened.
     # ~2s at the background loop's cadence: long enough to ride out a dropped
     # frame, short enough that a real disconnect is handled promptly.
@@ -1414,6 +1423,39 @@ class RTSPCamera(Camera):
         self._failure_since = None
         self._reconnect_attempts = 0
         self._was_connected = True
+
+    def _maybe_reopen_dead_capture(self) -> bool:
+        """
+        Retry a dead capture when its backoff has elapsed. True if attempted.
+
+        Independent of the failure counter on purpose: a dead capture is not
+        being read, so nothing is counting, and recovery must not depend on a
+        number that has stopped moving.
+        """
+        if not self._capture_dead.is_set():
+            return False
+
+        now = time.time()
+        if self._next_reopen_attempt and now < self._next_reopen_attempt:
+            return False
+
+        self._reconnect_attempts += 1
+        logger.info(
+            "Camera %s: retrying dead capture (attempt #%s)",
+            self._describe_self(), self._reconnect_attempts)
+
+        recovered = self._reopen_capture()
+
+        if recovered:
+            self._reopen_backoff = 1.0
+            self._next_reopen_attempt = 0.0
+        else:
+            # Back off so an absent camera costs one open a minute rather than
+            # a spin loop, but keep trying — the device may come back at any time.
+            self._next_reopen_attempt = time.time() + self._reopen_backoff
+            self._reopen_backoff = min(
+                self._reopen_backoff * 2, self.RECONNECT_BACKOFF_MAX)
+        return True
 
     def _reopen_capture(self) -> bool:
         """
@@ -1533,6 +1575,15 @@ class RTSPCamera(Camera):
                 frame, motion_detected = self.get_frame()
 
                 if frame is None:
+                    # A dead capture is retried on its own schedule. This has to
+                    # come first: once the capture is dead nothing counts
+                    # failures any more, so every counter-driven branch below is
+                    # unreachable.
+                    if self._capture_dead.is_set():
+                        self._maybe_reopen_dead_capture()
+                        self._stop_background.wait(0.5)
+                        continue
+
                     # Isolated capture is checked FIRST, ahead of the
                     # failure-count shortcut below.
                     #

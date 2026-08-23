@@ -256,3 +256,56 @@ def test_no_route_module_calls_get_frame():
         "backend.core.live_frame.get_live_frame() instead.\n  "
         + "\n  ".join(offenders)
     )
+
+
+def test_a_dead_capture_is_retried_on_a_schedule(camera, monkeypatch):
+    """
+    A capture marked dead must still be retried, on a time-based backoff.
+
+    Regression: marking the capture dead stopped _note_frame_failure() from
+    running, so _consecutive_failures froze at 3. The reconnect trigger was
+    `failures % RECONNECT_AFTER_FAILURES == 0`, and 3 % 20 is never 0 — so a
+    camera that was unplugged went dead and stayed dead until the process was
+    restarted. Confirmed against real hardware on 2026-08-22: the guard fired
+    correctly and then nothing ever retried.
+
+    Recovery must not depend on a counter that stops counting.
+    """
+    camera._mark_capture_dead("test")
+    assert camera.is_capture_dead()
+
+    attempts = {"n": 0}
+
+    def _fake_reopen():
+        attempts["n"] += 1
+        return False          # still unplugged
+
+    monkeypatch.setattr(camera, "_reopen_capture", _fake_reopen)
+
+    # First call: the backoff has never been armed, so a retry is due now.
+    assert camera._maybe_reopen_dead_capture() is True
+    assert attempts["n"] == 1
+
+    # Immediately after, the backoff must suppress a retry.
+    assert camera._maybe_reopen_dead_capture() is False
+    assert attempts["n"] == 1
+
+    # Once the backoff elapses, it retries again.
+    camera._next_reopen_attempt = 0
+    assert camera._maybe_reopen_dead_capture() is True
+    assert attempts["n"] == 2
+
+
+def test_reopen_backoff_grows_and_is_capped(camera, monkeypatch):
+    """Retrying an absent camera must not become a spin loop."""
+    camera._mark_capture_dead("test")
+    monkeypatch.setattr(camera, "_reopen_capture", lambda: False)
+
+    delays = []
+    for _ in range(8):
+        camera._next_reopen_attempt = 0
+        camera._maybe_reopen_dead_capture()
+        delays.append(camera._reopen_backoff)
+
+    assert delays == sorted(delays), "backoff should grow monotonically"
+    assert max(delays) <= camera.RECONNECT_BACKOFF_MAX
