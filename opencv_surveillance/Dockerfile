@@ -22,9 +22,17 @@ RUN npm run build
 # ============================================
 # Stage 2: Python Builder - Compile dependencies
 # ============================================
-FROM python:3.11-slim AS builder
+# 3.12 to match the shipped macOS bundle. Three different Pythons were in
+# play — CI on 3.9-3.11, Docker on 3.11, the .app on 3.12.8 — so nothing
+# tested what users actually run. The lock below is resolved for 3.12.
+FROM python:3.12-slim AS builder
 
 # Install build dependencies
+#
+# libportaudio2 is the RUNTIME library, not the portaudio19-dev headers this
+# previously installed. Two-way audio moved from PyAudio to sounddevice, which
+# ships pure-Python wheels and never compiles, so the headers and their
+# toolchain are no longer needed to build the image.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
@@ -34,17 +42,37 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     liblapack-dev \
     libx11-dev \
     libboost-python-dev \
-    portaudio19-dev \
+    libportaudio2 \
     git \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 
-# Copy and install Python dependencies
+# Copy and install Python dependencies.
+#
+# The lock is preferred when present. Without it the image resolved fresh from
+# PyPI on every build, so two builds of the same commit could ship different
+# software — which is not hypothetical: the macOS bundle was found running
+# fastapi 0.141 while the test suite validated 0.128.
+#
+# requirements.txt remains the fallback so a missing or stale lock cannot break
+# the build; it describes intent, the lock describes the exact set.
 COPY requirements.txt requirements-ecosystem.txt ./
-RUN pip install --user --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --user --no-cache-dir -r requirements.txt && \
+COPY requirements.linux-py312.loc[k] ./
+# setuptools is NOT upgraded here. It is pinned below 82 because that
+# release removed pkg_resources, which face_recognition_models imports at
+# module load. Upgrading it here used to be harmless only because
+# installing requirements.txt downgraded it again; installing from the
+# lock does not, so the upgrade would leave the image unable to start.
+RUN pip install --user --no-cache-dir --upgrade pip wheel && \
+    if [ -f requirements.linux-py312.lock ]; then \
+        echo "Installing from requirements.linux-py312.lock" && \
+        pip install --user --no-cache-dir -r requirements.linux-py312.lock; \
+    else \
+        echo "No lock found; resolving from requirements.txt" && \
+        pip install --user --no-cache-dir -r requirements.txt; \
+    fi && \
     # Ecosystem packages now come from PyPI instead of a git URL pinned to a
     # commit SHA. That pin named the PRE-RENAME distribution `ecosystem-auth`,
     # which ships the same `ecosystem_auth` module as the published
@@ -60,7 +88,7 @@ RUN pip install --user --no-cache-dir --upgrade pip setuptools wheel && \
 # ============================================
 # Stage 3: Runtime - Minimal production image
 # ============================================
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # Install only runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \

@@ -1,0 +1,439 @@
+# OpenEye — pinned dependency set for Linux / CPython 3.12
+#
+# Generated inside python:3.12-slim with pip-compile, so it reflects what Linux
+# actually resolves rather than what macOS resolved. Regenerate with:
+#
+#   docker run --rm -v "$PWD:/src:ro" -v /tmp/out:/out -w /src python:3.12-slim \
+#     bash -c "pip install -q pip-tools && pip-compile --no-header \
+#              --output-file=/out/requirements.linux-py312.lock requirements.txt"
+#
+# Companion to requirements.lock, which is macOS/arm64/CPython 3.12 only. Two
+# platforms need two locks: wheels, and sometimes versions, differ.
+#
+# NOTE ON setuptools
+# pip-compile treats setuptools as "unsafe" and omits it, so the
+# `setuptools>=68.0,<82` bound in requirements.txt does not survive into this
+# file. That bound matters: setuptools 82 removed pkg_resources, and
+# face_recognition_models imports it at module load. Without the pin the install
+# succeeds and the application cannot start. It is therefore restated at the
+# bottom of this file by hand — keep it when regenerating.
+#
+# Reassuring result on first generation: Linux resolved to the same versions as
+# the shipped macOS bundle for every package that matters — fastapi 0.141.1,
+# starlette 1.6.0, numpy 1.26.4, opencv-contrib-python 4.10.0.84. The upper
+# bounds added to requirements.txt on 2026-08-22 are holding both platforms to
+# the same set.
+#
+aiohappyeyeballs==2.7.1
+    # via aiohttp
+aiohttp==3.14.3
+    # via
+    #   -r requirements.txt
+    #   aiohttp-retry
+    #   twilio
+aiohttp-retry==2.9.1
+    # via twilio
+aioice==0.10.2
+    # via aiortc
+aiortc==1.15.0
+    # via -r requirements.txt
+aiosignal==1.4.0
+    # via aiohttp
+aiosmtplib==5.1.2
+    # via -r requirements.txt
+alembic==1.19.1
+    # via -r requirements.txt
+annotated-doc==0.0.5
+    # via fastapi
+annotated-types==0.8.0
+    # via pydantic
+anyio==4.14.2
+    # via
+    #   httpx
+    #   starlette
+    #   watchfiles
+attrs==26.1.0
+    # via
+    #   aiohttp
+    #   zeep
+av==17.1.0
+    # via
+    #   -r requirements.txt
+    #   aiortc
+azure-core==1.41.0
+    # via azure-storage-blob
+azure-storage-blob==12.30.0
+    # via -r requirements.txt
+base36==0.1.1
+    # via hap-python
+bcrypt==5.0.0
+    # via passlib
+boto3==1.43.78
+    # via -r requirements.txt
+botocore==1.43.78
+    # via
+    #   boto3
+    #   s3transfer
+cachecontrol==0.14.4
+    # via firebase-admin
+certifi==2026.7.22
+    # via
+    #   httpcore
+    #   httpx
+    #   requests
+cffi==2.1.1
+    # via
+    #   cryptography
+    #   pylibsrtp
+chacha20poly1305-reuseable==0.13.2
+    # via hap-python
+charset-normalizer==3.5.1
+    # via requests
+click==8.4.2
+    # via
+    #   face-recognition
+    #   uvicorn
+cryptography==50.0.0
+    # via
+    #   -r requirements.txt
+    #   aiortc
+    #   azure-storage-blob
+    #   chacha20poly1305-reuseable
+    #   google-auth
+    #   hap-python
+    #   pyjwt
+    #   pyopenssl
+dlib==20.0.1
+    # via
+    #   -r requirements.txt
+    #   face-recognition
+dnspython==2.8.0
+    # via
+    #   aioice
+    #   email-validator
+email-validator==2.3.0
+    # via -r requirements.txt
+face-recognition==1.3.0
+    # via -r requirements.txt
+face-recognition-models==0.3.0
+    # via face-recognition
+fastapi==0.141.1
+    # via -r requirements.txt
+firebase-admin==7.5.0
+    # via -r requirements.txt
+frozenlist==1.8.0
+    # via
+    #   aiohttp
+    #   aiosignal
+google-api-core[grpc]==2.34.0
+    # via
+    #   firebase-admin
+    #   google-cloud-core
+    #   google-cloud-firestore
+    #   google-cloud-pubsub
+    #   google-cloud-storage
+google-auth==2.56.3
+    # via
+    #   -r requirements.txt
+    #   google-api-core
+    #   google-auth-oauthlib
+    #   google-cloud-core
+    #   google-cloud-firestore
+    #   google-cloud-pubsub
+    #   google-cloud-storage
+google-auth-oauthlib==1.4.0
+    # via -r requirements.txt
+google-cloud-core==2.6.1
+    # via
+    #   google-cloud-firestore
+    #   google-cloud-storage
+google-cloud-firestore==2.28.1
+    # via firebase-admin
+google-cloud-pubsub==2.39.1
+    # via -r requirements.txt
+google-cloud-storage==3.13.1
+    # via
+    #   -r requirements.txt
+    #   firebase-admin
+google-crc32c==1.8.0
+    # via
+    #   aiortc
+    #   google-cloud-storage
+    #   google-resumable-media
+google-resumable-media==2.10.1
+    # via google-cloud-storage
+googleapis-common-protos[grpc]==1.75.1
+    # via
+    #   google-api-core
+    #   grpc-google-iam-v1
+    #   grpcio-status
+greenlet==3.5.5
+    # via sqlalchemy
+grpc-google-iam-v1==0.14.5
+    # via google-cloud-pubsub
+grpcio==1.83.0
+    # via
+    #   google-api-core
+    #   google-cloud-firestore
+    #   google-cloud-pubsub
+    #   googleapis-common-protos
+    #   grpc-google-iam-v1
+    #   grpcio-status
+grpcio-status==1.83.0
+    # via
+    #   google-api-core
+    #   google-cloud-pubsub
+h11==0.16.0
+    # via
+    #   hap-python
+    #   httpcore
+    #   uvicorn
+h2==4.4.1
+    # via httpx
+hap-python[qrcode]==5.0.0
+    # via
+    #   -r requirements.txt
+    #   hap-python
+hiredis==3.4.1
+    # via -r requirements.txt
+hpack==4.2.0
+    # via h2
+httpcore==1.0.9
+    # via httpx
+httptools==0.8.0
+    # via uvicorn
+httpx[http2]==0.28.1
+    # via
+    #   -r requirements.txt
+    #   firebase-admin
+hyperframe==6.1.0
+    # via h2
+idna==3.19
+    # via
+    #   anyio
+    #   email-validator
+    #   httpx
+    #   requests
+    #   yarl
+ifaddr==0.2.0
+    # via
+    #   aioice
+    #   zeroconf
+isodate==0.7.2
+    # via
+    #   azure-storage-blob
+    #   zeep
+jinja2==3.1.6
+    # via -r requirements.txt
+jmespath==1.1.0
+    # via
+    #   boto3
+    #   botocore
+joblib==1.5.3
+    # via scikit-learn
+lxml==6.1.2
+    # via zeep
+mako==1.4.1
+    # via alembic
+markupsafe==3.0.3
+    # via
+    #   jinja2
+    #   mako
+msgpack==1.2.1
+    # via cachecontrol
+multidict==6.7.1
+    # via
+    #   aiohttp
+    #   yarl
+narwhals==2.25.0
+    # via scikit-learn
+netifaces==0.11.0
+    # via -r requirements.txt
+numpy==1.26.4
+    # via
+    #   -r requirements.txt
+    #   face-recognition
+    #   opencv-contrib-python
+    #   scikit-learn
+    #   scipy
+oauthlib==3.3.1
+    # via requests-oauthlib
+onvif-zeep==0.2.12
+    # via -r requirements.txt
+opencv-contrib-python==4.10.0.84
+    # via -r requirements.txt
+opentelemetry-api==1.44.0
+    # via
+    #   google-cloud-pubsub
+    #   opentelemetry-sdk
+    #   opentelemetry-semantic-conventions
+opentelemetry-sdk==1.44.0
+    # via google-cloud-pubsub
+opentelemetry-semantic-conventions==0.65b0
+    # via opentelemetry-sdk
+orjson==3.12.0
+    # via hap-python
+paho-mqtt==2.1.0
+    # via -r requirements.txt
+passlib[bcrypt]==1.7.4
+    # via -r requirements.txt
+pillow==12.3.0
+    # via
+    #   -r requirements.txt
+    #   face-recognition
+    #   qrcode
+platformdirs==4.11.3
+    # via zeep
+propcache==0.5.2
+    # via
+    #   aiohttp
+    #   yarl
+proto-plus==1.28.3
+    # via
+    #   google-api-core
+    #   google-cloud-firestore
+    #   google-cloud-pubsub
+protobuf==7.36.0
+    # via
+    #   google-api-core
+    #   google-cloud-firestore
+    #   google-cloud-pubsub
+    #   googleapis-common-protos
+    #   grpc-google-iam-v1
+    #   grpcio-status
+    #   proto-plus
+psutil==7.2.2
+    # via -r requirements.txt
+psycopg2-binary==2.9.12
+    # via -r requirements.txt
+pyasn1==0.6.4
+    # via pyasn1-modules
+pyasn1-modules==0.4.2
+    # via google-auth
+pycparser==3.0
+    # via cffi
+pydantic==2.13.4
+    # via fastapi
+pydantic-core==2.46.4
+    # via pydantic
+pyee==14.0.0
+    # via aiortc
+pyjwt[crypto]==2.13.0
+    # via
+    #   -r requirements.txt
+    #   firebase-admin
+    #   twilio
+pylibsrtp==1.0.0
+    # via aiortc
+pyopenssl==26.4.0
+    # via aiortc
+pyotp==2.10.0
+    # via -r requirements.txt
+pyqrcode==1.2.1
+    # via hap-python
+python-dateutil==2.9.0.post0
+    # via
+    #   -r requirements.txt
+    #   botocore
+python-dotenv==1.2.3
+    # via
+    #   -r requirements.txt
+    #   uvicorn
+python-multipart==0.0.32
+    # via -r requirements.txt
+pyyaml==6.0.3
+    # via uvicorn
+qrcode[pil]==8.2
+    # via -r requirements.txt
+redis==8.1.0
+    # via -r requirements.txt
+requests==2.34.2
+    # via
+    #   -r requirements.txt
+    #   azure-core
+    #   cachecontrol
+    #   google-api-core
+    #   google-cloud-storage
+    #   requests-file
+    #   requests-oauthlib
+    #   requests-toolbelt
+    #   twilio
+    #   zeep
+requests-file==3.0.1
+    # via zeep
+requests-oauthlib==2.0.0
+    # via google-auth-oauthlib
+requests-toolbelt==1.0.0
+    # via zeep
+s3transfer==0.19.2
+    # via boto3
+scikit-learn==1.9.0
+    # via -r requirements.txt
+scipy==1.17.1
+    # via
+    #   -r requirements.txt
+    #   scikit-learn
+six==1.17.0
+    # via python-dateutil
+sounddevice==0.5.6
+    # via -r requirements.txt
+sqlalchemy==2.0.52
+    # via
+    #   -r requirements.txt
+    #   alembic
+starlette==1.6.0
+    # via fastapi
+threadpoolctl==3.6.0
+    # via scikit-learn
+twilio==9.11.0
+    # via -r requirements.txt
+typing-extensions==4.16.0
+    # via
+    #   aiohttp
+    #   aiosignal
+    #   alembic
+    #   anyio
+    #   azure-core
+    #   azure-storage-blob
+    #   fastapi
+    #   grpcio
+    #   opentelemetry-api
+    #   opentelemetry-sdk
+    #   opentelemetry-semantic-conventions
+    #   pydantic
+    #   pydantic-core
+    #   pyee
+    #   pyopenssl
+    #   sqlalchemy
+    #   starlette
+    #   typing-inspection
+typing-inspection==0.4.4
+    # via
+    #   fastapi
+    #   pydantic
+urllib3==2.7.0
+    # via
+    #   botocore
+    #   requests
+uvicorn[standard]==0.52.4
+    # via -r requirements.txt
+uvloop==0.22.1
+    # via uvicorn
+watchfiles==1.2.0
+    # via uvicorn
+websockets==17.0.1
+    # via
+    #   -r requirements.txt
+    #   uvicorn
+yarl==1.24.5
+    # via aiohttp
+zeep==4.3.3
+    # via onvif-zeep
+zeroconf==0.150.0
+    # via hap-python
+
+# The following packages are considered to be unsafe in a requirements file:
+# setuptools
+
+# Pinned deliberately — see NOTE ON setuptools above.
+setuptools<82

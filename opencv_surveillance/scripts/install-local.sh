@@ -136,6 +136,9 @@ install_system_deps() {
         fi
         
         log_info "Installing dependencies via Homebrew..."
+        # No portaudio here: two-way audio uses sounddevice, whose macOS wheel
+        # bundles libportaudio.dylib. Linux installs the runtime libportaudio2
+        # below; macOS needs nothing.
         brew install opencv pkg-config cmake || log_warn "Some packages may already be installed"
         
     elif [ "$OS" == "linux" ]; then
@@ -154,6 +157,7 @@ install_system_deps() {
             libavformat-dev \
             libswscale-dev \
             libv4l-dev \
+            libportaudio2 \
             libxvidcore-dev \
             libx264-dev \
             libatlas-base-dev \
@@ -200,9 +204,15 @@ install_python_deps() {
     # Activate virtual environment
     source "$VENV/bin/activate"
     
-    # Upgrade pip
+    # Upgrade pip and wheel, but NOT setuptools: requirements.txt pins it below
+    # 82, because that release removed pkg_resources and face_recognition_models
+    # imports it at module load. Installing requirements.txt afterwards happens to
+    # downgrade setuptools back under the bound, so upgrading here was harmless by
+    # ordering alone — and stopped being harmless in the Docker image the moment it
+    # installed a lock file instead. Left out here so this path does not depend on
+    # that accident either.
     log_info "Upgrading pip..."
-    pip install --upgrade pip setuptools wheel
+    pip install --upgrade pip wheel
 
     # Ensure ffmpeg BEFORE pip: aiortc->av (WebRTC two-way audio) builds against
     # it. Without a usable ffmpeg the av wheel fails and would abort the install.
