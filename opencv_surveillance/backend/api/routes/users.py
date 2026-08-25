@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 import json
 import bcrypt
 
@@ -269,11 +270,27 @@ def read_users_me(
 # ============================================================================
 
 
+class RefreshTokenRequest(BaseModel):
+    """
+    The refresh token, in the request body.
+
+    Declared as a model on purpose. `refresh_token: str` written directly in the
+    signature is read by FastAPI as a QUERY parameter, so a client sending
+    {"refresh_token": "..."} as JSON — which is what the browser client does, and
+    what the docstring below has always described — was answered with 422. Every
+    refresh and every revoke failed that way, from the first release.
+
+    A refresh token also does not belong in a query string: those are logged by
+    servers and proxies and kept in browser history.
+    """
+    refresh_token: str
+
+
 @router.post("/token/refresh")
 def refresh_token(
     http_request: Request,
     response: Response,
-    refresh_token: str,
+    payload: RefreshTokenRequest,
     db: Session = Depends(get_db)
 ):
     """
@@ -296,7 +313,8 @@ def refresh_token(
     ip_address = http_request.client.host if http_request.client else None
 
     # Refresh tokens using refresh token rotation
-    tokens = auth.refresh_access_token(db, refresh_token, device_info, ip_address)
+    tokens = auth.refresh_access_token(
+        db, payload.refresh_token, device_info, ip_address)
 
     # Refresh the cookie too, or media requests start failing 30 minutes into a
     # session that the client believes is still valid.
@@ -307,7 +325,7 @@ def refresh_token(
 
 @router.post("/token/revoke")
 def revoke_token(
-    refresh_token: str,
+    payload: RefreshTokenRequest,
     db: Session = Depends(get_db),
     current_user: user_schema.User = Depends(auth.get_current_user)
 ):
@@ -323,7 +341,7 @@ def revoke_token(
     Raises:
         HTTPException 404: If token not found
     """
-    success = crud.revoke_refresh_token(db, refresh_token)
+    success = crud.revoke_refresh_token(db, payload.refresh_token)
 
     if not success:
         raise HTTPException(
