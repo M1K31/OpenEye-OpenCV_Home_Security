@@ -75,6 +75,7 @@ def list_people(current_user: user_schema.User = Depends(
 def add_person(
     person: face_schema.PersonCreate,
     current_user: user_schema.User = Depends(require_user),
+    db: Session = Depends(get_db),
 ):
     """
     Add a new person to the face recognition system
@@ -169,6 +170,29 @@ def add_person(
             raise HTTPException(
                 status_code=400, detail=f"Person '{clean_name}' already exists"
             )
+
+        # Record the person, not just the folder.
+        #
+        # This endpoint used to create a directory and nothing else, so somebody
+        # created here existed on disk and in no table — which is the exact
+        # condition the Person model was added to end. Reassignment already
+        # creates the row; this path, where a human deliberately names someone,
+        # did not, so the two disagreed about who exists.
+        #
+        # origin='user' and a confirmation timestamp, for the same reason
+        # reassignment sets them: a person created by hand is confirmed from the
+        # outset, not a guess awaiting review.
+        existing_row = db.query(models.Person).filter(
+            models.Person.name == clean_name).first()
+        if existing_row is None:
+            db.add(models.Person(
+                name=clean_name,
+                origin="user",
+                confirmed_at=datetime.utcnow(),
+            ))
+            db.commit()
+            logger.info("Recorded person '%s' (created by %s)",
+                        clean_name, current_user.username)
 
         # Return person info (new person, no photos yet)
         return face_schema.Person(
