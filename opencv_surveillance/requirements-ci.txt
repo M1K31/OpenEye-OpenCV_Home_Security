@@ -85,7 +85,7 @@ jinja2>=3.1.0
 # - firebase-admin (push notifications)
 # - twilio (SMS)
 # - paho-mqtt, HAP-python (smart home)
-# - pyaudio (two-way audio)
+# - sounddevice (two-way audio)
 #
 # Also absent by design: ecosystem_client / ecosystem_auth / ecosystem_ai, which
 # ship with the sibling appEcosystem project and are not published to PyPI. Tests

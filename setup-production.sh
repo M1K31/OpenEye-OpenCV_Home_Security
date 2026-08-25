@@ -106,6 +106,19 @@ install_dependencies() {
     echo "  Upgrading pip..."
     pip install --upgrade pip > /dev/null 2>&1
 
+    # PortAudio backs two-way audio via sounddevice. A missing library no longer
+    # breaks the install — sounddevice ships pure-Python wheels that never
+    # compile, so pip succeeds either way and the feature degrades with a clear
+    # message. This check exists so the degradation is noticed NOW, at install
+    # time, rather than discovered later when someone tries to use the intercom.
+    if ! pkg-config --exists portaudio-2.0 2>/dev/null \
+       && [ ! -f /opt/homebrew/lib/libportaudio.dylib ] \
+       && [ ! -f /usr/local/lib/libportaudio.dylib ]; then
+        echo -e "${YELLOW}  ⚠ PortAudio not found — two-way audio will be disabled.${NC}"
+        echo "     The rest of the install is unaffected. To enable it:"
+        echo "       ./install-deps.sh"
+    fi
+
     # This is the phase most likely to fail on a fresh Linux box (dlib and
     # OpenCV need system libraries that install-deps.sh provides). Discarding
     # the output left the user with only a downstream import error and no

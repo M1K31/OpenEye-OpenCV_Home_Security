@@ -28,15 +28,29 @@ import struct
 logger = logging.getLogger(__name__)
 
 # Optional heavy dependencies — graceful degradation when unavailable
+# sounddevice rather than PyAudio. Both drive the same PortAudio engine, but
+# PyAudio publishes wheels for Windows only, so on macOS and Linux it compiled
+# from source against PortAudio's headers. When those headers were missing the
+# build failed — and pip aborts the whole transaction, so one absent system
+# library took every other dependency down with it and surfaced as an unrelated
+# import error. sounddevice ships pure-Python wheels that never compile: the
+# macOS wheel bundles libportaudio.dylib outright, and Linux needs only the
+# runtime libportaudio2 package.
+#
+# OSError is caught alongside ImportError deliberately: on Linux without
+# libportaudio2, sounddevice imports and then raises OSError('PortAudio library
+# not found'). Catching only ImportError would let that escape and take the
+# whole application down over an optional feature.
 try:
-    import pyaudio
-    PYAUDIO_AVAILABLE = True
-except ImportError:
-    pyaudio = None
-    PYAUDIO_AVAILABLE = False
+    import sounddevice as sd
+    AUDIO_IO_AVAILABLE = True
+except (ImportError, OSError) as exc:
+    sd = None
+    AUDIO_IO_AVAILABLE = False
     logger.warning(
-        "pyaudio not installed — audio capture/playback disabled. "
-        "Install with: pip install pyaudio (requires portaudio). "
+        f"sounddevice unavailable ({exc}) — audio capture/playback disabled. "
+        "Install with: pip install sounddevice "
+        "(Linux also needs the libportaudio2 package). "
         "Run install-deps.sh for guided installation."
     )
 
@@ -70,8 +84,16 @@ except ImportError:
         "Run install-deps.sh for guided installation."
     )
 
-# Numeric value of pyaudio.paInt16 — used as fallback when pyaudio is unavailable
-PYAUDIO_INT16 = 8
+# Signed 16-bit samples throughout. Named rather than inlined because the
+# playback callback has to size its silence buffer in bytes, and that arithmetic
+# is wrong in a way nothing catches if the two ever disagree.
+SAMPLE_DTYPE = "int16"
+BYTES_PER_SAMPLE = 2
+
+# How much undelivered playback audio may accumulate before the oldest is
+# dropped. Two-way audio is a conversation: stale audio is worse than missing
+# audio, because latency that grows during a call never recovers on its own.
+MAX_PLAYBACK_BACKLOG_BLOCKS = 4
 
 
 @dataclass
@@ -81,7 +103,9 @@ class AudioConfig:
     sample_rate: int = 16000  # Hz
     channels: int = 1  # Mono
     chunk_size: int = 1024  # Frames per buffer
-    format: int = pyaudio.paInt16 if PYAUDIO_AVAILABLE else PYAUDIO_INT16
+    # Was a pyaudio.paInt16 constant; sounddevice takes a dtype string. Nothing
+    # outside this module ever set it.
+    dtype: str = SAMPLE_DTYPE
     input_device: Optional[int] = None
     output_device: Optional[int] = None
     enable_echo_cancellation: bool = True
@@ -97,9 +121,17 @@ class AudioCapture:
 
     def __init__(self, config: AudioConfig):
         """Initialize audio capture"""
+        if not AUDIO_IO_AVAILABLE:
+            raise RuntimeError(
+                "Audio capture unavailable — sounddevice could not be loaded. "
+                "Run install-deps.sh for guided installation."
+            )
+
         self.config = config
-        self.pyaudio = pyaudio.PyAudio()
-        self.stream: Optional[pyaudio.Stream] = None
+        # sounddevice needs no engine object; PortAudio is initialised on demand
+        # and devices are queried at module level, so there is nothing to hold
+        # open or terminate.
+        self.stream = None
         self.running = False
 
         # Audio processing
@@ -112,15 +144,14 @@ class AudioCapture:
         """List available audio input devices"""
         devices = []
 
-        for i in range(self.pyaudio.get_device_count()):
-            info = self.pyaudio.get_device_info_by_index(i)
-            if info["maxInputChannels"] > 0:
+        for i, info in enumerate(sd.query_devices()):
+            if info["max_input_channels"] > 0:
                 devices.append(
                     {
                         "index": i,
                         "name": info["name"],
-                        "channels": info["maxInputChannels"],
-                        "sample_rate": int(info["defaultSampleRate"]),
+                        "channels": info["max_input_channels"],
+                        "sample_rate": int(info["default_samplerate"]),
                     }
                 )
 
@@ -133,18 +164,17 @@ class AudioCapture:
             return
 
         try:
-            self.stream = self.pyaudio.open(
-                format=self.config.format,
+            self.stream = sd.RawInputStream(
+                samplerate=self.config.sample_rate,
+                blocksize=self.config.chunk_size,
+                device=self.config.input_device,
                 channels=self.config.channels,
-                rate=self.config.sample_rate,
-                input=True,
-                input_device_index=self.config.input_device,
-                frames_per_buffer=self.config.chunk_size,
-                stream_callback=self._audio_callback,
+                dtype=self.config.dtype,
+                callback=self._audio_callback,
             )
 
             self.running = True
-            self.stream.start_stream()
+            self.stream.start()
 
             logger.info("Audio capture started")
 
@@ -160,20 +190,33 @@ class AudioCapture:
         self.running = False
 
         if self.stream:
-            self.stream.stop_stream()
+            self.stream.stop()
             self.stream.close()
             self.stream = None
 
         logger.info("Audio capture stopped")
 
-    def _audio_callback(self, in_data, frame_count, time_info, status):
-        """PyAudio callback for captured audio"""
+    def _audio_callback(self, indata, frame_count, time_info, status):
+        """
+        sounddevice callback for captured audio.
+
+        Two differences from the PyAudio callback this replaces, both of which
+        are silent corruption rather than errors if missed:
+
+        1. PyAudio handed the callback an immutable `bytes` object, so a numpy
+           view over it stayed valid once queued. sounddevice reuses the same
+           underlying buffer for every block, so a view would be overwritten by
+           the next block while still sitting in the queue — the copy below is
+           required, not defensive.
+        2. sounddevice callbacks return nothing; PyAudio expected
+           `(data, paContinue)`.
+        """
         if status:
             logger.warning(f"Audio capture status: {status}")
 
         try:
-            # Convert bytes to numpy array
-            audio_data = np.frombuffer(in_data, dtype=np.int16)
+            # Copy out of the reused buffer before queueing — see note above.
+            audio_data = np.frombuffer(indata, dtype=np.int16).copy()
 
             # Apply audio processing
             if self.config.enable_noise_suppression:
@@ -185,8 +228,6 @@ class AudioCapture:
 
         except Exception as e:
             logger.error(f"Error in audio callback: {e}")
-
-        return (in_data, pyaudio.paContinue)
 
     def _noise_suppression(self, audio_data: np.ndarray) -> np.ndarray:
         """Simple noise suppression using noise gate"""
@@ -214,9 +255,16 @@ class AudioCapture:
             return None
 
     def __del__(self):
-        """Cleanup"""
-        self.stop()
-        self.pyaudio.terminate()
+        """
+        Cleanup.
+
+        A partially constructed object is still finalised, so this cannot assume
+        __init__ ran to completion: when the availability check rejects the
+        construction, `running` and `stream` were never assigned, and reaching
+        for them here raised AttributeError inside the garbage collector.
+        """
+        if getattr(self, "running", False):
+            self.stop()
 
 
 class AudioPlayback:
@@ -228,13 +276,23 @@ class AudioPlayback:
 
     def __init__(self, config: AudioConfig):
         """Initialize audio playback"""
+        if not AUDIO_IO_AVAILABLE:
+            raise RuntimeError(
+                "Audio playback unavailable — sounddevice could not be loaded. "
+                "Run install-deps.sh for guided installation."
+            )
+
         self.config = config
-        self.pyaudio = pyaudio.PyAudio()
-        self.stream: Optional[pyaudio.Stream] = None
+        self.stream = None
         self.running = False
 
         # Playback buffer
         self.playback_queue: Queue = Queue(maxsize=100)
+
+        # Bytes left over when a queued frame does not divide evenly into a
+        # PortAudio block. Held here and emitted at the start of the next block
+        # so no samples are dropped — see _audio_callback.
+        self._residual = b""
 
         logger.info(
             f"Audio playback initialized: {config.sample_rate}Hz, {config.channels}ch")
@@ -243,15 +301,14 @@ class AudioPlayback:
         """List available audio output devices"""
         devices = []
 
-        for i in range(self.pyaudio.get_device_count()):
-            info = self.pyaudio.get_device_info_by_index(i)
-            if info["maxOutputChannels"] > 0:
+        for i, info in enumerate(sd.query_devices()):
+            if info["max_output_channels"] > 0:
                 devices.append(
                     {
                         "index": i,
                         "name": info["name"],
-                        "channels": info["maxOutputChannels"],
-                        "sample_rate": int(info["defaultSampleRate"]),
+                        "channels": info["max_output_channels"],
+                        "sample_rate": int(info["default_samplerate"]),
                     }
                 )
 
@@ -264,18 +321,17 @@ class AudioPlayback:
             return
 
         try:
-            self.stream = self.pyaudio.open(
-                format=self.config.format,
+            self.stream = sd.RawOutputStream(
+                samplerate=self.config.sample_rate,
+                blocksize=self.config.chunk_size,
+                device=self.config.output_device,
                 channels=self.config.channels,
-                rate=self.config.sample_rate,
-                output=True,
-                output_device_index=self.config.output_device,
-                frames_per_buffer=self.config.chunk_size,
-                stream_callback=self._audio_callback,
+                dtype=self.config.dtype,
+                callback=self._audio_callback,
             )
 
             self.running = True
-            self.stream.start_stream()
+            self.stream.start()
 
             logger.info("Audio playback started")
 
@@ -291,33 +347,63 @@ class AudioPlayback:
         self.running = False
 
         if self.stream:
-            self.stream.stop_stream()
+            self.stream.stop()
             self.stream.close()
             self.stream = None
 
         logger.info("Audio playback stopped")
 
-    def _audio_callback(self, in_data, frame_count, time_info, status):
-        """PyAudio callback for audio playback"""
+    def _audio_callback(self, outdata, frame_count, time_info, status):
+        """
+        sounddevice callback for audio playback.
+
+        PyAudio accepted a returned buffer; sounddevice hands the callback a
+        writable buffer that must be filled completely. A short write leaves the
+        tail of the block holding the PREVIOUS block's samples, which is audible
+        as a stutter or repeated fragment rather than an error, so the queued
+        frame is padded or truncated to exactly the block size here.
+
+        A queued frame is not guaranteed to match the block size: producers push
+        whatever the far end sent, and nothing upstream enforces chunk_size.
+        """
         if status:
             logger.warning(f"Audio playback status: {status}")
 
+        needed = frame_count * self.config.channels * BYTES_PER_SAMPLE
+
+        buffered = self._residual
         try:
-            # Get audio data from queue
-            if not self.playback_queue.empty():
-                audio_data = self.playback_queue.get()
-
-                # Convert to bytes
-                out_data = audio_data.tobytes()
-            else:
-                # Silence if no data
-                out_data = b"\x00" * (frame_count * self.config.channels * 2)
-
+            # Frames arrive sized by the far end, not by our block size, so pull
+            # until the block can be filled rather than assuming one frame is
+            # one block.
+            while len(buffered) < needed and not self.playback_queue.empty():
+                buffered += self.playback_queue.get().tobytes()
         except Exception as e:
             logger.error(f"Error in playback callback: {e}")
-            out_data = b"\x00" * (frame_count * self.config.channels * 2)
 
-        return (out_data, pyaudio.paContinue)
+        if len(buffered) < needed:
+            # Underrun: pad with silence rather than leave stale samples in the
+            # tail of the buffer.
+            out_data = buffered + b"\x00" * (needed - len(buffered))
+            self._residual = b""
+        else:
+            out_data = buffered[:needed]
+            remainder = buffered[needed:]
+            # Cap the carry-over. Without this, a producer that consistently
+            # outruns playback grows the backlog without bound and the delay
+            # between speaking and being heard climbs for as long as the call
+            # lasts. Dropping the oldest audio keeps the intercom responsive.
+            limit = needed * MAX_PLAYBACK_BACKLOG_BLOCKS
+            if len(remainder) > limit:
+                logger.warning(
+                    "Playback backlog exceeded %d blocks — dropping %d bytes "
+                    "of buffered audio to keep latency bounded",
+                    MAX_PLAYBACK_BACKLOG_BLOCKS, len(remainder) - limit,
+                )
+                remainder = remainder[-limit:]
+            self._residual = remainder
+
+        outdata[:] = out_data
 
     def play_frame(self, audio_data: np.ndarray):
         """Queue audio frame for playback"""
@@ -325,9 +411,16 @@ class AudioPlayback:
             self.playback_queue.put(audio_data)
 
     def __del__(self):
-        """Cleanup"""
-        self.stop()
-        self.pyaudio.terminate()
+        """
+        Cleanup.
+
+        A partially constructed object is still finalised, so this cannot assume
+        __init__ ran to completion: when the availability check rejects the
+        construction, `running` and `stream` were never assigned, and reaching
+        for them here raised AttributeError inside the garbage collector.
+        """
+        if getattr(self, "running", False):
+            self.stop()
 
 
 class AudioTrack(MediaStreamTrack):
@@ -575,12 +668,12 @@ class TwoWayAudioManager:
         """Initialize audio manager"""
         self.audio_config = audio_config or AudioConfig()
         self.sessions: Dict[str, WebRTCAudioSession] = {}
-        self.available = PYAUDIO_AVAILABLE and WEBRTC_AVAILABLE
+        self.available = AUDIO_IO_AVAILABLE and WEBRTC_AVAILABLE
 
         if not self.available:
             missing = []
-            if not PYAUDIO_AVAILABLE:
-                missing.append("pyaudio")
+            if not AUDIO_IO_AVAILABLE:
+                missing.append("sounddevice")
             if not WEBRTC_AVAILABLE:
                 missing.append("aiortc/av")
             logger.warning(
@@ -605,7 +698,7 @@ class TwoWayAudioManager:
         """
         if not self.available:
             raise RuntimeError(
-                "Two-way audio unavailable — pyaudio and/or aiortc not installed. "
+                "Two-way audio unavailable — sounddevice and/or aiortc not installed. "
                 "Run install-deps.sh for guided installation."
             )
 
@@ -639,8 +732,12 @@ class TwoWayAudioManager:
 
     def list_audio_devices(self) -> Dict:
         """List available audio devices"""
-        if not PYAUDIO_AVAILABLE:
-            return {"input_devices": [], "output_devices": [], "error": "pyaudio not installed"}
+        if not AUDIO_IO_AVAILABLE:
+            return {
+                "input_devices": [],
+                "output_devices": [],
+                "error": "sounddevice not installed",
+            }
 
         capture = AudioCapture(self.audio_config)
         playback = AudioPlayback(self.audio_config)

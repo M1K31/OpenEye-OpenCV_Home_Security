@@ -97,7 +97,15 @@ azure-storage-blob>=12.19.0  # Azure Blob Storage
 websockets>=12.0,<18  # For real-time updates to mobile
 
 # Two-Way Audio (v3.10.0) - FREE & OPEN SOURCE
-pyaudio>=0.2.13  # Audio I/O library
+# sounddevice, not PyAudio. Both drive PortAudio, but PyAudio ships wheels for
+# Windows only, so on macOS and Linux it compiled from source against PortAudio's
+# headers — and when they were absent, pip aborted the ENTIRE install, so one
+# optional feature took all other dependencies with it. sounddevice ships
+# pure-Python wheels that never compile: macOS bundles libportaudio.dylib in the
+# wheel, and Linux needs only the runtime libportaudio2 package (installed by
+# install-deps.sh). If that package is missing the install still succeeds and
+# two-way audio degrades with a clear message instead.
+sounddevice>=0.4.6  # Audio I/O library (PortAudio)
 aiortc>=1.6.0  # WebRTC implementation for Python
 av>=11.0.0  # Audio/video processing (required by aiortc)
 

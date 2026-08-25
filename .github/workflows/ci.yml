@@ -50,7 +50,7 @@ jobs:
           libopencv-dev \
           libopenblas-dev \
           liblapack-dev \
-          portaudio19-dev \
+          libportaudio2 \
           libgl1 \
           libglib2.0-0 \
           ffmpeg

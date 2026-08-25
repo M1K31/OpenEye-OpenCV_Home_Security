@@ -3,7 +3,7 @@
 # OpenEye — Smart Dependency Installer
 #
 # Detects OS/architecture and installs optional heavy dependencies
-# (dlib, torch, ultralytics, face_recognition, aiortc, pyaudio)
+# (dlib, torch, ultralytics, face_recognition, aiortc, sounddevice)
 # using the preferred method for each platform.
 #
 # Falls back through multiple install strategies:
@@ -131,16 +131,16 @@ install_cmake() {
 }
 
 install_portaudio() {
-    echo -e "${BLUE}Installing PortAudio (required for pyaudio)...${NC}"
+    echo -e "${BLUE}Installing PortAudio (runtime library for sounddevice)...${NC}"
     case "$PKG_MGR" in
         apt)
-            sudo apt-get update -qq && sudo apt-get install -y portaudio19-dev python3-pyaudio
+            sudo apt-get update -qq && sudo apt-get install -y libportaudio2
             ;;
         brew)
-            brew install portaudio
+            : # macOS needs nothing: the sounddevice wheel bundles libportaudio.dylib
             ;;
         dnf)
-            sudo dnf install -y portaudio-devel
+            sudo dnf install -y portaudio
             ;;
         pacman)
             sudo pacman -S --noconfirm portaudio
@@ -344,34 +344,52 @@ install_ultralytics() {
     return 1
 }
 
-install_pyaudio() {
-    local dep_name="pyaudio"
+install_sounddevice() {
+    local dep_name="sounddevice"
     local features="Two-Way Audio (microphone capture/playback)"
 
     echo ""
     echo -e "${BOLD}[$dep_name]${NC} — required for: $features"
 
-    if is_installed pyaudio; then
-        log_ok "pyaudio already installed"
+    if is_installed sounddevice; then
+        log_ok "sounddevice already installed"
         return 0
     fi
 
-    # PortAudio is required
-    if ! pkg-config --exists portaudio-2.0 2>/dev/null && ! [ -f /opt/homebrew/lib/libportaudio.dylib ] && ! [ -f /usr/local/lib/libportaudio.dylib ]; then
-        install_portaudio || {
-            FAILED_DEPS+=("$dep_name")
-            DISABLED_FEATURES+=("$features")
-            return 1
-        }
+    # Order reversed from the PyAudio version this replaces. PyAudio compiled
+    # against PortAudio's headers, so the system library had to be present
+    # BEFORE pip could succeed. sounddevice ships pure-Python wheels and never
+    # compiles, so the pip step always works; PortAudio is needed only at import
+    # time, and only on Linux — the macOS wheel bundles libportaudio.dylib.
+    log_info "Trying: pip install sounddevice..."
+    if ! "$PIP" install "sounddevice>=0.4.6" 2>/dev/null; then
+        log_fail "sounddevice installation failed"
+        FAILED_DEPS+=("$dep_name")
+        DISABLED_FEATURES+=("$features")
+        return 1
     fi
+    log_ok "sounddevice installed"
 
-    log_info "Trying: pip install pyaudio..."
-    if "$PIP" install "pyaudio>=0.2.13" 2>/dev/null; then
-        log_ok "pyaudio installed"
+    # Verify it can actually load PortAudio. On Linux without libportaudio2 the
+    # import raises OSError, which the application handles by disabling audio —
+    # so fix it here rather than let the user discover it at the intercom.
+    if "$PYTHON" -c "import sounddevice" 2>/dev/null; then
         return 0
     fi
 
-    log_fail "pyaudio installation failed"
+    log_info "sounddevice installed but PortAudio is not loadable — installing it"
+    install_portaudio || {
+        FAILED_DEPS+=("$dep_name")
+        DISABLED_FEATURES+=("$features")
+        return 1
+    }
+
+    if "$PYTHON" -c "import sounddevice" 2>/dev/null; then
+        log_ok "PortAudio available — two-way audio enabled"
+        return 0
+    fi
+
+    log_fail "PortAudio still not loadable; two-way audio will stay disabled"
     FAILED_DEPS+=("$dep_name")
     DISABLED_FEATURES+=("$features")
     return 1
@@ -491,8 +509,8 @@ show_summary() {
                 ultralytics)
                     echo "  ultralytics:      pip install ultralytics (requires torch)"
                     ;;
-                pyaudio)
-                    echo "  pyaudio:          Install PortAudio first, then pip install pyaudio"
+                sounddevice)
+                    echo "  sounddevice:      pip install sounddevice (Linux also needs libportaudio2)"
                     ;;
                 aiortc)
                     echo "  aiortc:           https://github.com/aiortc/aiortc#linux"
@@ -530,7 +548,7 @@ main() {
     install_face_recognition || true
     install_torch         || true
     install_ultralytics   || true
-    install_pyaudio       || true
+    install_sounddevice   || true
     install_aiortc        || true
 
     show_summary

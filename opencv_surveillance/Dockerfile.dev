@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     libopencv-dev \
     libglib2.0-0 \
+    libportaudio2 \
     libsm6 \
     libxext6 \
     libxrender-dev \

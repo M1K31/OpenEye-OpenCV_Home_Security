@@ -116,7 +116,6 @@ psutil==7.2.2
 psycopg2-binary==2.9.12
 pyasn1==0.6.4
 pyasn1_modules==0.4.2
-PyAudio==0.2.14
 pycparser==3.0
 pydantic==2.13.4
 pydantic_core==2.46.4
@@ -143,6 +142,7 @@ scikit-learn==1.9.0
 scipy==1.17.1
 setuptools==81.0.0
 six==1.17.0
+sounddevice==0.5.6
 SQLAlchemy==2.0.52
 starlette==1.6.0
 threadpoolctl==3.6.0

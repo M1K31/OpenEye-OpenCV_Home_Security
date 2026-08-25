@@ -68,7 +68,7 @@ def list_audio_devices(current_user = Depends(get_current_active_user)):
     if not AUDIO_AVAILABLE:
         return JSONResponse(
             status_code=503,
-            content={"error": "Two-way audio unavailable — pyaudio/aiortc not installed"},
+            content={"error": "Two-way audio unavailable — sounddevice/aiortc not installed"},
         )
     return audio_manager.list_audio_devices()
 
@@ -100,7 +100,7 @@ async def websocket_audio_stream(
 
     await websocket.accept()
     if not AUDIO_AVAILABLE:
-        await websocket.send_json({"error": "Two-way audio unavailable — pyaudio/aiortc not installed"})
+        await websocket.send_json({"error": "Two-way audio unavailable — sounddevice/aiortc not installed"})
         await websocket.close(code=1011, reason="Audio dependencies not installed")
         return
     session = await audio_manager.create_session(camera_id)
