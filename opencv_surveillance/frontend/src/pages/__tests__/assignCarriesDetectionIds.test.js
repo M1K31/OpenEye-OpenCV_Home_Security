@@ -99,3 +99,90 @@ describe('the assign handler can identify what it was given', () => {
     expect(collectFaceIds([{ id: '55', name: 'Unknown' }])).toEqual(['55']);
   });
 });
+
+// ---------------------------------------------------------------------------
+// The two id conventions
+// ---------------------------------------------------------------------------
+//
+// Fixing the missing id exposed a second defect underneath it. Two views load
+// detections in two shapes and both reach the same handler: the person view
+// passes API rows through, so `id` is numeric, while the combined view merges
+// faces and objects and prefixes the ids to keep them distinct. Sending
+// "face-123" to an endpoint declaring `face_ids: List[int]` is rejected with
+// 422, which the interface rendered as "[object Object]".
+
+import { faceIdOf } from '../DetectionsPage.jsx';
+import { describeApiError } from '../../utils/apiError.js';
+
+describe('resolving a face id from either convention', () => {
+  it('reads a numeric id, as the person view supplies', () => {
+    expect(faceIdOf({ id: 123 })).toBe(123);
+  });
+
+  it('reads a prefixed id, as the combined view supplies', () => {
+    expect(faceIdOf({ id: 'face-123' })).toBe(123);
+  });
+
+  it('prefers an explicit face_id when present', () => {
+    expect(faceIdOf({ id: 'face-123', face_id: 123 })).toBe(123);
+  });
+
+  it('refuses an object detection', () => {
+    // A vehicle cannot be assigned to a person, and "object-45" must never be
+    // sent as a face id.
+    expect(faceIdOf({ id: 'object-45' })).toBeNull();
+  });
+
+  it('keeps id 0', () => {
+    expect(faceIdOf({ id: 0 })).toBe(0);
+    expect(faceIdOf({ id: 'face-0' })).toBe(0);
+  });
+
+  it('returns null rather than guessing at an unknown shape', () => {
+    expect(faceIdOf({ id: 'cluster-7' })).toBeNull();
+    expect(faceIdOf({})).toBeNull();
+    expect(faceIdOf(null)).toBeNull();
+  });
+});
+
+describe('reporting an API failure', () => {
+  it('renders a validation array instead of [object Object]', () => {
+    const error = {
+      response: { data: { detail: [
+        { type: 'int_parsing', loc: ['body', 'face_ids', 0],
+          msg: 'Input should be a valid integer', input: 'face-123' },
+      ] } },
+    };
+
+    const message = describeApiError(error);
+
+    expect(message).not.toContain('[object Object]');
+    expect(message).toContain('face_ids.0');
+    expect(message).toContain('valid integer');
+    expect(message).toContain('face-123');
+  });
+
+  it('joins several validation errors', () => {
+    const error = {
+      response: { data: { detail: [
+        { loc: ['body', 'face_ids', 0], msg: 'bad', input: 'face-1' },
+        { loc: ['body', 'face_ids', 1], msg: 'bad', input: 'face-2' },
+      ] } },
+    };
+    expect(describeApiError(error).split(';')).toHaveLength(2);
+  });
+
+  it('passes a plain string detail through unchanged', () => {
+    expect(describeApiError({ response: { data: { detail: 'No faces found' } } }))
+      .toBe('No faces found');
+  });
+
+  it('falls back to the error message when there is no detail', () => {
+    expect(describeApiError({ message: 'Network Error' })).toBe('Network Error');
+  });
+
+  it('always produces something to show', () => {
+    expect(describeApiError({})).toBeTruthy();
+    expect(describeApiError(null)).toBeTruthy();
+  });
+});

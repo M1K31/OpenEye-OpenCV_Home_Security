@@ -20,6 +20,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { activateOnKey } from '../utils/a11y';
+import { describeApiError } from '../utils/apiError';
 import apiClient from '../api/apiClient';
 import { Button } from '../components/universal';
 import { formatTimestampShort } from '../utils/dateUtils';
@@ -65,6 +66,38 @@ const REVIEW_CONFIDENCE = 0.55;
  * genuinely need a human — unrecognised or borderline, AND carrying an image —
  * form a queue short enough to work through.
  */
+/**
+ * The numeric face-detection id, or null when this is not a face detection.
+ *
+ * Two views load detections in two different shapes, and both reach the same
+ * assign handler. The person view passes API rows straight through, so `id` is
+ * the numeric face id. The combined view merges faces and objects into one
+ * list, where those ids would collide, so it prefixes them: `face-123`,
+ * `object-45`.
+ *
+ * The handler sends `id` to an endpoint declaring `face_ids: List[int]`. From
+ * the person view that worked; from the combined view every request was
+ * rejected with 422 and the interface showed "[object Object]" — the
+ * validation errors, stringified. One handler cannot serve two id conventions,
+ * so the conventions are reconciled here.
+ *
+ * Objects return null: a vehicle cannot be assigned to a person.
+ */
+export function faceIdOf(detection) {
+  if (!detection) return null;
+
+  if (typeof detection.face_id === 'number') return detection.face_id;
+  if (typeof detection.id === 'number') return detection.id;
+
+  if (typeof detection.id === 'string') {
+    const match = /^face-(\d+)$/.exec(detection.id);
+    if (match) return Number(match[1]);
+    // A bare numeric string is still a face id.
+    if (/^\d+$/.test(detection.id)) return Number(detection.id);
+  }
+  return null;
+}
+
 export function splitDetections(detections) {
   const review = [];
   const byPerson = new Map();
@@ -223,6 +256,10 @@ const DetectionsPage = () => {
         const faceData = faceResponse.value.data;
         const faceDetections = (faceData.data || []).map(face => ({
           id: `face-${face.id}`,
+          // The unprefixed id, for anything that has to talk to the API. The
+          // prefix exists only to keep face and object keys distinct in this
+          // merged list.
+          face_id: face.id,
           type: 'person',
           subtype: 'face',
           name: face.person_name,
@@ -412,7 +449,7 @@ const DetectionsPage = () => {
       //
       // Done first, so a failure here surfaces as an error instead of being
       // masked by the training upload that follows.
-      const faceIds = dets.map(d => d.id).filter(id => id !== undefined && id !== null);
+      const faceIds = dets.map(faceIdOf).filter(id => id !== null);
       if (faceIds.length === 0) {
         // Refuse rather than continue. Every call site builds its own object,
         // and when one omitted `id` this guard skipped the reassignment, let
@@ -421,8 +458,8 @@ const DetectionsPage = () => {
         // detections stayed where they were. A missing id is a bug in the
         // caller, not an empty selection, and it has to be visible.
         throw new Error(
-          'Could not reassign: the selected detections carry no id. ' +
-          'This is a bug — please report it.'
+          'Could not reassign: none of the selected detections is a face. ' +
+          'Only face detections can be assigned to a person.'
         );
       }
       await apiClient.post('/faces/history/bulk-reassign', {
@@ -485,7 +522,7 @@ const DetectionsPage = () => {
       }
     } catch (error) {
       console.error('Error assigning detections:', error);
-      alert('Error assigning person: ' + (error.response?.data?.detail || error.message));
+      alert('Error assigning person: ' + describeApiError(error));
     } finally {
       setAssignBusy(false);
     }
