@@ -18,7 +18,11 @@ jobs:
       # never that the others were green.
       fail-fast: false
       matrix:
-        python-version: ['3.9', '3.10', '3.11']
+        # 3.12 is what the shipped macOS bundle runs, and the Docker image
+        # now matches it. It was absent here, so CI certified three versions
+        # and never the one users have. 3.9 stays because the developer
+        # machine still runs it; drop it once that moves.
+        python-version: ['3.9', '3.10', '3.11', '3.12']
     
     steps:
     - name: Checkout code
@@ -105,7 +109,7 @@ jobs:
         file: ./opencv_surveillance/coverage.xml
         flags: unittests
         name: codecov-umbrella
-      if: matrix.python-version == '3.11'
+      if: matrix.python-version == '3.12'  # report against the shipped version
       continue-on-error: true
 
   docker-build-test:

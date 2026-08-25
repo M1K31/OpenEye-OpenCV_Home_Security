@@ -155,7 +155,7 @@ class UserPreferences(Base):
 
 
 class Person(Base):
-    """
+    r"""
     A person the system knows about.
 
     Added because there was no such thing. A person was emergent from three
