@@ -69,41 +69,30 @@ const REVIEW_CONFIDENCE = 0.55;
 /**
  * The numeric face-detection id, or null when this is not a face detection.
  *
- * Two views load detections in two different shapes, and both reach the same
- * assign handler. The person view passes API rows straight through, so `id` is
- * the numeric face id. The combined view merges faces and objects into one
- * list, where those ids would collide, so it prefixes them: `face-123`,
- * `object-45`.
+ * `id` is now always the server's own id, because rendering keys live in a
+ * separate `listKey` field. This function used to unwrap three prefixes —
+ * `face-`, `pd-`, `object-` — invented independently to keep list rows
+ * distinct, all of which ended up in `id` and were sent to an endpoint
+ * expecting an integer.
  *
- * The handler sends `id` to an endpoint declaring `face_ids: List[int]`. From
- * the person view that worked; from the combined view every request was
- * rejected with 422 and the interface showed "[object Object]" — the
- * validation errors, stringified. One handler cannot serve two id conventions,
- * so the conventions are reconciled here.
+ * What remains is the one distinction the API genuinely cares about: a vehicle
+ * or a package cannot be assigned to a person. Rows from the person endpoint
+ * carry no `type` at all and are always faces.
  *
- * Objects return null: a vehicle cannot be assigned to a person.
+ * A prefixed string arriving here now returns null rather than being decoded,
+ * so a view that puts a render key back into `id` fails visibly at the point of
+ * use instead of being quietly tolerated forever.
  */
 export function faceIdOf(detection) {
   if (!detection) return null;
+  if (detection.type && detection.type !== 'person') return null;
 
-  if (typeof detection.face_id === 'number') return detection.face_id;
-  if (typeof detection.id === 'number') return detection.id;
-
-  if (typeof detection.id === 'string') {
-    // Three prefixes are in use, invented independently for list-key
-    // uniqueness: `face-` in the combined feed and `pd-` in the person view.
-    // A list key is a rendering concern and never a value the API can accept,
-    // but both ended up in the id field, so both are unwrapped here.
-    //
-    // `object-` is deliberately absent: an object detection is not a face and
-    // must fall through to null.
-    const match = /^(?:face|pd)-(\d+)$/.exec(detection.id);
-    if (match) return Number(match[1]);
-    // A bare numeric string is still a face id.
-    if (/^\d+$/.test(detection.id)) return Number(detection.id);
-  }
+  const id = detection.id;
+  if (typeof id === 'number') return id;
+  if (typeof id === 'string' && /^\d+$/.test(id)) return Number(id);
   return null;
 }
+
 
 export function splitDetections(detections) {
   const review = [];
@@ -262,11 +251,16 @@ const DetectionsPage = () => {
       if (faceResponse.status === 'fulfilled') {
         const faceData = faceResponse.value.data;
         const faceDetections = (faceData.data || []).map(face => ({
-          id: `face-${face.id}`,
-          // The unprefixed id, for anything that has to talk to the API. The
-          // prefix exists only to keep face and object keys distinct in this
-          // merged list.
-          face_id: face.id,
+          // `id` is the server's id, untouched, so anything talking to the API
+          // can use it directly. `listKey` is the separate, render-only value
+          // that keeps rows distinct once faces and objects share one list.
+          //
+          // These were previously the same field. Face 12 and object 12 collide
+          // in a merged list, so ids were prefixed to `face-12` — and the
+          // prefixed string then reached an endpoint expecting an integer,
+          // which rejected every request. Two purposes, two fields.
+          id: face.id,
+          listKey: `face-${face.id}`,
           type: 'person',
           subtype: 'face',
           name: face.person_name,
@@ -286,7 +280,8 @@ const DetectionsPage = () => {
       if (objectResponse.status === 'fulfilled') {
         const objectData = objectResponse.value.data;
         const objectDetections = (objectData.data || []).map(obj => ({
-          id: `object-${obj.id}`,
+          id: obj.id,
+          listKey: `object-${obj.id}`,
           type: obj.object_class,
           subtype: obj.object_subclass,
           name: obj.identified_object_name || `Unknown ${obj.object_subclass}`,
@@ -379,7 +374,8 @@ const DetectionsPage = () => {
 
       // Transform to unified format
       const objectDetections = (data.data || []).map(obj => ({
-        id: `object-${obj.id}`,
+        id: obj.id,
+        listKey: `object-${obj.id}`,
         type: obj.object_class,
         subtype: obj.object_subclass,
         name: obj.identified_object_name || `Unknown ${obj.object_subclass}`,
@@ -676,21 +672,21 @@ const DetectionsPage = () => {
                   ) : (
                     <div style={styles.detectionGrid}>
                       {personDetections.map((detection, index) => {
-                        const key = `pd-${detection.id ?? index}`;
+                        // Render-only, and never sent anywhere. The person
+                        // endpoint returns real ids, but a row without one
+                        // still needs to be distinct in this list, so the
+                        // index stands in — which is exactly why this value
+                        // must not be mistaken for an identifier.
+                        const listKey = `pd-${detection.id ?? index}`;
                         const snapshotPath = normalizeSnapshot(detection.snapshot_path);
-                        const sel = !!selected[key];
+                        const sel = !!selected[listKey];
                         return (
-                          <div key={key}
+                          <div key={listKey}
                             style={{ ...styles.detectionCard, ...(sel ? styles.detectionCardSelected : {}) }}>
                             <label style={styles.selectCheckboxWrap}>
                               <input type="checkbox" checked={sel}
-                                onChange={() => toggleSelect(key, {
-                                  // The detection's own id, not the list key.
-                                  // `key` is prefixed to stay unique within
-                                  // this list; it is not something the API can
-                                  // be given.
+                                onChange={() => toggleSelect(listKey, {
                                   id: detection.id,
-                                  face_id: detection.id,
                                   snapshot_path: detection.snapshot_path,
                                   cluster_id: detection.cluster_id,
                                   name: detection.person_name,
@@ -801,19 +797,20 @@ const DetectionsPage = () => {
                   <div style={styles.detectionGrid}>
                     {review.map(detection => (
                       <DetectionCard
-                        key={detection.id}
+                        key={detection.listKey}
                         detection={detection}
                         selectable={detection.type === 'person'}
-                        selected={!!selected[detection.id]}
-                        onToggleSelect={() => toggleSelect(detection.id, {
+                        selected={!!selected[detection.listKey]}
+                        onToggleSelect={() => toggleSelect(detection.listKey, {
                           id: detection.id,
-                          face_id: detection.face_id,
+                          type: detection.type,
                           snapshot_path: detection.snapshot_path,
                           cluster_id: detection.cluster_id,
                           name: detection.name,
                         })}
                         onAssign={() => openAssign([{
                           id: detection.id,
+                          type: detection.type,
                           snapshot_path: detection.snapshot_path,
                           cluster_id: detection.cluster_id,
                           name: detection.name,

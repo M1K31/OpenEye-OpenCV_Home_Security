@@ -22,6 +22,7 @@
 // transformations, so they are tested directly rather than through the page.
 
 import { describe, it, expect } from 'vitest';
+import { faceIdOf } from '../DetectionsPage.jsx';
 
 /**
  * Mirrors toggleSelect: the map key is the detection id, and the stored value
@@ -34,9 +35,14 @@ function storeSelection(previous, key, detection) {
   return next;
 }
 
-/** Mirrors the id collection in assignDetections. */
+/**
+ * Mirrors the id collection in assignDetections.
+ *
+ * Uses the real faceIdOf rather than reimplementing it, so this cannot drift
+ * from the handler the way an earlier copy of this helper did.
+ */
 function collectFaceIds(detections) {
-  return detections.map(d => d.id).filter(id => id !== undefined && id !== null);
+  return detections.map(faceIdOf).filter(id => id !== null);
 }
 
 describe('selection carries the detection id', () => {
@@ -78,7 +84,7 @@ describe('the assign handler can identify what it was given', () => {
     expect(collectFaceIds(detections)).toEqual([101, 102]);
   });
 
-  it('reproduces the bug when the id is dropped', () => {
+  it('yields nothing when the id is dropped, as the shipped literal did', () => {
     // The literal that shipped. Kept as a test so the failure mode is visible
     // rather than described: this is what produced a success message and no
     // reassignment.
@@ -95,53 +101,80 @@ describe('the assign handler can identify what it was given', () => {
     expect(collectFaceIds([{ id: 0, name: 'Unknown' }])).toEqual([0]);
   });
 
-  it('keeps ids that are strings, as some endpoints return', () => {
-    expect(collectFaceIds([{ id: '55', name: 'Unknown' }])).toEqual(['55']);
+  it('normalises a numeric string, which the endpoint needs as a number', () => {
+    expect(collectFaceIds([{ id: '55', name: 'Unknown' }])).toEqual([55]);
   });
 });
 
 // ---------------------------------------------------------------------------
-// The two id conventions
+// Render keys and API identifiers are separate fields
 // ---------------------------------------------------------------------------
 //
-// Fixing the missing id exposed a second defect underneath it. Two views load
-// detections in two shapes and both reach the same handler: the person view
-// passes API rows through, so `id` is numeric, while the combined view merges
-// faces and objects and prefixes the ids to keep them distinct. Sending
-// "face-123" to an endpoint declaring `face_ids: List[int]` is rejected with
-// 422, which the interface rendered as "[object Object]".
+// They were one field, and it caused three separate bugs. The combined feed
+// merges faces and objects, where face 12 and object 12 collide, so ids were
+// prefixed to `face-12`; the person view invented `pd-12` for the same reason.
+// Those strings then reached an endpoint declaring `face_ids: List[int]`, which
+// rejected every request — and a selection that stored the key instead of the
+// id could not be reassigned at all.
+//
+// `listKey` now carries uniqueness for rendering and `id` stays exactly what
+// the server sent. faceIdOf no longer decodes prefixes: a prefixed value is a
+// view putting a render key back into `id`, and that should fail where it is
+// used rather than be tolerated indefinitely.
 
-import { faceIdOf } from '../DetectionsPage.jsx';
 import { describeApiError } from '../../utils/apiError.js';
 
-describe('resolving a face id from either convention', () => {
-  it('reads a numeric id, as the person view supplies', () => {
+describe('identifying a face detection', () => {
+  it('uses the id the server sent', () => {
+    expect(faceIdOf({ id: 123, type: 'person' })).toBe(123);
+  });
+
+  it('accepts rows from the person endpoint, which carry no type', () => {
     expect(faceIdOf({ id: 123 })).toBe(123);
   });
 
-  it('reads a prefixed id, as the combined view supplies', () => {
-    expect(faceIdOf({ id: 'face-123' })).toBe(123);
-  });
-
-  it('prefers an explicit face_id when present', () => {
-    expect(faceIdOf({ id: 'face-123', face_id: 123 })).toBe(123);
-  });
-
   it('refuses an object detection', () => {
-    // A vehicle cannot be assigned to a person, and "object-45" must never be
-    // sent as a face id.
-    expect(faceIdOf({ id: 'object-45' })).toBeNull();
+    // A vehicle cannot be assigned to a person. `type` is carried into the
+    // selection for exactly this check, since a stored selection is detached
+    // from the row it came from.
+    expect(faceIdOf({ id: 12, type: 'vehicle' })).toBeNull();
+    expect(faceIdOf({ id: 12, type: 'package' })).toBeNull();
+    expect(faceIdOf({ id: 12, type: 'animal' })).toBeNull();
   });
 
   it('keeps id 0', () => {
     expect(faceIdOf({ id: 0 })).toBe(0);
-    expect(faceIdOf({ id: 'face-0' })).toBe(0);
+  });
+
+  it('accepts a numeric string, as some endpoints return', () => {
+    expect(faceIdOf({ id: '55' })).toBe(55);
+  });
+
+  it('refuses a prefixed value instead of decoding it', () => {
+    // The regression guard for this whole change. If a view puts its render
+    // key back into `id`, the assign handler must refuse and say so — the
+    // silent version of this shipped, reported success, and moved nothing.
+    expect(faceIdOf({ id: 'face-123' })).toBeNull();
+    expect(faceIdOf({ id: 'pd-123' })).toBeNull();
+    expect(faceIdOf({ id: 'object-45' })).toBeNull();
   });
 
   it('returns null rather than guessing at an unknown shape', () => {
-    expect(faceIdOf({ id: 'cluster-7' })).toBeNull();
     expect(faceIdOf({})).toBeNull();
     expect(faceIdOf(null)).toBeNull();
+  });
+});
+
+describe('a detection carries both fields', () => {
+  it('keeps them distinct, so neither can stand in for the other', () => {
+    // What the loader now builds for the merged feed.
+    const face = { id: 12, listKey: 'face-12', type: 'person' };
+    const object = { id: 12, listKey: 'object-12', type: 'vehicle' };
+
+    // Same server id, different rows: the keys are what keep them apart.
+    expect(face.listKey).not.toBe(object.listKey);
+    expect(faceIdOf(face)).toBe(12);
+    expect(faceIdOf(object)).toBeNull();
   });
 });
 
@@ -187,23 +220,6 @@ describe('reporting an API failure', () => {
   });
 });
 
-describe('the person view uses a third prefix', () => {
-  it('unwraps the pd- key the person list builds', () => {
-    // `pd-${detection.id ?? index}`, invented for list-key uniqueness and then
-    // stored as the id. Reported from the interface as "none of the selected
-    // detections is a face" over three plainly visible faces.
-    expect(faceIdOf({ id: 'pd-123' })).toBe(123);
-  });
-
-  it('prefers the real id over the list key when both are present', () => {
-    expect(faceIdOf({ id: 'pd-9', face_id: 123 })).toBe(123);
-  });
-
-  it('still refuses an object, whatever the prefix looks like', () => {
-    expect(faceIdOf({ id: 'object-45' })).toBeNull();
-    expect(faceIdOf({ id: 'pd-abc' })).toBeNull();
-  });
-});
 
 describe('the fallback message', () => {
   it('is used when the server said nothing useful', () => {
