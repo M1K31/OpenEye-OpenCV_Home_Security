@@ -456,10 +456,23 @@ class ScheduledTasksManager:
             cutoff_date = utcnow() - timedelta(days=min_age_days)
 
             if config.get("remove_empty_clusters", True):
-                # Find and remove empty clusters
+                # Emptiness is measured, not read.
+                #
+                # This used to test the stored face_count. That column is
+                # maintained by some writers and not others, so a cluster could
+                # hold nothing while still claiming hundreds of faces — and the
+                # one test that would have tidied it away was the very number
+                # that was wrong. Two clusters on a live install claimed 506
+                # faces between them and held none; neither was ever eligible
+                # for removal.
+                #
+                # Counting the rows that actually point at the cluster cannot
+                # drift, and clears up the ones already in that state.
                 empty_clusters = db.query(FaceCluster).filter(
                     FaceCluster.created_at < cutoff_date,
-                    FaceCluster.face_count == 0
+                    ~db.query(FaceDetectionEvent).filter(
+                        FaceDetectionEvent.cluster_id == FaceCluster.id
+                    ).exists()
                 ).all()
 
                 for cluster in empty_clusters:
@@ -467,6 +480,21 @@ class ScheduledTasksManager:
                     result["clusters_removed"] += 1
 
                 db.commit()
+
+            # An empty cluster usually leaves an empty placeholder behind.
+            #
+            # When a placeholder's detections are assigned to a real person, the
+            # unknownN gallery survives with its images, and the recogniser goes
+            # on holding encodings under that name — so it can match the person
+            # it was just emptied of, and be recreated. Tidied here because this
+            # is where the same situation is already being cleaned up.
+            from backend.core.person_reassignment import prune_orphaned_placeholders
+
+            pruned = prune_orphaned_placeholders(db, dry_run=False)
+            result["placeholders_pruned"] = len(pruned["pruned"])
+            if pruned["pruned"]:
+                logger.info("Pruned placeholder galleries: %s",
+                            "; ".join(pruned["pruned"]))
 
         return result
 

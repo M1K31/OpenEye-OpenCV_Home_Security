@@ -64,6 +64,114 @@ class ReassignmentPlan:
         return "\n".join(lines)
 
 
+def prune_orphaned_placeholders(db, dry_run: bool = True) -> dict:
+    """
+    Remove auto-named placeholders that no longer describe anyone.
+
+    An `unknownN` gallery exists to hold faces nobody has identified yet. Once
+    those detections are assigned to a real person, the placeholder describes
+    nothing — but its folder survives, and with it the encodings trained from
+    it.
+
+    That is not cosmetic. On a live install `unknown1` held **no detections, no
+    person record, and twelve images**, and the recogniser still carried twelve
+    encodings under that name — encodings of a face that had since been
+    identified as somebody else. The placeholder could therefore win a match
+    against the very person whose detections had been moved out of it, and be
+    recreated.
+
+    Only `detected/` is removed, and only for names matching the auto-generated
+    pattern. That directory is derived from detections by definition, so for a
+    person with none the correct contents are none: this makes derived data
+    agree with its source rather than discarding anything authored. A gallery
+    with anything in `uploaded/` is left alone entirely — somebody put those
+    there deliberately, and that makes it a real person under an unfortunate
+    name.
+    """
+    from backend.core.face_clustering import AUTO_UNKNOWN_NAME
+    from backend.core.gallery import detected_dir, person_dir, uploaded_dir, images_in
+    from backend.core.paths import paths
+    from backend.database.models import FaceDetectionEvent
+
+    result = {"examined": [], "pruned": [], "kept": [], "dry_run": dry_run}
+
+    faces_root = paths.faces_dir
+    if not faces_root.is_dir():
+        return result
+
+    for entry in sorted(faces_root.iterdir()):
+        if not entry.is_dir() or not AUTO_UNKNOWN_NAME.match(entry.name):
+            continue
+
+        name = entry.name
+        result["examined"].append(name)
+
+        detections = db.query(FaceDetectionEvent).filter(
+            FaceDetectionEvent.person_name == name).count()
+        if detections:
+            result["kept"].append(f"{name}: still has {detections} detection(s)")
+            continue
+
+        if images_in(uploaded_dir(name)):
+            result["kept"].append(f"{name}: has photographs somebody uploaded")
+            continue
+
+        images = images_in(detected_dir(name))
+        if dry_run:
+            result["pruned"].append(f"{name}: would remove {len(images)} image(s)")
+            continue
+
+        for image in images:
+            try:
+                image.unlink()
+            except OSError as exc:
+                logger.warning("Could not remove %s: %s", image, exc)
+
+        # Take the directories only if they are genuinely empty.
+        for directory in (detected_dir(name), uploaded_dir(name), person_dir(name)):
+            try:
+                directory.rmdir()
+            except OSError:
+                pass
+
+        # Drop the encodings too.
+        #
+        # Removing the images is only half of it: the recogniser holds its
+        # encodings in memory and on disk, and would go on matching faces
+        # against a name that now describes nobody — recreating the placeholder
+        # from the very person whose detections were moved out of it.
+        #
+        # Removed by name rather than by retraining everything: a full retrain
+        # re-encodes every photograph of everyone to forget one name, and there
+        # are hundreds.
+        try:
+            from backend.core.face_recognition import get_face_manager
+
+            manager = get_face_manager()
+            stale = [i for i, held in enumerate(manager.known_face_names)
+                     if held == name]
+            for index in reversed(stale):
+                del manager.known_face_encodings[index]
+                del manager.known_face_names[index]
+            if stale:
+                manager.save_encodings()
+                result["pruned"].append(
+                    f"{name}: dropped {len(stale)} encoding(s)")
+                logger.info("Dropped %d encoding(s) for placeholder '%s'",
+                            len(stale), name)
+        except Exception as exc:
+            # The images are already gone, which is the larger half. Say so
+            # rather than failing the whole prune.
+            logger.warning("Could not drop encodings for '%s': %s", name, exc)
+
+        result["pruned"].append(f"{name}: removed {len(images)} image(s)")
+        logger.info(
+            "Removed placeholder gallery '%s' (%d images, no detections)",
+            name, len(images))
+
+    return result
+
+
 def rebuild_gallery(person_name: str, db, dry_run: bool = True) -> int:
     """
     Regenerate a person's detected/ gallery from their own detections.

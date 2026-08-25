@@ -810,8 +810,22 @@ class FaceClusteringService:
             db.query(FaceDetectionEvent).filter(
                 FaceDetectionEvent.cluster_id.isnot(None)
             ).update({"cluster_id": None})
+
+            # Zero the counts this just invalidated.
+            #
+            # Detaching every detection leaves every cluster holding nothing,
+            # but face_count is a stored column and kept whatever it last said.
+            # Clusters were left claiming faces they no longer had — one
+            # reported 503 against zero — which is wrong in the interface and
+            # worse in the cleanup job, whose whole test is face_count == 0. A
+            # cluster emptied this way could therefore never be tidied away.
+            db.query(FaceCluster).filter(
+                FaceCluster.face_count != 0
+            ).update({"face_count": 0}, synchronize_session=False)
+
             db.commit()
-            logger.info("Cleared existing cluster assignments")
+            logger.info(
+                "Cleared existing cluster assignments and reset cluster counts")
 
         unknown_faces, known_faces = self.get_all_faces_for_clustering(db)
         all_faces = unknown_faces + known_faces
