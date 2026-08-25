@@ -367,7 +367,11 @@ const DetectionsPage = () => {
     setSelected(prev => {
       const next = { ...prev };
       if (next[key]) delete next[key];
-      else next[key] = detection;
+      // The key IS the detection id, so record it rather than relying on every
+      // call site to include it. Both of them built their object literal by
+      // hand and neither carried `id`, so a selection could not be reassigned:
+      // the handler collects `d.id`, found nothing, and skipped the call.
+      else next[key] = { id: key, ...detection };
       return next;
     });
   };
@@ -409,12 +413,22 @@ const DetectionsPage = () => {
       // Done first, so a failure here surfaces as an error instead of being
       // masked by the training upload that follows.
       const faceIds = dets.map(d => d.id).filter(id => id !== undefined && id !== null);
-      if (faceIds.length > 0) {
-        await apiClient.post('/faces/history/bulk-reassign', {
-          face_ids: faceIds,
-          new_person_name: name,
-        });
+      if (faceIds.length === 0) {
+        // Refuse rather than continue. Every call site builds its own object,
+        // and when one omitted `id` this guard skipped the reassignment, let
+        // the photo upload below succeed, and reported "Assigned N detections"
+        // — so the interface confirmed an action it had not performed, and the
+        // detections stayed where they were. A missing id is a bug in the
+        // caller, not an empty selection, and it has to be visible.
+        throw new Error(
+          'Could not reassign: the selected detections carry no id. ' +
+          'This is a bug — please report it.'
+        );
       }
+      await apiClient.post('/faces/history/bulk-reassign', {
+        face_ids: faceIds,
+        new_person_name: name,
+      });
 
       // Name any clusters represented in the selection (relabels their history).
       // Best-effort: the reassignment above is what the operator asked for, and
@@ -598,6 +612,7 @@ const DetectionsPage = () => {
                     <div style={styles.personActions}>
                       <Button variant="primary" size="small"
                         onClick={() => openAssign(personDetections.map(d => ({
+                          id: d.id,
                           snapshot_path: d.snapshot_path, cluster_id: d.cluster_id, name: d.person_name,
                         })))}>
                         {isKnownPerson(selectedPerson) ? 'Merge into a profile…' : 'Save all as a person…'}
@@ -659,6 +674,7 @@ const DetectionsPage = () => {
                               <div style={styles.detectionActions}>
                                 <Button variant="secondary" size="small"
                                   onClick={() => openAssign([{
+                                    id: detection.id,
                                     snapshot_path: detection.snapshot_path,
                                     cluster_id: detection.cluster_id,
                                     name: detection.person_name,
@@ -745,6 +761,7 @@ const DetectionsPage = () => {
                           name: detection.name,
                         })}
                         onAssign={() => openAssign([{
+                          id: detection.id,
                           snapshot_path: detection.snapshot_path,
                           cluster_id: detection.cluster_id,
                           name: detection.name,

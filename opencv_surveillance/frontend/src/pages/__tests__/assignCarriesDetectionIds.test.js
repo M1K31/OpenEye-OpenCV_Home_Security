@@ -1,0 +1,101 @@
+// Copyright (c) 2025 Smart Industries LLC (Mikel Smart)
+// This file is part of OpenEye-OpenCV_Home_Security
+//
+// Assigning detections to a person must actually move them.
+//
+// The defect
+// ----------
+// The assign handler collects `d.id` from each detection and posts them to
+// /faces/history/bulk-reassign. Every call site built its own object literal by
+// hand, and all five omitted `id` — so the collected list was empty, a
+// `length > 0` guard skipped the reassignment entirely, and the photo upload
+// that follows still succeeded. The interface then reported "Assigned N
+// detections" while the detection rows had not moved.
+//
+// Confirmed from the application log: creating a person from the detections
+// view produced only
+//     POST /api/faces/people/Mikayla/photos
+// with no bulk-reassign call, twice, on two separate attempts.
+//
+// These tests cover the two shapes that carry the failure: what selection
+// stores, and what the assign handler extracts. Both are plain data
+// transformations, so they are tested directly rather than through the page.
+
+import { describe, it, expect } from 'vitest';
+
+/**
+ * Mirrors toggleSelect: the map key is the detection id, and the stored value
+ * must carry it regardless of what the caller passed.
+ */
+function storeSelection(previous, key, detection) {
+  const next = { ...previous };
+  if (next[key]) delete next[key];
+  else next[key] = { id: key, ...detection };
+  return next;
+}
+
+/** Mirrors the id collection in assignDetections. */
+function collectFaceIds(detections) {
+  return detections.map(d => d.id).filter(id => id !== undefined && id !== null);
+}
+
+describe('selection carries the detection id', () => {
+  it('records the id even when the caller omits it', () => {
+    // Exactly what both call sites passed: no id field.
+    const fromCallSite = {
+      snapshot_path: 'unknown/face_1.jpg',
+      cluster_id: null,
+      name: 'Unknown',
+    };
+
+    const selected = storeSelection({}, 42, fromCallSite);
+
+    expect(selected[42].id).toBe(42);
+    expect(collectFaceIds(Object.values(selected))).toEqual([42]);
+  });
+
+  it('does not overwrite an id the caller did supply', () => {
+    const selected = storeSelection({}, 7, { id: 7, name: 'Yaleska' });
+    expect(selected[7].id).toBe(7);
+  });
+
+  it('still removes an entry when toggled off', () => {
+    const once = storeSelection({}, 1, { name: 'Unknown' });
+    const twice = storeSelection(once, 1, { name: 'Unknown' });
+    expect(twice[1]).toBeUndefined();
+    expect(collectFaceIds(Object.values(twice))).toEqual([]);
+  });
+});
+
+describe('the assign handler can identify what it was given', () => {
+  it('collects ids from detections built by the assign buttons', () => {
+    // The three "Assign to person…" call sites, with the id now included.
+    const detections = [
+      { id: 101, snapshot_path: 'a.jpg', cluster_id: null, name: 'Unknown' },
+      { id: 102, snapshot_path: 'b.jpg', cluster_id: 5, name: 'unknown1' },
+    ];
+
+    expect(collectFaceIds(detections)).toEqual([101, 102]);
+  });
+
+  it('reproduces the bug when the id is dropped', () => {
+    // The literal that shipped. Kept as a test so the failure mode is visible
+    // rather than described: this is what produced a success message and no
+    // reassignment.
+    const asShipped = [
+      { snapshot_path: 'a.jpg', cluster_id: null, name: 'Unknown' },
+    ];
+
+    expect(collectFaceIds(asShipped)).toEqual([]);
+  });
+
+  it('treats id 0 as a real id', () => {
+    // `filter(Boolean)` would discard it. The guard tests for undefined and
+    // null specifically, and must keep doing so.
+    expect(collectFaceIds([{ id: 0, name: 'Unknown' }])).toEqual([0]);
+  });
+
+  it('keeps ids that are strings, as some endpoints return', () => {
+    expect(collectFaceIds([{ id: '55', name: 'Unknown' }])).toEqual(['55']);
+  });
+});
