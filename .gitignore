@@ -226,3 +226,10 @@ harness_bridge.py
 pytest-of-*/
 /node-compile-cache/
 openeye_backup_*/
+
+# Temporary directories that have been committed by accident before.
+# pytest's tmp_path root is already ignored above; these are the macOS
+# per-user cache directories that appear at the repo root when a test or
+# build tool resolves TMPDIR relative to the working directory.
+0-arm64-*/
+0-x86_64-*/
