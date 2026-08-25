@@ -378,7 +378,7 @@ const styles = {
     marginBottom: '30px',
   },
   backButton: {
-    background: '#6c757d',
+    background: 'var(--bg-hover)',
     color: 'white',
     border: 'none',
     padding: '10px 20px',
@@ -445,8 +445,8 @@ const styles = {
     marginBottom: '20px',
   },
   spinner: {
-    border: '4px solid #f3f3f3',
-    borderTop: '4px solid #667eea',
+    border: '4px solid var(--border-panel)',
+    borderTop: '4px solid var(--accent-color)',
     borderRadius: '50%',
     width: '50px',
     height: '50px',
@@ -522,7 +522,7 @@ const styles = {
     fontSize: '12px',
   },
   authNote: {
-    background: '#fff3cd',
+    background: 'var(--warning-bg)',
     padding: '10px',
     borderRadius: '5px',
     fontSize: '12px',

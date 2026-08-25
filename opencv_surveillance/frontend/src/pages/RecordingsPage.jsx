@@ -989,7 +989,7 @@ const styles = {
     flex: 1,
     padding: '0.625rem',
     backgroundColor: 'var(--success)',
-    color: '#fff',
+    color: 'var(--text-on-status)',
     textDecoration: 'none',
     textAlign: 'center',
     borderRadius: '0.375rem',
@@ -1000,7 +1000,7 @@ const styles = {
     flex: 1,
     padding: '0.625rem',
     backgroundColor: 'var(--danger)',
-    color: '#fff',
+    color: 'var(--text-on-status)',
     border: 'none',
     borderRadius: '0.375rem',
     fontSize: '0.875rem',
@@ -1054,7 +1054,7 @@ const styles = {
     flex: 1,
     padding: '0.5rem',
     backgroundColor: 'var(--success)',
-    color: '#fff',
+    color: 'var(--text-on-status)',
     textDecoration: 'none',
     textAlign: 'center',
     borderRadius: '0.375rem',
@@ -1064,7 +1064,7 @@ const styles = {
     flex: 1,
     padding: '0.5rem',
     backgroundColor: 'var(--danger)',
-    color: '#fff',
+    color: 'var(--text-on-status)',
     border: 'none',
     borderRadius: '0.375rem',
     fontSize: '0.875rem',
@@ -1095,7 +1095,7 @@ const styles = {
     top: '0.625rem',
     right: '0.625rem',
     backgroundColor: 'rgba(0,0,0,0.5)',
-    color: '#fff',
+    color: 'var(--text-on-status)',
     border: 'none',
     borderRadius: '50%',
     width: '2.5rem',
@@ -1134,7 +1134,7 @@ const styles = {
   clearButton: {
     padding: '0.5rem 1rem',
     backgroundColor: 'var(--danger)',
-    color: '#fff',
+    color: 'var(--text-on-status)',
     border: 'none',
     borderRadius: '0.375rem',
     fontSize: '0.875rem',
@@ -1171,7 +1171,7 @@ const styles = {
   batchDeleteButton: {
     padding: '0.625rem 1.25rem',
     backgroundColor: 'var(--danger)',
-    color: '#fff',
+    color: 'var(--text-on-status)',
     border: 'none',
     borderRadius: '0.375rem',
     fontSize: '0.875rem',
@@ -1182,7 +1182,7 @@ const styles = {
   batchExportButton: {
     padding: '0.625rem 1.25rem',
     backgroundColor: 'var(--success)',
-    color: '#fff',
+    color: 'var(--text-on-status)',
     border: 'none',
     borderRadius: '0.375rem',
     fontSize: '0.875rem',
@@ -1203,7 +1203,7 @@ const styles = {
   clearSearchButton: {
     padding: '0.5rem 0.75rem',
     backgroundColor: 'var(--danger)',
-    color: '#fff',
+    color: 'var(--text-on-status)',
     border: 'none',
     borderRadius: '0.375rem',
     fontSize: '0.875rem',
@@ -1243,7 +1243,10 @@ const styles = {
   paginationButton: {
     padding: '0.625rem 1.25rem',
     backgroundColor: 'var(--primary)',
-    color: '#fff',
+    // The theme's own accent, so the text follows the theme rather than the
+    // fixed status colour: one palette pairs its accent with gold, another
+    // with near-black.
+    color: 'var(--button-primary-text)',
     border: 'none',
     borderRadius: '0.375rem',
     fontSize: '0.875rem',
@@ -1282,7 +1285,10 @@ const styles = {
   },
   pageNumberActive: {
     backgroundColor: 'var(--primary)',
-    color: '#fff',
+    // The theme's own accent, so the text follows the theme rather than the
+    // fixed status colour: one palette pairs its accent with gold, another
+    // with near-black.
+    color: 'var(--button-primary-text)',
     borderColor: 'var(--primary)',
     fontWeight: '600',
   },

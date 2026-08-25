@@ -111,6 +111,20 @@ html[class$="-theme"] body {
    * green and danger must stay red in every theme, or the interface stops
    * communicating state. They live here so components stop hardcoding them.
    */
+  /* Text that sits ON a semantic colour.
+   *
+   * Distinct from --button-primary-text, and the distinction matters. That
+   * token varies per theme on purpose — white in the default, gold in one,
+   * near-black in another — because it pairs with that theme's accent. The
+   * semantic colours below do NOT vary: success is green everywhere. Text on
+   * green has to stay legible against green, so it cannot follow the accent, or
+   * a gold-on-green badge appears in one theme and a black-on-red one in
+   * another.
+   *
+   * Hardcoded as #fff at eighteen sites before this existed, which was right
+   * for status badges and wrong for the four that sat on the theme accent. */
+  --text-on-status: #ffffff;
+
   --success-color: #28a745;
   --state-success: #28a745;
   --warning-color: #ffc107;

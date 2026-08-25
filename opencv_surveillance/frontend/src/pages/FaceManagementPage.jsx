@@ -797,8 +797,8 @@ const FaceManagementPage = ({ embedded = false }) => {
                 style={{
                   display: 'inline-block',
                   padding: '12px 24px',
-                  background: '#007bff',
-                  color: '#ffffff',
+                  background: 'var(--button-primary-bg)',
+                  color: 'var(--button-primary-text)',
                   borderRadius: '5px',
                   cursor: 'pointer',
                   marginBottom: '10px',
@@ -807,8 +807,8 @@ const FaceManagementPage = ({ embedded = false }) => {
                   border: 'none',
                   transition: 'background 0.3s ease'
                 }}
-                onMouseOver={(e) => e.target.style.background = '#0056b3'}
-                onMouseOut={(e) => e.target.style.background = '#007bff'}
+                onMouseOver={(e) => e.target.style.background = 'var(--button-primary-hover-bg, var(--button-primary-bg))'}
+                onMouseOut={(e) => e.target.style.background = 'var(--button-primary-bg)'}
                 onClick={() => logger.log('[FaceManagement] Choose Photos label clicked')}
               >
                 📁 Choose Photos

@@ -283,7 +283,7 @@ const styles = {
   },
   button: {
     backgroundColor: 'var(--theme-primary)',
-    color: '#ffffff',
+    color: 'var(--button-primary-text)',
     padding: 'var(--spacing-md, 16px)', // 8pt grid aligned
     border: 'none',
     borderRadius: 'var(--radius-md, 12px)',

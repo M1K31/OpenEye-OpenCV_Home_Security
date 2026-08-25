@@ -126,7 +126,7 @@ const TwoFactorSettings = ({ embedded = false }) => {
               <span style={{
                 ...styles.statusBadge,
                 backgroundColor: status?.two_factor_enabled ? 'var(--color-success, #28a745)' : 'var(--color-warning, #ffc107)',
-                color: '#fff'
+                color: 'var(--text-on-status)'
               }}>
                 {status?.two_factor_enabled ? 'Enabled' : 'Disabled'}
               </span>

@@ -269,7 +269,7 @@ const MotionZoneEditor = ({ cameraId, onClose }) => {
       </div>
 
       {error && (
-        <div style={{ padding: '12px', background: 'var(--danger-color)', color: '#fff', borderRadius: '4px' }}>
+        <div style={{ padding: '12px', background: 'var(--danger-color)', color: 'var(--text-on-status)', borderRadius: '4px' }}>
           {error}
         </div>
       )}

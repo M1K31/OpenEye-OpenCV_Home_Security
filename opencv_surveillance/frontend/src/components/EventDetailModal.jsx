@@ -210,7 +210,7 @@ const EventDetailModal = ({ event, onClose, onDelete }) => {
                         style={{
                           padding: '4px 8px',
                           fontSize: '12px',
-                          border: '1px solid #ccc',
+                          border: '1px solid var(--border-panel)',
                           borderRadius: '4px',
                           background: playbackSpeed === speed ? '#007bff' : '#fff',
                           color: playbackSpeed === speed ? '#fff' : '#333',
