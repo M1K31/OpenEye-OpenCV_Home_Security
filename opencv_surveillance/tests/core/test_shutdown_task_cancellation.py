@@ -23,13 +23,24 @@ import time
 import pytest
 
 
-async def _cancel_pending(exclude_self: bool):
-    """The shutdown step, with the defect switchable."""
+def _pending_tasks(exclude_self: bool):
+    """
+    Which tasks the shutdown step would cancel, with the defect switchable.
+
+    Separated from the cancelling so the selection can be asserted without
+    performing it — running the defective selection is not survivable on
+    Python 3.12. See TestSelfCancellation.
+    """
     current = asyncio.current_task()
-    tasks = [
+    return [
         t for t in asyncio.all_tasks()
         if not t.done() and (t is not current or not exclude_self)
     ]
+
+
+async def _cancel_pending(exclude_self: bool):
+    """The shutdown step, with the defect switchable."""
+    tasks = _pending_tasks(exclude_self)
     for task in tasks:
         task.cancel()
     if tasks:
@@ -47,15 +58,54 @@ async def _long_runner():
 
 class TestSelfCancellation:
     @pytest.mark.asyncio
-    async def test_the_old_shape_cancels_itself(self):
-        """Reproduces the reported failure, so the fix has something to prove."""
+    async def test_the_old_shape_selects_the_running_task_for_cancellation(self):
+        """
+        The defect, proved by inspection rather than by living through it.
+
+        This previously ran the broken shape and asserted CancelledError came
+        out. That held through Python 3.11. On 3.12 the same shape does
+        something worse: the running task is a member of the `gather` it is
+        awaiting, so cancelling it cancels the gather, which cancels its
+        children, which include the running task again. asyncio recurses
+        through `child.cancel()` until the stack is exhausted:
+
+            File ".../asyncio/tasks.py", line 721, in cancel
+                if child.cancel(msg=msg):
+            [Previous line repeated 958 more times]
+            RecursionError: maximum recursion depth exceeded
+
+        The loop never recovers, the await never returns, and the test hangs —
+        taking the whole suite with it, which is how this was found. Bounding it
+        with a timeout does not help: the RecursionError is raised INSIDE
+        `Timeout._on_timeout`, so the timeout that was meant to rescue the test
+        is itself the thing that blows the stack.
+
+        The property under test is which tasks the filter selects, so that is
+        what is asserted. No cancellation is performed, the outcome is identical
+        on every Python version, and the test cannot hang.
+
+        The sibling test below exercises the FIXED shape for real, so the
+        working path is still covered end to end.
+        """
         victim = asyncio.create_task(_long_runner())
         await asyncio.sleep(0)
+        current = asyncio.current_task()
 
-        with pytest.raises(asyncio.CancelledError):
-            await _cancel_pending(exclude_self=False)
+        try:
+            selected_by_old = _pending_tasks(exclude_self=False)
+            selected_by_new = _pending_tasks(exclude_self=True)
 
-        victim.cancel()
+            assert current in selected_by_old, (
+                "the old shape must select the running task — that is the defect"
+            )
+            assert current not in selected_by_new, (
+                "the fix must leave the running task alone"
+            )
+            assert victim in selected_by_old and victim in selected_by_new, (
+                "both shapes must still cancel genuinely pending work"
+            )
+        finally:
+            victim.cancel()
 
     @pytest.mark.asyncio
     async def test_excluding_the_current_task_shuts_down_cleanly(self):

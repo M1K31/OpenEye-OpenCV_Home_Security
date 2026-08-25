@@ -8,7 +8,13 @@ Unit tests for authentication module
 import pytest
 from unittest.mock import MagicMock, patch
 from datetime import datetime, timedelta, timezone
-from jose import jwt, JWTError
+# PyJWT, matching backend.core.auth. This module previously imported the same
+# names from `jose`; the application moved off python-jose and the lock files
+# no longer ship it, so the import survived only in developer environments
+# that still had the old package installed. The encode/decode calls below
+# are unchanged — the two libraries agree on this part of the API.
+import jwt
+from jwt import PyJWTError as JWTError
 from fastapi import HTTPException
 
 from backend.core.auth import (

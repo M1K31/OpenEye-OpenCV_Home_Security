@@ -58,14 +58,26 @@ def test_send_unauthenticated_rejected(client, db_session):
 
 
 def test_settings_persist_roundtrip(client, db_session):
-    r1 = client.get("/api/notifications/settings")
+    """
+    Both reads are signed, not just the write.
+
+    GET /api/notifications/settings carries require_ecosystem_auth exactly as
+    the PUT does, so an unsigned read is refused with
+    `{"detail": "Missing ecosystem authentication"}`. The unsigned GETs here
+    asserted 200 and never failed only because this whole module is skipped
+    wherever ecosystem_auth is absent — which includes the development machine.
+    The test therefore ran for the first time in a container that has the
+    package, and failed immediately.
+    """
+    url = "/api/notifications/settings"
+
+    r1 = client.get(url, headers=_auth_headers("GET", url))
     assert r1.status_code == 200               # defaults on first read
 
     payload = r1.json()
     payload["quiet_hours"]["enabled"] = True
-    headers = _auth_headers("PUT", "/api/notifications/settings", payload)
-    r2 = client.put("/api/notifications/settings", json=payload, headers=headers)
+    r2 = client.put(url, json=payload, headers=_auth_headers("PUT", url, payload))
     assert r2.status_code == 200
 
-    r3 = client.get("/api/notifications/settings")
+    r3 = client.get(url, headers=_auth_headers("GET", url))
     assert r3.json()["quiet_hours"]["enabled"] is True

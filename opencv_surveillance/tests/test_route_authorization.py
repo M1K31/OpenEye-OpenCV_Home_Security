@@ -82,14 +82,54 @@ PUBLIC_PREFIXES = (
 )
 
 
+def _walk_routes(routes, prefix="", inherited_dependencies=()):
+    """
+    Yield (route, full_path, inherited_dependencies) for every route, including
+    those reached through include_router().
+
+    Iterating app.routes directly is no longer sufficient. Up to Starlette 0.49
+    include_router() copied each child route into app.routes with its full path
+    already applied, so a flat loop saw everything. Starlette 1.6 — the version
+    both lock files pin — instead stores an opaque `_IncludedRouter` per include
+    and resolves paths at request time.
+
+    That change silently gutted the check below. Under the shipped dependency
+    set, app.routes holds 12 plain routes and 30 `_IncludedRouter` objects, and
+    a flat `isinstance` loop skips all 30: the test asserting every route is
+    authenticated was passing while examining a small fraction of the surface.
+    It reported nothing wrong because it was looking at almost nothing.
+
+    Router-level dependencies are carried down as well. `include_router(...,
+    dependencies=[Depends(get_current_active_user)])` records them on the
+    include context rather than folding them into each child route's dependant,
+    so a route protected at the router level looks unprotected if only its own
+    dependant is inspected.
+    """
+    for route in routes:
+        # Matched by name: the class is private and not importable.
+        if type(route).__name__ == "_IncludedRouter":
+            context = getattr(route, "include_context", None)
+            child_router = getattr(route, "original_router", None)
+            if child_router is None:
+                continue
+            yield from _walk_routes(
+                child_router.routes,
+                prefix + (getattr(context, "prefix", "") or ""),
+                tuple(inherited_dependencies)
+                + tuple(getattr(context, "dependencies", ()) or ()),
+            )
+        elif isinstance(route, (APIRoute, APIWebSocketRoute)):
+            yield route, prefix + route.path, tuple(inherited_dependencies)
+
+
 def _iter_api_routes():
     """Yield (method, path) for every HTTP and WebSocket route the app serves."""
-    for route in app.routes:
+    for route, path, _ in _walk_routes(app.routes):
         if isinstance(route, APIWebSocketRoute):
-            yield "WEBSOCKET", route.path
-        elif isinstance(route, APIRoute):
+            yield "WEBSOCKET", path
+        else:
             for method in sorted(set(route.methods) - {"HEAD", "OPTIONS"}):
-                yield method, route.path
+                yield method, path
 
 
 def _is_public(method: str, path: str) -> bool:
@@ -98,7 +138,7 @@ def _is_public(method: str, path: str) -> bool:
     return path.startswith(PUBLIC_PREFIXES)
 
 
-def _has_auth_dependency(route) -> bool:
+def _has_auth_dependency(route, inherited_dependencies=()) -> bool:
     """
     True if any dependency in the route's resolved chain enforces identity.
 
@@ -114,13 +154,29 @@ def _has_auth_dependency(route) -> bool:
         "role_checker",             # produced by auth.require_role([...])
         "require_ecosystem_auth",   # HMAC — how appEcosystem authenticates
     }
-    for dependency in route.dependant.dependencies:
-        call = getattr(dependency, "call", None)
+    def _callable_of(dependency):
+        """
+        The function a dependency will invoke.
+
+        Two shapes turn up and they do not share an attribute name. A resolved
+        `Dependant`, which is what route.dependant.dependencies holds, exposes
+        `.call`. A raw `fastapi.params.Depends`, which is what include_router()
+        records on the include context, exposes `.dependency`. Reading only
+        `.call` silently treats every router-level dependency as absent — which
+        made routers protected by `include_router(dependencies=[...])` look
+        wide open.
+        """
+        return getattr(dependency, "call", None) or getattr(dependency, "dependency", None)
+
+    candidates = list(route.dependant.dependencies) + list(inherited_dependencies)
+
+    for dependency in candidates:
+        call = _callable_of(dependency)
         if call is not None and getattr(call, "__name__", "") in enforcing:
             return True
         # Nested one level: dependencies declared on a sub-dependency.
-        for nested in getattr(dependency, "dependencies", []):
-            nested_call = getattr(nested, "call", None)
+        for nested in getattr(dependency, "dependencies", []) or []:
+            nested_call = _callable_of(nested)
             if nested_call is not None and getattr(nested_call, "__name__", "") in enforcing:
                 return True
     return False
@@ -130,21 +186,18 @@ def test_every_route_is_authenticated_or_explicitly_public():
     """No route may be reachable anonymously without being listed above."""
     unprotected = []
 
-    for route in app.routes:
-        if not isinstance(route, (APIRoute, APIWebSocketRoute)):
-            continue
-
+    for route, path, inherited in _walk_routes(app.routes):
         methods = (
             ["WEBSOCKET"]
             if isinstance(route, APIWebSocketRoute)
             else sorted(set(route.methods) - {"HEAD", "OPTIONS"})
         )
         for method in methods:
-            if _is_public(method, route.path):
+            if _is_public(method, path):
                 continue
-            if _has_auth_dependency(route):
+            if _has_auth_dependency(route, inherited):
                 continue
-            unprotected.append(f"{method} {route.path}")
+            unprotected.append(f"{method} {path}")
 
     assert not unprotected, (
         "These routes are reachable without credentials:\n  "

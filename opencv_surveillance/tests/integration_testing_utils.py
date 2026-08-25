@@ -476,7 +476,7 @@ def system_check():
         'opencv-python': 'cv2',
         'face-recognition': 'face_recognition',
         'numpy': 'numpy',
-        'pyaudio': 'pyaudio',
+        'sounddevice': 'sounddevice',
         'aiortc': 'aiortc',
         'boto3': 'boto3',
         'google-cloud-storage': 'google.cloud.storage',

@@ -128,6 +128,32 @@ class TestAuditLogDirectory:
         assert AuditLogger().log_dir == DATA_ROOT / "logs" / "audit"
 
 
+@pytest.fixture
+def outside_a_container(monkeypatch):
+    """
+    Force the non-container branch of default_data_root.
+
+    default_data_root checks for /.dockerenv before any platform convention,
+    because a container keeps its data beside the code where the volumes are
+    mounted. That check is correct and deliberate — but it short-circuits the
+    platform behaviour the tests below are about, so running the suite INSIDE
+    Docker failed all four of them while the product was doing exactly what it
+    was designed to do.
+
+    /.dockerenv is reported absent rather than os.path.exists being stubbed out
+    wholesale, so the tests still see the real filesystem for everything else.
+    """
+    from backend.core import paths
+
+    real_exists = paths.os.path.exists
+    monkeypatch.setattr(
+        paths.os.path,
+        "exists",
+        lambda path: False if path == "/.dockerenv" else real_exists(path),
+    )
+    monkeypatch.delenv("OPENEYE_IN_CONTAINER", raising=False)
+
+
 class TestDataRootSelection:
     """
     Where the application keeps what it writes.
@@ -161,7 +187,7 @@ class TestDataRootSelection:
         assert is_source_checkout(checkout) is True
         assert default_data_root(checkout) == checkout
 
-    def test_an_installed_tree_does_not_write_beside_the_code(self, tmp_path, monkeypatch):
+    def test_an_installed_tree_does_not_write_beside_the_code(self, tmp_path, monkeypatch, outside_a_container):
         from backend.core.paths import default_data_root, is_source_checkout
 
         monkeypatch.delenv("OPENEYE_DATA_ROOT", raising=False)
@@ -171,7 +197,7 @@ class TestDataRootSelection:
         assert is_source_checkout(installed) is False
         assert default_data_root(installed) != installed
 
-    def test_linux_honours_xdg_data_home(self, tmp_path, monkeypatch):
+    def test_linux_honours_xdg_data_home(self, tmp_path, monkeypatch, outside_a_container):
         from backend.core import paths
 
         monkeypatch.delenv("OPENEYE_DATA_ROOT", raising=False)
@@ -182,7 +208,7 @@ class TestDataRootSelection:
 
         assert paths.default_data_root(installed) == tmp_path / "xdg" / "openeye"
 
-    def test_linux_falls_back_to_local_share(self, tmp_path, monkeypatch):
+    def test_linux_falls_back_to_local_share(self, tmp_path, monkeypatch, outside_a_container):
         from backend.core import paths
 
         monkeypatch.delenv("OPENEYE_DATA_ROOT", raising=False)
@@ -193,7 +219,7 @@ class TestDataRootSelection:
 
         assert paths.default_data_root(installed) == Path.home() / ".local" / "share" / "openeye"
 
-    def test_macos_uses_application_support(self, tmp_path, monkeypatch):
+    def test_macos_uses_application_support(self, tmp_path, monkeypatch, outside_a_container):
         from backend.core import paths
 
         monkeypatch.delenv("OPENEYE_DATA_ROOT", raising=False)
