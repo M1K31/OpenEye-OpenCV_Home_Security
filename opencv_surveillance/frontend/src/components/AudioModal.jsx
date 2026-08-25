@@ -11,6 +11,7 @@
 import React from 'react';
 import TwoWayAudio from './TwoWayAudio';
 import './AudioModal.css';
+import { useDialogA11y } from '../hooks/useDialogA11y';
 
 const AudioModal = ({ isOpen, onClose, cameraId, cameraName }) => {
   if (!isOpen) return null;
@@ -42,11 +43,14 @@ const AudioModal = ({ isOpen, onClose, cameraId, cameraName }) => {
     };
   }, [isOpen, onClose]);
 
+  const { dialogRef, dialogProps } = useDialogA11y(true, 'audio-modal-title-text');
+
+
   return (
     <div className="audio-modal-backdrop" onClick={handleBackdropClick}>
-      <div className="audio-modal-container">
+      <div ref={dialogRef} {...dialogProps} className="audio-modal-container">
         <div className="audio-modal-header">
-          <h2 className="audio-modal-title">
+          <h2 id="audio-modal-title-text" className="audio-modal-title">
             🎤 Two-Way Audio
           </h2>
           <p className="audio-modal-subtitle">

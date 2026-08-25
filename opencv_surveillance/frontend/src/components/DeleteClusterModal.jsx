@@ -3,6 +3,7 @@
 
 import React, { useState } from 'react';
 import { useEscapeToClose } from '../hooks/useEscapeToClose';
+import { useDialogA11y } from '../hooks/useDialogA11y';
 import './DeleteClusterModal.css';
 
 /**
@@ -24,13 +25,15 @@ const DeleteClusterModal = ({ cluster, onConfirm, onCancel }) => {
 
   useEscapeToClose(onCancel);
 
+  const { dialogRef, dialogProps } = useDialogA11y(true, 'delete-cluster-title');
+
 
   return (
     <div className="modal-overlay" onClick={onCancel}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} {...dialogProps} className="modal" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="modal-header">
-          <h2 className="modal-title">Delete Cluster?</h2>
+          <h2 id="delete-cluster-title" className="modal-title">Delete Cluster?</h2>
           <button className="modal-close" onClick={onCancel} aria-label="Close">
             ×
           </button>

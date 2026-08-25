@@ -116,11 +116,16 @@ const Modal = ({
 
   if (!isOpen) return null;
 
+  // aria-modal is declared on the dialog below, not on this overlay.
+  //
+  // It used to be set here, on an element carrying role="presentation" — which
+  // is explicitly removed from the accessibility tree, so the attribute
+  // described nothing at all. On the dialog it does what it is for: tells a
+  // screen reader that everything outside is unavailable while this is open.
   return (
     <div
       className="modal-overlay"
       onClick={handleBackdropClick}
-      aria-modal="true"
       role="presentation"
     >
       <div

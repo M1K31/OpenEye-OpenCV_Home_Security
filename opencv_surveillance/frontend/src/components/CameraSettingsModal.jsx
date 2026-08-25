@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useEscapeToClose } from '../hooks/useEscapeToClose';
+import { useDialogA11y } from '../hooks/useDialogA11y';
 import apiClient from '../api/apiClient';
 import MotionZoneEditor from './MotionZoneEditor';
 import Switch from './Switch';
@@ -774,10 +775,12 @@ const CameraSettingsModal = ({ camera, onClose, onSave }) => {
 
   useEscapeToClose(onClose);
 
+  const { dialogRef, dialogProps } = useDialogA11y(true, undefined);
+
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal camera-settings-modal" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} {...dialogProps} className="modal camera-settings-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2 className="modal-title">Camera Settings: {camera.camera_id}</h2>
           <button className="modal-close" onClick={onClose}>×</button>

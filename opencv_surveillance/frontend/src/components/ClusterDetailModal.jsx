@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { activateOnKey } from '../utils/a11y';
 import { useEscapeToClose } from '../hooks/useEscapeToClose';
+import { useDialogA11y } from '../hooks/useDialogA11y';
 import { logger } from '../utils/logger';
 import clusteringService from '../services/clusteringService';
 import apiClient from '../api/apiClient';
@@ -253,13 +254,14 @@ const ClusterDetailModal = ({ clusterId, onClose, onAssignName, onClusterUpdated
   // it and have no way to dismiss it.
 
   useEscapeToClose(onClose);
+  const { dialogRef, dialogProps } = useDialogA11y(true, 'cluster-detail-title');
 
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-large cluster-detail-modal" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} {...dialogProps} className="modal modal-large cluster-detail-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2 className="modal-title">
+          <h2 id="cluster-detail-title" className="modal-title">
             {cluster?.is_identified ? (
               <>✓ {cluster.label}</>
             ) : (

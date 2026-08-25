@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { activateOnKey } from '../utils/a11y';
 import { useEscapeToClose } from '../hooks/useEscapeToClose';
+import { useDialogA11y } from '../hooks/useDialogA11y';
 import { logger } from '../utils/logger';
 import faceHistoryService from '../services/faceHistoryService';
 import apiClient from '../api/apiClient';
@@ -197,12 +198,14 @@ const PersonDetectionsModal = ({ personName, allPeople, onClose, onUpdate }) => 
 
   useEscapeToClose(onClose);
 
+  const { dialogRef, dialogProps } = useDialogA11y(true, 'person-detections-title');
+
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-large person-detections-modal" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} {...dialogProps} className="modal modal-large person-detections-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2 className="modal-title">
+          <h2 id="person-detections-title" className="modal-title">
             Detections for {personName}
           </h2>
           <button className="modal-close" onClick={onClose}>×</button>

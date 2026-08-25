@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useEscapeToClose } from '../hooks/useEscapeToClose';
+import { useDialogA11y } from '../hooks/useDialogA11y';
 import clusteringService from '../services/clusteringService';
 import './Modal.css';
 import { describeApiError } from '../utils/apiError';
@@ -71,12 +72,14 @@ const MergeClustersModal = ({ clusterIds, onClose, onSuccess }) => {
 
   useEscapeToClose(onClose);
 
+  const { dialogRef, dialogProps } = useDialogA11y(true, 'merge-clusters-title');
+
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-medium" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} {...dialogProps} className="modal modal-medium" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2 className="modal-title">🔗 Merge Face Clusters</h2>
+          <h2 id="merge-clusters-title" className="modal-title">🔗 Merge Face Clusters</h2>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
 

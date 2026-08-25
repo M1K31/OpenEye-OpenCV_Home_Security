@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useEscapeToClose } from '../hooks/useEscapeToClose';
+import { useDialogA11y } from '../hooks/useDialogA11y';
 import { useNavigate } from 'react-router-dom';
 import { logger } from '../utils/logger';
 import apiClient from '../api/apiClient';
@@ -159,12 +160,14 @@ const EventDetailModal = ({ event, onClose, onDelete }) => {
 
   useEscapeToClose(onClose);
 
+  const { dialogRef, dialogProps } = useDialogA11y(true, 'event-detail-title');
+
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal event-detail-modal" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} {...dialogProps} className="modal event-detail-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2 className="modal-title">{getEventTitle()}</h2>
+          <h2 id="event-detail-title" className="modal-title">{getEventTitle()}</h2>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
 

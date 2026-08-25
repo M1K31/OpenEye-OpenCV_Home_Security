@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useEscapeToClose } from '../hooks/useEscapeToClose';
+import { useDialogA11y } from '../hooks/useDialogA11y';
 import { logger } from '../utils/logger';
 import clusteringService from '../services/clusteringService';
 import apiClient from '../api/apiClient';
@@ -89,12 +90,14 @@ const AssignNameModal = ({ clusterId, onClose, onSuccess }) => {
 
   useEscapeToClose(onClose);
 
+  const { dialogRef, dialogProps } = useDialogA11y(true, 'assign-name-title');
+
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div ref={dialogRef} {...dialogProps} className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2 className="modal-title">👤 Assign Name to Cluster</h2>
+          <h2 id="assign-name-title" className="modal-title">👤 Assign Name to Cluster</h2>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
 
