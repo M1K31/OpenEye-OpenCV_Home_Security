@@ -145,7 +145,7 @@ const styles = {
     padding: '40px',
     color: 'var(--color-error)',
     fontSize: '16px',
-    backgroundColor: 'rgba(220, 53, 69, 0.15)',
+    backgroundColor: 'var(--danger-bg, rgba(220, 53, 69, 0.15))',
     borderRadius: '8px',
     border: '1px solid var(--color-error)',
   },

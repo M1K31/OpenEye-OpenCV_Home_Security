@@ -934,12 +934,12 @@ const styles = {
     fontWeight: '500',
   },
   messageSuccess: {
-    backgroundColor: 'rgba(40, 167, 69, 0.15)',
+    backgroundColor: 'var(--success-bg, rgba(40, 167, 69, 0.15))',
     color: 'var(--color-success)',
     border: '1px solid var(--color-success)',
   },
   messageError: {
-    backgroundColor: 'rgba(220, 53, 69, 0.15)',
+    backgroundColor: 'var(--danger-bg, rgba(220, 53, 69, 0.15))',
     color: 'var(--color-error)',
     border: '1px solid var(--color-error)',
   },

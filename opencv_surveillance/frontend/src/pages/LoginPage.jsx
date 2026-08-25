@@ -296,7 +296,7 @@ const styles = {
     color: 'var(--color-error)',
     marginTop: 'var(--spacing-lg, 24px)', // 8pt grid aligned
     padding: 'var(--spacing-md, 16px)', // 8pt grid aligned
-    backgroundColor: 'rgba(220, 53, 69, 0.15)',
+    backgroundColor: 'var(--danger-bg, rgba(220, 53, 69, 0.15))',
     borderRadius: 'var(--radius-sm, 8px)',
     borderLeft: '4px solid var(--color-error)',
     fontSize: '14px',

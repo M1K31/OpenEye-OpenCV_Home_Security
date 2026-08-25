@@ -431,7 +431,7 @@ const styles = {
     fontStyle: 'italic',
   },
   alert: {
-    backgroundColor: 'rgba(220, 53, 69, 0.15)',
+    backgroundColor: 'var(--danger-bg, rgba(220, 53, 69, 0.15))',
     color: 'var(--color-error)',
     padding: 'var(--spacing-md, 16px)',
     borderRadius: 'var(--radius-sm, 8px)',
@@ -441,7 +441,7 @@ const styles = {
     borderLeft: '4px solid var(--color-error)',
   },
   alertSuccess: {
-    backgroundColor: 'rgba(40, 167, 69, 0.15)',
+    backgroundColor: 'var(--success-bg, rgba(40, 167, 69, 0.15))',
     color: 'var(--color-success)',
     padding: 'var(--spacing-md, 16px)',
     borderRadius: 'var(--radius-sm, 8px)',

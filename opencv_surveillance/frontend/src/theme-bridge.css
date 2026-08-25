@@ -70,6 +70,8 @@ html[class$="-theme"] body {
   --hover-bg-dark: var(--bg-hover);
   --hover-background: var(--bg-hover);
   --danger-bg: rgba(220, 53, 69, 0.15);
+  --success-bg: rgba(40, 167, 69, 0.15);
+  --warning-bg: rgba(255, 193, 7, 0.15);
 
   /* --- Text ------------------------------------------------------------- */
   --text-color: var(--text-primary);

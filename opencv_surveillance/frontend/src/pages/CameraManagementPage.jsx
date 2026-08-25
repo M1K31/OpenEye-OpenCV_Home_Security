@@ -677,7 +677,7 @@ const styles = {
   },
   alert: {
     error: {
-      background: 'rgba(220, 53, 69, 0.15)',
+      background: 'var(--danger-bg, rgba(220, 53, 69, 0.15))',
       border: '1px solid var(--color-error)',
       color: 'var(--color-error)',
       padding: '15px',
@@ -686,7 +686,7 @@ const styles = {
       position: 'relative',
     },
     success: {
-      background: 'rgba(40, 167, 69, 0.15)',
+      background: 'var(--success-bg, rgba(40, 167, 69, 0.15))',
       border: '1px solid var(--color-success)',
       color: 'var(--color-success)',
       padding: '15px',
