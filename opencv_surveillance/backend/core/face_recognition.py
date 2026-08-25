@@ -683,6 +683,10 @@ class FaceRecognitionManager:
                 processed_frame = self.preprocessor.preprocess_for_face_recognition(frame)
 
             # Convert BGR to RGB for face_recognition
+            # Starts as the caller's frame and is replaced by a copy the first
+            # time something is drawn. See the drawing block below.
+            annotated = frame
+
             rgb_frame = cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB)
 
             height, width = rgb_frame.shape[:2]
@@ -799,19 +803,34 @@ class FaceRecognitionManager:
                     }
                 )
 
+                # Draw on a COPY, made once on first use.
+                #
+                # These calls used to draw straight onto the caller's frame and
+                # return it, so "annotated_frame" and the original were the same
+                # array and there was no unannotated frame left anywhere. The
+                # camera then cropped faces out of that frame to build the
+                # gallery, and every stored photograph carried a red rectangle
+                # and the word "Unknown" burned across the chin — including the
+                # images used to train recognition.
+                #
+                # Deferred until a face is actually drawn: frames with no faces
+                # are the common case and copy nothing.
+                if annotated is frame:
+                    annotated = frame.copy()
+
                 # Draw rectangle around face
                 color = (0, 255, 0) if name != "Unknown" else (0, 0, 255)
-                cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
+                cv2.rectangle(annotated, (left, top), (right, bottom), color, 2)
 
                 # Draw label background
                 cv2.rectangle(
-                    frame, (left, bottom - 35), (right, bottom), color, cv2.FILLED
+                    annotated, (left, bottom - 35), (right, bottom), color, cv2.FILLED
                 )
 
                 # Draw label text
                 label = f"{name} ({confidence:.2f})" if name != "Unknown" else "Unknown"
                 cv2.putText(
-                    frame,
+                    annotated,
                     label,
                     (left + 6, bottom - 6),
                     cv2.FONT_HERSHEY_DUPLEX,
@@ -826,7 +845,9 @@ class FaceRecognitionManager:
                 self.statistics["last_recognition"] = self.last_recognition_time.isoformat()
                 self.statistics["recognitions_today"] += len(detected_faces)
 
-            return frame, detected_faces
+            # `annotated` is the original frame when nothing was drawn, so a
+            # frame with no faces is returned untouched and uncopied.
+            return annotated, detected_faces
         finally:
             _face_recognition_lock.release()
 

@@ -1192,12 +1192,30 @@ class MockCamera(Camera):
 
         # Face detection
         if self.face_detector.enabled:
+            # Keep the clean frame before annotation.
+            #
+            # process_frame returns a frame with boxes and name labels drawn on
+            # it, for the live view. That same frame used to be handed to
+            # _handle_detected_faces, which crops each face out of it and stores
+            # the crop as a gallery photograph — so every stored face carried a
+            # red rectangle around it and the word "Unknown" burned across the
+            # chin.
+            #
+            # Two costs. Profile cards showed a named person over a picture
+            # labelled "Unknown", which reads as a fault. More seriously, those
+            # images ARE the training set: encodings were being computed from
+            # pixels with an overlay drawn through the lower part of the face,
+            # identically on every capture, which is not a property of the
+            # person.
+            clean_frame = processed_frame
+
             processed_frame, self.last_faces_detected = (
                 self.face_detector.process_frame(
                     processed_frame, self.motion_detected))
 
-            # Act on every face, record the ones worth keeping.
-            self._handle_detected_faces(processed_frame, self.last_faces_detected)
+            # Act on every face, record the ones worth keeping. Cropped from the
+            # unannotated frame; the annotated one is only for display.
+            self._handle_detected_faces(clean_frame, self.last_faces_detected)
 
             # Update motion event with face count if faces detected
             if self.last_faces_detected and self.current_motion_event_id:
@@ -1984,12 +2002,30 @@ class RTSPCamera(Camera):
 
         # Face detection
         if self.face_detector.enabled:
+            # Keep the clean frame before annotation.
+            #
+            # process_frame returns a frame with boxes and name labels drawn on
+            # it, for the live view. That same frame used to be handed to
+            # _handle_detected_faces, which crops each face out of it and stores
+            # the crop as a gallery photograph — so every stored face carried a
+            # red rectangle around it and the word "Unknown" burned across the
+            # chin.
+            #
+            # Two costs. Profile cards showed a named person over a picture
+            # labelled "Unknown", which reads as a fault. More seriously, those
+            # images ARE the training set: encodings were being computed from
+            # pixels with an overlay drawn through the lower part of the face,
+            # identically on every capture, which is not a property of the
+            # person.
+            clean_frame = processed_frame
+
             processed_frame, self.last_faces_detected = (
                 self.face_detector.process_frame(
                     processed_frame, self.motion_detected))
 
-            # Act on every face, record the ones worth keeping.
-            self._handle_detected_faces(processed_frame, self.last_faces_detected)
+            # Act on every face, record the ones worth keeping. Cropped from the
+            # unannotated frame; the annotated one is only for display.
+            self._handle_detected_faces(clean_frame, self.last_faces_detected)
 
             # Update motion event with face count if faces detected
             if self.last_faces_detected and self.current_motion_event_id:
