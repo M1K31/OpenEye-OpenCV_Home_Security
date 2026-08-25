@@ -257,3 +257,86 @@ describe('the fallback message', () => {
     expect(describeApiError(error, 'Could not save')).toContain('Field required');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Sightings are reported, not reviewed
+// ---------------------------------------------------------------------------
+//
+// About a third of detections are sightings: the person was recognised, but the
+// capture policy judged their likeness already well recorded and saved no
+// image. Those rows have a name, a camera and a time, and nothing to look at.
+//
+// They were rendered as review cards carrying an "Assign to person…" button —
+// asking somebody to identify a face from a card reading "no new image was
+// saved". One person's view held 100 of them.
+
+import { splitPersonHistory } from '../DetectionsPage.jsx';
+
+const hasImage = (path) => !!path;
+
+describe('splitting a person history', () => {
+  it('keeps only detections with an image in the reviewable set', () => {
+    const { captured, sightings } = splitPersonHistory([
+      { id: 1, snapshot_path: 'a.jpg', camera_id: 'front', detected_at: '2026-08-25T04:19:17' },
+      { id: 2, snapshot_path: null, camera_id: 'front', detected_at: '2026-08-25T04:57:08' },
+      { id: 3, snapshot_path: '', camera_id: 'front', detected_at: '2026-08-25T04:35:50' },
+    ], hasImage);
+
+    expect(captured.map(d => d.id)).toEqual([1]);
+    expect(sightings).toHaveLength(1);
+    expect(sightings[0].count).toBe(2);
+  });
+
+  it('groups a trail by camera', () => {
+    const { sightings } = splitPersonHistory([
+      { id: 1, snapshot_path: null, camera_id: 'kitchen', detected_at: '2026-08-25T04:10:00' },
+      { id: 2, snapshot_path: null, camera_id: 'front', detected_at: '2026-08-25T04:20:00' },
+      { id: 3, snapshot_path: null, camera_id: 'kitchen', detected_at: '2026-08-25T04:30:00' },
+    ], hasImage);
+
+    expect(sightings.map(s => s.camera)).toEqual(['kitchen', 'front']);
+    expect(sightings[0].count).toBe(2);
+  });
+
+  it('orders cameras by most recently seen', () => {
+    const { sightings } = splitPersonHistory([
+      { snapshot_path: null, camera_id: 'old', detected_at: '2026-08-20T01:00:00' },
+      { snapshot_path: null, camera_id: 'recent', detected_at: '2026-08-25T01:00:00' },
+    ], hasImage);
+
+    expect(sightings[0].camera).toBe('recent');
+  });
+
+  it('orders times newest first within a camera', () => {
+    const { sightings } = splitPersonHistory([
+      { snapshot_path: null, camera_id: 'front', detected_at: '2026-08-25T04:00:00' },
+      { snapshot_path: null, camera_id: 'front', detected_at: '2026-08-25T05:00:00' },
+    ], hasImage);
+
+    expect(sightings[0].times[0]).toBe('2026-08-25T05:00:00');
+    expect(sightings[0].lastSeen).toBe('2026-08-25T05:00:00');
+  });
+
+  it('counts a sighting with no timestamp but does not let it lead', () => {
+    // A row with no time still happened; it must not claim to be the most
+    // recent sighting just because null sorts oddly.
+    const { sightings } = splitPersonHistory([
+      { snapshot_path: null, camera_id: 'front', detected_at: null },
+      { snapshot_path: null, camera_id: 'front', detected_at: '2026-08-25T04:00:00' },
+    ], hasImage);
+
+    expect(sightings[0].count).toBe(2);
+    expect(sightings[0].lastSeen).toBe('2026-08-25T04:00:00');
+  });
+
+  it('names a camera that did not identify itself', () => {
+    const { sightings } = splitPersonHistory(
+      [{ snapshot_path: null, detected_at: '2026-08-25T04:00:00' }], hasImage);
+    expect(sightings[0].camera).toBe('unknown camera');
+  });
+
+  it('handles an empty or missing history', () => {
+    expect(splitPersonHistory([], hasImage)).toEqual({ captured: [], sightings: [] });
+    expect(splitPersonHistory(undefined, hasImage)).toEqual({ captured: [], sightings: [] });
+  });
+});

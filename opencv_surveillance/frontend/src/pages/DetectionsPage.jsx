@@ -94,6 +94,55 @@ export function faceIdOf(detection) {
 }
 
 
+/**
+ * A person's history, split by what can actually be reviewed.
+ *
+ * Roughly a third of all detections are sightings: the person was recognised,
+ * but the capture policy decided their likeness was already well recorded and
+ * saved no image. Those rows carry a name, a camera and a time, and nothing to
+ * look at.
+ *
+ * They were rendered as review cards with an "Assign to person…" button, which
+ * asks somebody to identify a face from a card that says "no new image was
+ * saved". One person's view held 100 such cards.
+ *
+ * A sighting is not a question, it is a record of movement — so it is grouped
+ * by camera and shown as a trail: where this person was seen, and when.
+ */
+export function splitPersonHistory(detections, hasImage) {
+  const captured = [];
+  const byCamera = new Map();
+
+  for (const detection of detections || []) {
+    if (hasImage(detection.snapshot_path)) {
+      captured.push(detection);
+      continue;
+    }
+    const camera = detection.camera_id || 'unknown camera';
+    if (!byCamera.has(camera)) byCamera.set(camera, []);
+    byCamera.get(camera).push(detection.detected_at || detection.timestamp || null);
+  }
+
+  const sightings = [...byCamera.entries()]
+    .map(([camera, times]) => {
+      // Newest first, and nulls last so a row with no timestamp cannot claim
+      // to be the most recent sighting.
+      const ordered = times
+        .filter(Boolean)
+        .sort((a, b) => String(b).localeCompare(String(a)));
+      return {
+        camera,
+        count: times.length,
+        times: ordered,
+        lastSeen: ordered[0] || null,
+      };
+    })
+    .sort((a, b) => String(b.lastSeen || '').localeCompare(String(a.lastSeen || '')));
+
+  return { captured, sightings };
+}
+
+
 export function splitDetections(detections) {
   const review = [];
   const byPerson = new Map();
@@ -418,6 +467,11 @@ const DetectionsPage = () => {
   const clearSelection = () => setSelected({});
   const selectedList = Object.values(selected);
 
+  // A person's own history, split into what can be reviewed and what can only
+  // be reported. See splitPersonHistory.
+  const { captured: capturedDetections, sightings: personSightings } =
+    splitPersonHistory(personDetections, normalizeSnapshot);
+
   // ---- Assignment ---------------------------------------------------------
   // Open the assign modal for one or more detections.
   const openAssign = (dets) => {
@@ -671,7 +725,7 @@ const DetectionsPage = () => {
                     </div>
                   ) : (
                     <div style={styles.detectionGrid}>
-                      {personDetections.map((detection, index) => {
+                      {capturedDetections.map((detection, index) => {
                         // Render-only, and never sent anywhere. The person
                         // endpoint returns real ids, but a row without one
                         // still needs to be distinct in this list, so the
@@ -732,6 +786,46 @@ const DetectionsPage = () => {
                           </div>
                         );
                       })}
+                    </div>
+                  )}
+
+                  {/* Where this person was seen but no image was kept.
+                      Reported, not reviewable: there is nothing to look at, so
+                      there is no decision to make. */}
+                  {personSightings.length > 0 && (
+                    <div style={styles.sightingTrail}>
+                      <h4 style={styles.sightingTrailHeading}>
+                        Also seen, no image kept
+                      </h4>
+                      <p style={styles.sightingTrailHint}>
+                        Recognised while already well recorded, so no new
+                        photograph was saved. Shown as a record of where and
+                        when, grouped by camera.
+                      </p>
+                      {personSightings.map(entry => (
+                        <div key={entry.camera} style={styles.sightingCamera}>
+                          <div style={styles.sightingCameraHeader}>
+                            <span style={styles.sightingCameraName}>
+                              📷 {entry.camera}
+                            </span>
+                            <span style={styles.sightingCount}>
+                              {entry.count} sighting{entry.count !== 1 ? 's' : ''}
+                            </span>
+                          </div>
+                          <div style={styles.sightingTimes}>
+                            {entry.times.slice(0, 12).map(t => (
+                              <span key={t} style={styles.sightingTime}>
+                                {new Date(t).toLocaleString()}
+                              </span>
+                            ))}
+                            {entry.times.length > 12 && (
+                              <span style={styles.sightingMore}>
+                                +{entry.times.length - 12} earlier
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -1183,6 +1277,62 @@ const styles = {
   },
   empty: { textAlign: 'center', padding: '64px 24px', color: 'var(--theme-text-secondary)' },
   emptyIcon: { fontSize: '64px', display: 'block', marginBottom: '16px', opacity: 0.5 },
+  sightingTrail: {
+    marginTop: '24px',
+    padding: '16px',
+    background: 'var(--bg-panel)',
+    border: '1px solid var(--border-panel)',
+    borderRadius: 'var(--radius-md, 8px)',
+  },
+  sightingTrailHeading: {
+    margin: '0 0 4px 0',
+    fontSize: '15px',
+    color: 'var(--text-primary)',
+  },
+  sightingTrailHint: {
+    margin: '0 0 14px 0',
+    fontSize: '13px',
+    color: 'var(--text-secondary)',
+  },
+  sightingCamera: {
+    padding: '10px 0',
+    borderTop: '1px solid var(--border-panel)',
+  },
+  sightingCameraHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '8px',
+  },
+  sightingCameraName: {
+    fontSize: '14px',
+    color: 'var(--text-primary)',
+    fontWeight: 600,
+  },
+  sightingCount: {
+    fontSize: '12px',
+    color: 'var(--text-secondary)',
+  },
+  sightingTimes: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '6px',
+  },
+  sightingTime: {
+    fontSize: '12px',
+    color: 'var(--text-secondary)',
+    background: 'var(--bg-input)',
+    border: '1px solid var(--border-panel)',
+    borderRadius: 'var(--radius-pill, 999px)',
+    padding: '3px 9px',
+    whiteSpace: 'nowrap',
+  },
+  sightingMore: {
+    fontSize: '12px',
+    color: 'var(--text-secondary)',
+    padding: '3px 4px',
+    alignSelf: 'center',
+  },
   detectionGrid: {
     display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
     gap: '16px', marginBottom: '24px',
