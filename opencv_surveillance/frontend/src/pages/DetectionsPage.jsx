@@ -90,7 +90,14 @@ export function faceIdOf(detection) {
   if (typeof detection.id === 'number') return detection.id;
 
   if (typeof detection.id === 'string') {
-    const match = /^face-(\d+)$/.exec(detection.id);
+    // Three prefixes are in use, invented independently for list-key
+    // uniqueness: `face-` in the combined feed and `pd-` in the person view.
+    // A list key is a rendering concern and never a value the API can accept,
+    // but both ended up in the id field, so both are unwrapped here.
+    //
+    // `object-` is deliberately absent: an object detection is not a face and
+    // must fall through to null.
+    const match = /^(?:face|pd)-(\d+)$/.exec(detection.id);
     if (match) return Number(match[1]);
     // A bare numeric string is still a face id.
     if (/^\d+$/.test(detection.id)) return Number(detection.id);
@@ -678,6 +685,12 @@ const DetectionsPage = () => {
                             <label style={styles.selectCheckboxWrap}>
                               <input type="checkbox" checked={sel}
                                 onChange={() => toggleSelect(key, {
+                                  // The detection's own id, not the list key.
+                                  // `key` is prefixed to stay unique within
+                                  // this list; it is not something the API can
+                                  // be given.
+                                  id: detection.id,
+                                  face_id: detection.id,
                                   snapshot_path: detection.snapshot_path,
                                   cluster_id: detection.cluster_id,
                                   name: detection.person_name,
@@ -793,6 +806,8 @@ const DetectionsPage = () => {
                         selectable={detection.type === 'person'}
                         selected={!!selected[detection.id]}
                         onToggleSelect={() => toggleSelect(detection.id, {
+                          id: detection.id,
+                          face_id: detection.face_id,
                           snapshot_path: detection.snapshot_path,
                           cluster_id: detection.cluster_id,
                           name: detection.name,

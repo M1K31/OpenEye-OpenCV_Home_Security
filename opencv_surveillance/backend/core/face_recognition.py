@@ -914,6 +914,8 @@ class FaceRecognitionManager:
         if not os.path.exists(self.faces_folder):
             return people
 
+        from backend.core.gallery import iter_images
+
         for person_path in self.faces_folder.iterdir():
             # Skip files (like face_encodings.pkl)
             if not person_path.is_dir():
@@ -927,20 +929,32 @@ class FaceRecognitionManager:
 
             # Count photos and get preview photo
             try:
-                photo_files = [
-                    f
-                    for f in os.listdir(person_path)
-                    if f.lower().endswith((".jpg", ".jpeg", ".png"))
-                ]
+                # Walks the gallery, rather than listing the folder.
+                #
+                # Photographs no longer sit directly in faces/<name>/ — they are
+                # sorted into detected/ and uploaded/, so people photographed by
+                # a camera can be thinned without touching pictures somebody
+                # chose. A flat os.listdir() therefore matched nothing, and every
+                # profile reported "Photos: 0" with no preview while the folders
+                # held hundreds: 734 for one person, 61 and 26 for two others.
+                #
+                # The single-person endpoint was moved to iter_images when the
+                # layout changed and this listing was not, so the count was
+                # right on a profile page and zero in the list of profiles.
+                #
+                # Paths stay RELATIVE to the person folder, so a sorted gallery
+                # yields "detected/x.jpg" and a legacy flat one still yields
+                # "x.jpg". Both resolve under /faces/<name>/.
+                photo_files = sorted(
+                    str(image.relative_to(person_path))
+                    for image in iter_images(person_name)
+                )
                 photo_count = len(photo_files)
-                
+
                 # Get first photo for preview (sorted by name for consistency)
                 preview_photo_url = None
                 if photo_files:
-                    photo_files.sort()
-                    first_photo = photo_files[0]
-                    # URL format: /faces/{person_name}/{filename}
-                    preview_photo_url = f"/faces/{person_name}/{first_photo}"
+                    preview_photo_url = f"/faces/{person_name}/{photo_files[0]}"
             except (OSError, PermissionError) as e:
                 logger.warning(f"Error reading photos from {person_path}: {e}")
                 photo_count = 0

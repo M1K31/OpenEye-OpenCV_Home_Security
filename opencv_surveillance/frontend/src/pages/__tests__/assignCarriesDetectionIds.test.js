@@ -186,3 +186,21 @@ describe('reporting an API failure', () => {
     expect(describeApiError(null)).toBeTruthy();
   });
 });
+
+describe('the person view uses a third prefix', () => {
+  it('unwraps the pd- key the person list builds', () => {
+    // `pd-${detection.id ?? index}`, invented for list-key uniqueness and then
+    // stored as the id. Reported from the interface as "none of the selected
+    // detections is a face" over three plainly visible faces.
+    expect(faceIdOf({ id: 'pd-123' })).toBe(123);
+  });
+
+  it('prefers the real id over the list key when both are present', () => {
+    expect(faceIdOf({ id: 'pd-9', face_id: 123 })).toBe(123);
+  });
+
+  it('still refuses an object, whatever the prefix looks like', () => {
+    expect(faceIdOf({ id: 'object-45' })).toBeNull();
+    expect(faceIdOf({ id: 'pd-abc' })).toBeNull();
+  });
+});
