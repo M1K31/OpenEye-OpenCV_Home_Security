@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import twoFactorService from '../services/twoFactorService';
 import { Button, TextField } from '../components/universal';
+import { describeApiError } from '../utils/apiError';
 
 const TwoFactorSettings = ({ embedded = false }) => {
   const [status, setStatus] = useState(null);
@@ -48,7 +49,7 @@ const TwoFactorSettings = ({ embedded = false }) => {
       setBackupCodes(data.backup_codes);
       setShowEnableFlow(true);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to enable 2FA');
+      setError(describeApiError(err, 'Failed to enable 2FA'));
     }
   };
 
@@ -62,7 +63,7 @@ const TwoFactorSettings = ({ embedded = false }) => {
       setVerifyToken('');
       fetchStatus(); // Refresh status
     } catch (err) {
-      setError(err.response?.data?.detail || 'Invalid verification code');
+      setError(describeApiError(err, 'Invalid verification code'));
     }
   };
 
@@ -77,7 +78,7 @@ const TwoFactorSettings = ({ embedded = false }) => {
       setDisablePassword('');
       fetchStatus(); // Refresh status
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to disable 2FA');
+      setError(describeApiError(err, 'Failed to disable 2FA'));
     }
   };
 

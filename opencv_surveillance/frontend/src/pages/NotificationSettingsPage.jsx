@@ -9,6 +9,7 @@ import { logger } from '../utils/logger';
 import notificationService from '../services/notificationService';
 import { Button, Switch } from '../components/universal';
 import './NotificationSettingsPage.css';
+import { describeApiError } from '../utils/apiError';
 
 const NotificationSettingsPage = () => {
   const [providers, setProviders] = useState([]);
@@ -143,7 +144,7 @@ const NotificationSettingsPage = () => {
       closeModal();
     } catch (err) {
       logger.error('Error saving provider:', err);
-      alert(`Failed to save provider: ${err.response?.data?.detail || err.message}`);
+      alert(`Failed to save provider: ${describeApiError(err)}`);
     }
   };
 
@@ -197,7 +198,7 @@ const NotificationSettingsPage = () => {
       setTestResult({
         success: false,
         message: 'Test failed',
-        error: err.response?.data?.detail || err.message
+        error: describeApiError(err)
       });
     } finally {
       setTestLoading(false);

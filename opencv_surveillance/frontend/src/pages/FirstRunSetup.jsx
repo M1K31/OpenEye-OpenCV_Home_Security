@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Button, TextField } from '../components/universal';
 import './FirstRunSetup.css';
+import { describeApiError } from '../utils/apiError';
 
 const FirstRunSetup = ({ onComplete }) => {
   const navigate = useNavigate();
@@ -153,7 +154,7 @@ const FirstRunSetup = ({ onComplete }) => {
       }
     } catch (error) {
       setErrors({
-        submit: error.response?.data?.detail || 'Failed to complete setup. Please try again.'
+        submit: describeApiError(error, 'Failed to complete setup. Please try again.')
       });
     } finally {
       setLoading(false);

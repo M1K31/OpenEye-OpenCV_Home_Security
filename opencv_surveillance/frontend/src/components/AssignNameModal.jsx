@@ -7,6 +7,7 @@ import { logger } from '../utils/logger';
 import clusteringService from '../services/clusteringService';
 import apiClient from '../api/apiClient';
 import './Modal.css';
+import { describeApiError } from '../utils/apiError';
 
 /**
  * Assign Name Modal
@@ -65,7 +66,7 @@ const AssignNameModal = ({ clusterId, onClose, onSuccess }) => {
       onSuccess();
     } catch (err) {
       logger.error('Error assigning name:', err);
-      setError(err.response?.data?.detail || 'Failed to assign name. Please try again.');
+      setError(describeApiError(err, 'Failed to assign name. Please try again.'));
     } finally {
       setLoading(false);
     }

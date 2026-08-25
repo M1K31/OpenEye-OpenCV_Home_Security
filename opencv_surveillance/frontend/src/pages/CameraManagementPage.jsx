@@ -9,6 +9,7 @@ import HelpButton from '../components/HelpButton';
 import { HELP_CONTENT } from '../utils/helpContent';
 import apiClient from '../api/apiClient';
 import { Button, TextField, Switch } from '../components/universal';
+import { describeApiError } from '../utils/apiError';
 
 const CameraManagementPage = ({ embedded = false }) => {
   const navigate = useNavigate();
@@ -49,7 +50,7 @@ const CameraManagementPage = ({ embedded = false }) => {
       const cameraData = response.data.cameras || [];
       setCameras(cameraData);
     } catch (err) {
-      setError(`Failed to load cameras: ${err.response?.data?.detail || err.message}`);
+      setError(`Failed to load cameras: ${describeApiError(err)}`);
       setCameras([]); // Ensure cameras remains an array on error
     } finally {
       setLoading(false);
@@ -88,7 +89,7 @@ const CameraManagementPage = ({ embedded = false }) => {
       // Reload camera list
       loadCameras();
     } catch (err) {
-      setError(`❌ Failed to add camera: ${err.response?.data?.detail || err.message}`);
+      setError(`❌ Failed to add camera: ${describeApiError(err)}`);
     }
   };
 
@@ -103,7 +104,7 @@ const CameraManagementPage = ({ embedded = false }) => {
       setSuccess(`✅ Camera "${cameraId}" deleted successfully!`);
       loadCameras();
     } catch (err) {
-      setError(`❌ Failed to delete camera: ${err.response?.data?.detail || err.message}`);
+      setError(`❌ Failed to delete camera: ${describeApiError(err)}`);
     }
   };
 
@@ -114,7 +115,7 @@ const CameraManagementPage = ({ embedded = false }) => {
       setSuccess(`✅ Camera ${!currentState ? 'enabled' : 'disabled'} successfully!`);
       loadCameras();
     } catch (err) {
-      setError(`❌ Failed to toggle camera: ${err.response?.data?.detail || err.message}`);
+      setError(`❌ Failed to toggle camera: ${describeApiError(err)}`);
     }
   };
 
@@ -146,7 +147,7 @@ const CameraManagementPage = ({ embedded = false }) => {
       }
       loadCameras();
     } catch (err) {
-      setError(`❌ Reconnect failed: ${err.response?.data?.detail || err.message}`);
+      setError(`❌ Reconnect failed: ${describeApiError(err)}`);
     } finally {
       setReconnecting(null);
     }

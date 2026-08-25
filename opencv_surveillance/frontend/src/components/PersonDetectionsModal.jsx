@@ -8,6 +8,7 @@ import { logger } from '../utils/logger';
 import faceHistoryService from '../services/faceHistoryService';
 import apiClient from '../api/apiClient';
 import './PersonDetectionsModal.css';
+import { describeApiError } from '../utils/apiError';
 
 /**
  * Person Detections Modal
@@ -170,7 +171,7 @@ const PersonDetectionsModal = ({ personName, allPeople, onClose, onUpdate }) => 
     } catch (err) {
       logger.error('Error creating person:', err);
       // More specific error messages
-      const errorMsg = err.response?.data?.detail || err.message || 'Failed to create person and assign faces';
+      const errorMsg = describeApiError(err, 'Failed to create person and assign faces');
       setReviewMessage({ type: 'error', text: errorMsg });
     } finally {
       setReviewLoading(false);

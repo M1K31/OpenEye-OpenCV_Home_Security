@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { useEscapeToClose } from '../hooks/useEscapeToClose';
 import clusteringService from '../services/clusteringService';
 import './Modal.css';
+import { describeApiError } from '../utils/apiError';
 
 /**
  * Merge Clusters Modal
@@ -54,7 +55,7 @@ const MergeClustersModal = ({ clusterIds, onClose, onSuccess }) => {
       onSuccess();
     } catch (err) {
       console.error('Error merging clusters:', err);
-      setError(err.response?.data?.detail || 'Failed to merge clusters. Please try again.');
+      setError(describeApiError(err, 'Failed to merge clusters. Please try again.'));
     } finally {
       setLoading(false);
     }

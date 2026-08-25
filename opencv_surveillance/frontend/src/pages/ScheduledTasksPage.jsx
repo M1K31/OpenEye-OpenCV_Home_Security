@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import apiClient from '../api/apiClient';
 import { logger } from '../utils/logger';
+import { describeApiError } from '../utils/apiError';
 
 /**
  * ScheduledTasksPage - Manage scheduled system tasks
@@ -74,7 +75,7 @@ const ScheduledTasksPage = ({ embedded = false }) => {
       logger.error('Error running task:', error);
       setMessage({
         type: 'error',
-        text: error.response?.data?.detail || 'Task failed'
+        text: describeApiError(error, 'Task failed')
       });
     } finally {
       setRunning(prev => ({ ...prev, [taskType]: false }));
@@ -96,7 +97,7 @@ const ScheduledTasksPage = ({ embedded = false }) => {
       logger.error('Error in train and search:', error);
       setMessage({
         type: 'error',
-        text: error.response?.data?.detail || 'Train and search failed'
+        text: describeApiError(error, 'Train and search failed')
       });
     } finally {
       setRunning(prev => ({ ...prev, trainAndSearch: false }));

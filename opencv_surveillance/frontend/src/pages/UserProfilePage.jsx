@@ -18,6 +18,7 @@ import apiClient from '../api/apiClient';
 import { logger } from '../utils/logger';
 import ThemeSelectorPage from './ThemeSelectorPage';
 import './UserProfilePage.css';
+import { describeApiError } from '../utils/apiError';
 
 const UserProfilePage = () => {
   const navigate = useNavigate();
@@ -118,7 +119,7 @@ const UserProfilePage = () => {
       }
       
     } catch (err) {
-      showMessage('Failed to load profile: ' + (err.response?.data?.detail || err.message), 'error');
+      showMessage('Failed to load profile: ' + (describeApiError(err)), 'error');
     } finally {
       setLoading(false);
     }
@@ -155,7 +156,7 @@ const UserProfilePage = () => {
       showMessage('Profile updated successfully');
       loadUserData();
     } catch (err) {
-      showMessage('Failed to save profile: ' + (err.response?.data?.detail || err.message), 'error');
+      showMessage('Failed to save profile: ' + (describeApiError(err)), 'error');
     } finally {
       setSaving(false);
     }
@@ -171,7 +172,7 @@ const UserProfilePage = () => {
       });
       showMessage('Notification preferences saved');
     } catch (err) {
-      showMessage('Failed to save: ' + (err.response?.data?.detail || err.message), 'error');
+      showMessage('Failed to save: ' + (describeApiError(err)), 'error');
     } finally {
       setSaving(false);
     }
@@ -186,7 +187,7 @@ const UserProfilePage = () => {
       });
       showMessage('UI preferences saved');
     } catch (err) {
-      showMessage('Failed to save: ' + (err.response?.data?.detail || err.message), 'error');
+      showMessage('Failed to save: ' + (describeApiError(err)), 'error');
     } finally {
       setSaving(false);
     }
@@ -203,7 +204,7 @@ const UserProfilePage = () => {
       }
       loadUserData();
     } catch (err) {
-      showMessage('Failed to link face: ' + (err.response?.data?.detail || err.message), 'error');
+      showMessage('Failed to link face: ' + (describeApiError(err)), 'error');
     }
   };
   

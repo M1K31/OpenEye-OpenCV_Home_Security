@@ -17,6 +17,7 @@ import { useNavigate } from 'react-router-dom';
 import apiClient from '../api/apiClient';
 import { logger } from '../utils/logger';
 import './UserManagementPage.css';
+import { describeApiError } from '../utils/apiError';
 
 const UserManagementPage = () => {
   const navigate = useNavigate();
@@ -69,7 +70,7 @@ const UserManagementPage = () => {
       setUsers(response.data.users || []);
       setError(null);
     } catch (err) {
-      setError('Failed to load users: ' + (err.response?.data?.detail || err.message));
+      setError('Failed to load users: ' + (describeApiError(err)));
     } finally {
       setLoading(false);
     }
@@ -93,7 +94,7 @@ const UserManagementPage = () => {
       resetForm();
       loadUsers();
     } catch (err) {
-      setError('Failed to create user: ' + (err.response?.data?.detail || err.message));
+      setError('Failed to create user: ' + (describeApiError(err)));
     }
   };
   
@@ -110,7 +111,7 @@ const UserManagementPage = () => {
       resetForm();
       loadUsers();
     } catch (err) {
-      setError('Failed to update user: ' + (err.response?.data?.detail || err.message));
+      setError('Failed to update user: ' + (describeApiError(err)));
     }
   };
   
@@ -119,7 +120,7 @@ const UserManagementPage = () => {
       await apiClient.patch(`/users/${userId}/role`, { role: newRole });
       loadUsers();
     } catch (err) {
-      setError('Failed to change role: ' + (err.response?.data?.detail || err.message));
+      setError('Failed to change role: ' + (describeApiError(err)));
     }
   };
   
@@ -132,7 +133,7 @@ const UserManagementPage = () => {
       await apiClient.delete(`/users/${userId}`);
       loadUsers();
     } catch (err) {
-      setError('Failed to delete user: ' + (err.response?.data?.detail || err.message));
+      setError('Failed to delete user: ' + (describeApiError(err)));
     }
   };
   
@@ -145,7 +146,7 @@ const UserManagementPage = () => {
       }
       loadUsers();
     } catch (err) {
-      setError('Failed to link face: ' + (err.response?.data?.detail || err.message));
+      setError('Failed to link face: ' + (describeApiError(err)));
     }
   };
   

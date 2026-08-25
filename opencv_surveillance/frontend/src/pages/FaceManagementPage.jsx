@@ -8,6 +8,7 @@ import PersonDetectionsModal from '../components/PersonDetectionsModal';
 import { HELP_CONTENT } from '../utils/helpContent';
 import { logger } from '../utils/logger';
 import './FaceManagementPage.css';
+import { describeApiError } from '../utils/apiError';
 
 // Lazy load sub-pages for tab content
 const FaceClusteringPage = lazy(() => import('./FaceClusteringPage'));
@@ -136,7 +137,7 @@ const FaceManagementPage = ({ embedded = false }) => {
         loadPeople();
       }
     } catch (error) {
-      showMessage('Error adding person: ' + (error.response?.data?.detail || error.message), 'error');
+      showMessage('Error adding person: ' + (describeApiError(error)), 'error');
     } finally {
       setLoading(false);
     }
@@ -364,7 +365,7 @@ const FaceManagementPage = ({ embedded = false }) => {
     } catch (error) {
       logger.error('[FaceManagement] Upload error:', error);
       logger.error('[FaceManagement] Error response:', error.response?.data);
-      showMessage('Error uploading photos: ' + (error.response?.data?.detail || error.message), 'error');
+      showMessage('Error uploading photos: ' + (describeApiError(error)), 'error');
     } finally {
       setLoading(false);
     }
@@ -383,7 +384,7 @@ const FaceManagementPage = ({ embedded = false }) => {
       );
       loadStatistics();
     } catch (error) {
-      showMessage('❌ Error training: ' + (error.response?.data?.detail || error.message), 'error');
+      showMessage('❌ Error training: ' + (describeApiError(error)), 'error');
     } finally {
       setTrainingPerson(null);
     }
@@ -424,7 +425,7 @@ const FaceManagementPage = ({ embedded = false }) => {
       }
     } catch (error) {
       showMessage(
-        '❌ Search failed: ' + (error.response?.data?.detail || error.message),
+        '❌ Search failed: ' + (describeApiError(error)),
         'error'
       );
       setSearchResults(null);

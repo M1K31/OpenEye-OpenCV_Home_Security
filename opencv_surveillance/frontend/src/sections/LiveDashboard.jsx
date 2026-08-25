@@ -15,6 +15,7 @@ import { CacheTTL } from '../services/apiCache';
 import LoadingSkeleton, { SkeletonCameraCard, SkeletonEventTimeline } from '../components/LoadingSkeleton';
 import AudioModal from '../components/AudioModal';
 import './LiveDashboard.css';
+import { describeApiError } from '../utils/apiError';
 
 /**
  * Memoized Camera Card Component
@@ -304,7 +305,7 @@ const LiveDashboard = () => {
       setRefreshResult({
         camera_id: id,
         ok: false,
-        message: err?.response?.data?.detail || err.message || 'Reconnect failed.',
+        message: describeApiError(err, 'Reconnect failed.'),
       });
     } finally {
       setRefreshingCamera(null);
@@ -586,7 +587,7 @@ const LiveDashboard = () => {
       setScreenshotFeedback({
         camera_id: camera.camera_id,
         status: 'error',
-        message: error.response?.data?.detail || 'Failed to capture screenshot'
+        message: describeApiError(error, 'Failed to capture screenshot')
       });
 
       // Clear feedback after 3 seconds

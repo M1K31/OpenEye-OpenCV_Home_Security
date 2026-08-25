@@ -21,6 +21,7 @@ import {
 import apiClient from '../api/apiClient';
 import { Button } from '../components/universal';
 import './AutomationsPage.css';
+import { describeApiError } from '../utils/apiError';
 
 const AutomationsPage = () => {
   const [rules, setRules] = useState([]);
@@ -182,7 +183,7 @@ const AutomationsPage = () => {
       loadStats();
     } catch (error) {
       console.error('Failed to save rule:', error);
-      alert(`Failed to save rule: ${error.response?.data?.detail || error.message}`);
+      alert(`Failed to save rule: ${describeApiError(error)}`);
     }
   };
 

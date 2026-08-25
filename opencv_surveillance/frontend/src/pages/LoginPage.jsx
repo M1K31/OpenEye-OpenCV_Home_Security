@@ -5,6 +5,7 @@ import axios from 'axios';
 import twoFactorService from '../services/twoFactorService';
 import PasswordResetModal from '../components/PasswordResetModal';
 import { Button, TextField } from '../components/universal';
+import { describeApiError } from '../utils/apiError';
 
 const LoginPage = ({ setToken }) => {
   const [username, setUsername] = useState('');
@@ -85,11 +86,12 @@ const LoginPage = ({ setToken }) => {
         setError('Login failed: No token received.');
       }
     } catch (err) {
-      if (err.response && err.response.data && err.response.data.detail) {
-        setError(err.response.data.detail);
-      } else {
-        setError('An unexpected error occurred.');
-      }
+      // The guard here tested whether the server had actually said something.
+      // describeApiError always returns a sentence — that is its contract — so
+      // using it as the condition made the branch unconditional and the
+      // fallback unreachable. The presence check stays on the raw value; the
+      // formatting is what the helper is for.
+      setError(describeApiError(err, 'An unexpected error occurred.'));
     }
   };
 

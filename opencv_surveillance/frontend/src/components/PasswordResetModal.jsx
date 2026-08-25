@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import apiClient from '../api/apiClient';
 import './Modal.css';
+import { describeApiError } from '../utils/apiError';
 
 /**
  * Password Reset Modal with 2FA Verification
@@ -121,7 +122,7 @@ const PasswordResetModal = ({ isOpen, onClose }) => {
         setError(response.data.message);
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Error checking username. Please try again.');
+      setError(describeApiError(err, 'Error checking username. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -164,7 +165,7 @@ const PasswordResetModal = ({ isOpen, onClose }) => {
         setStep(3); // Success step
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Password reset failed. Please try again.');
+      setError(describeApiError(err, 'Password reset failed. Please try again.'));
     } finally {
       setLoading(false);
     }

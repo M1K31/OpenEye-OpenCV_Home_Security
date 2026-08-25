@@ -8,6 +8,7 @@ import HelpButton from '../components/HelpButton';
 import { HELP_CONTENT } from '../utils/helpContent';
 import { Button, TextField, Switch } from '../components/universal';
 import './AlertSettingsPage.css';
+import { describeApiError } from '../utils/apiError';
 
 const AlertSettingsPage = ({ embedded = false }) => {
   const navigate = useNavigate();
@@ -144,7 +145,7 @@ const AlertSettingsPage = ({ embedded = false }) => {
       }
       loadStatistics();
     } catch (error) {
-      const errorMsg = error.response?.data?.detail || error.message;
+      const errorMsg = describeApiError(error);
       console.error('[AlertSettings] Error saving configuration:', errorMsg);
       console.error('[AlertSettings] Full error:', error);
       console.error('[AlertSettings] Error response:', error.response?.data);
@@ -165,7 +166,7 @@ const AlertSettingsPage = ({ embedded = false }) => {
       });
       showMessage(`Test ${channel} sent successfully!`, 'success');
     } catch (error) {
-      showMessage(`Failed to send test ${channel}: ${error.response?.data?.detail || error.message}`, 'error');
+      showMessage(`Failed to send test ${channel}: ${describeApiError(error)}`, 'error');
     } finally {
       setTesting(false);
     }

@@ -22,7 +22,7 @@
  * error.message`, so all of them produce that for any 422. This is the one
  * place to fix it.
  */
-export function describeApiError(error) {
+export function describeApiError(error, fallback) {
   const detail = error?.response?.data?.detail;
 
   if (typeof detail === 'string' && detail.trim()) return detail;
@@ -35,6 +35,17 @@ export function describeApiError(error) {
   // Some endpoints answer with {message: ...} instead of {detail: ...}.
   const message = error?.response?.data?.message;
   if (typeof message === 'string' && message.trim()) return message;
+
+  // `fallback` comes BEFORE error.message on purpose.
+  //
+  // Call sites split into two shapes. Most read
+  // `detail || err.message`, and pass no fallback, so they still land on
+  // error.message exactly as before. The rest wrote a specific sentence —
+  // "Failed to enable 2FA" — and those say more to a user than the raw
+  // "Network Error" or "Request failed with status code 500" that axios
+  // supplies. Preferring the caller's sentence keeps every one of those
+  // messages behaving as it did.
+  if (typeof fallback === 'string' && fallback.trim()) return fallback;
 
   if (error?.message) return error.message;
   return 'Something went wrong, and the server did not say what.';

@@ -11,6 +11,7 @@ import React, { useState, useEffect } from 'react';
 import apiClient from '../api/apiClient';
 import { Button, TextField, Card, CardHeader } from '../components/universal';
 import './AIProviderSettingsPage.css';
+import { describeApiError } from '../utils/apiError';
 
 const PROVIDERS = [
   { id: 'anthropic', label: 'Claude (Anthropic)', hint: 'console.anthropic.com' },
@@ -41,7 +42,7 @@ function AIProviderSettingsPage() {
     } catch (err) {
       setMessage({
         ok: false,
-        text: err?.response?.data?.detail || 'Could not load provider keys.',
+        text: describeApiError(err, 'Could not load provider keys.'),
       });
     }
     try {
@@ -74,7 +75,7 @@ function AIProviderSettingsPage() {
     } catch (err) {
       setMessage({
         ok: false,
-        text: err?.response?.data?.detail || `Failed to save ${id} key.`,
+        text: describeApiError(err, `Failed to save ${id} key.`),
       });
     } finally {
       setBusy(null);
@@ -94,7 +95,7 @@ function AIProviderSettingsPage() {
     } catch (err) {
       setMessage({
         ok: false,
-        text: err?.response?.data?.detail || `Failed to delete ${id} key.`,
+        text: describeApiError(err, `Failed to delete ${id} key.`),
       });
     } finally {
       setBusy(null);
@@ -114,7 +115,7 @@ function AIProviderSettingsPage() {
     } catch (err) {
       setMessage({
         ok: false,
-        text: err?.response?.data?.detail || 'Failed to save routing.',
+        text: describeApiError(err, 'Failed to save routing.'),
       });
     } finally {
       setSavingRoute(false);

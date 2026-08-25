@@ -204,3 +204,40 @@ describe('the person view uses a third prefix', () => {
     expect(faceIdOf({ id: 'pd-abc' })).toBeNull();
   });
 });
+
+describe('the fallback message', () => {
+  it('is used when the server said nothing useful', () => {
+    expect(describeApiError({}, 'Failed to enable 2FA')).toBe('Failed to enable 2FA');
+  });
+
+  it('never overrides what the server did say', () => {
+    const error = { response: { data: { detail: 'Code already used' } } };
+    expect(describeApiError(error, 'Failed to enable 2FA')).toBe('Code already used');
+  });
+
+  it('is preferred over the transport error', () => {
+    // The call sites that supply one wrote a sentence about what the user was
+    // doing. "Failed to enable 2FA" is more use than axios's "Network Error",
+    // and this ordering is what keeps those sites reading as they did before.
+    const error = { message: 'Network Error' };
+    expect(describeApiError(error, 'Failed to enable 2FA')).toBe('Failed to enable 2FA');
+  });
+
+  it('falls through to the transport error when no fallback is given', () => {
+    // The majority shape: `detail || err.message`, which must be unchanged.
+    expect(describeApiError({ message: 'Network Error' })).toBe('Network Error');
+  });
+
+  it('ignores an empty fallback', () => {
+    expect(describeApiError({ message: 'Network Error' }, '   ')).toBe('Network Error');
+  });
+
+  it('still renders validation errors ahead of any fallback', () => {
+    const error = {
+      response: { data: { detail: [
+        { loc: ['body', 'name'], msg: 'Field required' },
+      ] } },
+    };
+    expect(describeApiError(error, 'Could not save')).toContain('Field required');
+  });
+});

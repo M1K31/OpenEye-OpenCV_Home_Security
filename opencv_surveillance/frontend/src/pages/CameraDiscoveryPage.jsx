@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import apiClient from '../api/apiClient';
 import { Button } from '../components/universal';
+import { describeApiError } from '../utils/apiError';
 
 const CameraDiscoveryPage = ({ onBack }) => {
   const [usbCameras, setUsbCameras] = useState([]);
@@ -79,7 +80,7 @@ const CameraDiscoveryPage = ({ onBack }) => {
       setUsbCameras(response.data.cameras || []);
       setSuccess(`Found ${response.data.count} USB camera(s)`);
     } catch (err) {
-      setError(`USB discovery failed: ${err.response?.data?.detail || err.message}`);
+      setError(`USB discovery failed: ${describeApiError(err)}`);
     } finally {
       setScanning({ ...scanning, usb: false });
     }
@@ -99,7 +100,7 @@ const CameraDiscoveryPage = ({ onBack }) => {
       console.log('[CameraDiscovery] Network scan initiated successfully');
     } catch (err) {
       console.error('[CameraDiscovery] Network scan failed to start:', err);
-      setError(`Network discovery failed: ${err.response?.data?.detail || err.message}`);
+      setError(`Network discovery failed: ${describeApiError(err)}`);
       setScanning({ ...scanning, network: false });
     }
   };
@@ -119,7 +120,7 @@ const CameraDiscoveryPage = ({ onBack }) => {
         return false;
       }
     } catch (err) {
-      setError(`❌ Test failed: ${err.response?.data?.detail || err.message}`);
+      setError(`❌ Test failed: ${describeApiError(err)}`);
       return false;
     }
   };
@@ -147,7 +148,7 @@ const CameraDiscoveryPage = ({ onBack }) => {
         setNetworkCameras(prev => prev.filter(c => c.ip !== camera.ip));
       }
     } catch (err) {
-      setError(`❌ Failed to add camera: ${err.response?.data?.detail || err.message}`);
+      setError(`❌ Failed to add camera: ${describeApiError(err)}`);
     }
   };
 

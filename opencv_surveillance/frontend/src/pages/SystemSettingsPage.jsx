@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { logger } from '../utils/logger';
 import apiClient from '../api/apiClient';
 import AlertSettingsPage from './AlertSettingsPage';
+import { describeApiError } from '../utils/apiError';
 
 // Lazy load additional tab content for better performance
 const UserManagementPage = lazy(() => import('./UserManagementPage'));
@@ -158,26 +159,20 @@ const SystemSettingsPage = ({ embedded = false, initialTab = null }) => {
       logger.error('Path validation error:', error);
       logger.error('Error response:', error.response?.data);
       
-      // Log the full error detail array to see what Pydantic is complaining about
-      if (error.response?.data?.detail && Array.isArray(error.response.data.detail)) {
-        logger.error('Pydantic validation errors:', JSON.stringify(error.response.data.detail, null, 2));
+      // The RAW detail goes to the log, not the formatted sentence. Pydantic
+      // sends an array of objects here, and its structure — which field, which
+      // rule, what value — is what makes a validation failure diagnosable.
+      const rawDetail = error.response?.data?.detail;
+      if (Array.isArray(rawDetail)) {
+        logger.error('Pydantic validation errors:', JSON.stringify(rawDetail, null, 2));
       }
-      
-      // Extract error message properly, handling various formats
-      let errorMsg = 'Error validating path';
-      if (error.response?.data?.detail) {
-        const detail = error.response.data.detail;
-        if (typeof detail === 'string') {
-          errorMsg = detail;
-        } else if (Array.isArray(detail) && detail.length > 0) {
-          // Pydantic validation errors come as array
-          errorMsg = detail.map(err => err.msg || JSON.stringify(err)).join(', ');
-        } else if (typeof detail === 'object') {
-          errorMsg = detail.message || JSON.stringify(detail);
-        }
-      } else if (error.message) {
-        errorMsg = error.message;
-      }
+
+      // This branch used to hand-roll the string/array/object cases itself.
+      // It was written because a validation failure here rendered unreadably,
+      // which is the same problem describeApiError now solves for the whole
+      // interface — so the local version is replaced by the shared one rather
+      // than left to drift from it.
+      const errorMsg = describeApiError(error, 'Error validating path');
       
       setPathValidation(prev => ({
         ...prev,
@@ -215,7 +210,7 @@ const SystemSettingsPage = ({ embedded = false, initialTab = null }) => {
       logger.error('Error saving settings:', error);
       setMessage({
         type: 'error',
-        text: error.response?.data?.detail || 'Failed to save settings'
+        text: describeApiError(error, 'Failed to save settings')
       });
       setSaving(false);
     }
@@ -240,7 +235,7 @@ const SystemSettingsPage = ({ embedded = false, initialTab = null }) => {
       }
     } catch (error) {
       setEcoSecretAvailable(true);
-      setEcoSecretStatus(error.response?.data?.detail || 'Could not load secret status.');
+      setEcoSecretStatus(describeApiError(error, 'Could not load secret status.'));
     }
   }, []);
 
@@ -258,7 +253,7 @@ const SystemSettingsPage = ({ embedded = false, initialTab = null }) => {
       setEcoSecretInput('');
       refreshEcoSecretStatus();
     } catch (error) {
-      const detail = error.response?.data?.detail || 'Failed to save secret';
+      const detail = describeApiError(error, 'Failed to save secret');
       if (/already configured/i.test(detail) && !overwrite) {
         if (window.confirm('A different shared secret is already configured. Replace it? This breaks auth with peers still using the old secret.')) {
           applyEcoSecret(true);
@@ -277,7 +272,7 @@ const SystemSettingsPage = ({ embedded = false, initialTab = null }) => {
       setMessage({ type: 'success', text: '✓ New shared secret generated. Copy it to your other devices.' });
       refreshEcoSecretStatus();
     } catch (error) {
-      setMessage({ type: 'error', text: error.response?.data?.detail || 'Failed to generate secret' });
+      setMessage({ type: 'error', text: describeApiError(error, 'Failed to generate secret') });
     }
   };
 

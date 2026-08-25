@@ -5,6 +5,7 @@ import MotionZoneEditor from './MotionZoneEditor';
 import Switch from './Switch';
 import TwoWayAudio from './TwoWayAudio';
 import './CameraSettingsModal.css';
+import { describeApiError } from '../utils/apiError';
 
 const CameraSettingsModal = ({ camera, onClose, onSave }) => {
   const [activeTab, setActiveTab] = useState('motion');
@@ -131,7 +132,7 @@ const CameraSettingsModal = ({ camera, onClose, onSave }) => {
       }
     } catch (err) {
       console.error('Failed to save motion settings:', err);
-      const errorMsg = err.response?.data?.detail || err.message || 'Unknown error';
+      const errorMsg = describeApiError(err);
       setError(`Failed to save motion settings: ${errorMsg}`);
     } finally {
       setSaving(false);
