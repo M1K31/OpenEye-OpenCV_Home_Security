@@ -555,11 +555,38 @@ def get_trainable_clusters(
     - Recommended action
     """
     try:
-        # Get clusters with at least min_faces faces that are not identified
-        trainable = db.query(FaceCluster).filter(
+        # Clusters that still need a name.
+        #
+        # A stored is_identified flag is not sufficient on its own. Older runs
+        # set it on any cluster whose faces no longer read the literal
+        # "Unknown", which includes clusters auto-named unknown1 — so a cluster
+        # nobody had ever named was marked identified and disappeared from this
+        # list, the one place a user goes to name it. Seen on a live install:
+        # cluster 5, label unknown1, seven faces, is_identified = 1.
+        #
+        # Clustering no longer sets the flag that way. Matching on the label as
+        # well repairs installs that already carry the bad value, without
+        # rewriting anybody's data to do it — the same reason main.py declines
+        # to repair encodings on boot.
+        # The LIKE is a coarse pre-filter so the database still does the work;
+        # the exact test runs in Python because SQLite has no REGEXP by default
+        # and "unknown%" alone would also match a genuine name such as
+        # "Unknown Person".
+        from sqlalchemy import or_
+        from backend.core.face_clustering import _is_unnamed
+
+        candidates = db.query(FaceCluster).filter(
             FaceCluster.face_count >= min_faces,
-            FaceCluster.is_identified == False  # Not yet identified
+            or_(
+                FaceCluster.is_identified == False,
+                FaceCluster.label.ilike("unknown%"),
+            ),
         ).order_by(FaceCluster.face_count.desc()).all()
+
+        trainable = [
+            c for c in candidates
+            if not c.is_identified or _is_unnamed(c.label)
+        ]
 
         # Get clusters that have been labeled but not yet trained
         # (labeled means they have a name, but is_identified indicates if training was done)

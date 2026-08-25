@@ -161,11 +161,16 @@ def repair_people_missing_encodings(db: Session, limit_per_person: int = 40) -> 
     """
     Make every identified person recognisable again, and do nothing otherwise.
 
-    Runs on startup. Two defects left existing installs with people who had a
-    profile but no encodings: reassignment never enrolled anything, and the
-    trainer could not encode the tight 144x144 detection crops it was given.
-    Both are fixed going forward, but neither fix repairs data already on disk —
-    an upgraded install would keep its unrecognisable people forever.
+    Runs on request, via POST /api/faces/repair-encodings. NOT on startup:
+    main.py deliberately leaves this alone, because rewriting somebody's gallery
+    on every boot changes their data without being asked. This docstring used to
+    claim it ran at startup, which was never true of any caller.
+
+    Two defects left existing installs with people who had a profile but no
+    encodings: reassignment never enrolled anything, and the trainer could not
+    encode the tight 144x144 detection crops it was given. Both are fixed going
+    forward, but neither fix repairs data already on disk — an upgraded install
+    keeps its unrecognisable people until this is run.
 
     Cheap when there is nothing wrong: it compares names against the encodings
     already loaded in memory and returns immediately if none are missing. Only

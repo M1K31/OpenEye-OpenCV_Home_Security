@@ -26,6 +26,22 @@ logger = logging.getLogger(__name__)
 AUTO_UNKNOWN_NAME = re.compile(r"^unknown\d+$", re.IGNORECASE)
 
 
+def _is_unnamed(person_name: Optional[str]) -> bool:
+    """
+    True when a name is a placeholder rather than a person somebody chose.
+
+    "Unknown" and the auto-generated unknown1/unknown2 names are both
+    placeholders. Treating only the literal "Unknown" as unnamed made a cluster
+    look identified the moment auto-naming stamped unknown1 on its faces, which
+    is how a cluster nobody has named disappears from the list of clusters
+    needing a name.
+    """
+    if not person_name:
+        return True
+    cleaned = person_name.strip()
+    return cleaned == "" or cleaned.lower() == "unknown" or bool(AUTO_UNKNOWN_NAME.match(cleaned))
+
+
 def _resolve_snapshot_path(stored: Optional[str]) -> Optional[str]:
     """
     Resolve a stored snapshot reference to a real filesystem path.
@@ -587,7 +603,9 @@ class FaceClusteringService:
 
         # Update cluster
         cluster.label = clean_name
-        cluster.is_identified = True
+        # A real name identifies the cluster; a placeholder does not, even when
+        # it arrives through this path.
+        cluster.is_identified = not _is_unnamed(clean_name)
         cluster.updated_at = datetime.utcnow()
 
         # Adopt the cluster's name — but a placeholder still may not overwrite a
@@ -890,8 +908,22 @@ class FaceClusteringService:
             # Find last seen time
             last_seen = max([f.detected_at for f in cluster_faces_db])
             
-            # Determine if cluster is unknown (all faces are "Unknown")
-            is_unknown_cluster = all(f.person_name == "Unknown" for f in cluster_faces_db)
+            # Determine if cluster is unknown (nobody has named any of its faces)
+            #
+            # Placeholder names count as unnamed. Comparing against the literal
+            # "Unknown" alone meant that once auto-naming wrote unknown1 onto
+            # these faces, the NEXT clustering run saw a name that was not
+            # "Unknown", concluded the cluster was identified, and set
+            # is_identified. The cluster then dropped out of the endpoint that
+            # lists clusters needing a name, so a placeholder nobody had ever
+            # named became invisible to the workflow whose whole job is to name
+            # it. Observed on a live install: cluster 5, label unknown1, seven
+            # faces, is_identified = 1.
+            #
+            # The chosen name is unaffected: a cluster whose faces all read
+            # unknown1 still inherits unknown1 through the branch below, because
+            # that branch keys off the name itself rather than this flag.
+            is_unknown_cluster = all(_is_unnamed(f.person_name) for f in cluster_faces_db)
             
             # Determine person name for cluster
             if is_unknown_cluster:
