@@ -73,6 +73,7 @@ from backend.api.routes import (
     two_way_audio,
     timeline,
     metrics,
+    backups,
     notification_providers,
     two_factor_auth,
     motion_zones,
@@ -1075,6 +1076,12 @@ app.include_router(websockets.router, prefix="/api", tags=["WebSockets"])
 app.include_router(settings.router, prefix="/api", tags=["System Settings"])
 
 # Notification Provider Configuration
+app.include_router(
+    backups.router,
+    prefix="/api",
+    tags=["Backup & Restore"],
+)
+
 app.include_router(
     notification_providers.router,
     prefix="/api",

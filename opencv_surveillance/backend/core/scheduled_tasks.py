@@ -29,6 +29,7 @@ class TaskType(str, Enum):
     CLUSTER_CLEANUP = "cluster_cleanup"
     DATABASE_CLEANUP = "database_cleanup"
     SNAPSHOT_CLEANUP = "snapshot_cleanup"
+    DATABASE_BACKUP = "database_backup"
 
 
 class TaskStatus(str, Enum):
@@ -206,6 +207,23 @@ class ScheduledTasksManager:
         )
 
         # Snapshot cleanup - daily at 5 AM
+        # Enabled by default, unlike every other task here.
+        #
+        # The others delete things, so leaving them off until somebody asks is
+        # the cautious choice. This one only writes, costs about 20 MB and under
+        # a second, and is the single thing that makes every other mistake
+        # recoverable. A backup nobody switched on is the one they needed.
+        self.tasks[TaskType.DATABASE_BACKUP] = ScheduledTask(
+            task_type=TaskType.DATABASE_BACKUP,
+            enabled=True,
+            schedule_time=time(3, 30),
+            config={
+                # Two weeks of nightly backups at ~20 MB is under half a
+                # gigabyte, against a data root already measured at 10 GB.
+                "keep": 14,
+            }
+        )
+
         self.tasks[TaskType.SNAPSHOT_CLEANUP] = ScheduledTask(
             task_type=TaskType.SNAPSHOT_CLEANUP,
             enabled=False,
@@ -277,6 +295,8 @@ class ScheduledTasksManager:
                     result = await self._run_model_retrain(task.config)
                 elif task.task_type == TaskType.RETROACTIVE_SEARCH:
                     result = await self._run_retroactive_search(task.config)
+                elif task.task_type == TaskType.DATABASE_BACKUP:
+                    result = await self._run_database_backup(task.config)
                 elif task.task_type == TaskType.CLUSTER_CLEANUP:
                     result = await self._run_cluster_cleanup(task.config)
                 elif task.task_type == TaskType.DATABASE_CLEANUP:
@@ -441,6 +461,35 @@ class ScheduledTasksManager:
             db.commit()
 
         return result
+
+    async def _run_database_backup(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Write a backup of the database and the face galleries, then rotate.
+
+        Run in a worker thread. Taking the backup reads the whole database and
+        compresses it; on the scheduler's own thread that would stall every
+        other task behind it for the duration.
+        """
+        import asyncio
+
+        from backend.core import backup as backup_module
+
+        keep = int(config.get("keep", 14))
+
+        def _work():
+            written = backup_module.create_backup()
+            pruned = backup_module.prune_backups(keep=keep)
+            return written, pruned
+
+        written, pruned = await asyncio.get_running_loop().run_in_executor(None, _work)
+
+        return {
+            "backup": written["path"],
+            "megabytes": round(written["bytes"] / 1e6, 1),
+            "seconds": written["seconds"],
+            "contents": written["contents"],
+            "pruned": len(pruned),
+        }
 
     async def _run_cluster_cleanup(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Clean up old/empty face clusters"""

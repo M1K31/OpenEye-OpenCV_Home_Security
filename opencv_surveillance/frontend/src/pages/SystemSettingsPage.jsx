@@ -6,6 +6,7 @@ import { logger } from '../utils/logger';
 import apiClient from '../api/apiClient';
 import AlertSettingsPage from './AlertSettingsPage';
 import { describeApiError } from '../utils/apiError';
+import BackupRestorePanel from '../components/BackupRestorePanel';
 
 // Lazy load additional tab content for better performance
 const UserManagementPage = lazy(() => import('./UserManagementPage'));
@@ -780,6 +781,12 @@ const SystemSettingsPage = ({ embedded = false, initialTab = null }) => {
               <li><strong>Focus Indicators:</strong> Required for WCAG 2.1 Level AA compliance and keyboard navigation</li>
             </ul>
           </div>
+        </div>
+
+        {/* Backup & Restore */}
+        <div style={styles.section}>
+          <h2 style={styles.sectionTitle}>🗄️ Backup &amp; Restore</h2>
+          <BackupRestorePanel />
         </div>
 
         {/* Camera Settings Note */}
