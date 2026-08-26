@@ -6,7 +6,13 @@ sqlalchemy==2.1.0
 pydantic==2.11.0
 passlib[bcrypt]==1.8.2
 bcrypt==4.0.1
-python-jose==3.3.0
+# python-jose was removed with the move to PyJWT. It is not listed here.
+# It pulls in ecdsa, which carries CVE-2024-23342 (Minerva timing attack)
+# and will not be fixed — pure-Python scalar multiplication is not
+# constant-time, and the maintainers have said so. Nothing imports either.
+#
+# This file is standalone, so the replacement is named here too.
+pyjwt>=2.8.0,<3.0
 fastapi==0.100.0
 httpx==0.24.0
 starlette==0.27.0

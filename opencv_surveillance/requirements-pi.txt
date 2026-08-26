@@ -30,7 +30,10 @@ alembic>=1.13.0
 
 # Authentication & Security
 passlib[bcrypt]>=1.7.4
-python-jose[cryptography]>=3.3.0
+# python-jose was removed with the move to PyJWT. It is not listed here.
+# It pulls in ecdsa, which carries CVE-2024-23342 (Minerva timing attack)
+# and will not be fixed — pure-Python scalar multiplication is not
+# constant-time, and the maintainers have said so. Nothing imports either.
 
 # Environment variables
 python-dotenv>=1.0.0

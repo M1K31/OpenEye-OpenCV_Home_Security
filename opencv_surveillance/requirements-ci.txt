@@ -12,7 +12,14 @@ alembic>=1.13.0
 
 # Authentication & Security
 passlib[bcrypt]>=1.7.4
-python-jose[cryptography]>=3.3.0
+# python-jose was removed with the move to PyJWT. It is not listed here.
+# It pulls in ecdsa, which carries CVE-2024-23342 (Minerva timing attack)
+# and will not be fixed — pure-Python scalar multiplication is not
+# constant-time, and the maintainers have said so. Nothing imports either.
+#
+# This file is standalone — it does not read requirements.txt — so the
+# replacement has to be named here too, or nothing here can sign a token.
+pyjwt>=2.8.0,<3.0  # JSON Web Token handling
 bcrypt>=4.0.0
 
 # Environment variables
