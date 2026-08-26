@@ -20,11 +20,20 @@ if [[ "$DATABASE_URL" == postgresql* ]]; then
     echo "✅ PostgreSQL is ready"
 fi
 
-# Run database migrations
-if [ -f "alembic.ini" ]; then
-    echo "🔄 Running database migrations..."
-    alembic upgrade head || echo "⚠️  No migrations or alembic not configured"
-fi
+# Migrations are the application's job, not this script's.
+#
+# This used to run `alembic upgrade head` here. It was harmless only because
+# alembic.ini was never copied into the image, so the block never ran. Once the
+# migrations were shipped it started failing on every fresh container:
+#
+#     sqlalchemy.exc.NoSuchTableError: cameras
+#
+# No migration creates the base tables. They come from create_all(), and the
+# chain only adds increments on top, so running it first against an empty
+# database can only fail. backend/main.py already does this in the right order —
+# create the tables, then stamp alembic_version on a fresh database so the chain
+# starts from the right place — and says so at length. Doing it here as well,
+# earlier and without that care, could only undo it.
 
 # Create directories (may fail if volumes are mounted without correct permissions)
 echo "📁 Creating data directories..."

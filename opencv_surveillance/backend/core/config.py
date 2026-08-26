@@ -24,6 +24,15 @@ Environment Variables:
 """
 
 import os
+
+# The one place the application version is written.
+#
+# It had been hardcoded in seven: the FastAPI app, three API responses,
+# the sidebar, package.json and deploy.sh — and they had drifted to four
+# different numbers, with the deploy script about to publish an OLDER tag
+# than the released one against newer code. Everything that reports a
+# version now reads it from here.
+APP_VERSION = "3.11.9"
 from typing import List
 
 # ============================================================================

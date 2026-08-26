@@ -155,6 +155,16 @@ WORKDIR /app
 # previously-broken COPY of those (never-committed) vendored dirs is removed.
 COPY --chown=openeye:openeye backend/ ./backend/
 COPY --chown=openeye:openeye docker/ ./docker/
+
+# Migrations. Without these the image starts and then reports
+# "No 'script_location' key found in configuration" — alembic.ini was never
+# copied, so no migration could run in a container. A fresh database still gets
+# its tables from create_all, which is why this went unnoticed; an upgraded one
+# would silently keep an old schema.
+#
+# The macOS bundle has always shipped them. Only the image was missing them.
+COPY --chown=openeye:openeye alembic/ ./alembic/
+COPY --chown=openeye:openeye alembic.ini ./alembic.ini
 COPY --chown=openeye:openeye requirements.txt ./
 
 # Copy built frontend from frontend-builder

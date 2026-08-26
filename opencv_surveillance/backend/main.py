@@ -48,6 +48,7 @@ from fastapi.responses import FileResponse
 # a launch agent, login item or application bundle got no configuration at all
 # and came up without a signing key.
 from backend.core.config_loader import load_configuration
+from backend.core.config import APP_VERSION
 load_configuration()
 
 from backend.database.session import engine, SessionLocal
@@ -138,7 +139,7 @@ signal.signal(signal.SIGTERM, signal_handler)
 app = FastAPI(
     title="OpenEye Surveillance System",
     description="OpenCV-powered surveillance system with face recognition, motion detection, and video recording",
-    version="3.11.8",  # Face-Management Workflow & Stability
+    version=APP_VERSION,  # Face-Management Workflow & Stability
     docs_url="/api/docs",
     redoc_url="/api/redoc",
 )
@@ -738,7 +739,7 @@ async def startup_event():
     audit_logger.log_event(
         AuditEventType.SYSTEM_STARTUP,
         details={
-            "version": "3.11.4",
+            "version": APP_VERSION,
             "cameras_loaded": loaded_count,
             "known_faces": len(face_manager.known_face_names)
         }
@@ -790,18 +791,33 @@ async def startup_event():
     # Ecosystem integration (standalone no-op when registry unavailable)
     try:
         from ecosystem_client import EcosystemClient
+        from ecosystem_client.config import EcosystemConfig
         from backend.core.config import resolve_service_port
+
+        # Advertise the webhook path this application actually serves. The
+        # client's default is /ecosystem/events, which here is a WebSocket route
+        # (routes/ecosystem.py) mounted under /api — so the registry POSTed to a
+        # path that answered 405 and OpenEye could never receive an event. The
+        # POST receiver is /api/ecosystem/webhook.
+        eco_config = EcosystemConfig.from_env()
+        eco_config.webhook_path = "/api/ecosystem/webhook"
+
         eco = EcosystemClient(
             service_name="openeye",
             service_port=resolve_service_port(),  # same value the server binds
             health_endpoint="/api/health",
             priority=50,  # Fallback ecosystem manager
+            config=eco_config,
         )
         await eco.start()
         app.state.ecosystem = eco
+        # start() now reports a failed registration at ERROR itself; this line
+        # records the mode either way.
         logger.info(f"Ecosystem client started in {eco.mode.value} mode")
     except Exception as e:
-        logger.debug(f"Ecosystem client not available: {e}")
+        # Raised above INFO: a silent debug line is how this integration stayed
+        # broken unnoticed. The application still runs without the ecosystem.
+        logger.warning(f"Ecosystem client not available: {e}")
         app.state.ecosystem = None
 
 
@@ -1159,7 +1175,7 @@ async def read_root():
         # Fallback to API info if frontend not built
         return {
             "name": "OpenEye Surveillance System",
-            "version": "3.11.4",
+            "version": APP_VERSION,
             "description": "OpenCV-powered surveillance with face recognition",
             "features": [
                 "Motion Detection",
@@ -1202,7 +1218,7 @@ async def api_root(request: Request):
     return {
         "app_name": "OpenEye",
         "name": "OpenEye Surveillance System API",
-        "version": "3.11.4",
+        "version": APP_VERSION,
         "description": "OpenCV-powered surveillance with face recognition",
         "capabilities": [
             "notifications",
