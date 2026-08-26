@@ -130,3 +130,87 @@ class TestTheThresholdItself:
         close, dedupe would start refusing genuinely different views of a face.
         """
         assert fr.DUPLICATE_DISTANCE < 0.4
+
+
+class TestEveryTrainingPathIsBounded:
+    """
+    The mechanisms above are only worth having where they run.
+
+    Both were implemented correctly and wired into `train_from_cluster_export`
+    alone. `train_person` and `train_face_recognition` — the paths a
+    reassignment and a full retrain take — called neither, so the two routes
+    that grow a gallery fastest were the two that never bounded it. Measured on
+    a live install: one person held **746 encodings against a cap of 250**, and
+    deduplicating that same gallery reduces it to 207.
+
+    Asserted against the source rather than by training, because the defect is
+    structural: every mechanism worked, and the failure was that a caller did
+    not call one. Running a real training pass needs real photographs of real
+    faces and several seconds per path, and would still only prove the paths it
+    happened to exercise.
+
+    This does not prove the calls are correctly placed — the per-person eviction
+    in the full retrain has to sit inside the per-person loop, and that is
+    checked separately below.
+    """
+
+    TRAINING_PATHS = (
+        "train_face_recognition",
+        "train_person",
+        "train_from_cluster_export",
+    )
+
+    def _method_source(self, name):
+        import ast
+        import inspect
+        from backend.core import face_recognition as module
+
+        source = inspect.getsource(module)
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == name:
+                return ast.dump(node)
+        raise AssertionError(f"no method named {name}")
+
+    @pytest.mark.parametrize("path", TRAINING_PATHS)
+    def test_the_path_skips_redundant_encodings(self, path):
+        assert "_is_redundant" in self._method_source(path), (
+            f"{path} stores every encoding it computes, including ones the "
+            "person already has"
+        )
+
+    @pytest.mark.parametrize("path", TRAINING_PATHS)
+    def test_the_path_holds_the_gallery_to_its_cap(self, path):
+        assert "_evict_to_cap" in self._method_source(path), (
+            f"{path} can grow a gallery past MAX_ENCODINGS_PER_PERSON"
+        )
+
+    def test_the_full_retrain_caps_each_person_not_just_the_last(self):
+        """
+        Placement, not presence.
+
+        `_evict_to_cap` takes one person. In the full retrain it has to run
+        inside the loop over people — one level out and it would cap only
+        whoever happened to be last, leaving every other gallery unbounded
+        while the call looked present.
+        """
+        import ast
+        import inspect
+        from backend.core import face_recognition as module
+
+        tree = ast.parse(inspect.getsource(module))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == "train_face_recognition":
+                enclosing = [
+                    loop for loop in ast.walk(node)
+                    if isinstance(loop, ast.For)
+                    and any("_evict_to_cap" in ast.dump(stmt) for stmt in loop.body)
+                ]
+                assert enclosing, "eviction is not directly inside any loop"
+                target = getattr(enclosing[0].target, "id", "")
+                assert "person" in target, (
+                    f"eviction runs inside `for {target}`, which is not the "
+                    "loop over people"
+                )
+                return
+        raise AssertionError("train_face_recognition not found")

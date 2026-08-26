@@ -217,6 +217,8 @@ class FaceRecognitionManager:
 
             people_count = 0
             encodings_count = 0
+            skipped_count = 0
+            evicted_count = 0
 
             # Iterate through each person's folder
             for person_path in self.faces_folder.iterdir():
@@ -243,19 +245,44 @@ class FaceRecognitionManager:
                         face_encodings = _encode_gallery_image(image)
 
                         if len(face_encodings) > 0:
-                            # Use the first face found in the image
-                            self.known_face_encodings.append(face_encodings[0])
-                            self.known_face_names.append(person_name)
-                            encodings_count += 1
-                            logger.debug(f"Encoded face from: {image_path}")
+                            # Use the first face found in the image, unless this
+                            # person already has one saying the same thing.
+                            #
+                            # A full retrain rebuilds every gallery from the
+                            # images on disk, so without this it restores
+                            # exactly the redundancy the other paths remove —
+                            # and puts a capped gallery straight back over its
+                            # cap.
+                            if self._is_redundant(
+                                    face_encodings[0],
+                                    self._indices_for(person_name)):
+                                skipped_count += 1
+                            else:
+                                self.known_face_encodings.append(face_encodings[0])
+                                self.known_face_names.append(person_name)
+                                encodings_count += 1
+                                logger.debug(f"Encoded face from: {image_path}")
                         else:
                             logger.warning(f"No face found in: {image_path}")
 
                     except Exception as e:
                         logger.error(f"Error processing {image_path}: {e}")
 
+                # Cap this person before moving to the next.
+                #
+                # Inside the per-person loop rather than after it, because
+                # _evict_to_cap works on one person's encodings and the whole
+                # point is that each gallery is bounded individually.
+                evicted_count += self._evict_to_cap(person_name)
+
             # Save encodings to file
             self.save_encodings()
+
+            if skipped_count or evicted_count:
+                logger.info(
+                    "Retrain: %d encodings kept, %d skipped as redundant, "
+                    "%d evicted to stay under the cap",
+                    encodings_count, skipped_count, evicted_count)
 
             training_time = (datetime.now() - start_time).total_seconds()
 
@@ -333,6 +360,7 @@ class FaceRecognitionManager:
 
             # Encode new photos for this person
             encodings_added = 0
+            encodings_skipped = 0
             photos_processed = 0
             photos_failed = 0
 
@@ -348,10 +376,22 @@ class FaceRecognitionManager:
                     face_encodings = _encode_gallery_image(image)
 
                     if len(face_encodings) > 0:
-                        self.known_face_encodings.append(face_encodings[0])
-                        self.known_face_names.append(person_name)
-                        encodings_added += 1
-                        logger.debug(f"Encoded face from: {image_file_path}")
+                        # Skip a likeness this person already has.
+                        #
+                        # The dedupe and the cap existed but were wired into
+                        # train_from_cluster_export alone, and this is the path
+                        # reassignment uses — so the two mechanisms meant to
+                        # bound a gallery were absent from the route that grows
+                        # it fastest. One person reached 746 encodings against a
+                        # cap of 250.
+                        if self._is_redundant(face_encodings[0],
+                                              self._indices_for(person_name)):
+                            encodings_skipped += 1
+                        else:
+                            self.known_face_encodings.append(face_encodings[0])
+                            self.known_face_names.append(person_name)
+                            encodings_added += 1
+                            logger.debug(f"Encoded face from: {image_file_path}")
                     else:
                         photos_failed += 1
                         logger.warning(f"No face found in: {image_file_path}")
@@ -360,8 +400,22 @@ class FaceRecognitionManager:
                     photos_failed += 1
                     logger.error(f"Error processing {image_file_path}: {e}")
 
+            # Hold the gallery to its cap.
+            #
+            # Dedupe alone is not enough: it cannot compress a subject whose
+            # appearance genuinely varies, and this is the path a reassignment
+            # takes, so it is where a gallery grows fastest.
+            encodings_evicted = self._evict_to_cap(person_name)
+
             # Save updated encodings
             self.save_encodings()
+
+            if encodings_skipped or encodings_evicted:
+                logger.info(
+                    "Trained '%s': %d added, %d skipped as redundant, "
+                    "%d evicted to stay under the cap",
+                    person_name, encodings_added, encodings_skipped,
+                    encodings_evicted)
 
             training_time = (datetime.now() - start_time).total_seconds()
 
@@ -375,6 +429,8 @@ class FaceRecognitionManager:
                 "person_name": person_name,
                 "encodings_added": encodings_added,
                 "encodings_removed": removed_count,
+                "encodings_skipped_redundant": encodings_skipped,
+                "encodings_evicted": encodings_evicted,
                 "photos_processed": photos_processed,
                 "photos_failed": photos_failed,
                 "training_time": training_time
