@@ -326,6 +326,7 @@ def refresh_token(
 @router.post("/token/revoke")
 def revoke_token(
     payload: RefreshTokenRequest,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: user_schema.User = Depends(auth.get_current_user)
 ):
@@ -341,12 +342,39 @@ def revoke_token(
     Raises:
         HTTPException 404: If token not found
     """
+    # Clear the media cookie first, before any early return.
+    #
+    # Login mirrors the access token into an HttpOnly `access_token` cookie so
+    # that <img> and <video> tags can authenticate — a plain tag cannot send an
+    # Authorization header. Being HttpOnly, the browser discards the frontend's
+    # own `document.cookie` deletion, so the server is the only thing that can
+    # remove it. Nothing did: clear_media_auth_cookie() existed and was never
+    # called from anywhere.
+    #
+    # Until it is cleared, a signed-out browser keeps pulling /recordings,
+    # /faces, /api/snapshots and /data/thumbnails for the remaining life of the
+    # access token — up to ACCESS_TOKEN_EXPIRE_MINUTES. On a shared machine
+    # that is the next person's access to recorded footage.
+    #
+    # Unconditional, and ahead of the 404: someone presenting an unknown
+    # refresh token is still trying to sign out, and leaving them holding a
+    # working media cookie is the wrong answer to that.
+    auth.clear_media_auth_cookie(response)
+
     success = crud.revoke_refresh_token(db, payload.refresh_token)
 
     if not success:
+        # Carry the deletion onto the error response explicitly.
+        #
+        # Setting it on the injected Response is NOT enough here: FastAPI does
+        # not merge those headers into the response built for an HTTPException,
+        # so raising would discard the Set-Cookie and hand back a 404 with the
+        # media cookie still live. Verified by test — see
+        # test_an_unknown_refresh_token_still_clears_the_cookie.
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Refresh token not found"
+            detail="Refresh token not found",
+            headers={"set-cookie": response.headers["set-cookie"]},
         )
 
     # Log token revocation
@@ -362,6 +390,7 @@ def revoke_token(
 
 @router.post("/token/revoke-all")
 def revoke_all_tokens(
+    response: Response,
     db: Session = Depends(get_db),
     current_user: user_schema.User = Depends(auth.get_current_user)
 ):
@@ -376,6 +405,11 @@ def revoke_all_tokens(
     Returns:
         Number of tokens revoked
     """
+    # See revoke_token above: the media cookie is HttpOnly, so only the server
+    # can remove it. "Log out everywhere" that leaves this browser able to read
+    # footage has not logged anything out.
+    auth.clear_media_auth_cookie(response)
+
     count = crud.revoke_all_user_tokens(db, current_user.id)
 
     # Log mass token revocation
