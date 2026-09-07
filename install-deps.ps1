@@ -34,7 +34,12 @@ param(
     [string]$Feature = 'all',
 
     # Python to install into. Defaults to the active virtual environment.
-    [string]$Python = ''
+    [string]$Python = '',
+
+    # Where to look for a dlib wheel built by this project, if one has been
+    # published. A URL or a local directory; passed to pip as --find-links.
+    # Leave empty to go straight to the dlib-bin fallback.
+    [string]$DlibWheelIndex = $env:OPENEYE_DLIB_WHEEL_INDEX
 )
 
 $ErrorActionPreference = 'Stop'
@@ -127,27 +132,58 @@ function Install-FaceRecognition {
         Write-Fail 'could not pin setuptools'; return $false
     }
 
-    # Prebuilt wheels only. If this cannot be satisfied we want a clear failure,
-    # not a silent multi-hour source build.
-    if (-not (Invoke-Quiet $Py @('-m','pip','install','--quiet','--only-binary=:all:','dlib-bin>=19.24','numpy<2'))) {
-        Write-Fail 'no prebuilt dlib wheel for this Python version.'
-        Write-Host  '         Options: use Python 3.9-3.12, or build from source with'
-        Write-Host  '         CMake plus the Visual Studio C++ build tools installed.'
-        return $false
+    if (-not (Invoke-Quiet $Py @('-m','pip','install','--quiet','--only-binary=:all:','numpy<2'))) {
+        Write-Fail 'could not install numpy'; return $false
     }
 
-    # --no-deps is the whole point. face_recognition declares
-    # "Requires-Dist: dlib (>=19.7)", and pip resolves by DISTRIBUTION name, not
-    # import name - so dlib-bin being installed does not satisfy it and pip
-    # would fetch the dlib sdist and try to build it, which is exactly what
-    # dlib-bin exists to avoid.
-    if (-not (Invoke-Quiet $Py @('-m','pip','install','--quiet','--no-deps','face_recognition','face_recognition_models'))) {
-        Write-Fail 'face_recognition install failed'; return $false
+    # Two ways to get dlib, tried in order. They are not equivalent.
+    #
+    # 1. A wheel WE built, published on this project's releases. It is named
+    #    `dlib`, so face_recognition's "Requires-Dist: dlib (>=19.7)" resolves
+    #    against it and everything downstream behaves normally.
+    #
+    # 2. dlib-bin, a third-party repackaging of the same library. It works and
+    #    imports as `dlib`, but pip matches requirements by DISTRIBUTION name,
+    #    not import name — so it does NOT satisfy that requirement, and
+    #    face_recognition has to be installed with --no-deps and its own
+    #    dependencies supplied by hand.
+    #
+    # Hence the two branches below. The first is preferred because it needs no
+    # special handling; the second is the fallback when no wheel has been
+    # published for this Python version yet.
+    $usedOwnWheel = $false
+    if ($DlibWheelIndex) {
+        Write-Host "    trying published wheel index: $DlibWheelIndex"
+        $usedOwnWheel = Invoke-Quiet $Py @(
+            '-m','pip','install','--quiet','--only-binary=:all:',
+            '--find-links', $DlibWheelIndex, 'dlib')
     }
 
-    # Its remaining dependencies, supplied by hand because --no-deps skipped them.
-    if (-not (Invoke-Quiet $Py @('-m','pip','install','--quiet','--only-binary=:all:','click','pillow'))) {
-        Write-Fail 'face_recognition dependencies failed'; return $false
+    if ($usedOwnWheel) {
+        Write-Ok 'dlib installed from the project wheel'
+        # Resolves normally: no --no-deps, no hand-listed dependencies.
+        if (-not (Invoke-Quiet $Py @('-m','pip','install','--quiet','face_recognition'))) {
+            Write-Fail 'face_recognition install failed'; return $false
+        }
+    }
+    else {
+        if ($DlibWheelIndex) {
+            Write-Warn 'no project wheel for this Python version; falling back to dlib-bin'
+        }
+        if (-not (Invoke-Quiet $Py @('-m','pip','install','--quiet','--only-binary=:all:','dlib-bin>=19.24'))) {
+            Write-Fail 'no prebuilt dlib wheel for this Python version.'
+            Write-Host  '         Options: use Python 3.9-3.12, or build from source with'
+            Write-Host  '         CMake plus the Visual Studio C++ build tools installed.'
+            return $false
+        }
+        # --no-deps is required here, for the reason given above.
+        if (-not (Invoke-Quiet $Py @('-m','pip','install','--quiet','--no-deps','face_recognition','face_recognition_models'))) {
+            Write-Fail 'face_recognition install failed'; return $false
+        }
+        # Its remaining dependencies, supplied by hand because --no-deps skipped them.
+        if (-not (Invoke-Quiet $Py @('-m','pip','install','--quiet','--only-binary=:all:','click','pillow'))) {
+            Write-Fail 'face_recognition dependencies failed'; return $false
+        }
     }
 
     # Prove it, rather than trusting exit codes. An install that reports success
@@ -163,12 +199,15 @@ print("    verified: dlib " + dlib.__version__ + " + face_recognition working")
         Write-Fail 'installed, but does not import'; return $false
     }
 
-    # pip prints "face-recognition 1.3.0 requires dlib>=19.7, which is not
-    # installed" here. It is expected and harmless: dlib-bin supplies the same
-    # module under a different distribution name, and the check above has just
-    # proved the module works. Said out loud so it does not look like a problem.
-    Write-Host '    note: pip may warn that "dlib is not installed" - expected,'
-    Write-Host '          dlib-bin provides it under a different package name.'
+    if (-not $usedOwnWheel) {
+        # On the fallback path pip prints "face-recognition 1.3.0 requires
+        # dlib>=19.7, which is not installed". It is expected and harmless -
+        # dlib-bin supplies the same module under a different distribution
+        # name, and the check above has just proved the module works. Said out
+        # loud so it does not read as a problem.
+        Write-Host '    note: pip may warn that "dlib is not installed" - expected,'
+        Write-Host '          dlib-bin provides it under a different package name.'
+    }
     Write-Ok 'face recognition available'
     return $true
 }
