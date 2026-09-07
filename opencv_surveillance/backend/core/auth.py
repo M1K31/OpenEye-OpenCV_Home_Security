@@ -44,11 +44,55 @@ from backend.core.config import (
 _KNOWN_WEAK_KEYS = {
     "",
     "your-secret-key",
+    "your-secret-key-change-in-production",   # docker-compose.yml default
+    "your-jwt-secret-key",                    # docker-compose.yml default
     "dev-secret-key",
     "dev-secret-key-change-in-production",
+    "dev-jwt-key-change-in-production",       # setup_notification_encryption.py
     "change-me",
     "changeme",
 }
+
+# Fragments that mark a key as a placeholder, whatever the surrounding wording.
+#
+# The exact-match set above is not sufficient on its own, and this is not
+# hypothetical: it listed "your-secret-key" while docker-compose.yml shipped
+# "your-secret-key-change-in-production" and "your-jwt-secret-key". Neither
+# matched, so `docker compose up` with no .env signed every token with a string
+# published in this repository, and anyone who could reach the port could mint
+# an admin JWT. The guard was correct when written and the defaults were
+# reworded in another file afterwards.
+#
+# Substrings are what stop that recurring. A future placeholder does not need
+# anyone to remember this list.
+_WEAK_KEY_MARKERS = (
+    "your-secret", "your-jwt", "change-in-production", "changeme", "change-me",
+    "dev-secret", "dev-jwt", "placeholder", "example", "insecure",
+    "not-for-production", "test-key", "secret-key-here", "xxxx",
+)
+
+# HS256 signs with a 256-bit key. Anything shorter than 32 characters is below
+# that and is brute-forceable offline from a single captured token, so length is
+# refused on the same footing as a known placeholder.
+_MINIMUM_KEY_LENGTH = 32
+
+
+def _is_weak_key(value: Optional[str]) -> bool:
+    """
+    True when a key must not be used to sign tokens.
+
+    Refuses three things: an empty value, a published or placeholder-looking
+    constant, and a key too short for the signing algorithm. Case-insensitive,
+    because a placeholder does not become strong by being capitalised.
+    """
+    if not value:
+        return True
+    candidate = value.strip().lower()
+    if candidate in _KNOWN_WEAK_KEYS:
+        return True
+    if any(marker in candidate for marker in _WEAK_KEY_MARKERS):
+        return True
+    return len(candidate) < _MINIMUM_KEY_LENGTH
 
 
 def _load_or_create_secret_key() -> str:
@@ -65,12 +109,12 @@ def _load_or_create_secret_key() -> str:
          still random, still never the published constant.
     """
     env_key = os.getenv("SECRET_KEY")
-    if env_key and env_key not in _KNOWN_WEAK_KEYS:
+    if env_key and not _is_weak_key(env_key):
         return env_key
 
     if env_key:
         logger.warning(
-            "SECRET_KEY is a known weak/placeholder value; generating a "
+            "SECRET_KEY is empty, too short, or a known placeholder; generating a "
             "per-install key instead."
         )
 
@@ -84,7 +128,7 @@ def _load_or_create_secret_key() -> str:
     try:
         if key_file.exists():
             existing = key_file.read_text().strip()
-            if existing and existing not in _KNOWN_WEAK_KEYS:
+            if existing and not _is_weak_key(existing):
                 return existing
 
         key_file.parent.mkdir(parents=True, exist_ok=True)
@@ -114,9 +158,9 @@ JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 if not JWT_SECRET_KEY:
     JWT_SECRET_KEY = SECRET_KEY
     logger.info("JWT_SECRET_KEY not set; deriving it from SECRET_KEY.")
-elif JWT_SECRET_KEY in _KNOWN_WEAK_KEYS:
+elif _is_weak_key(JWT_SECRET_KEY):
     logger.warning(
-        "JWT_SECRET_KEY is a known weak/placeholder value; deriving from "
+        "JWT_SECRET_KEY is empty, too short, or a known placeholder; deriving from "
         "SECRET_KEY instead."
     )
     JWT_SECRET_KEY = SECRET_KEY
