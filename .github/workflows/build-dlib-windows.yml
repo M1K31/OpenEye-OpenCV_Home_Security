@@ -68,76 +68,32 @@ jobs:
         python-version: ['3.9', '3.10', '3.11', '3.12']
 
     steps:
+      - uses: actions/checkout@v4
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
-      # windows-latest ships MSVC and CMake already. Asserted rather than
-      # assumed: if the image ever drops them the failure should name the
-      # cause, not surface as a confusing compiler error 20 minutes in.
-      - name: Verify the build toolchain is present
+      # The build, the toolchain checks and the verification all live in
+      # scripts/build-dlib-wheel.ps1 rather than here.
+      #
+      # Duplicating them would mean CI and a developer's local run could drift,
+      # and the local run is the one that matters most: this workflow cannot be
+      # triggered from the Actions tab until the file reaches the default
+      # branch, so building by hand is the first thing anyone will actually do.
+      #
+      # The script asserts CMake and the MSVC C++ tools are present, builds with
+      # pip's build isolation disabled, and verifies in a clean venv that
+      # `pip install face_recognition` resolves against the wheel without
+      # --no-deps and without pulling dlib-bin. It exits non-zero on any of
+      # those, so no extra assertions are needed here.
+      - name: Build and verify the wheel
         shell: pwsh
         run: |
-          $cmake = Get-Command cmake -ErrorAction SilentlyContinue
-          if (-not $cmake) { throw "cmake not found on the runner image" }
-          cmake --version
-          Write-Host "MSVC:"
-          & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
-            -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
-            -property displayName
-
-      - name: Build the wheel
-        shell: pwsh
-        run: |
-          # dlib's pyproject declares requires = [setuptools, wheel, packaging,
-          # cmake], and pip's build isolation tries to satisfy that `cmake` from
-          # PyPI in a fresh environment. Where no wheel matches the platform it
-          # builds cmake FROM SOURCE, which fails — dlib's own setup.py carries
-          # the comment "the pip cmake package is busted" about exactly this.
-          # Reproduced on linux/arm64: the build died in cmcurl, never reaching
-          # dlib at all.
-          #
-          # Install the build requirements directly and disable isolation, so
-          # the runner's own CMake (verified present above) is what gets used.
-          python -m pip install --upgrade pip wheel setuptools packaging
-
-          # --no-binary=:all: so this always compiles from the official sdist
-          # and never silently repackages someone else's binary.
-          python -m pip wheel --no-deps --no-build-isolation --no-binary=:all: `
-            --wheel-dir dist "dlib==${{ inputs.dlib_version }}"
-          Get-ChildItem dist
-
-      # A wheel that builds but cannot import is the failure this whole effort
-      # is about, so prove it in a clean interpreter before publishing.
-      - name: Verify the wheel imports and runs
-        shell: pwsh
-        run: |
-          python -m venv verify
-          .\verify\Scripts\python.exe -m pip install --upgrade pip "setuptools<82" | Out-Null
-          .\verify\Scripts\python.exe -m pip install --find-links dist --only-binary=:all: dlib
-          .\verify\Scripts\python.exe -m pip install "numpy<2" pillow click | Out-Null
-          # face_recognition must resolve WITHOUT --no-deps. If this step needs
-          # it, the wheel is not doing the job it exists to do.
-          .\verify\Scripts\python.exe -m pip install --no-build-isolation face_recognition
-          .\verify\Scripts\python.exe -c @"
-          import numpy, dlib, face_recognition
-          img = numpy.zeros((120, 120, 3), dtype=numpy.uint8)
-          face_recognition.face_locations(img)
-          face_recognition.face_encodings(img)
-          print('verified: dlib', dlib.__version__, 'on Python', __import__('sys').version.split()[0])
-          "@
-
-      # Guards the claim above. `pip install face_recognition` must not have
-      # pulled the sdist and rebuilt dlib — if it did, the wheel was not
-      # satisfying the requirement and we have gained nothing over dlib-bin.
-      - name: Assert face_recognition used our wheel
-        shell: pwsh
-        run: |
-          $out = .\verify\Scripts\python.exe -m pip list --format=freeze
-          if ($out -match 'dlib-bin') { throw "dlib-bin was installed; our wheel did not satisfy the requirement" }
-          if (-not ($out -match '^dlib==')) { throw "dlib is not installed under its own name" }
-          Write-Host "OK: face_recognition resolved against the dlib wheel built here"
+          .\scripts\build-dlib-wheel.ps1 `
+            -DlibVersion '${{ inputs.dlib_version }}' `
+            -OutDir dist
 
       - name: Upload the wheel
         uses: actions/upload-artifact@v4
