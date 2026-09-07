@@ -352,7 +352,7 @@ def revoke_token(
     # Log token revocation
     audit_logger.log_event(
         event_type=AuditEventType.LOGOUT,
-        username=current_user.username,
+        user=current_user.username,
         ip_address="unknown",
         details={"single_device": True}
     )
@@ -381,7 +381,7 @@ def revoke_all_tokens(
     # Log mass token revocation
     audit_logger.log_event(
         event_type=AuditEventType.LOGOUT,
-        username=current_user.username,
+        user=current_user.username,
         ip_address="unknown",
         details={"all_devices": True, "tokens_revoked": count}
     )
@@ -762,7 +762,7 @@ async def update_user(
     # Log profile update
     audit_logger.log_event(
         event_type=AuditEventType.PROFILE_UPDATED,
-        username=current_user.username,
+        user=current_user.username,
         ip_address="unknown",
         details={"updated_user_id": user_id, "fields": list(update_data.keys())}
     )
@@ -810,7 +810,7 @@ async def delete_user(
     # Log deletion
     audit_logger.log_event(
         event_type=AuditEventType.USER_DELETED,
-        username=current_user.username,
+        user=current_user.username,
         ip_address="unknown",
         details={"deleted_user": username, "deleted_user_id": user_id}
     )
@@ -853,7 +853,7 @@ async def change_user_role(
     # Log role change
     audit_logger.log_event(
         event_type=AuditEventType.ROLE_CHANGED,
-        username=current_user.username,
+        user=current_user.username,
         ip_address="unknown",
         details={
             "target_user": user.username,
@@ -906,7 +906,7 @@ async def change_password(
     # Log password change
     audit_logger.log_event(
         event_type=AuditEventType.PASSWORD_CHANGED,
-        username=current_user.username,
+        user=current_user.username,
         ip_address="unknown",
         details={"tokens_revoked": tokens_revoked}
     )
@@ -1084,7 +1084,7 @@ async def link_face_profile(
     # Log the linking
     audit_logger.log_event(
         event_type=AuditEventType.FACE_LINKED,
-        username=current_user.username,
+        user=current_user.username,
         ip_address="unknown",
         details={
             "target_user_id": user_id,
