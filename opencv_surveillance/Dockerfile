@@ -58,7 +58,7 @@ WORKDIR /build
 #
 # requirements.txt remains the fallback so a missing or stale lock cannot break
 # the build; it describes intent, the lock describes the exact set.
-COPY requirements.txt requirements-ecosystem.txt ./
+COPY requirements.txt requirements-ecosystem.txt requirements-face-recognition.txt ./
 COPY requirements.linux-py312.loc[k] ./
 # setuptools is NOT upgraded here. It is pinned below 82 because that
 # release removed pkg_resources, which face_recognition_models imports at
@@ -83,7 +83,16 @@ RUN pip install --user --no-cache-dir --upgrade pip wheel && \
     # changing the build). PyPI releases are immutable per version, so the
     # equivalent control here is the version floor in requirements-ecosystem.txt;
     # pin exact versions there if you want byte-identical rebuilds.
-    pip install --user --no-cache-dir -r requirements-ecosystem.txt
+    pip install --user --no-cache-dir -r requirements-ecosystem.txt && \
+    # Face recognition, installed explicitly because it is no longer in the
+    # base set. dlib has no Windows wheel and compiles for hours on ARM, so
+    # requirements.txt makes it opt-in for the developer `pip install` path.
+    #
+    # The image keeps it: a container is expected to have the same features as
+    # the application bundles, and this is a Linux build where dlib resolves
+    # normally. Dropping it here would silently remove face recognition from
+    # every Docker deployment, which is not what making it optional was for.
+    pip install --user --no-cache-dir -r requirements-face-recognition.txt
 
 # ============================================
 # Stage 3: Runtime - Minimal production image

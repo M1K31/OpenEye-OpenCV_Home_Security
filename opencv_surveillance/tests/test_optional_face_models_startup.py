@@ -64,3 +64,64 @@ def test_the_application_imports_without_the_models():
     not, it verifies the degraded path — which is the case that used to abort.
     """
     import backend.main  # noqa: F401
+
+
+class TestTheDependencySplit:
+    """
+    requirements.txt must agree with the rest of the project about optionality.
+
+    feature_config.py excludes face recognition from HardwareTier.MINIMAL,
+    FACE_RECOGNITION_AVAILABLE guards every call site, ENABLE_FACE_RECOGNITION
+    gates the feature, and requirements-pi.txt ships dlib commented out. Only
+    requirements.txt disagreed, and it did so by accident: commit 0c804a6
+    resolved a merge that had been committed with conflict markers in the file
+    and kept the "required" side.
+    """
+
+    @staticmethod
+    def _requirements(name):
+        import pathlib
+
+        path = pathlib.Path(__file__).resolve().parents[1] / name
+        assert path.exists(), f"{name} is missing"
+        return [
+            line.strip()
+            for line in path.read_text().splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        ]
+
+    def test_the_base_set_does_not_require_dlib(self):
+        """
+        dlib has no cp312 Windows wheel; requiring it fails the whole install.
+
+        A source build also costs hours on ARM, for a feature MINIMAL-tier
+        hardware never enables.
+        """
+        base = self._requirements("requirements.txt")
+        offenders = [r for r in base if r.lower().startswith(("dlib", "face_recognition", "face-recognition"))]
+        assert not offenders, (
+            f"requirements.txt requires {offenders}; these belong in "
+            "requirements-face-recognition.txt"
+        )
+
+    def test_the_optional_set_exists_and_declares_them(self):
+        """Making it optional is only safe if there is a documented way back in."""
+        optional = self._requirements("requirements-face-recognition.txt")
+        joined = " ".join(optional).lower()
+        assert "dlib" in joined
+        assert "face_recognition" in joined or "face-recognition" in joined
+
+    def test_the_pi_set_still_excludes_them(self):
+        """requirements-pi.txt was right all along; it must stay that way."""
+        pi = self._requirements("requirements-pi.txt")
+        offenders = [r for r in pi if r.lower().startswith(("dlib", "face_recognition"))]
+        assert not offenders, f"requirements-pi.txt requires {offenders}"
+
+    def test_the_feature_is_still_excluded_from_minimal_hardware(self):
+        """The premise of the split: MINIMAL never enables face recognition."""
+        from backend.core.feature_config import HardwareTier, get_features_for_hardware_tier
+
+        minimal = get_features_for_hardware_tier(HardwareTier.MINIMAL)
+        assert not [f for f in minimal if "face" in f], (
+            "MINIMAL now includes face recognition; the dependency split needs revisiting"
+        )

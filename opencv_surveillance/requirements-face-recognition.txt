@@ -1,0 +1,53 @@
+# OpenEye — face recognition (optional)
+#
+#     pip install -r requirements-face-recognition.txt
+#
+# Adds face detection, recognition and clustering. OpenEye runs normally without
+# it: `FACE_RECOGNITION_AVAILABLE` guards every call site in
+# `backend/core/face_recognition.py`, `ENABLE_FACE_RECOGNITION` gates the
+# feature, and startup tolerates the packages being absent. The interface
+# reports face recognition as unavailable rather than failing.
+#
+# WHY IT IS SEPARATE
+#
+# dlib has no prebuilt wheel for Windows on CPython 3.12, so `pip install`
+# attempts a source build and fails — taking the ENTIRE install down with it,
+# including every package that would have worked. On ARM it compiles for hours:
+# `requirements-pi.txt` has always said "dlib takes 2+ hours to compile, may
+# fail on Pi 3" and has shipped these two commented out for exactly that reason.
+#
+# It is also unnecessary for a large part of the intended hardware range.
+# `backend/core/feature_config.py` excludes face recognition from
+# `HardwareTier.MINIMAL` outright, and `face_recognition_hog` declares
+# `min_ram_gb=4`. Requiring it in the base set made a multi-hour compile
+# mandatory for hardware the project has already decided will never enable the
+# feature.
+#
+# HOW IT BECAME MANDATORY
+#
+# By accident. It was originally listed as
+# "Optional: ... Uncomment if you want to install dlib separately". Commit
+# 0c804a6 resolved a merge that had been committed with live conflict markers
+# still in the file, kept the "required" side, and rewrote the comment to match.
+# That was conflict resolution, not a decision — every other part of the
+# codebase still treats face recognition as optional.
+#
+# PACKAGING
+#
+# The macOS, Windows and Linux application bundles ship these preinstalled, so
+# customers get face recognition with no compile step. This file is the
+# developer-facing path, where a fast `pip install` matters more than having
+# every optional feature present by default.
+#
+# INSTALLING
+#
+# `install-deps.sh` handles the awkward cases (system dlib via apt, prebuilt
+# wheels, then a source build as a last resort) and is the recommended route on
+# Linux and macOS. On Windows, prefer a prebuilt wheel matching your Python
+# version over a source build.
+#
+# face_recognition_models is not listed here: it is a dependency of
+# face_recognition and arrives with it.
+
+dlib>=19.24.0            # native library behind face_recognition
+face_recognition>=1.3.0  # detection, encoding and comparison
