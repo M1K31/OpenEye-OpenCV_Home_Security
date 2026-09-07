@@ -515,10 +515,23 @@ def cmd_doctor(args) -> int:
 
     problems = 0
 
-    def check(label: str, ok: bool, detail: str = "") -> None:
+    def check(label: str, ok: bool, hint: str = "", info: str = "") -> None:
+        """
+        Report one check.
+
+        `hint` explains a FAILURE and is printed only when the check fails.
+        `info` is context that is true either way and is always printed.
+
+        The distinction is not cosmetic. Every hint here is phrased as a
+        reason something is wrong, and printing them unconditionally produced
+        lines that contradicted themselves — a healthy machine reported
+        "[ok  ] port 8200 available — another application holds it", which
+        reads as a failure that has been marked as passing.
+        """
         nonlocal problems
         mark = "ok  " if ok else "FAIL"
-        print(f"  [{mark}] {label}" + (f" — {detail}" if detail else ""))
+        suffix = info or (hint if not ok else "")
+        print(f"  [{mark}] {label}" + (f" — {suffix}" if suffix else ""))
         if not ok:
             problems += 1
 
@@ -578,9 +591,9 @@ def cmd_doctor(args) -> int:
         probe = root / ".write-probe"
         probe.write_text("ok")
         probe.unlink()
-        check("data root writable", True, str(root))
+        check("data root writable", True, info=str(root))
     except OSError as exc:
-        check("data root writable", False, f"{root}: {exc}")
+        check("data root writable", False, hint=f"{root}: {exc}")
 
     if IS_WINDOWS:
         print("\nWindows notes:")
