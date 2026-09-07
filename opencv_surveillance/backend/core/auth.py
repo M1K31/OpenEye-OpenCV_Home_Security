@@ -152,8 +152,18 @@ def _load_or_create_secret_key() -> str:
 
 SECRET_KEY = _load_or_create_secret_key()
 
-# JWT signing key. Falls back to SECRET_KEY when a separate key is not provided;
-# both are now guaranteed strong (never a published constant).
+# The key every token in this application is signed and verified with.
+#
+# This was previously computed and then never used: all four jwt.encode/decode
+# call sites passed SECRET_KEY, so setting JWT_SECRET_KEY changed nothing while
+# .env.example, docker-compose.yml, DOCKER.md and setup-production.sh all told
+# operators to set it. Someone rotating it after a suspected compromise, to
+# invalidate every issued token, invalidated none — which is worse than not
+# offering the control at all.
+#
+# It falls back to SECRET_KEY when unset, so an installation that never set it
+# is unaffected by this becoming real. An installation that DID set it signs
+# with a different key than before and its users sign in once more.
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 if not JWT_SECRET_KEY:
     JWT_SECRET_KEY = SECRET_KEY
@@ -186,7 +196,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=15)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 
@@ -249,7 +259,7 @@ async def get_current_user(
     )
 
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
@@ -319,7 +329,7 @@ async def get_current_user_media(
         raise credentials_exception
 
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
