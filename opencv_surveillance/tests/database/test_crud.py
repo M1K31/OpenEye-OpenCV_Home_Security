@@ -460,7 +460,10 @@ class TestRefreshTokenCRUD:
         )
 
         assert created_token.id is not None
-        assert created_token.token == token_string
+        # Stored as a digest, never in the clear: the database is archived by
+        # backup.py, and a stored refresh token is a usable credential.
+        assert created_token.token_hash == crud.hash_refresh_token(token_string)
+        assert created_token.token_hash != token_string
         assert created_token.user_id == user.id
         assert created_token.revoked is False
         assert created_token.expires_at > datetime.utcnow()
@@ -478,7 +481,9 @@ class TestRefreshTokenCRUD:
         retrieved_token = crud.get_refresh_token(db_session, token_string)
 
         assert retrieved_token is not None
-        assert retrieved_token.token == token_string
+        # Looked up by digest — the raw token is what the caller presents, and
+        # what the database holds is the hash of it.
+        assert retrieved_token.token_hash == crud.hash_refresh_token(token_string)
         assert retrieved_token.user_id == user.id
 
     def test_get_refresh_token_not_exists(self, db_session: Session):

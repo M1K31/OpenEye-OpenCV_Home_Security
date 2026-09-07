@@ -64,7 +64,19 @@ class RefreshToken(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    token = Column(String(512), unique=True, nullable=False, index=True)
+    # The SHA-256 digest of the refresh token, never the token itself.
+    #
+    # A refresh token is a bearer credential: whoever holds it can mint access
+    # tokens until it expires. Stored verbatim, the database became a file full
+    # of live credentials — and backup.py archives that database, so every
+    # backup was a credential file that resumed every active session for up to
+    # REFRESH_TOKEN_EXPIRE_DAYS, bypassing both the password and 2FA.
+    #
+    # A plain digest is the right primitive here, not bcrypt or argon2: the
+    # token is 512 bits from secrets.token_urlsafe(64), so there is no
+    # dictionary to attack and nothing for a slow hash to buy. A slow hash
+    # would only add latency to every refresh.
+    token_hash = Column(String(64), unique=True, nullable=False, index=True)
     expires_at = Column(DateTime, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     revoked = Column(Boolean, default=False, index=True)
