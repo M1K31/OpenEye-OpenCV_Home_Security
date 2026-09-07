@@ -84,7 +84,11 @@ jobs:
       timeout-minutes: 25
       env:
         # ecosystem auth is fail-closed; throwaway secret so auth paths run in CI.
-        ECOSYSTEM_HMAC_SECRET: "ci-test-secret-not-for-production-0123456789abcdef"
+        # 64 hex characters, matching the shape the application requires of a
+        # real one. The previous value read "…-not-for-production-…", which the
+        # placeholder check now (correctly) refuses — a CI secret still has to
+        # be a valid secret, or CI stops exercising the signed path at all.
+        ECOSYSTEM_HMAC_SECRET: "3f9a1c7e4b2d8056a1e3c5f70b9d24618c4a7e0d3b5f9126ae4c8d0b7f3a5e29"
         # Deterministic signing keys. Without these the app generates a per-install
         # key on the fly, which works but writes a key file and logs a warning on
         # every run.

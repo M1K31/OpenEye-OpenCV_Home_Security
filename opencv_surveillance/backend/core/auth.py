@@ -77,7 +77,7 @@ _WEAK_KEY_MARKERS = (
 _MINIMUM_KEY_LENGTH = 32
 
 
-def _is_weak_key(value: Optional[str]) -> bool:
+def is_weak_secret(value: Optional[str]) -> bool:
     """
     True when a key must not be used to sign tokens.
 
@@ -109,7 +109,7 @@ def _load_or_create_secret_key() -> str:
          still random, still never the published constant.
     """
     env_key = os.getenv("SECRET_KEY")
-    if env_key and not _is_weak_key(env_key):
+    if env_key and not is_weak_secret(env_key):
         return env_key
 
     if env_key:
@@ -128,7 +128,7 @@ def _load_or_create_secret_key() -> str:
     try:
         if key_file.exists():
             existing = key_file.read_text().strip()
-            if existing and not _is_weak_key(existing):
+            if existing and not is_weak_secret(existing):
                 return existing
 
         key_file.parent.mkdir(parents=True, exist_ok=True)
@@ -150,6 +150,9 @@ def _load_or_create_secret_key() -> str:
         return secrets.token_hex(64)
 
 
+# Retained so the older private name keeps resolving.
+_is_weak_key = is_weak_secret
+
 SECRET_KEY = _load_or_create_secret_key()
 
 # The key every token in this application is signed and verified with.
@@ -168,7 +171,7 @@ JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 if not JWT_SECRET_KEY:
     JWT_SECRET_KEY = SECRET_KEY
     logger.info("JWT_SECRET_KEY not set; deriving it from SECRET_KEY.")
-elif _is_weak_key(JWT_SECRET_KEY):
+elif is_weak_secret(JWT_SECRET_KEY):
     logger.warning(
         "JWT_SECRET_KEY is empty, too short, or a known placeholder; deriving from "
         "SECRET_KEY instead."
