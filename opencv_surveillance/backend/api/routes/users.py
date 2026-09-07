@@ -7,6 +7,7 @@ from pydantic import BaseModel
 import json
 import bcrypt
 
+from backend.core.timeutil import utcnow
 from backend.database import crud
 from backend.database.session import get_db
 from backend.api.schemas import user as user_schema
@@ -618,6 +619,9 @@ def reset_password_with_2fa(
 
     hashed_password = bcrypt.hashpw(request.new_password.encode(), bcrypt.gensalt()).decode()
     user.hashed_password = hashed_password
+    # Ends every session issued under the previous version, including access
+    # tokens already in flight that revoking refresh tokens cannot reach.
+    user.token_version = (user.token_version or 0) + 1
 
     # Revoke all existing refresh tokens (logout from all devices for security)
     tokens_revoked = crud.revoke_all_user_tokens(db, user.id)
@@ -931,6 +935,10 @@ async def change_password(
     
     # Update password
     user.hashed_password = auth.hash_password(password_change.new_password)
+    # Ends every session issued under the previous version. Without this,
+    # changing a password left other sessions live until their tokens aged out
+    # on their own.
+    user.token_version = (user.token_version or 0) + 1
     
     # Revoke all refresh tokens for security
     tokens_revoked = crud.revoke_all_user_tokens(db, user_id)

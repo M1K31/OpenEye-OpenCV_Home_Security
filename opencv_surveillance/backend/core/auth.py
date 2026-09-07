@@ -195,7 +195,13 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
         expire = datetime.now(timezone.utc) + expires_delta
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=15)
-    to_encode.update({"exp": expire})
+    # `iat` is informational. `tv` is the one that matters: get_current_user
+    # refuses a token whose version no longer matches the user's, which is what
+    # ends other sessions when a password changes.
+    to_encode.update({
+        "exp": expire,
+        "iat": datetime.now(timezone.utc).replace(microsecond=0),
+    })
     encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
@@ -236,6 +242,30 @@ def hash_password(password: str) -> str:
     return hashed.decode("utf-8")
 
 
+def token_is_superseded(payload: dict, user) -> bool:
+    """
+    True when this token was issued under a superseded token version.
+
+    Revoking refresh tokens does not reach an access token that has already been
+    issued — it remains valid until `exp`, thirty minutes by default. So
+    changing a password left every other signed-in session working for the rest
+    of that window.
+
+    Tokens issued before this feature carry no `tv`. They are accepted rather
+    than refused: rejecting them would sign out every user on upgrade for no
+    security gain, since they expire inside the access-token window anyway.
+    """
+    current = getattr(user, "token_version", None)
+    if current is None:
+        return False
+
+    issued_under = payload.get("tv")
+    if issued_under is None:
+        return False
+
+    return issued_under != current
+
+
 async def get_current_user(
     token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
 ) -> user_schema.User:
@@ -268,6 +298,9 @@ async def get_current_user(
 
     user = crud.get_user_by_username(db, username=username)
     if user is None:
+        raise credentials_exception
+
+    if token_is_superseded(payload, user):
         raise credentials_exception
 
     return user
@@ -338,6 +371,8 @@ async def get_current_user_media(
 
     user = crud.get_user_by_username(db, username=username)
     if user is None:
+        raise credentials_exception
+    if token_is_superseded(payload, user):
         raise credentials_exception
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
@@ -418,7 +453,8 @@ def create_tokens(
     # Create short-lived access token (30 minutes)
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
+        data={"sub": user.username, "tv": getattr(user, "token_version", 0) or 0},
+        expires_delta=access_token_expires,
     )
 
     # Create long-lived refresh token (7 days)

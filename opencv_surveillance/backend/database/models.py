@@ -20,6 +20,24 @@ class User(Base):
     username = Column(String, unique=True, index=True)
     email = Column(String, unique=True, index=True, nullable=True)
     hashed_password = Column(String)
+    # Bumped whenever every existing session for this user must stop working.
+    #
+    # Access tokens carry the value they were issued under and are refused when
+    # it no longer matches. That is what makes "change my password" actually end
+    # other sessions: revoking refresh tokens does not reach an access token
+    # already issued, so it stayed valid until it expired on its own — up to
+    # ACCESS_TOKEN_EXPIRE_MINUTES, which is exactly the window somebody
+    # resetting a compromised password is trying to close.
+    #
+    # A counter rather than a "password changed at" timestamp, deliberately.
+    # JWT encodes `iat` as integer SECONDS, so a timestamp comparison is
+    # ambiguous for the whole second in which the change happens: reject on
+    # equality and a user signing straight back in is refused, accept on
+    # equality and a token issued in that same second survives the change.
+    # Measured, not assumed — a login and a password change in one test landed
+    # on the same `iat`. A counter has no such boundary, and is unaffected by
+    # clock skew.
+    token_version = Column(Integer, nullable=False, default=0, server_default="0")
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
