@@ -27,13 +27,33 @@ def patch_face_recognition_models():
 
     This function should be called before importing face_recognition.
     """
-    # Check if face_recognition_models is already imported
-    if "face_recognition_models" in sys.modules:
-        # Already imported, patch it in place
-        module = sys.modules["face_recognition_models"]
-    else:
-        # Import it fresh
-        import face_recognition_models as module
+    # Locate the package, tolerating its absence.
+    #
+    # face_recognition_models is an OPTIONAL dependency: it arrives with
+    # face_recognition/dlib, which are guarded everywhere else behind
+    # FACE_RECOGNITION_AVAILABLE so the application runs without face
+    # recognition. This function is called unconditionally from main.py at
+    # import time, and the import below used to sit OUTSIDE the try, so on a
+    # machine without the package a ModuleNotFoundError propagated out of the
+    # very first import and the server could not start at all.
+    #
+    # That matters beyond the obvious: splitting dlib and face_recognition out
+    # of requirements.txt is the prerequisite for a working `pip install` on
+    # Windows (neither publishes a cp312 Windows wheel). Doing that split while
+    # this import could still raise would have taken every platform down, not
+    # just Windows.
+    #
+    # This patch only suppresses a deprecation warning. It must never be able
+    # to prevent the application from starting.
+    try:
+        if "face_recognition_models" in sys.modules:
+            module = sys.modules["face_recognition_models"]
+        else:
+            import face_recognition_models as module
+    except ImportError:
+        # Not installed. Face recognition is disabled elsewhere by the same
+        # absence; there is simply nothing here to patch.
+        return False
 
     # Get the package path using importlib.resources
     try:
