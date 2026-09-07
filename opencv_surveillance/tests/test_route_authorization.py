@@ -17,6 +17,8 @@ authenticated, or this test fails and someone has to justify the exception by
 adding it to PUBLIC_ROUTES below.
 """
 
+import pathlib
+
 import pytest
 from fastapi.routing import APIRoute, APIWebSocketRoute
 
@@ -214,7 +216,21 @@ def test_public_routes_list_has_no_stale_entries():
     silently re-open the new path, so fail when an entry stops matching.
     """
     live = set(_iter_api_routes())
-    stale = [entry for entry in PUBLIC_ROUTES if entry not in live]
+
+    # The SPA catch-all is mounted only when frontend/dist exists
+    # (backend/main.py:1329), so on a checkout without a built frontend it is
+    # legitimately absent and is not a stale entry. Excluded rather than the
+    # whole test skipped: everything else in PUBLIC_ROUTES is unconditional,
+    # and catching a renamed path is exactly what this test is for.
+    frontend_built = (
+        pathlib.Path(__file__).resolve().parents[1] / "frontend" / "dist" / "index.html"
+    ).exists()
+    conditional = set() if frontend_built else {("GET", "/{full_path:path}")}
+
+    stale = [
+        entry for entry in PUBLIC_ROUTES
+        if entry not in live and entry not in conditional
+    ]
 
     assert not stale, (
         "PUBLIC_ROUTES contains entries that match no route: "

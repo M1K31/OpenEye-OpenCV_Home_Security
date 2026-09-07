@@ -26,6 +26,25 @@ of hashing them in the first place.
 
 import pytest
 
+# These exercise the SPA mount, which backend/main.py:1329 registers only when
+# frontend/dist exists. Without a built frontend the routes are simply absent,
+# so the tests failed for every developer who had not run `npm run build` and in
+# any CI job that does not build it first — noise that trains people to ignore a
+# red suite. Skipping states the requirement instead of asserting against
+# something that was never mounted.
+import pathlib as _pathlib
+
+import pytest as _pytest
+
+_FRONTEND_DIST = (
+    _pathlib.Path(__file__).resolve().parents[2] / "frontend" / "dist" / "index.html"
+)
+pytestmark = _pytest.mark.skipif(
+    not _FRONTEND_DIST.exists(),
+    reason="frontend/dist not built — run `npm run build` to exercise the SPA routes",
+)
+
+
 
 @pytest.fixture
 def client():
