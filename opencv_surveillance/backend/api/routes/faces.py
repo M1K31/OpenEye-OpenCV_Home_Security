@@ -468,6 +468,21 @@ def list_person_photos(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _safe_upload_path(person_path, filename: str) -> str:
+    """
+    Where an uploaded photograph is allowed to be written.
+
+    Refuses rather than rewrites: a caller who sent "../../x.jpg" gets a 400,
+    not a file quietly stored somewhere else under a name they did not pick.
+    """
+    from backend.utils.safe_paths import UnsafePathError, safe_child
+
+    try:
+        return str(safe_child(person_path, filename, what="filename"))
+    except UnsafePathError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 @router.post("/faces/people/{person_name}/photos",
              response_model=face_schema.ValidatedUploadResponse)
 async def upload_photos(
@@ -631,11 +646,17 @@ async def upload_photos(
                     logger.error(f"Face matching failed for {file.filename}: {e}")
 
                 # Save the photo (face was detected)
-                file_path = os.path.join(person_path, file.filename)
+                #
+                # file.filename is whatever the client sent in the multipart
+                # body — os.path.join with "../../x.jpg" escapes the gallery,
+                # and with an absolute path discards person_path completely.
+                # The extension filter above constrains the suffix, not the
+                # prefix, so it is no help here.
+                file_path = _safe_upload_path(person_path, file.filename)
                 if os.path.exists(file_path):
-                    name, ext = os.path.splitext(file.filename)
+                    name, ext = os.path.splitext(os.path.basename(file.filename))
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    file_path = os.path.join(
+                    file_path = _safe_upload_path(
                         person_path, f"{name}_{timestamp}{ext}"
                     )
 
@@ -654,12 +675,14 @@ async def upload_photos(
                     f"({match_result}, {file_size} bytes)"
                 )
             else:
-                # Skip validation — save directly
-                file_path = os.path.join(person_path, file.filename)
+                # Skip validation — save directly. The filename is still
+                # untrusted; skip_validation refers to face detection, not to
+                # where the file is allowed to land.
+                file_path = _safe_upload_path(person_path, file.filename)
                 if os.path.exists(file_path):
-                    name, ext = os.path.splitext(file.filename)
+                    name, ext = os.path.splitext(os.path.basename(file.filename))
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    file_path = os.path.join(
+                    file_path = _safe_upload_path(
                         person_path, f"{name}_{timestamp}{ext}"
                     )
 
@@ -1227,7 +1250,12 @@ def capture_training_photo(
             )
         
         # Save the photo
-        person_dir = paths.faces_dir / session.person_name
+        # Through gallery.person_dir so the name is validated, rather than
+        # joined straight onto faces_dir. It originates from a request when the
+        # session is created, so it is untrusted here too.
+        from backend.core.gallery import person_dir as _person_dir
+
+        person_dir = _person_dir(session.person_name)
         person_dir.mkdir(parents=True, exist_ok=True)
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")

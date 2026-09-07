@@ -35,7 +35,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, WebSocket, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 # Load configuration BEFORE importing any other backend.* module. auth.py,
 # database.session and others read os.getenv(...) at import time; if this runs
 # after those imports the values are ignored (it previously ran ~55 lines too
@@ -97,6 +97,7 @@ from backend.core.scheduled_tasks import get_scheduled_tasks_manager
 from backend.middleware.rate_limiter import RateLimiter
 from backend.middleware.endpoint_rate_limiter import EndpointRateLimiter
 from backend.middleware.csrf_protection import CSRFProtection
+from backend.utils.safe_paths import UnsafePathError
 from backend.middleware.security import (
     SecurityHeadersMiddleware,
     IPWhitelistMiddleware,
@@ -221,6 +222,23 @@ _CSRF_ENABLED = os.getenv("ENABLE_CSRF_PROTECTION", "false").lower() == "true"
 if _CSRF_ENABLED:
     app.add_middleware(CSRFProtection)
     logger.info("CSRF protection enabled (ENABLE_CSRF_PROTECTION=true)")
+
+# A request-supplied name that would have escaped its directory is a bad
+# request, not a server fault.
+#
+# backend.utils.safe_paths raises UnsafePathError from gallery.person_dir, which
+# sits under six routes that take {person_name} from the URL. Without a handler
+# that surfaces as an unhandled exception — a 500, and a stack trace in the log
+# for what is really a client sending "../..". Registered centrally so every
+# current and future call site is covered rather than six try/except blocks that
+# have to be remembered.
+@app.exception_handler(UnsafePathError)
+async def _unsafe_path_handler(request: Request, exc: UnsafePathError):
+    logger.warning("Rejected unsafe path from %s on %s: %s",
+                   request.client.host if request.client else "unknown",
+                   request.url.path, exc)
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
+
 
 # Performance monitoring middleware
 app.add_middleware(

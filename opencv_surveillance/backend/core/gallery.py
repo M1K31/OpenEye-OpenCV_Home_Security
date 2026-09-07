@@ -53,8 +53,25 @@ EXPORTED_NAME = re.compile(r"^\d{8}_\d{6}_.+_\d+\.(jpg|jpeg|png|webp)$", re.IGNO
 
 
 def person_dir(person_name: str) -> Path:
+    """
+    The folder holding one person's images.
+
+    person_name reaches here straight from a URL path parameter on six routes.
+    Starlette decodes percent-escapes after matching, so "%2E%2E%2F" arrives as
+    "../" and `Path(faces_dir) / "../../etc"` escapes the gallery entirely — as
+    would an absolute value, which discards the base outright.
+
+    Validated here rather than at each route because this is the one place every
+    caller passes through, including the clustering paths that build a folder
+    from a name read back out of the database. It refuses rather than sanitises:
+    a person cannot legitimately be called "../..", so quietly rewriting it to
+    something storable would put photographs of a real person in a folder nobody
+    asked for and report success.
+    """
     from backend.core.paths import paths
-    return Path(paths.faces_dir) / person_name
+    from backend.utils.safe_paths import safe_child
+
+    return safe_child(Path(paths.faces_dir), person_name, what="person name")
 
 
 def detected_dir(person_name: str) -> Path:
