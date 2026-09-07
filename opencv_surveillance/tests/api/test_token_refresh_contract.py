@@ -32,14 +32,21 @@ at all. These tests check the shape of the request instead.
 """
 
 import pytest
-from fastapi.testclient import TestClient
 
 from backend.main import app
 
-
-@pytest.fixture
-def client():
-    return TestClient(app)
+# `client` deliberately comes from conftest rather than being defined here.
+#
+# A local `TestClient(app)` looks equivalent and is not: conftest's fixture
+# installs the dependency_overrides[get_db] that points the application at the
+# test database, and clears the startup handlers. Without it the endpoint ran
+# against the real get_db and failed with
+#
+#     sqlite3.OperationalError: no such table: refresh_tokens
+#
+# which reads as a schema problem rather than a fixture that shadowed the one
+# doing the wiring. Everything else in the suite got the wired client; only this
+# module opted out, by accident.
 
 
 class TestTheTokenIsReadFromTheBody:
