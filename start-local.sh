@@ -163,7 +163,22 @@ export OPENBLAS_NUM_THREADS=1
 
 # Start uvicorn in background and capture PID
 # Use venv's python to run uvicorn module
-$PYTHON_CMD -m uvicorn backend.main:app --host 0.0.0.0 --port "$PORT" --reload &
+#
+# --reload is NOT passed by default, and adding it back unscoped would break
+# recording. On a source checkout backend/core/paths.py resolves DATA_ROOT to
+# the application directory, so recordings, snapshots and the database are
+# written inside the very tree the reloader watches: every captured event
+# restarted the server, mid-recording, releasing the cameras with it.
+#
+# Set OPENEYE_DEV_RELOAD=true to enable it for development. The watch is then
+# confined to backend/, so writing a recording no longer triggers it.
+RELOAD_ARGS=()
+if [ "${OPENEYE_DEV_RELOAD:-false}" = "true" ]; then
+    echo "   ⚠ OPENEYE_DEV_RELOAD=true — auto-reload on, watching backend/ only"
+    RELOAD_ARGS=(--reload --reload-dir backend)
+fi
+
+$PYTHON_CMD -m uvicorn backend.main:app --host 0.0.0.0 --port "$PORT" "${RELOAD_ARGS[@]}" &
 UVICORN_PID=$!
 
 echo "   ✓ Server started with PID: $UVICORN_PID"

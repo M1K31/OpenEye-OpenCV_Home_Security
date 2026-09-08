@@ -28,7 +28,6 @@ patch_face_recognition_models()
 import uvicorn
 import logging
 import asyncio
-import signal
 import sys
 import os
 from pathlib import Path
@@ -116,26 +115,25 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-# Global shutdown flag
-shutdown_in_progress = False
-
-def signal_handler(signum, frame):
-    """Handle shutdown signals gracefully"""
-    global shutdown_in_progress
-    if shutdown_in_progress:
-        logger.warning(f"Signal {signum} received but shutdown already in progress")
-        return
-    
-    signal_name = "SIGINT" if signum == signal.SIGINT else "SIGTERM"
-    logger.info(f"Received {signal_name}, initiating graceful shutdown...")
-    shutdown_in_progress = True
-    
-    # Trigger FastAPI shutdown
-    sys.exit(0)
-
-# Register signal handlers
-signal.signal(signal.SIGINT, signal_handler)
-signal.signal(signal.SIGTERM, signal_handler)
+# Signals are uvicorn's to handle, not this module's.
+#
+# There used to be a module-level handler here, registered at import, whose body
+# was `sys.exit(0)`. It was dead in every real deployment and actively wrong in
+# any case where it was not:
+#
+#   * Dead, because uvicorn installs its own handlers when it starts serving in
+#     the main thread and replaces this one. Measured: the SIGTERM handler is
+#     `signal_handler` after importing this module and `handle_exit` — uvicorn's
+#     — while the server is running.
+#
+#   * Wrong if it ever did fire, because sys.exit raises SystemExit, which
+#     unwinds immediately and never reaches the @app.on_event("shutdown")
+#     handler below. That handler is what closes WebSockets, stops the audio
+#     manager and disposes the database engine, so bypassing it is exactly the
+#     leak it was written to prevent.
+#
+# uvicorn's handler sets should_exit, which ends the serve loop and runs the
+# shutdown event properly. Nothing here needs to help.
 
 # Initialize FastAPI application
 app = FastAPI(
@@ -846,8 +844,6 @@ async def shutdown_event():
     Enhanced shutdown sequence - ensures all resources are properly cleaned up.
     Addresses issue where daemon threads and processes remain running after shutdown.
     """
-    global shutdown_in_progress
-    shutdown_in_progress = True
 
     logger.info("=" * 60)
     logger.info("Shutting down OpenEye Surveillance System...")
@@ -1455,9 +1451,30 @@ if __name__ == "__main__":
     port = resolve_service_port()
     host = SERVICE_BIND_HOST
 
+    # The auto-reloader is OFF unless asked for, and watches only the code when
+    # it is on.
+    #
+    # It used to be unconditional, and on a source checkout that is actively
+    # harmful rather than merely wasteful. paths.is_source_checkout() makes
+    # DATA_ROOT the application directory, so recordings, snapshots and the
+    # database are all written INSIDE the tree the reloader watches — every
+    # captured event restarted the server, mid-recording, releasing the cameras
+    # as it went. A surveillance system that restarts whenever it records
+    # something is the least useful failure available.
+    #
+    # reload_dirs confines the watch to backend/ so that enabling it
+    # deliberately does not reintroduce the same loop.
+    dev_reload = os.getenv("OPENEYE_DEV_RELOAD", "false").lower() == "true"
+    if dev_reload:
+        logger.warning(
+            "OPENEYE_DEV_RELOAD is set: the auto-reloader is on and watching "
+            "backend/ only. Do not use this to run a real installation."
+        )
+
     uvicorn.run(
         "backend.main:app",
         host=host,
         port=port,
-        reload=True,
+        reload=dev_reload,
+        reload_dirs=["backend"] if dev_reload else None,
         log_level="info")
