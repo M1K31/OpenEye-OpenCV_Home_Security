@@ -32,7 +32,7 @@ import signal
 import sys
 import os
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, WebSocket, Request, Depends
+from fastapi import FastAPI, HTTPException, WebSocket, Request, Depends, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -53,6 +53,7 @@ load_configuration()
 
 from backend.database.session import engine, SessionLocal
 from backend.core.auth import get_current_active_user, get_current_user_media
+from sqlalchemy import text
 from backend.database.utils import get_db_context
 from backend.database import models, alert_models
 from backend.api.routes import (
@@ -1273,17 +1274,75 @@ async def api_root(request: Request):
 
 
 @app.get("/api/health")
-async def health_check():
+async def health_check(response: Response):
     """
-    Health check endpoint
+    Report whether this instance is actually working.
+
+    It used to answer `"database": "connected"` and
+    `"face_recognition": "available"` as string literals, checking neither. The
+    Dockerfile's HEALTHCHECK curls this endpoint, so a container whose database
+    had gone reported itself healthy indefinitely and orchestration had no
+    reason to restart it. A health check that cannot fail is not a health check.
+
+    Two states are distinguished on purpose:
+
+    * **unhealthy** — the database is unreachable. The application cannot serve
+      anything meaningful, so this answers 503 and `curl -f` fails, which is what
+      makes the container restart.
+    * **degraded** — an OPTIONAL feature is unavailable, face recognition being
+      the usual one. That is a supported configuration, not a fault: it is
+      reported so an operator can see it, and the status code stays 200 so
+      nothing restarts a container that is working as configured.
+
+    Kept deliberately cheap. `scripts/health-watch.sh` exists because this
+    endpoint was once observed taking 24-40 seconds, and a health check that
+    hangs is indistinguishable from the outage it is meant to detect. The
+    database probe is a single `SELECT 1` on a short-lived connection.
+
+    Public by design (it is in PUBLIC_ROUTES), so it reports state and never
+    detail — no exception text, no paths, no connection strings.
     """
-    active_cameras = len(camera_manager.cameras)
+    checks = {}
+    healthy = True
+
+    # Database: the one dependency whose absence means this instance is useless.
+    try:
+        with get_db_context() as db:
+            db.execute(text("SELECT 1")).scalar()
+        checks["database"] = "connected"
+    except Exception as exc:
+        # Logged in full, reported as one word. This response is unauthenticated.
+        logger.error("Health check: database unreachable: %s", exc)
+        checks["database"] = "unreachable"
+        healthy = False
+
+    # Optional features: reported, never fatal.
+    try:
+        from backend.core.face_recognition import FACE_RECOGNITION_AVAILABLE
+        checks["face_recognition"] = (
+            "available" if FACE_RECOGNITION_AVAILABLE else "not_installed")
+    except Exception:
+        checks["face_recognition"] = "not_installed"
+
+    try:
+        active_cameras = len(camera_manager.cameras)
+    except Exception:
+        active_cameras = 0
+
+    degraded = checks.get("face_recognition") == "not_installed"
+
+    if not healthy:
+        # 503 so the Dockerfile HEALTHCHECK's `curl -f` fails and the container
+        # is restarted, instead of sitting there reporting success.
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        status_text = "unhealthy"
+    else:
+        status_text = "degraded" if degraded else "healthy"
 
     return {
-        "status": "healthy",
+        "status": status_text,
         "active_cameras": active_cameras,
-        "face_recognition": "available",
-        "database": "connected",
+        **checks,
     }
 
 
