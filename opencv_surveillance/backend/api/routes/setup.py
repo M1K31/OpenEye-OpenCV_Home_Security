@@ -5,12 +5,17 @@ This file is part of OpenEye-OpenCV_Home_Security
 First-run setup endpoints for admin account creation.
 """
 
-from fastapi import APIRouter, HTTPException, status
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from backend.database.session import get_db
 from backend.database.models import User
 from backend.core.auth import hash_password
 from backend.core.password_policy import validate_password
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["setup"])
 
@@ -42,34 +47,36 @@ class SetupInitializeRequest(BaseModel):
 
 
 @router.get("/status")
-async def check_setup_status():
+async def check_setup_status(db: Session = Depends(get_db)):
     """
-    Check if initial setup has been completed.
-    Returns setup_complete: true if admin user exists, false otherwise.
+    Whether an admin account exists yet.
+
+    The session arrives as an ordinary dependency. It was previously taken with
+    `db = next(get_db())`, which pulls the session out of the generator and
+    abandons it: the generator's `finally: db.close()` never runs and the
+    connection is never returned to the pool.
+
+    That shape matters most here. The login page calls this on every load and it
+    requires no authentication, so it leaked one connection per page view until
+    the pool was exhausted — at which point every request blocks, with nothing
+    in the logs pointing at the cause.
     """
-    try:
-        db = next(get_db())
-
-        # Check if any admin user exists
-        admin_user = db.query(User).filter(User.role == "admin").first()
-
-        return {"setup_complete": admin_user is not None}
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to check setup status: {str(e)}",
-        )
+    admin_user = db.query(User).filter(User.role == "admin").first()
+    return {"setup_complete": admin_user is not None}
 
 
 @router.post("/initialize")
-async def initialize_setup(request: SetupInitializeRequest):
+async def initialize_setup(
+    request: SetupInitializeRequest,
+    db: Session = Depends(get_db),
+):
     """
-    Initialize the system by creating the first admin user.
-    Can only be called once - will fail if admin already exists.
+    Create the first admin account. Refuses once one exists.
+
+    Same session handling as /status above: a dependency, not
+    `next(get_db())`, so the connection is returned when the request ends.
     """
     try:
-        db = next(get_db())
-
         # Check if admin already exists
         existing_admin = db.query(User).filter(User.role == "admin").first()
         if existing_admin:
@@ -130,7 +137,11 @@ async def initialize_setup(request: SetupInitializeRequest):
             detail=str(e))
     except Exception as e:
         db.rollback()
+        logger.error("Setup initialisation failed: %s", e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to initialize setup: {str(e)}",
+            # Logged in full, reported without detail: this endpoint is
+            # unauthenticated, and the exception text carries database paths
+            # and connection strings.
+            detail="Setup failed. See the server log for details.",
         )
