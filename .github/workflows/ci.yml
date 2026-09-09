@@ -116,6 +116,38 @@ jobs:
       if: matrix.python-version == '3.12'  # report against the shipped version
       continue-on-error: true
 
+  frontend-tests:
+    name: Frontend unit tests
+    runs-on: ubuntu-latest
+    # The vitest suite ran in NO workflow. Six test files existed and none of
+    # them executed on a push or a pull request, so a frontend regression could
+    # only be caught by someone running `npm test` locally and remembering to.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: opencv_surveillance/frontend/package-lock.json
+
+      - name: Install
+        working-directory: opencv_surveillance/frontend
+        # --legacy-peer-deps matches the Dockerfile's frontend stage; without it
+        # the two resolve differently and CI stops testing what ships.
+        run: npm ci --legacy-peer-deps
+
+      - name: Unit tests
+        working-directory: opencv_surveillance/frontend
+        run: npx vitest run --reporter=default
+
+      - name: Build
+        working-directory: opencv_surveillance/frontend
+        # A suite that passes against source that will not build is not much of
+        # a gate. This also produces frontend/dist, which several backend tests
+        # skip without.
+        run: npm run build
+
   docker-build-test:
     name: Test Docker Build
     runs-on: ubuntu-latest

@@ -30,17 +30,50 @@ const apiClient = axios.create({
 /**
  * Check if error is retryable
  */
+// Methods with no side effects, so replaying one cannot create anything.
+//
+// A POST that reached the server and succeeded before the connection dropped is
+// indistinguishable, from here, from one that never arrived — and replaying it
+// creates a second camera, automation rule or exported clip. That was happening
+// for every method, because the old check looked only at the failure and never
+// at the request.
+//
+// PUT and DELETE are idempotent by HTTP contract and are still excluded. A
+// replayed DELETE whose first attempt succeeded returns 404, so the user is
+// shown "not found" for work that was in fact done. Not retrying costs a little
+// resilience; retrying costs correctness of what the user is told.
+const REPLAYABLE_METHODS = new Set(['get', 'head', 'options']);
+
+const isReplayable = (config) =>
+  REPLAYABLE_METHODS.has(String(config?.method || 'get').toLowerCase());
+
 const isRetryableError = (error) => {
-  if (!error.response) {
-    // Network errors (no response) are retryable
+  const { config, response } = error;
+
+  // No config means the failure happened before a request was built — in the
+  // request interceptor. There is nothing to replay.
+  if (!config) {
+    return false;
+  }
+
+  if (!response) {
+    // A network error is ambiguous: the server may have processed the request
+    // and lost the response. Only safe methods may be replayed.
+    return isReplayable(config);
+  }
+
+  const status = response.status;
+
+  // 429 is the one unambiguous case: the server rejected the request without
+  // acting on it, so replaying any method is safe.
+  if (status === 429) {
     return true;
   }
 
-  const status = error.response.status;
-
-  // Retry on server errors (5xx) and rate limiting (429)
-  if (status >= 500 || status === 429) {
-    return true;
+  // 5xx is ambiguous in the same way as a network error — a 500 can be raised
+  // after the write committed — so the same restriction applies.
+  if (status >= 500) {
+    return isReplayable(config);
   }
 
   // Don't retry on client errors (4xx except 429)
@@ -155,7 +188,7 @@ apiClient.interceptors.response.use(
 
       // Only redirect if we had a token (meaning it expired)
       // Don't redirect if we never had a token (user not logged in yet)
-      if (hadToken && !isPublicEndpoint(config.url)) {
+      if (hadToken && !isPublicEndpoint(config?.url)) {
         logger.warn('Token expired or invalid after refresh attempt');
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
@@ -168,6 +201,10 @@ apiClient.interceptors.response.use(
     }
 
     // Retry logic for retryable errors
+    // isRetryableError returns false when config is absent, so it is safe to
+    // dereference here. It was previously dereferenced first, and an error
+    // raised in the request interceptor has no config — so `config.__retryCount`
+    // threw a TypeError that replaced the real error with a misleading one.
     if (isRetryableError(error)) {
       // Initialize retry count if not set
       config.__retryCount = config.__retryCount || 0;
