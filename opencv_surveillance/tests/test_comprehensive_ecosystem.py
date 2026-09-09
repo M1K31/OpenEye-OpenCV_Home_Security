@@ -384,7 +384,19 @@ class TestStatisticsN1Fix:
 class TestFaceRecognition:
     """Test face detection and recognition using real photos."""
 
-    PHOTOS_DIR = Path("/Users/mikelsmart/Desktop/TestPhotos")
+    # Where the optional real-photo fixtures live.
+    #
+    # This was one developer's home directory, hardcoded. That embeds a username
+    # in a tracked file — the same leak `.gitignore` untracks `pytest-of-*` to
+    # avoid — and it meant these tests could only ever run on one machine:
+    # everywhere else the skip below fired and nobody noticed the coverage was
+    # unreachable.
+    #
+    # Point OPENEYE_TEST_PHOTOS_DIR at a folder of JPEGs to run them.
+    PHOTOS_DIR = Path(
+        os.environ.get("OPENEYE_TEST_PHOTOS_DIR")
+        or Path(__file__).resolve().parent / "fixtures" / "photos"
+    )
 
     @pytest.fixture
     def face_images(self):

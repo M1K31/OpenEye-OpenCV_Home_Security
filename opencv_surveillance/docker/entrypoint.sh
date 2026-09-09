@@ -1,6 +1,13 @@
 #!/bin/bash
 
-set -e
+# -e: stop on a failed command.
+# -u: an unset variable is an error, not an empty string. This script builds a
+#     DATABASE_URL and a host/port from the environment; without -u a missing
+#     one expands to nothing and the failure surfaces later, somewhere else.
+# -o pipefail: a pipeline fails if ANY stage fails, not just the last. The
+#     PostgreSQL wait below pipes through sed, which succeeds happily on empty
+#     input, so without this a failed extraction looked like a successful one.
+set -euo pipefail
 
 # Ensure Python packages are in PATH (using openeye user's home)
 export PATH=/home/openeye/.local/bin:$PATH
@@ -9,12 +16,16 @@ echo "🚀 Starting OpenEye Surveillance System..."
 echo "================================================"
 
 # Wait for database if using PostgreSQL
-if [[ "$DATABASE_URL" == postgresql* ]]; then
+# Guarded because of `set -u` above. Running the image without compose
+# leaves DATABASE_URL unset, and the application defaults to SQLite — an
+# unguarded reference here would turn a supported way of starting the
+# container into an immediate failure.
+if [[ "${DATABASE_URL:-}" == postgresql* ]]; then
     echo "⏳ Waiting for PostgreSQL..."
     
     # Extract host and port from DATABASE_URL
-    DB_HOST=$(echo $DATABASE_URL | sed -n 's/.*@\([^:]*\):.*/\1/p')
-    DB_PORT=$(echo $DATABASE_URL | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
+    DB_HOST=$(echo "${DATABASE_URL:-}" | sed -n 's/.*@\([^:]*\):.*/\1/p')
+    DB_PORT=$(echo "${DATABASE_URL:-}" | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
     
     timeout 60 bash -c "until nc -z $DB_HOST ${DB_PORT:-5432}; do sleep 1; done" || echo "⚠️  Could not connect to database"
     echo "✅ PostgreSQL is ready"
@@ -59,7 +70,7 @@ fi
 # Display configuration
 echo "================================================"
 echo "Configuration:"
-echo "  Database: ${DATABASE_URL%%@*}@***"
+echo "  Database: ${DATABASE_URL:-sqlite (default)}"
 echo "  Log Level: ${LOG_LEVEL:-INFO}"
 echo "  Workers: ${WORKERS:-1}"
 echo "  Face Recognition: ${ENABLE_FACE_RECOGNITION:-true}"

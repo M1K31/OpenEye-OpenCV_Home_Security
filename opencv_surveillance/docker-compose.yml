@@ -96,6 +96,20 @@ services:
 
     restart: unless-stopped
 
+    # Docker's default is 10 seconds, after which the container is killed.
+    #
+    # Shutdown here is not instant by design: backend/main.py closes WebSockets,
+    # stops the audio manager, releases every camera and disposes the database
+    # engine. A recording being finalised is exactly the work that must not be
+    # interrupted, and a SIGKILL mid-write leaves a truncated file that plays
+    # back as a corrupt clip.
+    stop_grace_period: 45s
+
+    # uvicorn runs as PID 1 without this, where it inherits none of init's
+    # responsibilities — most relevantly, reaping the ffmpeg processes the
+    # recorder spawns. They accumulate as zombies over a long-running container.
+    init: true
+
     networks:
       - openeye-network
 
