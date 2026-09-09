@@ -46,11 +46,15 @@ pytestmark = _pytest.mark.skipif(
 
 
 
-@pytest.fixture
-def client():
-    from fastapi.testclient import TestClient
-    from backend.main import app
-    return TestClient(app)
+# `client` deliberately comes from conftest.
+#
+# A local `TestClient(app)` looks equivalent and is not: conftest's fixture
+# installs dependency_overrides[get_db], pointing the application at the test
+# database, and clears the startup handlers. These tests only read cache headers
+# on static routes, so the missing override does not bite today — but it is the
+# same shadowing that made tests/api/test_token_refresh_contract.py fail with
+# "no such table: refresh_tokens", a message that points at the schema rather
+# than at the fixture. Not worth keeping a second time.
 
 
 class TestIndexIsAlwaysRevalidated:
