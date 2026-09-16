@@ -16,8 +16,31 @@ import subprocess
 import time
 from typing import List, Dict, Optional
 from datetime import datetime
-import netifaces
 import ipaddress
+
+# netifaces is optional, and has to be.
+#
+# Its last release was 2021 and its newest Windows wheel is for CPython 3.8, so
+# on 3.12 pip must build it from source with MSVC. This import was unguarded, so
+# a machine without it could not import backend.main AT ALL — a bare
+# ModuleNotFoundError before anything started. manage.py doctor has always
+# listed it as optional ("network camera discovery"), so the code and the
+# diagnostics disagreed.
+#
+# Nothing else needs changing: _get_local_subnets() already wraps its use in
+# try/except and falls back to a common subnet, so absence degrades discovery
+# rather than breaking it.
+#
+# The proper fix is to stop needing it. psutil.net_if_addrs() returns the same
+# interface addresses and netmasks, is already a required dependency, and ships
+# Windows wheels. That is a change to discovery behaviour and belongs with the
+# camera work (W4), not here.
+try:
+    import netifaces
+    NETIFACES_AVAILABLE = True
+except ImportError:  # pragma: no cover - depends on the install
+    netifaces = None
+    NETIFACES_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -484,6 +507,14 @@ class CameraDiscovery:
     def _get_local_subnets(self) -> List[str]:
         """Get all local subnets to scan"""
         subnets = []
+
+        if not NETIFACES_AVAILABLE:
+            logger.warning(
+                "netifaces is not installed; scanning the default subnet only. "
+                "Add IP cameras by RTSP URL, or install netifaces for automatic "
+                "subnet detection."
+            )
+            return ["192.168.1.0/24"]
 
         try:
             # Get all network interfaces

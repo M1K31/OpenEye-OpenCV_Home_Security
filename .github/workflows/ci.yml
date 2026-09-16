@@ -116,6 +116,78 @@ jobs:
       if: matrix.python-version == '3.12'  # report against the shipped version
       continue-on-error: true
 
+  test-windows:
+    name: Test Windows / Python 3.12
+    runs-on: windows-latest
+    # Non-blocking for now. Nothing in this project has ever been proven to
+    # install, import or start on Windows, so the first job's value is the
+    # signal, not the gate. Promote to required once the platform backlog lands.
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # ffmpeg is a hard prerequisite for recording and clip export, and the
+      # Windows runners do not carry one.
+      - name: Install ffmpeg
+        run: choco install ffmpeg -y --no-progress
+
+      - name: Install Python dependencies
+        working-directory: opencv_surveillance
+        # requirements.txt, NOT requirements-ci.txt.
+        #
+        # requirements-ci.txt still lists dlib and face_recognition. dlib
+        # publishes no Windows wheel for any CPython version, so pip would build
+        # it from source, fail, and take every other package down with it — the
+        # job would prove only that, which is already known.
+        #
+        # requirements.txt is the documented developer install and was made
+        # Windows-installable deliberately: dlib and face_recognition moved to
+        # requirements-face-recognition.txt, and netifaces is excluded here by
+        # an environment marker for the same reason. Testing it is testing what
+        # a Windows developer actually runs.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-timeout
+
+      - name: Import the application
+        working-directory: opencv_surveillance
+        # The first thing to establish, and historically the thing that failed:
+        # an unguarded optional import aborts before anything starts.
+        run: python -c "import backend.main; print('import OK')"
+        env:
+          SECRET_KEY: 7c1f4b9e2a6d0538f7b2e4c6a9d1038b5e7c2f4a6d9b1e3c5a7f0d2b4e6c8a1f
+          JWT_SECRET_KEY: 2e9a7c5f1b3d6084a2c4e6f8b0d2a4c6e8f1a3c5e7b9d0f2a4c6e8b1d3f5a7c9
+
+      - name: Report what this machine can run
+        working-directory: opencv_surveillance
+        # doctor exits non-zero when prerequisites are missing, which is
+        # expected here — the interest is in WHICH ones, so the result is
+        # reported rather than enforced.
+        run: python manage.py doctor
+        continue-on-error: true
+
+      - name: Run tests
+        working-directory: opencv_surveillance
+        timeout-minutes: 25
+        # Face recognition is absent by design (see the install step), so tests
+        # that need it are deselected rather than left to fail. Everything else
+        # runs, and a failure here is real Windows signal.
+        run: pytest tests/ -v --timeout=60 --timeout-method=thread -m "not face" -p no:cacheprovider
+        env:
+          # Real values, not placeholders. backend/core/auth.py refuses a key
+          # that looks like a placeholder — "not-for-production" and friends are
+          # rejected — and would silently generate its own instead, so a
+          # placeholder here means CI stops testing the configured path.
+          SECRET_KEY: 7c1f4b9e2a6d0538f7b2e4c6a9d1038b5e7c2f4a6d9b1e3c5a7f0d2b4e6c8a1f
+          JWT_SECRET_KEY: 2e9a7c5f1b3d6084a2c4e6f8b0d2a4c6e8f1a3c5e7b9d0f2a4c6e8b1d3f5a7c9
+          ECOSYSTEM_HMAC_SECRET: 9d3f7a1c5e8b2046d9f3a7c1e5b8024fd6a9c3e7b1f5a8d2c4e6b0f3a7d9c1e5
+
   frontend-tests:
     name: Frontend unit tests
     runs-on: ubuntu-latest
