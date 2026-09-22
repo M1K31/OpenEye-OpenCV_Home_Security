@@ -28,6 +28,8 @@ persists, but is set here too so a fresh install gets it without a migration.
 
 import sqlite3
 
+import importlib.util
+
 import pytest
 from sqlalchemy import create_engine, text
 
@@ -116,6 +118,24 @@ def test_a_reader_does_not_block_a_writer(tmp_path):
         writer.close()
 
 
+# PostgreSQL's driver must be present for these.
+#
+# SQLAlchemy resolves and imports the DBAPI when the engine is CONSTRUCTED, not
+# when it first connects, so create_engine("postgresql://...") raises without
+# psycopg2 even though nothing is dialled. The failure reads as a bug in the URL
+# handling under test, which is what it looked like here.
+#
+# psycopg2-binary is in requirements.txt and ships wheels for every supported
+# platform, so this skips only where the dependency was deliberately left out —
+# a slim test image, or an install that will never use PostgreSQL.
+_HAS_POSTGRES_DRIVER = importlib.util.find_spec("psycopg2") is not None
+_needs_postgres_driver = pytest.mark.skipif(
+    not _HAS_POSTGRES_DRIVER,
+    reason="needs the psycopg2 driver; create_engine imports it eagerly",
+)
+
+
+@_needs_postgres_driver
 def test_non_sqlite_engines_are_left_alone():
     """
     PostgreSQL must not be handed SQLite pragmas.

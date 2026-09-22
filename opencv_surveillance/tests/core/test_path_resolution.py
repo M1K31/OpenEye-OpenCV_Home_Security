@@ -18,6 +18,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import importlib.util
+
 import pytest
 
 from backend.core.paths import PROJECT_ROOT, resolve_under_project
@@ -71,6 +73,23 @@ class TestPathManagerHonoursTheProjectRoot:
         assert manager.faces_dir == target
 
 
+# PostgreSQL's driver must be present for these.
+#
+# SQLAlchemy resolves and imports the DBAPI when the engine is CONSTRUCTED, not
+# when it first connects, so create_engine("postgresql://...") raises without
+# psycopg2 even though nothing is dialled. The failure reads as a bug in the URL
+# handling under test, which is what it looked like here.
+#
+# psycopg2-binary is in requirements.txt and ships wheels for every supported
+# platform, so this skips only where the dependency was deliberately left out —
+# a slim test image, or an install that will never use PostgreSQL.
+_HAS_POSTGRES_DRIVER = importlib.util.find_spec("psycopg2") is not None
+_needs_postgres_driver = pytest.mark.skipif(
+    not _HAS_POSTGRES_DRIVER,
+    reason="needs the psycopg2 driver; create_engine imports it eagerly",
+)
+
+
 class TestDatabaseUrlResolution:
     """
     Run in subprocesses: the URL is computed once at import, and the point of
@@ -113,6 +132,7 @@ class TestDatabaseUrlResolution:
         assert url == f"sqlite:///{PROJECT_ROOT / 'surveillance.db'}"
         assert str(missing) not in url
 
+    @_needs_postgres_driver
     def test_non_sqlite_urls_are_passed_through_untouched(self, tmp_path):
         dsn = "postgresql://user:pw@localhost:5432/openeye"
         assert self._url_from(tmp_path, {"DATABASE_URL": dsn}) == dsn
