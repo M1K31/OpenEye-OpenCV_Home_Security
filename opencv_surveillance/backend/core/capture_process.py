@@ -119,7 +119,13 @@ def _open_capture(source: str):
 
     try:
         device_index = int(source)
-        return cv2.VideoCapture(device_index)
+        # Through the shared helper: this runs in the isolation subprocess, and
+        # a fix applied only to camera_manager would leave installs with
+        # OPENEYE_CAPTURE_ISOLATION=true still on MSMF — the kind of partial fix
+        # that looks complete.
+        from backend.core.capture_backend import open_local_device
+
+        return open_local_device(device_index)
     except (ValueError, TypeError):
         return cv2.VideoCapture(source, cv2.CAP_FFMPEG)
 

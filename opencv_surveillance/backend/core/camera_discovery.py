@@ -19,6 +19,7 @@ from datetime import datetime
 import ipaddress
 
 import psutil
+from backend.core.capture_backend import open_local_device
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +129,7 @@ class CameraDiscovery:
             return
 
         try:
-            cap = cv2.VideoCapture(0)
+            cap = open_local_device(0)
             authorized = cap.isOpened()
             cap.release()
             if not authorized:
@@ -163,7 +164,7 @@ class CameraDiscovery:
             patient = True
         budget = self.FIRST_FRAME_TIMEOUT if patient else self.FIRST_FRAME_TIMEOUT_SWEEP
         try:
-            cap = cv2.VideoCapture(index)
+            cap = open_local_device(index)
             if not cap.isOpened():
                 # Logged at INFO, not DEBUG: when a camera the OS clearly lists
                 # cannot be opened, that fact is the whole diagnosis and it needs

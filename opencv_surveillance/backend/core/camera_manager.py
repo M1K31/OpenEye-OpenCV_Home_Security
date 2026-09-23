@@ -18,6 +18,7 @@ from typing import Optional, Dict, Any, Tuple
 from pathlib import Path
 from datetime import datetime
 from backend.core.timeutil import utcnow
+from backend.core.capture_backend import open_local_device
 from .motion_detector import MotionDetector
 from .image_processor import ImageProcessor
 from .paths import paths  # single source of truth for snapshot/recording dirs
@@ -1592,7 +1593,7 @@ class RTSPCamera(Camera):
                         target_fps=self.video_processor.settings.fps_target or 15)
                     capture.start()
                 else:
-                    capture = cv2.VideoCapture(device_index)
+                    capture = open_local_device(device_index)
             except (ValueError, TypeError):
                 if CAPTURE_ISOLATION:
                     capture = CaptureClient(
@@ -1785,7 +1786,7 @@ class RTSPCamera(Camera):
                         target_fps=self.video_processor.settings.fps_target or 15)
                     self.capture.start()
                 else:
-                    self.capture = cv2.VideoCapture(device_index)
+                    self.capture = open_local_device(device_index)
             except (ValueError, TypeError):
                 # Not a number, assume it's an RTSP URL or device path
                 logger.info("Camera %s: connecting to stream %s", self.camera_id, self.source)
