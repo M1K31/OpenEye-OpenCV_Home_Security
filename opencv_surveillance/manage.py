@@ -572,7 +572,6 @@ def cmd_doctor(args) -> int:
         ("sounddevice", "two-way audio"),
         ("aiortc", "two-way audio (WebRTC)"),
         ("ultralytics", "object detection"),
-        ("netifaces", "network camera discovery"),
     ):
         try:
             __import__(module)

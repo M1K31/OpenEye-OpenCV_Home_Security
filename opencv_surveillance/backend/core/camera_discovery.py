@@ -18,29 +18,7 @@ from typing import List, Dict, Optional
 from datetime import datetime
 import ipaddress
 
-# netifaces is optional, and has to be.
-#
-# Its last release was 2021 and its newest Windows wheel is for CPython 3.8, so
-# on 3.12 pip must build it from source with MSVC. This import was unguarded, so
-# a machine without it could not import backend.main AT ALL — a bare
-# ModuleNotFoundError before anything started. manage.py doctor has always
-# listed it as optional ("network camera discovery"), so the code and the
-# diagnostics disagreed.
-#
-# Nothing else needs changing: _get_local_subnets() already wraps its use in
-# try/except and falls back to a common subnet, so absence degrades discovery
-# rather than breaking it.
-#
-# The proper fix is to stop needing it. psutil.net_if_addrs() returns the same
-# interface addresses and netmasks, is already a required dependency, and ships
-# Windows wheels. That is a change to discovery behaviour and belongs with the
-# camera work (W4), not here.
-try:
-    import netifaces
-    NETIFACES_AVAILABLE = True
-except ImportError:  # pragma: no cover - depends on the install
-    netifaces = None
-    NETIFACES_AVAILABLE = False
+import psutil
 
 logger = logging.getLogger(__name__)
 
@@ -504,39 +482,67 @@ class CameraDiscovery:
 
         return network_cameras
 
-    def _get_local_subnets(self) -> List[str]:
-        """Get all local subnets to scan"""
-        subnets = []
+    # Subnets large enough that scanning them is not worth attempting.
+    #
+    # A /16 is 65,534 addresses; probing each for an RTSP port takes far longer
+    # than anyone will wait, and the scan's own timeout would cut it off having
+    # covered a fraction. Docker's default bridge hands out a /16, and corporate
+    # networks often do too, so this is common rather than exotic.
+    MAX_SCAN_PREFIX = 22          # /22 is 1,022 hosts
 
-        if not NETIFACES_AVAILABLE:
-            logger.warning(
-                "netifaces is not installed; scanning the default subnet only. "
-                "Add IP cameras by RTSP URL, or install netifaces for automatic "
-                "subnet detection."
-            )
-            return ["192.168.1.0/24"]
+    def _get_local_subnets(self) -> List[str]:
+        """
+        The local IPv4 subnets worth scanning for cameras.
+
+        Uses psutil rather than netifaces. netifaces was unmaintained from 2021
+        and published no Windows wheel past CPython 3.8, so on 3.12 pip had to
+        build it with MSVC — it was the single thing preventing the application
+        from importing on Windows. psutil returns the same interface addresses
+        and netmasks, is already a required dependency, and ships wheels for
+        every platform this project supports.
+        """
+        subnets: List[str] = []
 
         try:
-            # Get all network interfaces
-            for interface in netifaces.interfaces():
-                addrs = netifaces.ifaddresses(interface)
+            for interface, addresses in psutil.net_if_addrs().items():
+                for address in addresses:
+                    if address.family != socket.AF_INET:
+                        continue
 
-                # Get IPv4 addresses
-                if netifaces.AF_INET in addrs:
-                    for addr_info in addrs[netifaces.AF_INET]:
-                        ip = addr_info.get("addr")
-                        netmask = addr_info.get("netmask")
+                    ip, netmask = address.address, address.netmask
+                    if not ip or not netmask:
+                        continue
 
-                        if ip and netmask and not ip.startswith("127."):
-                            # Calculate subnet
-                            network = ipaddress.ip_network(
-                                f"{ip}/{netmask}", strict=False
-                            )
-                            subnets.append(str(network))
+                    # Loopback has nothing to find. Link-local means the
+                    # interface never got a lease — common on Windows for a
+                    # disconnected adapter, and scanning it only wastes the
+                    # scan's time budget.
+                    if ip.startswith("127.") or ip.startswith("169.254."):
+                        continue
+
+                    try:
+                        network = ipaddress.ip_network(f"{ip}/{netmask}", strict=False)
+                    except ValueError:
+                        continue
+
+                    if network.prefixlen < self.MAX_SCAN_PREFIX:
+                        logger.info(
+                            "Skipping %s on %s: %s addresses is too many to probe. "
+                            "Add cameras on this network by RTSP URL.",
+                            network, interface, network.num_addresses - 2,
+                        )
+                        continue
+
+                    subnets.append(str(network))
 
         except Exception as e:
-            logger.error(f"Error getting local subnets: {e}")
-            # Fallback to common subnet
+            logger.error("Could not enumerate network interfaces: %s", e)
+
+        if not subnets:
+            logger.warning(
+                "No scannable IPv4 subnet found; falling back to 192.168.1.0/24. "
+                "If your cameras are elsewhere, add them by RTSP URL."
+            )
             subnets = ["192.168.1.0/24"]
 
         return subnets

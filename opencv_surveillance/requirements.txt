@@ -92,18 +92,13 @@ requests>=2.31.0,<3.0
 
 # Utilities
 python-dateutil>=2.8.2
-# Network interface discovery for camera scanning. POSIX only.
+# netifaces was here. It is gone, not merely optional.
 #
-# Last released 2021; its newest Windows wheel is for CPython 3.8, so on 3.12
-# pip builds it from source and needs MSVC — which fails on a stock Windows
-# machine and takes the whole install with it, exactly as dlib does.
-#
-# backend/core/camera_discovery.py guards the import and falls back to scanning
-# a default subnet, so Windows loses automatic subnet detection and nothing
-# else. Replacing it with psutil.net_if_addrs(), which is already required and
-# ships Windows wheels, would remove the platform split entirely — that belongs
-# with the camera work.
-netifaces>=0.11.0; sys_platform != "win32"
+# Unmaintained since 2021, with no Windows wheel past CPython 3.8 — on 3.12 pip
+# had to build it with MSVC, which is what stopped this application importing on
+# Windows at all. Its single use, subnet enumeration for camera discovery, is
+# now served by psutil.net_if_addrs(), which is already required below and ships
+# wheels everywhere.
 psutil>=5.9.0  # Hardware detection (CPU, RAM, disk usage)
 
 # PTZ Camera Control (Phase 3.7)
