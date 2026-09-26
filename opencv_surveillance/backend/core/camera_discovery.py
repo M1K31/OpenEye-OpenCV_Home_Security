@@ -106,10 +106,70 @@ class CameraDiscovery:
                     if node.rsplit("video", 1)[-1].isdigit()
                 ]
 
+            if system == "Windows":
+                return self._list_windows_cameras()
+
         except Exception as e:
             logger.debug(f"Platform camera enumeration unavailable: {e}")
 
         return []
+
+    def _list_windows_cameras(self) -> List[Dict]:
+        """
+        Names of the video devices Windows knows about.
+
+        Windows returned nothing at all before this: the branches above covered
+        macOS and Linux, so discovery reported "no cameras" on Windows whether
+        one was attached or not — and could not tell that apart from a device it
+        was refused access to, which is the whole reason this method exists.
+
+        Get-PnpDevice rather than a Python dependency. It is built into Windows
+        8 and later, needs nothing installed, and matches how the other two
+        branches work — a subprocess asking the operating system. The
+        alternative, pygrabber, would add a package for one call.
+
+        A CAVEAT that matters, and which the macOS branch shares: PnP
+        enumeration order is not guaranteed to match the DirectShow index order
+        OpenCV uses. The names here are reliable; pairing name to index is a
+        best guess. Probing is the authority — discover_usb_cameras opens each
+        index and reports what actually answered — so a wrong pairing shows up
+        as a name against the wrong camera, not as a missing or phantom device.
+
+        The `Image` class is queried alongside `Camera` because some UVC webcams
+        still enumerate there on Windows 10. Scanners live in `Image` too, so a
+        flatbed may appear in this list; it will simply fail to open when probed,
+        which costs one attempt and no correctness.
+        """
+        script = (
+            "$ErrorActionPreference='SilentlyContinue';"
+            "Get-PnpDevice -Class Camera,Image -PresentOnly"
+            " | Where-Object { $_.Status -eq 'OK' }"
+            " | Select-Object -ExpandProperty FriendlyName"
+        )
+        completed = subprocess.run(
+            # powershell.exe, not pwsh: 5.1 ships with Windows, PowerShell 7 is
+            # an optional install. -NoProfile keeps a user's profile out of it
+            # and is faster; -NonInteractive means it can never sit waiting for
+            # input inside a background service.
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+            capture_output=True, text=True, timeout=20,
+        )
+
+        names, seen = [], set()
+        for line in completed.stdout.splitlines():
+            name = line.strip()
+            # Both classes can report the same device; keep the first.
+            if name and name not in seen:
+                seen.add(name)
+                names.append(name)
+
+        if not names:
+            logger.info(
+                "Windows reports no video devices. If a camera is attached, "
+                "check Settings > Privacy & security > Camera."
+            )
+
+        return [{"name": name, "index": i} for i, name in enumerate(names)]
 
     def _prime_macos_authorization(self) -> None:
         """
@@ -342,6 +402,13 @@ class CameraDiscovery:
             return (
                 "On Linux, ensure the service account is a member of the "
                 "'video' group and that /dev/video* is readable."
+            )
+        if system == "Windows":
+            return (
+                "On Windows, allow camera access in Settings > Privacy & "
+                "security > Camera, and make sure 'Let desktop apps access "
+                "your camera' is on — that second switch is separate and is "
+                "what blocks a Python process even when the first is enabled."
             )
         return "Check the operating system's camera privacy settings."
 
