@@ -40,6 +40,6 @@ ENABLE_CSRF_PROTECTION=true
 
 ## References
 
-- Audit finding F-02/F-07/F-08 — `docs/development/COMPREHENSIVE_AUDIT_2026-07-24.md`
+- `backend/core/auth.py` — token issuing and verification
 - `backend/middleware/csrf_protection.py`
 - `backend/main.py` (CSRF gating block)

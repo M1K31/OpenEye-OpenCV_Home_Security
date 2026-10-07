@@ -175,7 +175,7 @@ cd OpenEye-OpenCV_Home_Security
 
 > **Graceful Degradation**: OpenEye automatically disables features when optional dependencies aren't installed. Core surveillance (motion detection, recording, notifications) works without face recognition, YOLO, or two-way audio packages.
 
-**Access**: http://localhost:8000
+**Access**: http://localhost:8200
 
 #### Management Commands
 
@@ -185,6 +185,89 @@ cd OpenEye-OpenCV_Home_Security
 ./kill-server.sh          # Force kill server (emergency)
 ./uninstall.sh            # Complete removal with backup options
 ```
+
+---
+
+### Option 4: Windows (Beta)
+
+Windows runs natively — WSL2 is no longer required. Support is newer than the
+macOS and Linux paths, so please report anything that does not work.
+
+#### Prerequisites
+
+- **Python 3.9–3.12.** Not 3.13 or newer: OpenEye pins NumPy below 2.0, which
+  does not build on those versions. Tick *Add python.exe to PATH* in the
+  installer.
+- **Node.js 20+** and npm — only if you intend to build the frontend yourself.
+- **Git**
+- **ffmpeg** (optional) — needed for video recording and clip export.
+  `winget install Gyan.FFmpeg`, then reopen your terminal.
+
+#### Installation
+
+```powershell
+git clone https://github.com/M1K31/OpenEye-OpenCV_Home_Security.git
+cd OpenEye-OpenCV_Home_Security
+
+python -m venv opencv_surveillance\.venv
+opencv_surveillance\.venv\Scripts\activate
+
+pip install -r opencv_surveillance\requirements.txt
+```
+
+#### Check the machine before starting
+
+```powershell
+python opencv_surveillance\manage.py doctor
+```
+
+`doctor` lists what is present and what is missing, and names the fix for each.
+It is the quickest way to find a problem before it becomes a confusing error.
+
+#### Optional features
+
+Face recognition, object detection and two-way audio are not installed by
+default, because they are large and not every machine can run them. To add
+them:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File install-deps.ps1
+```
+
+`-ExecutionPolicy Bypass` is needed because Windows blocks unsigned scripts by
+default; it applies to that one command only and changes no system setting. To
+install just one feature: `-Feature face`, `-Feature audio` or
+`-Feature objects`.
+
+Face recognition on Windows uses a prebuilt `dlib` wheel, so no compiler is
+required.
+
+#### Running
+
+```powershell
+python opencv_surveillance\manage.py start      # start the server
+python opencv_surveillance\manage.py status     # is it running?
+python opencv_surveillance\manage.py logs       # tail the log
+python opencv_surveillance\manage.py stop       # stop it
+python opencv_surveillance\manage.py restart
+```
+
+**Access**: http://localhost:8200
+
+#### Known limitations on Windows
+
+Being straightforward about what is not finished yet:
+
+- **Camera names may not line up with camera numbers.** Windows does not
+  guarantee that the order it lists devices in matches the order OpenEye opens
+  them. The cameras all work; a name may appear against the wrong one.
+- **Scanners can appear in the camera list.** Windows groups some scanners with
+  imaging devices. Selecting one simply fails to open.
+- **Deleting a recording can fail while it is still being written.** Windows
+  does not allow removing a file another process holds open. Try again shortly
+  afterwards.
+- **Stopping the server from outside `manage.py`** — closing the console window,
+  for instance — does not release cameras cleanly. Use `manage.py stop`.
 
 ---
 
@@ -235,7 +318,8 @@ cat >> .env << EOF
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 DATABASE_URL=sqlite:///./surveillance.db
-CORS_ORIGINS=http://localhost:8000
+PORT=8200
+CORS_ORIGINS=http://localhost:8200
 LOG_LEVEL=INFO
 EOF
 
@@ -274,7 +358,7 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 
 ## 🎬 First-Run Setup
 
-1. **Access the application**: http://localhost:8000
+1. **Access the application**: http://localhost:8200 for a local install, or http://localhost:8000 for Docker
 2. **Create admin account**: Follow the first-run wizard
 3. **Add cameras**:
    - Click **"Camera Discovery"** to auto-find cameras
@@ -299,7 +383,7 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 - **CPU**: Dual-core 2.0GHz
 - **RAM**: 2GB
 - **Storage**: 10GB + recording space
-- **OS**: Linux, macOS, Windows (WSL2)
+- **OS**: Linux, macOS, or Windows 10/11 (Windows support is in beta — see [Option 4](#option-4-windows-beta))
 
 ### Recommended
 - **CPU**: Quad-core 2.5GHz+
@@ -485,6 +569,18 @@ that appears (OpenEye declares these uses). If a path silently fails to save, en
 **OpenEye** under **System Settings → Privacy & Security → Files and Folders**.
 Storing data on an internal disk remains the recommended default — an external volume
 that unmounts while recording can interrupt capture.
+
+**Windows: no cameras found**:
+Windows has two separate camera permissions, and the second one is easy to miss.
+- Open **Settings → Privacy & security → Camera**
+- Turn on **Camera access**
+- Then turn on **Let desktop apps access your camera** — this second switch is
+  what blocks OpenEye even when the first one looks correct
+- Run `python opencv_surveillance\manage.py doctor` to confirm what is detected
+
+**Windows: `pip install` fails to build a package**:
+Check your Python version with `python --version`. OpenEye needs 3.9–3.12;
+NumPy below 2.0 does not build on 3.13 or newer.
 
 **Docker: USB cameras not discovered (macOS/Windows)**:
 Docker Desktop runs containers in a Linux VM, preventing USB device access.
