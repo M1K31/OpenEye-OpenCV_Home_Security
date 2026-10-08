@@ -210,10 +210,18 @@ git clone https://github.com/M1K31/OpenEye-OpenCV_Home_Security.git
 cd OpenEye-OpenCV_Home_Security
 
 python -m venv opencv_surveillance\.venv
-opencv_surveillance\.venv\Scripts\activate
 
-pip install -r opencv_surveillance\requirements.txt
+# Call the environment's interpreter directly. There is no need to "activate"
+# it — see the note below.
+opencv_surveillance\.venv\Scripts\python.exe -m pip install -r opencv_surveillance\requirements.txt
 ```
+
+> **You do not need to activate the virtual environment.** PowerShell blocks
+> unsigned scripts by default, so `.venv\Scripts\Activate.ps1` fails with
+> *"running scripts is disabled on this system"* on a stock Windows install.
+> Calling `.venv\Scripts\python.exe` directly avoids the problem entirely, and
+> `manage.py` finds the environment on its own. If you would rather activate it
+> anyway, see [Windows: activating the virtual environment fails](#troubleshooting).
 
 #### Check the machine before starting
 
@@ -223,6 +231,8 @@ python opencv_surveillance\manage.py doctor
 
 `doctor` lists what is present and what is missing, and names the fix for each.
 It is the quickest way to find a problem before it becomes a confusing error.
+It reports on the virtual environment's interpreter even when run from outside
+it, so the answer reflects what the server will actually use.
 
 #### Optional features
 
@@ -251,6 +261,9 @@ python opencv_surveillance\manage.py logs       # tail the log
 python opencv_surveillance\manage.py stop       # stop it
 python opencv_surveillance\manage.py restart
 ```
+
+`manage.py` locates the virtual environment itself and runs the server with it,
+so these work from any shell whether the environment is active or not.
 
 **Access**: http://localhost:8200
 
@@ -569,6 +582,30 @@ that appears (OpenEye declares these uses). If a path silently fails to save, en
 **OpenEye** under **System Settings → Privacy & Security → Files and Folders**.
 Storing data on an internal disk remains the recommended default — an external volume
 that unmounts while recording can interrupt capture.
+
+**Windows: activating the virtual environment fails**:
+```
+.venv\Scripts\Activate.ps1 cannot be loaded because running scripts is
+disabled on this system.
+```
+PowerShell refuses unsigned scripts by default. Three ways past it, best first:
+
+1. **Do not activate.** Nothing requires it. Call the interpreter directly —
+   `opencv_surveillance\.venv\Scripts\python.exe -m pip install ...` — and let
+   `manage.py` find the environment on its own, which it does.
+2. **Allow local scripts for your user only** — the usual Windows development
+   setting, and it persists:
+   ```powershell
+   Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+   ```
+   `RemoteSigned` permits scripts you created locally while still requiring a
+   signature on anything downloaded. It affects your account only and needs no
+   administrator rights.
+3. **Use Command Prompt instead of PowerShell.** `activate.bat` is not a
+   PowerShell script, so the policy does not apply:
+   ```
+   opencv_surveillance\.venv\Scripts\activate.bat
+   ```
 
 **Windows: no cameras found**:
 Windows has two separate camera permissions, and the second one is easy to miss.
