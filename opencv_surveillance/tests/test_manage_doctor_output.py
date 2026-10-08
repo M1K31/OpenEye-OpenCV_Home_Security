@@ -83,3 +83,84 @@ def test_the_exit_code_reflects_the_findings():
         assert result.returncode != 0, "problems were reported but the exit code was 0"
     else:
         assert result.returncode == 0
+
+
+class TestDoctorReportsTheRightInterpreter:
+    """
+    doctor must describe the Python the SERVER will use, not the one that
+    happened to launch it.
+
+    Every check in it uses the running interpreter — sys.version, and
+    __import__ per package — while `start` launches the server with
+    venv_python(). Run as `python manage.py doctor` from a shell where the
+    virtual environment is not active, those are two different interpreters,
+    and doctor reported the system Python's packages: every dependency
+    "missing" while the environment had them all.
+
+    This matters most on Windows, where activating the environment needs an
+    execution-policy change and so most people will not have done it.
+    """
+
+    def test_it_re_execs_under_the_project_environment(self, tmp_path):
+        """
+        With a project venv present and doctor invoked by a different
+        interpreter, the report must name the venv's python.
+        """
+        import shutil
+        import subprocess
+        import sys
+        import venv
+
+        project = tmp_path / "opencv_surveillance"
+        project.mkdir()
+        shutil.copy(MANAGE, project / "manage.py")
+        venv.create(project / ".venv", with_pip=False)
+
+        result = subprocess.run(
+            [sys.executable, str(project / "manage.py"), "doctor"],
+            capture_output=True, text=True, timeout=180,
+        )
+
+        assert "Using the project virtual environment" in result.stdout, (
+            "doctor did not re-exec; it reported on the interpreter that "
+            f"launched it instead.\n{result.stdout[:400]}"
+        )
+        assert ".venv" in result.stdout
+
+        # The notice must come BEFORE the report it explains. Python buffers
+        # stdout while the subprocess writes straight to the terminal, so
+        # without an explicit flush it printed at the very end.
+        notice = result.stdout.index("Using the project virtual environment")
+        platform_line = result.stdout.index("Platform  :")
+        assert notice < platform_line, (
+            "the re-exec notice printed after the report it explains"
+        )
+
+    def test_it_does_not_recurse(self, tmp_path):
+        """
+        The re-exec guards itself.
+
+        Without the environment flag, an interpreter that resolves to something
+        other than itself would re-exec forever.
+        """
+        import os
+        import shutil
+        import subprocess
+        import sys
+        import venv
+
+        project = tmp_path / "opencv_surveillance"
+        project.mkdir()
+        shutil.copy(MANAGE, project / "manage.py")
+        venv.create(project / ".venv", with_pip=False)
+
+        result = subprocess.run(
+            [sys.executable, str(project / "manage.py"), "doctor"],
+            capture_output=True, text=True, timeout=180,
+            env={**os.environ, "OPENEYE_DOCTOR_REEXEC": "1"},
+        )
+
+        assert "Using the project virtual environment" not in result.stdout, (
+            "re-exec happened despite the guard flag being set"
+        )
+        assert "Platform  :" in result.stdout, "doctor did not run at all"

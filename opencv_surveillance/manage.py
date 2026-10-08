@@ -513,6 +513,32 @@ def cmd_doctor(args) -> int:
     """
     import shutil as _shutil
 
+    # Report on the interpreter that will actually run the server.
+    #
+    # Every check below uses the RUNNING interpreter — sys.version, and
+    # __import__ for each package — while `start` launches the server with
+    # venv_python(). Run as `python manage.py doctor` from a shell where the
+    # virtual environment is not active, those are two different interpreters,
+    # and doctor reported the system Python's packages: every dependency
+    # "missing" while the venv had them all. A diagnostic that is wrong in
+    # exactly the situation you reach for it is worse than none.
+    #
+    # Re-exec under the venv rather than probing it from here, so the checks
+    # stay simple and genuinely run where the server will. The environment
+    # variable stops this recursing if the venv interpreter somehow resolves
+    # elsewhere.
+    target = venv_python()
+    if target != sys.executable and not os.environ.get("OPENEYE_DOCTOR_REEXEC"):
+        # flush=True, or this never appears where it belongs. Python buffers
+        # stdout while the subprocess below writes straight to the terminal, so
+        # without it the line explaining the re-exec printed AFTER everything it
+        # was explaining — at the very end of the report.
+        print(f"Using the project virtual environment: {target}\n", flush=True)
+        environment = {**os.environ, "OPENEYE_DOCTOR_REEXEC": "1"}
+        completed = subprocess.run(
+            [target, os.path.abspath(__file__), "doctor"], env=environment)
+        return completed.returncode
+
     problems = 0
 
     def check(label: str, ok: bool, hint: str = "", info: str = "") -> None:
