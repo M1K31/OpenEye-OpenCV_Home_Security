@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.11.9] - 2026-11-03
+
+### Added
+- **Live Camera Viewer inside PTZ Controls** - Embedded a real-time MJPEG stream preview inside `PTZControl.jsx` with a toggleable alignment reticle (`🎯 Reticle: ON/OFF`), snapshot capture, stream reload, privacy-mask awareness, and on-video directional edge controls (`▲ ▼ ◀ ▶`, `🏠 Home`, `📍 +Preset`).
+- **Direct Manual PTZ Controls on Main Dashboard** - Added a `🎮 PTZ` action button to every camera card on `LiveDashboard.jsx` that toggles an inline Quick PTZ HUD overlay (`↖ ↑ ↗ ← 🏠 → ↙ ↓ ↘`, `Zoom + / −`) and a `🎛️ Full PTZ…` studio modal launcher so cameras can be panned, tilted, and zoomed without navigating to Settings.
+- **Camera Settings PTZ Tab** - Added a `🎮 PTZ & Viewer` tab to `CameraSettingsModal.jsx`.
+- **Automatic Offline Camera Unavailable Card & Recovery** - Cameras that disconnect or experience stream errors transition immediately to an `Unavailable` card on `LiveDashboard.jsx` and `CameraManagementPage.jsx`, automatically reconnecting the live stream when reachable again.
+
+### Fixed
+- **PTZ `429 (Too Many Requests)` Rate-Limit & Retry Storm** - Mapped `/api/cameras/{id}/ptz/*` and `/api/cameras/{id}/edge/*` to the high-frequency `"stream"` rate-limit bucket (`500 req/min`) in `backend/middleware/endpoint_rate_limiter.py` instead of the generic `"write"` bucket (`30 req/min`), disabled automatic Axios retries on `429` and `/ptz/` requests in `frontend/src/api/apiClient.js`, and added in-flight move coalescing in `PTZControl.jsx` and `LiveDashboard.jsx`.
+- **PTZ Preset Position Tracking** - `PTZControl.jsx` now tracks the camera's live `{ pan, tilt, zoom }` position from `/ptz/status` and `/ptz/move/relative` responses when saving presets instead of hardcoding `0`.
+- **Facial Recognition `unknown*` Placeholder Retirement** - Automatically removes empty `unknown*` placeholder folders (`faces/unknown*/`), empty `FaceCluster` rows, and stale `unknown*` encodings when all detections are reassigned to a named person (`backend/core/person_reassignment.py`, `face_history.py`, `face_clustering.py`, `clusters.py`, `faces.py`, `face_recognition.py`, `DetectionsPage.jsx`).
+- **Startup `UnboundLocalError` & Process Collision** - Removed a redundant inner `import os` in `backend/main.py` (`startup_event`), added an exclusive `fcntl.flock` worker lock so duplicate background processes never contend for USB/AVFoundation cameras, and updated `start-local.sh` to scope `--reload-dir` to `$APP_RUN_DIR/backend` and unload competing `launchd` services.
+- **MJPEG Stream `ERR_INCOMPLETE_CHUNKED_ENCODING` & WebSocket `/api/ws/statistics` Handshake** - Prevented background camera recovery polling in `LiveDashboard.jsx` from unmounting running `<CameraCard>` streams, made `generate_frames` in `backend/api/routes/cameras.py` non-blocking on the asyncio event loop, and prevented `WebSocketService.js` / `MainLayout.jsx` from aborting in-flight `CONNECTING` WebSocket handshakes.
+
+### Files Modified
+- `backend/main.py`, `backend/api/routes/cameras.py`, `backend/api/routes/faces.py`, `backend/api/routes/face_history.py`, `backend/api/routes/clusters.py`, `backend/core/person_reassignment.py`, `backend/core/face_recognition.py`, `backend/core/face_clustering.py`, `backend/middleware/endpoint_rate_limiter.py`, `frontend/src/api/apiClient.js`, `frontend/src/components/PTZControl.jsx`, `frontend/src/components/PTZControl.css`, `frontend/src/components/CameraSettingsModal.jsx`, `frontend/src/sections/LiveDashboard.jsx`, `frontend/src/sections/LiveDashboard.css`, `frontend/src/pages/DetectionsPage.jsx`, `frontend/src/pages/CameraManagementPage.jsx`, `frontend/src/services/WebSocketService.js`, `frontend/src/layouts/MainLayout.jsx`, `scripts/start-local.sh`, `todos_changelog.md`
+
+---
+
 ## [3.11.8] - 2026-07-27
 
 ### Added

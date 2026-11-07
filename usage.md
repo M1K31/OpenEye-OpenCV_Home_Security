@@ -83,7 +83,10 @@ Sidebar:
 - **Events & History** — detected events.
 - **Timeline Playback** — recorded footage scrubber.
 - **Camera Manager** — add/configure cameras (per-camera motion, recording, image
-  quality, zones via the ⚙ button on each card).
+  quality, zones via the ⚙ button on each card). Includes ARP-prioritized cross-platform
+  RTSP/ONVIF discovery (supporting TP-Link Tapo, Hikvision, Dahua/Amcrest, Reolink,
+  Axis, UniFi, and Foscam) with inline credential entry and Fernet encryption at rest
+  (`enc:v1:...`) in SQLite.
 - **AI & Faces** — face library, training, recognition history.
 - **Automations** — rules that trigger actions when specific people are detected.
   Notification actions deliver via the providers configured under notification
@@ -103,3 +106,48 @@ OpenEye registers with the appEcosystem registry when present (priority 50,
 shared secret on the System & Alerts → **Ecosystem Setup** card, or via the
 `ecosystem secret` CLI / `~/.config/ecosystem/secret.env`. The LLM selection syncs
 from the registry's shared AI profile.
+
+### Publishing Detections to the Mesh
+OpenEye uses `ecosystem_client` to broadcast real-time computer vision events (motion, face recognition, vehicle detection) so `AegisSIEM` and `cyber-agents` can correlate physical security with network traffic:
+
+```python
+from ecosystem_client import EcosystemClient
+
+eco = EcosystemClient(service_name="openeye", service_port=8200)
+await eco.start()
+
+# Emit physical security detection
+await eco.publish("physical.motion", {
+    "camera_id": "driveway_cam",
+    "detected_objects": ["person", "vehicle"],
+    "confidence": 0.94,
+    "zone": "driveway"
+})
+```
+
+
+
+---
+
+## 6. Automations, Forensic Scans & Emergency Freeze
+
+OpenEye's automation engine (`backend/core/automation_engine.py`) supports cross-ecosystem security actions:
+
+### New Action Types
+- **`device_scan`**: Dispatches an authorized forensic scan request for a designated target (`self` or specific `device_id`). Requires an active `auto_scan` grant designated during onboarding or via the control plane.
+- **`scan_schedule`**: Configures a recurring scan schedule for a designated endpoint.
+- **`ecosystem_freeze`**: Broadcasts an emergency freeze event (`ecosystem.freeze`) across the local mesh, stopping new scan/mutation jobs in response to a physical perimeter intrusion.
+
+### Example Automation Rule (YAML / JSON)
+```json
+{
+  "name": "Perimeter Breach -> Emergency Freeze",
+  "trigger": { "type": "event", "event": "security.person_detected", "match": { "known": false } },
+  "conditions": [
+    { "type": "camera_zone", "zone": "restricted_backyard" }
+  ],
+  "actions": [
+    { "type": "ecosystem_freeze", "config": { "reason": "Unrecognized intruder in backyard zone" } }
+  ]
+}
+```
