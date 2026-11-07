@@ -33,6 +33,7 @@ const CameraManagementPage = ({ embedded = false }) => {
 
   // Comprehensive camera settings modal state
   const [settingsCamera, setSettingsCamera] = useState(null);
+  const [settingsInitialTab, setSettingsInitialTab] = useState('motion');
 
   // camera_id currently being reconnected, or null. Reconnecting a sleeping
   // phone can take several seconds, so the button has to show it is working.
@@ -285,10 +286,12 @@ const CameraManagementPage = ({ embedded = false }) => {
                         <span style={styles.cameraType}>{camera.camera_type?.toUpperCase()}</span>
                       </div>
                       <div style={styles.statusBadge}>
-                        {camera.is_active ? (
-                          <span style={styles.statusEnabled}>● Active</span>
-                        ) : (
+                        {!camera.is_active ? (
                           <span style={styles.statusDisabled}>○ Disabled</span>
+                        ) : camera.is_running ? (
+                          <span style={styles.statusEnabled}>● Live</span>
+                        ) : (
+                          <span style={styles.statusDisabled}>◌ Unavailable</span>
                         )}
                       </div>
                     </div>
@@ -321,19 +324,29 @@ const CameraManagementPage = ({ embedded = false }) => {
                         variant="primary"
                         size="small"
                         onClick={() => window.open(`/api/cameras/${camera.camera_id}/stream`, '_blank')}
+                        disabled={!camera.is_active || !camera.is_running}
                         icon="👁️"
-                        title="View camera stream"
+                        title={camera.is_running ? 'View camera stream' : 'Stream unavailable while camera is disconnected'}
                       >
                         Stream
                       </Button>
                       <Button
                         variant="secondary"
                         size="small"
-                        onClick={() => setSettingsCamera(camera)}
+                        onClick={() => { setSettingsInitialTab('motion'); setSettingsCamera(camera); }}
                         icon="⚙️"
                         title="Configure camera settings"
                       >
                         Config
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="small"
+                        onClick={() => { setSettingsInitialTab('edge'); setSettingsCamera(camera); }}
+                        icon="🧠"
+                        title="Built-in Camera Edge AI & Hardware Controls"
+                      >
+                        Edge AI
                       </Button>
                       <Button
                         variant="secondary"
@@ -537,6 +550,10 @@ const CameraManagementPage = ({ embedded = false }) => {
               <h3 style={styles.helpTitle}>💡 Common RTSP URL Formats</h3>
               <div style={styles.helpGrid}>
                 <div style={styles.helpCard}>
+                  <h4>TP-Link Tapo</h4>
+                  <code style={styles.code}>rtsp://user:password@IP:554/stream1</code>
+                </div>
+                <div style={styles.helpCard}>
                   <h4>Hikvision</h4>
                   <code style={styles.code}>rtsp://admin:password@IP:554/Streaming/Channels/101</code>
                 </div>
@@ -562,6 +579,7 @@ const CameraManagementPage = ({ embedded = false }) => {
       {settingsCamera && (
         <CameraSettingsModal
           camera={settingsCamera}
+          initialTab={settingsInitialTab}
           onClose={() => setSettingsCamera(null)}
           onSave={loadCameras}
         />

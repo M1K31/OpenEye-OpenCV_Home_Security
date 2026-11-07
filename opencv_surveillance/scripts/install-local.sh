@@ -286,6 +286,8 @@ install_python_deps() {
         pip install -e "$ECO_ROOT/auth/python" \
                     -e "$ECO_ROOT/packages/ecosystem-client" \
                     -e "$ECO_ROOT/packages/ecosystem-ai" \
+                    -e "$ECO_ROOT/packages/ecosystem-hub" \
+                    -e "$ECO_ROOT/packages/ecosystem-policy" \
             && log_success "Shared ecosystem packages installed (editable, from source)" \
             || { log_error "Editable ecosystem install failed"; return 1; }
     fi
@@ -295,7 +297,7 @@ install_python_deps() {
     # and the AegisSIEM daemon are available to OpenEye. Runtime only: the daemon
     # is NOT started here (launchd owns it; a second start vector would let two
     # daemons share one SQLite state dir). Never fatal.
-    CYBER="${CYBER_AGENTS_PATH:-${ECOSYSTEM_BASE_PATH:-$PROJECT_DIR/../..}/CybersecurityTeam/cyber-agents}"
+    CYBER="${CYBER_AGENTS_PATH:-${ECOSYSTEM_BASE_PATH:-$PROJECT_DIR/../..}/cyber-agents}"
     if [ -n "${OPENEYE_SKIP_CYBER_AGENTS:-}" ]; then
         log_info "OPENEYE_SKIP_CYBER_AGENTS=1 — skipping cyber-agents setup"
     elif [ -x "$CYBER/scripts/install-local.sh" ]; then
@@ -586,6 +588,7 @@ create_systemd_service() {
   <key>WorkingDirectory</key><string>$APP_DIR</string>
   <key>EnvironmentVariables</key><dict>
     <key>ECOSYSTEM_SERVICE_PORT</key><string>$PORT</string>
+    <key>OPENCV_FFMPEG_CAPTURE_OPTIONS</key><string>rtsp_transport;tcp|stimeout;5000000</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <!-- Restart only on a CRASH (non-zero exit), not on a clean stop. Unconditional

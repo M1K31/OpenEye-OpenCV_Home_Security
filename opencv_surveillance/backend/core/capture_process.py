@@ -113,6 +113,14 @@ def _open_capture(source: str):
         factory = getattr(importlib.import_module(module_name), attr)
         return factory(source)
 
+    is_stream = isinstance(source, str) and str(source).startswith(
+        ("rtsp://", "rtsps://", "http://", "https://")
+    )
+    if is_stream:
+        os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
+            "rtsp_transport;tcp|fflags;nobuffer|flags;low_delay|max_delay;250000|stimeout;8000000"
+        )
+
     # Imported here so the parent process never imports cv2 on this module's
     # account, and so the child imports it fresh.
     import cv2
@@ -121,7 +129,12 @@ def _open_capture(source: str):
         device_index = int(source)
         return cv2.VideoCapture(device_index)
     except (ValueError, TypeError):
-        return cv2.VideoCapture(source, cv2.CAP_FFMPEG)
+        cap = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
+        try:
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        except Exception:
+            pass
+        return cap
 
 
 def _capture_worker(source: str, shm_name: str, meta_array, stop_event, target_fps: float):
@@ -146,8 +159,11 @@ def _capture_worker(source: str, shm_name: str, meta_array, stop_event, target_f
                 meta_array[6] = STATUS_OPEN_FAILED
             return
 
+        is_stream = isinstance(source, str) and str(source).startswith(
+            ("rtsp://", "rtsps://", "http://", "https://")
+        )
         try:
-            if target_fps:
+            if target_fps and not is_stream:
                 capture.set(__import__("cv2").CAP_PROP_FPS, float(target_fps))
         except Exception:
             pass  # Many devices ignore this; never fatal.
@@ -156,7 +172,11 @@ def _capture_worker(source: str, shm_name: str, meta_array, stop_event, target_f
             meta_array[6] = STATUS_RUNNING
 
         seq = 0
-        interval = 1.0 / target_fps if target_fps else 0.0
+        # For RTSP/HTTP network streams, drain frames at native stream rate (~30fps)
+        # rather than sleeping 1/target_fps so the FFmpeg socket buffer stays empty
+        # and PTZ camera movement appears with near-zero latency.
+        effective_fps = max(float(target_fps or 15.0), 30.0) if is_stream else float(target_fps or 0.0)
+        interval = 1.0 / effective_fps if effective_fps else 0.0
         consecutive_failures = 0
 
         while not stop_event.is_set():

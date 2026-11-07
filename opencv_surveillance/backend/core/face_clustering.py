@@ -1389,10 +1389,42 @@ class FaceClusteringService:
         # folder therefore survived every rename — 701 files in one case — still
         # feeding the recogniser under a name the user thought they had replaced,
         # and doubling the disk it occupied.
+        #
+        # After the gallery split, images inside `old_gallery` live in
+        # `detected/` and `uploaded/` subdirectories as well as loose in the
+        # root on legacy installs. Move both subdirectories into the target's
+        # corresponding subdirectories and remove the emptied subdirectories so
+        # `old_gallery.rmdir()` succeeds cleanly.
         images_moved = 0
         if previous_label and previous_label != clean_name:
+            from backend.core.gallery import uploaded_dir as _uploaded_dir
             old_gallery = paths.faces_dir / previous_label
             if old_gallery.is_dir() and old_gallery.resolve() != person_path.resolve():
+                for sub_name, target_sub in (
+                    ("detected", person_path),
+                    ("uploaded", _uploaded_dir(clean_name)),
+                ):
+                    old_sub = old_gallery / sub_name
+                    if not old_sub.is_dir():
+                        continue
+                    target_sub.mkdir(parents=True, exist_ok=True)
+                    for sub_item in old_sub.iterdir():
+                        if not sub_item.is_file():
+                            continue
+                        dest_sub = target_sub / sub_item.name
+                        if dest_sub.exists():
+                            sub_item.unlink()
+                            continue
+                        try:
+                            shutil.move(str(sub_item), str(dest_sub))
+                            images_moved += 1
+                        except Exception as e:
+                            logger.warning("Could not move %s: %s", sub_item, e)
+                    try:
+                        old_sub.rmdir()
+                    except OSError:
+                        pass
+
                 for item in old_gallery.iterdir():
                     if not item.is_file():
                         continue
@@ -1438,8 +1470,8 @@ class FaceClusteringService:
         if auto_train and training_required:
             try:
                 face_manager = get_face_manager()
-                training_result = face_manager.train_face_recognition()
-                logger.info(f"Face recognition retrained: {training_result}")
+                training_result = face_manager.train_person(clean_name)
+                logger.info(f"Face recognition retrained for '{clean_name}': {training_result}")
             except Exception as e:
                 logger.error(f"Failed to retrain face recognition: {e}")
                 # Don't fail the whole operation if retraining fails

@@ -307,6 +307,9 @@ class FaceCluster(Base):
         return f"<FaceCluster(id={self.id}, label={label}, faces={self.face_count})>"
 
 
+from backend.core.camera_security import EncryptedCameraSource
+
+
 class Camera(Base):
     """
     NEW: Model for storing camera configurations
@@ -318,7 +321,7 @@ class Camera(Base):
     id = Column(Integer, primary_key=True, index=True)
     camera_id = Column(String, unique=True, index=True)
     camera_type = Column(String)  # 'rtsp' or 'mock'
-    source = Column(String)
+    source = Column(EncryptedCameraSource)
 
     # Face detection settings
     face_detection_enabled = Column(Boolean, default=True)

@@ -6,8 +6,43 @@ Two-Factor Authentication (2FA) System
 TOTP-based 2FA using free and open source libraries
 """
 
-import pyotp
-import qrcode
+try:
+    import pyotp
+except ModuleNotFoundError:
+    class _FallbackPyOTP:
+        @staticmethod
+        def random_base32() -> str:
+            import base64, secrets
+            return base64.b32encode(secrets.token_bytes(20)).decode("ascii").rstrip("=")
+
+        class TOTP:
+            def __init__(self, secret: str):
+                self.secret = secret
+
+            def provisioning_uri(self, name: str, issuer_name: str) -> str:
+                from urllib.parse import quote
+                label = quote(f"{issuer_name}:{name}")
+                return f"otpauth://totp/{label}?secret={self.secret}&issuer={quote(issuer_name)}&algorithm=SHA1&digits=6&period=30"
+
+            def verify(self, token: str, valid_window: int = 1) -> bool:
+                from backend.core.ecosystem_hub_bridge import _ensure_ecosystem_paths
+                _ensure_ecosystem_paths()
+                from ecosystem_policy.step_up import compute_totp
+                import hmac, time
+                cleaned = str(token or "").strip()
+                base_window = int(time.time()) // 30
+                for delta in range(-valid_window, valid_window + 1):
+                    win_ts = (base_window + delta) * 30
+                    if hmac.compare_digest(compute_totp(self.secret, timestamp=win_ts), cleaned):
+                        return True
+                return False
+
+    pyotp = _FallbackPyOTP()  # type: ignore[assignment]
+
+try:
+    import qrcode
+except ModuleNotFoundError:
+    qrcode = None  # type: ignore[assignment]
 import io
 import base64
 from typing import Optional, Tuple
@@ -68,6 +103,9 @@ class TwoFactorAuth:
         Returns:
             Base64-encoded PNG image of QR code
         """
+        if qrcode is None:
+            return ""
+
         uri = self.get_provisioning_uri(username, secret)
 
         # Generate QR code

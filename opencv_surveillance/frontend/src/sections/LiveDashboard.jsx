@@ -1,13 +1,14 @@
 // Copyright (c) 2025 Mikel Smart
 // This file is part of OpenEye-OpenCV_Home_Security
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { activateOnKey } from '../utils/a11y';
 import { logger } from '../utils/logger';
 import { formatTimestampShort } from '../utils/dateUtils';
 import apiClient, { isAuthenticated } from '../api/apiClient';
 import PipVideoPlayer from '../components/PipVideoPlayer';
 import CameraSettingsModal from '../components/CameraSettingsModal';
+import PTZControl from '../components/PTZControl';
 import EventDetailModal from '../components/EventDetailModal';
 import Button from '../components/universal/Button';
 import { useCachedApi, useCachedApiMultiple } from '../hooks/useCachedApi';
@@ -35,33 +36,29 @@ const CameraCard = React.memo(({
   isRefreshing,
   streamNonce,
   refreshResult,
-  onAudioClick
+  onAudioClick,
+  isStreamUnavailable,
+  onStreamError,
+  isQuickPtzOpen,
+  onQuickPtzToggle,
+  onOpenPtzModal,
+  onQuickPtzMove,
+  onQuickPtzHome
 }) => {
+  const isLive = Boolean(camera.is_active && camera.is_running && !isStreamUnavailable);
+
   return (
     <div key={camera.camera_id} className="camera-card">
       {/*
-        Gate the stream on is_running, not is_active.
-
-        is_active is configuration ("this camera is switched on"); is_running is
-        whether a capture is actually open right now. They differ constantly — a
-        phone used as a Continuity Camera stays is_active while it is registered,
-        but stops running the moment it locks or leaves the network. Rendering the
-        <img> on is_active alone meant the browser requested a stream for a camera
-        that was not there and logged a 503 for every retry.
+        Gate the stream on is_running and stream health, not is_active alone.
+        When a camera disconnects or its MJPEG stream drops, transition cleanly
+        to the Unavailable card until the camera becomes available again.
       */}
       <div className="camera-header">
         <h3>{camera.name || camera.camera_id}</h3>
-        {/*
-          The status badge doubles as a per-camera refresh control: click it to
-          reconnect just this camera without disturbing the others.
-
-          A real <button>, not a clickable <span> — it must be keyboard reachable
-          and announced as a control. The badge classes are kept so it still reads
-          as status first and a control second.
-        */}
         <button
           type="button"
-          className={`status-badge status-badge--action ${camera.is_running ? 'active' : 'inactive'}`}
+          className={`status-badge status-badge--action ${isLive ? 'active' : 'inactive'}`}
           onClick={() => onRefresh && onRefresh(camera)}
           disabled={isRefreshing}
           title={`Reconnect ${camera.name || camera.camera_id} — refreshes only this camera`}
@@ -70,11 +67,11 @@ const CameraCard = React.memo(({
           {isRefreshing
             ? '⏳ Reconnecting…'
             : !camera.is_active ? 'Disabled'
-            : camera.is_running ? 'Live' : 'Disconnected'}
+            : isLive ? 'Live' : 'Unavailable'}
         </button>
       </div>
       <div className="camera-feed">
-        {camera.is_active && camera.is_running ? (
+        {isLive ? (
           <img
             // key + nonce force a remount so the browser drops the stalled
             // multipart response; changing the attribute alone would not.
@@ -82,34 +79,68 @@ const CameraCard = React.memo(({
             src={`/api/cameras/${camera.camera_id}/stream${streamNonce ? `?t=${streamNonce}` : ''}`}
             alt={`${camera.name} feed`}
             className="feed-image"
-            onError={(e) => {
-              e.target.onerror = null;
-              e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="640" height="480"%3E%3Crect fill="%23333" width="640" height="480"/%3E%3Ctext fill="%23fff" font-size="20" x="50%25" y="50%25" text-anchor="middle" dominant-baseline="middle"%3EStream Unavailable%3C/text%3E%3C/svg%3E';
+            onError={() => {
+              if (onStreamError) onStreamError(camera.camera_id);
             }}
           />
         ) : (
           <div className="feed-offline">
             <span>📡</span>
-            {/* Say which of the two it is — "offline" alone left the user unable
-                to tell a disabled camera from one that has simply wandered off. */}
-            <p>{!camera.is_active ? 'Camera Disabled' : 'Camera Disconnected'}</p>
-            {camera.is_active && !camera.is_running && (
-              /*
-                Continuity Camera wants the phone LOCKED and STILL — the opposite
-                of what this text used to say. Apple only offers an iPhone as a
-                camera when it is locked, stationary, near the Mac, with its rear
-                cameras facing out; picking it up or unlocking it withdraws it.
-                The earlier "unlock it and bring it into range" actively told the
-                user to do the one thing that makes the camera disappear.
-              */
+            <p>{!camera.is_active ? 'Camera Disabled' : 'Camera Unavailable'}</p>
+            {camera.is_active && (
               <small>
-                Not currently reachable. If this is an iPhone: leave it locked and
-                still, screen off, near this Mac with Wi-Fi and Bluetooth on — it is
-                offered as a camera only while stationary and locked. Then Reconnect.
+                Stream is currently unavailable and will resume automatically when
+                the camera is reachable again, or click Unavailable above to reconnect now.
               </small>
             )}
           </div>
         )}
+
+        {/* Direct Manual PTZ HUD Overlay on the Main Dashboard card */}
+        {isQuickPtzOpen && (
+          <div className="dashboard-ptz-hud" onClick={(e) => e.stopPropagation()}>
+            <div className="dashboard-ptz-hud-header">
+              <span>🎮 Manual PTZ</span>
+              <div className="dashboard-ptz-hud-actions">
+                <button
+                  type="button"
+                  className="dashboard-ptz-studio-btn"
+                  onClick={() => onOpenPtzModal && onOpenPtzModal(camera)}
+                  title="Open full PTZ Studio with Presets, Patrols & Live Reticle"
+                >
+                  🎛️ Full PTZ…
+                </button>
+                <button
+                  type="button"
+                  className="dashboard-ptz-close-btn"
+                  onClick={() => onQuickPtzToggle && onQuickPtzToggle(camera.camera_id)}
+                  title="Hide on-card PTZ controls"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            <div className="dashboard-ptz-controls-row">
+              <div className="dashboard-ptz-pad">
+                <button type="button" onClick={() => onQuickPtzMove(camera.camera_id, -1.0, 1.0, 0)} title="Pan Left + Tilt Up">↖</button>
+                <button type="button" onClick={() => onQuickPtzMove(camera.camera_id, 0, 1.0, 0)} title="Tilt Up">↑</button>
+                <button type="button" onClick={() => onQuickPtzMove(camera.camera_id, 1.0, 1.0, 0)} title="Pan Right + Tilt Up">↗</button>
+                <button type="button" onClick={() => onQuickPtzMove(camera.camera_id, -1.0, 0, 0)} title="Pan Left">←</button>
+                <button type="button" className="home-btn" onClick={() => onQuickPtzHome(camera.camera_id)} title="Home Position">🏠</button>
+                <button type="button" onClick={() => onQuickPtzMove(camera.camera_id, 1.0, 0, 0)} title="Pan Right">→</button>
+                <button type="button" onClick={() => onQuickPtzMove(camera.camera_id, -1.0, -1.0, 0)} title="Pan Left + Tilt Down">↙</button>
+                <button type="button" onClick={() => onQuickPtzMove(camera.camera_id, 0, -1.0, 0)} title="Tilt Down">↓</button>
+                <button type="button" onClick={() => onQuickPtzMove(camera.camera_id, 1.0, -1.0, 0)} title="Pan Right + Tilt Down">↘</button>
+              </div>
+              <div className="dashboard-ptz-zoom">
+                <button type="button" onClick={() => onQuickPtzMove(camera.camera_id, 0, 0, 0.5)} title="Zoom In">＋</button>
+                <span>Zoom</span>
+                <button type="button" onClick={() => onQuickPtzMove(camera.camera_id, 0, 0, -0.5)} title="Zoom Out">－</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Result of the last reconnect for THIS camera. Without it a correctly
             failing reconnect is indistinguishable from a button that does
             nothing — which is exactly how it was reported. */}
@@ -135,19 +166,17 @@ const CameraCard = React.memo(({
         </span>
       </div>
       <div className="camera-actions">
-        {/*
-          Two-way audio, ported here from pages/DashboardPage.jsx.
-
-          That page was dead code — nothing imported it — but it held the only
-          one-click entry point to two-way audio in the whole app. The feature
-          itself was never unreachable (CameraSettingsModal also renders
-          TwoWayAudio), but it took Settings > scroll to find. Deleting the dead
-          page without bringing this across would have quietly made a working
-          feature harder to reach.
-
-          Gated on is_running rather than is_active: talking to a camera that is
-          configured but not currently connected cannot work.
-        */}
+        <Button
+          variant={isQuickPtzOpen ? 'primary' : 'secondary'}
+          size="small"
+          onClick={() => onQuickPtzToggle && onQuickPtzToggle(camera.camera_id)}
+          title="Toggle manual Pan / Tilt / Zoom controls on this camera feed"
+          aria-label={`Pan, Tilt, and Zoom ${camera.name || camera.camera_id}`}
+          disabled={!camera.is_active}
+          icon="🎮"
+        >
+          PTZ
+        </Button>
         <Button
           variant="secondary"
           size="small"
@@ -263,44 +292,143 @@ const LiveDashboard = () => {
   // Camera whose two-way audio modal is open, or null.
   const [audioCamera, setAudioCamera] = useState(null);
 
+  // Direct PTZ controls on the Main Dashboard & Fullscreen: per-card inline HUD + full PTZ modal
+  const [quickPtzOpen, setQuickPtzOpen] = useState({});
+  const [showFullscreenPtz, setShowFullscreenPtz] = useState(true);
+  const [showFullscreenReticle, setShowFullscreenReticle] = useState(false);
+  const [ptzModalCamera, setPtzModalCamera] = useState(null);
+  const ptzBusyRef = useRef({});
+  const ptzPendingRef = useRef({});
+
+  const handleQuickPtzToggle = useCallback((cameraId) => {
+    setQuickPtzOpen((prev) => ({ ...prev, [cameraId]: !prev[cameraId] }));
+  }, []);
+
+  const handleQuickPtzMove = useCallback(async (cameraId, panDelta, tiltDelta, zoomDelta = 0) => {
+    if (ptzBusyRef.current[cameraId]) {
+      ptzPendingRef.current[cameraId] = { panDelta, tiltDelta, zoomDelta };
+      return;
+    }
+    ptzBusyRef.current[cameraId] = true;
+    try {
+      await apiClient.post(`/cameras/${cameraId}/ptz/move/relative`, {
+        pan_delta: panDelta * 0.85,
+        tilt_delta: tiltDelta * 0.85,
+        zoom_delta: zoomDelta * 0.85,
+        speed: 0.85,
+      });
+    } catch (err) {
+      logger.error('Quick PTZ move failed:', err);
+      setRefreshResult({
+        camera_id: cameraId,
+        ok: false,
+        message: describeApiError(err, 'PTZ move failed.'),
+      });
+    } finally {
+      ptzBusyRef.current[cameraId] = false;
+      const next = ptzPendingRef.current[cameraId];
+      if (next) {
+        delete ptzPendingRef.current[cameraId];
+        handleQuickPtzMove(cameraId, next.panDelta, next.tiltDelta, next.zoomDelta);
+      }
+    }
+  }, []);
+
+  const handleQuickPtzHome = useCallback(async (cameraId) => {
+    try {
+      await apiClient.post(`/cameras/${cameraId}/ptz/home`, null, {
+        params: { speed: 0.85 },
+      });
+    } catch (err) {
+      logger.error('Quick PTZ home failed:', err);
+      setRefreshResult({
+        camera_id: cameraId,
+        ok: false,
+        message: describeApiError(err, 'PTZ Home failed.'),
+      });
+    }
+  }, []);
+
   // Per-camera cache-buster for the MJPEG <img>. Reconnecting server-side is not
   // enough on its own: the browser holds an open multipart response and will keep
   // painting the stalled one unless the src changes.
   const [streamNonce, setStreamNonce] = useState({});
 
-  /**
-   * Reconnect one camera and refresh just its card.
-   *
-   * Scoped to a single camera on purpose — a full reload tears down every other
-   * live stream to fix one, which on a multi-camera wall is a bad trade.
-   *
-   * For a phone this is the whole recovery path: a Continuity Camera drops
-   * whenever it locks or leaves range, and reconnecting restores it for as long
-   * as it stays in range. Until now the only way back was restarting the service.
-   */
+  // Tracks cameras whose MJPEG <img> encountered a stream/network error so the
+  // card switches immediately to the Unavailable state until the camera recovers.
+  const [streamUnavailable, setStreamUnavailable] = useState({});
+
+  const handleStreamError = useCallback((cameraId) => {
+    setStreamUnavailable((prev) => (
+      prev[cameraId] ? prev : { ...prev, [cameraId]: true }
+    ));
+  }, []);
+
+  // Poll camera status silently in the background while any active camera is
+  // unavailable. Do NOT call refetchCameras() on every tick because useCachedApi's
+  // refetch sets camerasLoading=true, which would unmount running <CameraCard>
+  // components and sever live MJPEG streams (ERR_INCOMPLETE_CHUNKED_ENCODING).
+  useEffect(() => {
+    if (!isAuthenticated()) return undefined;
+    const hasUnavailable = cameras.some(
+      (c) => c.is_active && (!c.is_running || streamUnavailable[c.camera_id])
+    );
+    if (!hasUnavailable) return undefined;
+
+    const timer = setInterval(async () => {
+      try {
+        const res = await apiClient.get('/cameras/');
+        const list = res.data?.cameras || [];
+        let statusChanged = false;
+        list.forEach((cam) => {
+          const prevCam = cameras.find((c) => c.camera_id === cam.camera_id);
+          if (prevCam && Boolean(prevCam.is_running) !== Boolean(cam.is_running)) {
+            statusChanged = true;
+          }
+          if (cam.is_active && cam.is_running && streamUnavailable[cam.camera_id]) {
+            setStreamUnavailable((prev) => {
+              const next = { ...prev };
+              delete next[cam.camera_id];
+              return next;
+            });
+            setStreamNonce((prev) => ({ ...prev, [cam.camera_id]: Date.now() }));
+          }
+        });
+        if (statusChanged) {
+          await refetchCameras();
+        }
+      } catch (e) {
+        // Keep Unavailable card displayed while backend/camera is unreachable
+      }
+    }, 8000);
+
+    return () => clearInterval(timer);
+  }, [cameras, streamUnavailable, refetchCameras]);
+
   const handleRefreshCamera = useCallback(async (camera) => {
     const id = camera.camera_id;
     setRefreshingCamera(id);
     setRefreshResult(null);
     try {
       const res = await apiClient.post(`/cameras/${id}/reconnect`);
+      const connected = !!res.data?.connected;
 
-      // Show what actually happened. The server already explains itself — a phone
-      // that is out of range comes back with a plain-language reason — and
-      // throwing that away is what made a correctly-failing reconnect look like a
-      // broken button: click, wait, nothing visibly changes, no explanation.
       setRefreshResult({
         camera_id: id,
-        ok: !!res.data?.connected,
+        ok: connected,
         message: res.data?.message
-          || (res.data?.connected ? 'Reconnected.' : 'Camera did not come back.'),
+          || (connected ? 'Reconnected.' : 'Camera did not come back.'),
       });
 
-      // Re-read the list so the badge reflects real state rather than assuming
-      // the reconnect worked — a phone still out of range stays disconnected,
-      // and the UI should say so instead of flipping to Live.
       await refetchCameras();
-      setStreamNonce((prev) => ({ ...prev, [id]: Date.now() }));
+      if (connected) {
+        setStreamUnavailable((prev) => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+        setStreamNonce((prev) => ({ ...prev, [id]: Date.now() }));
+      }
     } catch (err) {
       setRefreshResult({
         camera_id: id,
@@ -541,19 +669,36 @@ const LiveDashboard = () => {
     setFullscreenCamera(null);
   };
 
-  // Handle ESC key to close fullscreen
+  // Handle ESC and Arrow keys inside Fullscreen Camera Viewer
   useEffect(() => {
-    const handleEscape = (e) => {
-      if (e.key === 'Escape' && fullscreenCamera) {
+    const handleFullscreenKeys = (e) => {
+      if (!fullscreenCamera) return;
+      const camId = fullscreenCamera.camera_id;
+      if (e.key === 'Escape') {
         closeFullscreen();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        handleQuickPtzMove(camId, 0, 1.0, 0);
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        handleQuickPtzMove(camId, 0, -1.0, 0);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        handleQuickPtzMove(camId, -1.0, 0, 0);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        handleQuickPtzMove(camId, 1.0, 0, 0);
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        handleQuickPtzHome(camId);
       }
     };
 
     if (fullscreenCamera) {
-      document.addEventListener('keydown', handleEscape);
-      return () => document.removeEventListener('keydown', handleEscape);
+      document.addEventListener('keydown', handleFullscreenKeys);
+      return () => document.removeEventListener('keydown', handleFullscreenKeys);
     }
-  }, [fullscreenCamera]);
+  }, [fullscreenCamera, handleQuickPtzMove, handleQuickPtzHome]);
 
   // Handle manual screenshot capture
   const handleScreenshot = useCallback(async (camera) => {
@@ -709,7 +854,7 @@ const LiveDashboard = () => {
             </div>
           </div>
 
-          {camerasLoading ? (
+          {camerasLoading && cameras.length === 0 ? (
             <div className={`camera-grid camera-grid-${cameraSize}`}>
               {Array.from({ length: 4 }).map((_, index) => (
                 <SkeletonCameraCard key={index} />
@@ -742,6 +887,13 @@ const LiveDashboard = () => {
                     refreshResult?.camera_id === camera.camera_id ? refreshResult : null
                   }
                   onAudioClick={setAudioCamera}
+                  isStreamUnavailable={!!streamUnavailable[camera.camera_id]}
+                  onStreamError={handleStreamError}
+                  isQuickPtzOpen={!!quickPtzOpen[camera.camera_id]}
+                  onQuickPtzToggle={handleQuickPtzToggle}
+                  onOpenPtzModal={setPtzModalCamera}
+                  onQuickPtzMove={handleQuickPtzMove}
+                  onQuickPtzHome={handleQuickPtzHome}
                 />
               ))}
             </div>
@@ -821,7 +973,7 @@ const LiveDashboard = () => {
         />
       )}
 
-      {/* Fullscreen Camera Viewer */}
+      {/* Fullscreen Camera Viewer with Integrated Interactive PTZ HUD */}
       {fullscreenCamera && (
         <div className="fullscreen-overlay" onClick={closeFullscreen}>
           <div className="fullscreen-container" onClick={(e) => e.stopPropagation()}>
@@ -829,36 +981,187 @@ const LiveDashboard = () => {
               <div className="fullscreen-title">
                 <span className="fullscreen-icon">⛶</span>
                 <span>{fullscreenCamera.name || fullscreenCamera.camera_id}</span>
+                <span style={{ fontSize: '12px', opacity: 0.75, marginLeft: '10px', fontWeight: 400 }}>
+                  (Arrow keys ↑↓←→ or PTZ pad to steer)
+                </span>
               </div>
-              <button className="fullscreen-close" onClick={closeFullscreen} title="Exit Fullscreen (ESC)">
-                ×
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Button
+                  variant={showFullscreenPtz ? 'primary' : 'secondary'}
+                  size="small"
+                  onClick={() => setShowFullscreenPtz((v) => !v)}
+                  icon="🎮"
+                  title="Toggle on-screen Pan/Tilt/Zoom controls in Fullscreen"
+                >
+                  {showFullscreenPtz ? 'Hide PTZ Pad' : 'Show PTZ Pad'}
+                </Button>
+                <Button
+                  variant={showFullscreenReticle ? 'primary' : 'secondary'}
+                  size="small"
+                  onClick={() => setShowFullscreenReticle((v) => !v)}
+                  icon="🎯"
+                  title="Toggle center crosshair reticle"
+                >
+                  Reticle
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="small"
+                  onClick={() => handleScreenshot(fullscreenCamera)}
+                  icon="📸"
+                  title="Capture Screenshot"
+                >
+                  Screenshot
+                </Button>
+                <button className="fullscreen-close" onClick={closeFullscreen} title="Exit Fullscreen (ESC)">
+                  ×
+                </button>
+              </div>
             </div>
 
-            <div className="fullscreen-content">
-              {fullscreenCamera.is_active ? (
-                <img
-                  src={`/api/cameras/${fullscreenCamera.camera_id}/stream`}
-                  alt={`${fullscreenCamera.name} fullscreen feed`}
-                  className="fullscreen-feed"
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"%3E%3Crect fill="%23222" width="1920" height="1080"/%3E%3Ctext fill="%23fff" font-size="32" x="50%25" y="50%25" text-anchor="middle" dominant-baseline="middle"%3EStream Unavailable%3C/text%3E%3C/svg%3E';
-                  }}
-                />
+            <div className="fullscreen-content" style={{ position: 'relative' }}>
+              {fullscreenCamera.is_active && fullscreenCamera.is_running && !streamUnavailable[fullscreenCamera.camera_id] ? (
+                <>
+                  <img
+                    key={`${fullscreenCamera.camera_id}-${streamNonce[fullscreenCamera.camera_id] || 0}`}
+                    src={`/api/cameras/${fullscreenCamera.camera_id}/stream${streamNonce[fullscreenCamera.camera_id] ? `?t=${streamNonce[fullscreenCamera.camera_id]}` : ''}`}
+                    alt={`${fullscreenCamera.name} fullscreen feed`}
+                    className="fullscreen-feed"
+                    onError={() => handleStreamError(fullscreenCamera.camera_id)}
+                  />
+                  {showFullscreenReticle && (
+                    <div className="ptz-reticle" aria-hidden="true">
+                      <div className="ptz-reticle-h" />
+                      <div className="ptz-reticle-v" />
+                      <div className="ptz-reticle-ring" />
+                    </div>
+                  )}
+                  {/* On-video translucent edge directional buttons in Fullscreen */}
+                  {showFullscreenPtz && (
+                    <div className="ptz-video-hud">
+                      <button
+                        type="button"
+                        className="ptz-hud-edge up"
+                        onClick={() => handleQuickPtzMove(fullscreenCamera.camera_id, 0, 1.0, 0)}
+                        title="Tilt Up (ArrowUp)"
+                      >
+                        ▲
+                      </button>
+                      <button
+                        type="button"
+                        className="ptz-hud-edge down"
+                        onClick={() => handleQuickPtzMove(fullscreenCamera.camera_id, 0, -1.0, 0)}
+                        title="Tilt Down (ArrowDown)"
+                      >
+                        ▼
+                      </button>
+                      <button
+                        type="button"
+                        className="ptz-hud-edge left"
+                        onClick={() => handleQuickPtzMove(fullscreenCamera.camera_id, -1.0, 0, 0)}
+                        title="Pan Left (ArrowLeft)"
+                      >
+                        ◀
+                      </button>
+                      <button
+                        type="button"
+                        className="ptz-hud-edge right"
+                        onClick={() => handleQuickPtzMove(fullscreenCamera.camera_id, 1.0, 0, 0)}
+                        title="Pan Right (ArrowRight)"
+                      >
+                        ▶
+                      </button>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="fullscreen-offline">
                   <span>📡</span>
-                  <p>Camera Offline</p>
+                  <p>{!fullscreenCamera.is_active ? 'Camera Disabled' : 'Camera Unavailable'}</p>
+                </div>
+              )}
+
+              {/* Floating Fullscreen PTZ D-Pad + Zoom Overlay */}
+              {showFullscreenPtz && (
+                <div
+                  className="dashboard-ptz-hud"
+                  style={{ bottom: '18px', right: '18px', zIndex: 20 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="dashboard-ptz-hud-header">
+                    <span>🎮 Fullscreen PTZ</span>
+                    <div className="dashboard-ptz-hud-actions">
+                      <button
+                        type="button"
+                        className="dashboard-ptz-studio-btn"
+                        onClick={() => {
+                          const cam = fullscreenCamera;
+                          setFullscreenCamera(null);
+                          setPtzModalCamera(cam);
+                        }}
+                        title="Open Full PTZ Studio with Presets & Patrols"
+                      >
+                        🎛️ Presets / Studio…
+                      </button>
+                      <button
+                        type="button"
+                        className="dashboard-ptz-close-btn"
+                        onClick={() => setShowFullscreenPtz(false)}
+                        title="Hide Fullscreen PTZ Pad"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                  <div className="dashboard-ptz-controls-row">
+                    <div className="dashboard-ptz-pad">
+                      <button type="button" onClick={() => handleQuickPtzMove(fullscreenCamera.camera_id, -1.0, 1.0, 0)} title="Pan Left + Tilt Up">↖</button>
+                      <button type="button" onClick={() => handleQuickPtzMove(fullscreenCamera.camera_id, 0, 1.0, 0)} title="Tilt Up (ArrowUp)">↑</button>
+                      <button type="button" onClick={() => handleQuickPtzMove(fullscreenCamera.camera_id, 1.0, 1.0, 0)} title="Pan Right + Tilt Up">↗</button>
+                      <button type="button" onClick={() => handleQuickPtzMove(fullscreenCamera.camera_id, -1.0, 0, 0)} title="Pan Left (ArrowLeft)">←</button>
+                      <button type="button" className="home-btn" onClick={() => handleQuickPtzHome(fullscreenCamera.camera_id)} title="Home Position (Home)">🏠</button>
+                      <button type="button" onClick={() => handleQuickPtzMove(fullscreenCamera.camera_id, 1.0, 0, 0)} title="Pan Right (ArrowRight)">→</button>
+                      <button type="button" onClick={() => handleQuickPtzMove(fullscreenCamera.camera_id, -1.0, -1.0, 0)} title="Pan Left + Tilt Down">↙</button>
+                      <button type="button" onClick={() => handleQuickPtzMove(fullscreenCamera.camera_id, 0, -1.0, 0)} title="Tilt Down (ArrowDown)">↓</button>
+                      <button type="button" onClick={() => handleQuickPtzMove(fullscreenCamera.camera_id, 1.0, -1.0, 0)} title="Pan Right + Tilt Down">↘</button>
+                    </div>
+                    <div className="dashboard-ptz-zoom">
+                      <button type="button" onClick={() => handleQuickPtzMove(fullscreenCamera.camera_id, 0, 0, 0.5)} title="Zoom In">＋</button>
+                      <span>Zoom</span>
+                      <button type="button" onClick={() => handleQuickPtzMove(fullscreenCamera.camera_id, 0, 0, -0.5)} title="Zoom Out">－</button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
 
             <div className="fullscreen-footer">
               <div className="fullscreen-status">
-                <span className={`fullscreen-status-badge ${fullscreenCamera.is_active ? 'active' : 'inactive'}`}>
-                  {fullscreenCamera.is_active ? '🔴 Live' : '⚫ Offline'}
+                <span className={`fullscreen-status-badge ${fullscreenCamera.is_active && fullscreenCamera.is_running && !streamUnavailable[fullscreenCamera.camera_id] ? 'active' : 'inactive'}`}>
+                  {fullscreenCamera.is_active && fullscreenCamera.is_running && !streamUnavailable[fullscreenCamera.camera_id] ? '🔴 Live' : '⚫ Unavailable'}
                 </span>
+                <Button
+                  variant="secondary"
+                  size="small"
+                  onClick={() => setShowFullscreenPtz((v) => !v)}
+                  icon="🕹️"
+                  title="Show or hide the interactive PTZ D-pad in Fullscreen"
+                >
+                  {showFullscreenPtz ? 'Hide PTZ Pad' : 'Show PTZ Pad'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="small"
+                  onClick={() => {
+                    const cam = fullscreenCamera;
+                    setFullscreenCamera(null);
+                    setPtzModalCamera(cam);
+                  }}
+                  icon="🎛️"
+                  title="Open Full PTZ Control Studio with Presets, Patrols & Live Viewer"
+                >
+                  Full PTZ Studio
+                </Button>
               </div>
               <div className="fullscreen-info">
                 <span className="fullscreen-info-item">
@@ -869,6 +1172,33 @@ const LiveDashboard = () => {
                 </span>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Direct PTZ Control Modal with Integrated Live Camera Viewer */}
+      {ptzModalCamera && (
+        <div
+          className="dashboard-ptz-modal-overlay"
+          onClick={() => setPtzModalCamera(null)}
+        >
+          <div
+            className="dashboard-ptz-modal-container"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="dashboard-ptz-modal-close"
+              onClick={() => setPtzModalCamera(null)}
+              title="Close PTZ Studio"
+            >
+              ✕ Close
+            </button>
+            <PTZControl
+              cameraId={ptzModalCamera.camera_id}
+              cameraName={ptzModalCamera.name || ptzModalCamera.camera_id}
+              showViewerByDefault={true}
+            />
           </div>
         </div>
       )}

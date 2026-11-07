@@ -1,9 +1,11 @@
 """
 PTZ Control API Routes
-Handles Pan-Tilt-Zoom camera control operations
+Handles Pan-Tilt-Zoom camera control operations with automatic credential and
+port resolution across ONVIF (TP-Link Tapo :2020, Hikvision/Dahua/Axis :80,
+Reolink :8000, Generic :8080/:8899) and vendor HTTP CGI protocols.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 from datetime import datetime
@@ -13,7 +15,8 @@ import json
 from backend.database.session import get_db
 from backend.database import crud
 from backend.database.models import PTZPreset, PTZPatrolPattern
-from backend.core.ptz_controller import get_ptz_controller, remove_ptz_controller
+from backend.core.ptz_controller import get_ptz_controller, remove_ptz_controller, PTZController
+from backend.core.camera_security import extract_camera_connection_info
 from backend.core.auth import get_current_user
 from pydantic import BaseModel, Field
 
@@ -23,10 +26,18 @@ router = APIRouter()
 # ===== Pydantic Schemas =====
 
 class PTZMoveRequest(BaseModel):
-    """Request schema for PTZ movement commands"""
+    """Request schema for PTZ absolute movement commands"""
     pan: float = Field(..., ge=-1.0, le=1.0, description="Pan position (-1.0 to 1.0)")
     tilt: float = Field(..., ge=-1.0, le=1.0, description="Tilt position (-1.0 to 1.0)")
-    zoom: float = Field(..., ge=0.0, le=1.0, description="Zoom level (0.0 to 1.0)")
+    zoom: float = Field(0.0, ge=0.0, le=1.0, description="Zoom level (0.0 to 1.0)")
+    speed: float = Field(0.5, ge=0.0, le=1.0, description="Movement speed (0.0 to 1.0)")
+
+
+class PTZRelativeMoveRequest(BaseModel):
+    """Request schema for PTZ relative step movement commands"""
+    pan_delta: float = Field(0.0, ge=-1.0, le=1.0, description="Pan step (-1.0 to 1.0)")
+    tilt_delta: float = Field(0.0, ge=-1.0, le=1.0, description="Tilt step (-1.0 to 1.0)")
+    zoom_delta: float = Field(0.0, ge=-1.0, le=1.0, description="Zoom step (-1.0 to 1.0)")
     speed: float = Field(0.5, ge=0.0, le=1.0, description="Movement speed (0.0 to 1.0)")
 
 
@@ -34,25 +45,29 @@ class PTZContinuousMoveRequest(BaseModel):
     """Request schema for continuous PTZ movement"""
     pan_velocity: float = Field(..., ge=-1.0, le=1.0, description="Pan velocity (-1.0 to 1.0)")
     tilt_velocity: float = Field(..., ge=-1.0, le=1.0, description="Tilt velocity (-1.0 to 1.0)")
-    zoom_velocity: float = Field(..., ge=-1.0, le=1.0, description="Zoom velocity (-1.0 to 1.0)")
+    zoom_velocity: float = Field(0.0, ge=-1.0, le=1.0, description="Zoom velocity (-1.0 to 1.0)")
 
 
 class PTZConnectionRequest(BaseModel):
-    """Request schema for PTZ connection"""
-    camera_ip: str = Field(..., description="Camera IP address")
-    port: int = Field(80, description="ONVIF port")
-    username: str = Field("", description="Camera username")
-    password: str = Field("", description="Camera password")
-    ptz_type: str = Field("onvif", description="PTZ protocol type")
+    """
+    Request schema for PTZ connection.
+    All fields are optional: when omitted, OpenEye automatically extracts the
+    camera IP and decrypted credentials from the camera's stored RTSP source.
+    """
+    camera_ip: Optional[str] = Field(None, description="Camera IP address (auto-detected if omitted)")
+    port: Optional[int] = Field(None, description="ONVIF/PTZ port (auto-probed if omitted or 0)")
+    username: Optional[str] = Field(None, description="Camera username (auto-detected if omitted)")
+    password: Optional[str] = Field(None, description="Camera password (auto-detected if omitted)")
+    ptz_type: str = Field("auto", description="PTZ protocol type (auto, onvif, hikvision_isapi, dahua_cgi, reolink_api, axis_vapix)")
 
 
 class PTZPresetCreate(BaseModel):
     """Request schema for creating PTZ preset"""
     name: str = Field(..., min_length=1, max_length=100, description="Preset name")
     preset_number: int = Field(..., ge=1, le=255, description="Preset slot number (1-255)")
-    pan: float = Field(..., ge=-1.0, le=1.0, description="Pan position")
-    tilt: float = Field(..., ge=-1.0, le=1.0, description="Tilt position")
-    zoom: float = Field(..., ge=0.0, le=1.0, description="Zoom level")
+    pan: float = Field(0.0, ge=-1.0, le=1.0, description="Pan position")
+    tilt: float = Field(0.0, ge=-1.0, le=1.0, description="Tilt position")
+    zoom: float = Field(0.0, ge=0.0, le=1.0, description="Zoom level")
 
 
 class PTZPresetUpdate(BaseModel):
@@ -90,41 +105,76 @@ class PTZPatrolPatternUpdate(BaseModel):
     interval_seconds: Optional[int] = Field(None, ge=1, le=300)
 
 
+async def _ensure_ptz_connected(camera, controller: PTZController) -> bool:
+    """
+    Lazily auto-connect a camera's PTZ controller using credentials stored in
+    `camera.source` if not already connected.
+    """
+    if controller.is_connected:
+        return True
+    if not camera or not camera.source:
+        return False
+    return await controller.auto_connect_from_source(camera.source)
+
+
 # ===== PTZ Control Endpoints =====
 
 @router.post("/cameras/{camera_id}/ptz/connect")
 async def connect_ptz(
     camera_id: str,
-    connection: PTZConnectionRequest,
+    connection: Optional[PTZConnectionRequest] = None,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Connect to PTZ camera
+    Connect to PTZ camera. Automatically uses the camera's stored IP and
+    decrypted credentials from SQLite when fields are omitted.
     """
-    # Verify camera exists
     camera = crud.get_camera_by_id(db, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")
 
-    # Get PTZ controller
-    controller = get_ptz_controller(camera_id, connection.ptz_type)
+    conn_req = connection or PTZConnectionRequest()
+    stored_info = extract_camera_connection_info(camera.source)
 
-    # Attempt connection
+    target_ip = (conn_req.camera_ip or "").strip() or stored_info.get("camera_ip", "")
+    target_user = conn_req.username if conn_req.username else stored_info.get("username", "")
+    target_pass = conn_req.password if conn_req.password else stored_info.get("password", "")
+    target_port = conn_req.port or 0
+    vendor_hint = stored_info.get("vendor_hint", "generic")
+
+    if not target_ip:
+        raise HTTPException(
+            status_code=400,
+            detail="Camera IP address could not be determined from camera source; please provide camera_ip.",
+        )
+
+    controller = get_ptz_controller(camera_id, conn_req.ptz_type or "auto")
     success = await controller.connect(
-        camera_ip=connection.camera_ip,
-        port=connection.port,
-        username=connection.username,
-        password=connection.password
+        camera_ip=target_ip,
+        port=target_port,
+        username=target_user,
+        password=target_pass,
+        vendor_hint=vendor_hint,
     )
 
     if not success:
-        raise HTTPException(status_code=500, detail="Failed to connect to PTZ camera")
+        raise HTTPException(
+            status_code=502,
+            detail=controller.last_error or f"Failed to connect to PTZ service at {target_ip}",
+        )
 
+    status = await controller.get_status()
     return {
         "message": "PTZ connected successfully",
         "camera_id": camera_id,
-        "connected": True
+        "connected": True,
+        "camera_ip": controller.camera_ip,
+        "port": controller.port,
+        "protocol": controller.active_protocol,
+        "vendor_hint": controller.vendor_hint,
+        "device_info": controller.device_info,
+        "status": status,
     }
 
 
@@ -133,9 +183,7 @@ async def disconnect_ptz(
     camera_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Disconnect PTZ camera
-    """
+    """Disconnect PTZ camera"""
     remove_ptz_controller(camera_id)
     return {"message": "PTZ disconnected successfully", "camera_id": camera_id}
 
@@ -147,16 +195,14 @@ async def move_absolute(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Move camera to absolute position
-    """
+    """Move camera to absolute position (auto-connects if needed)."""
     camera = crud.get_camera_by_id(db, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")
 
     controller = get_ptz_controller(camera_id)
-    if not controller.is_connected:
-        raise HTTPException(status_code=400, detail="PTZ not connected")
+    if not await _ensure_ptz_connected(camera, controller):
+        raise HTTPException(status_code=400, detail=controller.last_error or "PTZ not connected")
 
     success = await controller.move_absolute(
         pan=move_request.pan,
@@ -178,6 +224,38 @@ async def move_absolute(
     }
 
 
+@router.post("/cameras/{camera_id}/ptz/move/relative")
+async def move_relative(
+    camera_id: str,
+    move_request: PTZRelativeMoveRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Move camera by a relative step (auto-connects if needed)."""
+    camera = crud.get_camera_by_id(db, camera_id)
+    if not camera:
+        raise HTTPException(status_code=404, detail="Camera not found")
+
+    controller = get_ptz_controller(camera_id)
+    if not await _ensure_ptz_connected(camera, controller):
+        raise HTTPException(status_code=400, detail=controller.last_error or "PTZ not connected")
+
+    success = await controller.move_relative(
+        pan_delta=move_request.pan_delta,
+        tilt_delta=move_request.tilt_delta,
+        zoom_delta=move_request.zoom_delta,
+        speed=move_request.speed,
+    )
+
+    if not success:
+        raise HTTPException(status_code=500, detail="PTZ relative move command failed")
+
+    return {
+        "message": "PTZ relative move completed",
+        "position": controller.current_position,
+    }
+
+
 @router.post("/cameras/{camera_id}/ptz/move/continuous")
 async def move_continuous(
     camera_id: str,
@@ -185,16 +263,14 @@ async def move_continuous(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Start continuous camera movement
-    """
+    """Start continuous camera movement (auto-connects if needed)."""
     camera = crud.get_camera_by_id(db, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")
 
     controller = get_ptz_controller(camera_id)
-    if not controller.is_connected:
-        raise HTTPException(status_code=400, detail="PTZ not connected")
+    if not await _ensure_ptz_connected(camera, controller):
+        raise HTTPException(status_code=400, detail=controller.last_error or "PTZ not connected")
 
     success = await controller.move_continuous(
         pan_velocity=move_request.pan_velocity,
@@ -214,63 +290,91 @@ async def stop_ptz(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Stop all PTZ movement
-    """
+    """Stop all PTZ movement."""
     camera = crud.get_camera_by_id(db, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")
 
     controller = get_ptz_controller(camera_id)
     if not controller.is_connected:
-        raise HTTPException(status_code=400, detail="PTZ not connected")
+        return {"message": "PTZ already stopped", "camera_id": camera_id}
 
     success = await controller.stop()
-
     if not success:
         raise HTTPException(status_code=500, detail="PTZ stop command failed")
 
     return {"message": "PTZ stopped successfully"}
 
 
-@router.get("/cameras/{camera_id}/ptz/status")
-async def get_ptz_status(
+@router.post("/cameras/{camera_id}/ptz/home")
+async def goto_home_position(
     camera_id: str,
+    speed: float = 0.5,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Get current PTZ status and position
-    Returns connected: false instead of error if PTZ not connected
-    """
+    """Move camera to its Home position (auto-connects if needed)."""
     camera = crud.get_camera_by_id(db, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")
 
     controller = get_ptz_controller(camera_id)
+    if not await _ensure_ptz_connected(camera, controller):
+        raise HTTPException(status_code=400, detail=controller.last_error or "PTZ not connected")
 
-    # Return disconnected status instead of throwing error
+    success = await controller.goto_home(speed=speed)
+    if not success:
+        raise HTTPException(status_code=500, detail="PTZ Home command failed")
+
+    return {"message": "Moved to Home position", "position": controller.current_position}
+
+
+@router.get("/cameras/{camera_id}/ptz/status")
+async def get_ptz_status(
+    camera_id: str,
+    auto_connect: bool = Query(True, description="Automatically connect using stored camera credentials if disconnected"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get current PTZ status, discovered capabilities, and connection metadata.
+    When `auto_connect=True` (the default), automatically connects using the
+    camera's stored RTSP credentials so the UI requires zero manual setup.
+    """
+    camera = crud.get_camera_by_id(db, camera_id)
+    if not camera:
+        raise HTTPException(status_code=404, detail="Camera not found")
+
+    stored_info = extract_camera_connection_info(camera.source)
+    controller = get_ptz_controller(camera_id)
+
+    if not controller.is_connected and auto_connect and stored_info.get("is_network_camera"):
+        await controller.auto_connect_from_source(camera.source)
+
     if not controller.is_connected:
+        default_port = 2020 if stored_info.get("vendor_hint") == "tapo" else 80
         return {
             "camera_id": camera_id,
             "connected": False,
-            "status": None
+            "camera_ip": stored_info.get("camera_ip", ""),
+            "port": default_port,
+            "vendor_hint": stored_info.get("vendor_hint", "generic"),
+            "has_stored_credentials": bool(stored_info.get("username")),
+            "last_error": controller.last_error,
+            "status": None,
         }
 
     status = await controller.get_status()
-
-    if status is None:
-        # Return connected but unable to get status
-        return {
-            "camera_id": camera_id,
-            "connected": True,
-            "status": None
-        }
-
     return {
         "camera_id": camera_id,
         "connected": controller.is_connected,
-        "status": status
+        "camera_ip": controller.camera_ip,
+        "port": controller.port,
+        "protocol": controller.active_protocol,
+        "vendor_hint": controller.vendor_hint,
+        "device_info": controller.device_info,
+        "has_stored_credentials": bool(stored_info.get("username")),
+        "status": status,
     }
 
 
@@ -279,17 +383,40 @@ async def get_ptz_status(
 @router.get("/cameras/{camera_id}/ptz/presets")
 async def list_presets(
     camera_id: str,
+    sync_hardware: bool = Query(True, description="Import presets stored on the camera hardware if none exist in DB"),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
     """
-    List all PTZ presets for a camera
+    List all PTZ presets for a camera (automatically importing hardware presets
+    when the database has none yet).
     """
     camera = crud.get_camera_by_id(db, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")
 
     presets = crud.get_ptz_presets_by_camera(db, camera_id)
+
+    if not presets and sync_hardware:
+        controller = get_ptz_controller(camera_id)
+        if controller.is_connected:
+            hw_presets = await controller.get_hardware_presets()
+            for hw in hw_presets:
+                existing = crud.get_ptz_preset_by_number(db, camera_id, hw["preset_number"])
+                if not existing:
+                    crud.create_ptz_preset(
+                        db,
+                        camera_id,
+                        {
+                            "name": hw["name"],
+                            "preset_number": hw["preset_number"],
+                            "pan": hw["pan"],
+                            "tilt": hw["tilt"],
+                            "zoom": hw["zoom"],
+                        },
+                    )
+            if hw_presets:
+                presets = crud.get_ptz_presets_by_camera(db, camera_id)
 
     return {
         "camera_id": camera_id,
@@ -319,14 +446,11 @@ async def create_preset(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Create a new PTZ preset for a camera
-    """
+    """Create a new PTZ preset for a camera and save it to camera hardware."""
     camera = crud.get_camera_by_id(db, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")
 
-    # Check if preset number already exists for this camera
     existing = crud.get_ptz_preset_by_number(db, camera_id, preset.preset_number)
     if existing:
         raise HTTPException(
@@ -334,13 +458,19 @@ async def create_preset(
             detail=f"Preset number {preset.preset_number} already exists for this camera"
         )
 
-    # Create preset in database
-    new_preset = crud.create_ptz_preset(db, camera_id, preset.dict())
-
-    # If PTZ is connected, save to camera hardware
     controller = get_ptz_controller(camera_id)
+    await _ensure_ptz_connected(camera, controller)
+
+    preset_data = preset.dict()
     if controller.is_connected:
+        pos = controller.current_position
+        if preset_data.get("pan") == 0.0 and preset_data.get("tilt") == 0.0:
+            preset_data["pan"] = pos.get("pan", 0.0)
+            preset_data["tilt"] = pos.get("tilt", 0.0)
+            preset_data["zoom"] = pos.get("zoom", 0.0)
         await controller.set_preset(preset.preset_number, preset.name)
+
+    new_preset = crud.create_ptz_preset(db, camera_id, preset_data)
 
     return {
         "message": "Preset created successfully",
@@ -362,9 +492,7 @@ async def get_preset(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Get a specific PTZ preset
-    """
+    """Get a specific PTZ preset"""
     preset = crud.get_ptz_preset_by_id(db, preset_id)
     if not preset or preset.camera_id != camera_id:
         raise HTTPException(status_code=404, detail="Preset not found")
@@ -391,17 +519,13 @@ async def update_preset(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Update a PTZ preset
-    """
+    """Update a PTZ preset"""
     preset = crud.get_ptz_preset_by_id(db, preset_id)
     if not preset or preset.camera_id != camera_id:
         raise HTTPException(status_code=404, detail="Preset not found")
 
-    # Update preset
     updated_preset = crud.update_ptz_preset(db, preset_id, preset_update.dict(exclude_unset=True))
 
-    # If PTZ is connected and position changed, update hardware
     controller = get_ptz_controller(camera_id)
     if controller.is_connected and (preset_update.pan or preset_update.tilt or preset_update.zoom):
         await controller.set_preset(preset.preset_number, updated_preset.name)
@@ -426,9 +550,7 @@ async def delete_preset(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Delete a PTZ preset
-    """
+    """Delete a PTZ preset"""
     preset = crud.get_ptz_preset_by_id(db, preset_id)
     if not preset or preset.camera_id != camera_id:
         raise HTTPException(status_code=404, detail="Preset not found")
@@ -446,24 +568,27 @@ async def goto_preset(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Move camera to a saved preset position
-    """
+    """Move camera to a saved preset position (auto-connects if needed)."""
+    camera = crud.get_camera_by_id(db, camera_id)
+    if not camera:
+        raise HTTPException(status_code=404, detail="Camera not found")
+
     preset = crud.get_ptz_preset_by_id(db, preset_id)
     if not preset or preset.camera_id != camera_id:
         raise HTTPException(status_code=404, detail="Preset not found")
 
     controller = get_ptz_controller(camera_id)
-    if not controller.is_connected:
-        raise HTTPException(status_code=400, detail="PTZ not connected")
+    if not await _ensure_ptz_connected(camera, controller):
+        raise HTTPException(status_code=400, detail=controller.last_error or "PTZ not connected")
 
-    # Move to preset
     success = await controller.goto_preset(preset.preset_number, speed)
+    if not success:
+        # Fallback to stored coordinates if hardware preset slot wasn't set
+        success = await controller.move_absolute(preset.pan, preset.tilt, preset.zoom, speed)
 
     if not success:
         raise HTTPException(status_code=500, detail="Failed to move to preset")
 
-    # Update usage tracking
     crud.increment_preset_usage(db, preset_id)
 
     return {
@@ -486,9 +611,7 @@ async def list_patrol_patterns(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    List all patrol patterns for a camera
-    """
+    """List all patrol patterns for a camera"""
     camera = crud.get_camera_by_id(db, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")
@@ -523,17 +646,13 @@ async def create_patrol_pattern(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Create a new patrol pattern for a camera
-    """
+    """Create a new patrol pattern for a camera"""
     camera = crud.get_camera_by_id(db, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")
 
-    # Validate pattern steps
     pattern_steps_dict = [step.dict() for step in pattern.pattern_steps]
 
-    # Create pattern in database
     new_pattern = crud.create_patrol_pattern(
         db,
         camera_id,
@@ -566,9 +685,7 @@ async def get_patrol_pattern(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Get a specific patrol pattern
-    """
+    """Get a specific patrol pattern"""
     pattern = crud.get_patrol_pattern_by_id(db, pattern_id)
     if not pattern or pattern.camera_id != camera_id:
         raise HTTPException(status_code=404, detail="Patrol pattern not found")
@@ -595,23 +712,18 @@ async def update_patrol_pattern(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Update a patrol pattern
-    """
+    """Update a patrol pattern"""
     pattern = crud.get_patrol_pattern_by_id(db, pattern_id)
     if not pattern or pattern.camera_id != camera_id:
         raise HTTPException(status_code=404, detail="Patrol pattern not found")
 
-    # Stop pattern if it's currently running
     if pattern.is_active:
         await stop_patrol_pattern(camera_id, pattern_id, db, current_user)
 
-    # Build update dict
     update_data = pattern_update.dict(exclude_unset=True)
     if "pattern_steps" in update_data and update_data["pattern_steps"]:
         update_data["pattern_steps"] = json.dumps([step.dict() for step in update_data["pattern_steps"]])
 
-    # Update pattern
     updated_pattern = crud.update_patrol_pattern(db, pattern_id, update_data)
 
     return {
@@ -634,14 +746,11 @@ async def delete_patrol_pattern(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Delete a patrol pattern
-    """
+    """Delete a patrol pattern"""
     pattern = crud.get_patrol_pattern_by_id(db, pattern_id)
     if not pattern or pattern.camera_id != camera_id:
         raise HTTPException(status_code=404, detail="Patrol pattern not found")
 
-    # Stop pattern if it's currently running
     if pattern.is_active:
         await stop_patrol_pattern(camera_id, pattern_id, db, current_user)
 
@@ -658,21 +767,20 @@ async def start_patrol_pattern(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Start executing a patrol pattern
-    """
+    """Start executing a patrol pattern (auto-connects if needed)."""
+    camera = crud.get_camera_by_id(db, camera_id)
+    if not camera:
+        raise HTTPException(status_code=404, detail="Camera not found")
+
     pattern = crud.get_patrol_pattern_by_id(db, pattern_id)
     if not pattern or pattern.camera_id != camera_id:
         raise HTTPException(status_code=404, detail="Patrol pattern not found")
 
     controller = get_ptz_controller(camera_id)
-    if not controller.is_connected:
-        raise HTTPException(status_code=400, detail="PTZ not connected")
+    if not await _ensure_ptz_connected(camera, controller):
+        raise HTTPException(status_code=400, detail=controller.last_error or "PTZ not connected")
 
-    # Mark pattern as active
     crud.update_patrol_pattern(db, pattern_id, {"is_active": True, "last_run_at": datetime.utcnow()})
-
-    # Start patrol in background
     background_tasks.add_task(execute_patrol_pattern, camera_id, pattern_id)
 
     return {
@@ -689,14 +797,11 @@ async def stop_patrol_pattern(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Stop executing a patrol pattern
-    """
+    """Stop executing a patrol pattern"""
     pattern = crud.get_patrol_pattern_by_id(db, pattern_id)
     if not pattern or pattern.camera_id != camera_id:
         raise HTTPException(status_code=404, detail="Patrol pattern not found")
 
-    # Mark pattern as inactive
     crud.update_patrol_pattern(db, pattern_id, {"is_active": False})
     crud.increment_patrol_run_count(db, pattern_id)
 
@@ -709,9 +814,7 @@ async def stop_patrol_pattern(
 # ===== Background Task: Execute Patrol Pattern =====
 
 async def execute_patrol_pattern(camera_id: str, pattern_id: int):
-    """
-    Background task to execute patrol pattern
-    """
+    """Background task to execute patrol pattern"""
     from backend.database.session import SessionLocal
 
     db = SessionLocal()
@@ -724,42 +827,33 @@ async def execute_patrol_pattern(camera_id: str, pattern_id: int):
         if not controller.is_connected:
             return
 
-        # Parse pattern steps
         pattern_steps = json.loads(pattern.pattern_steps)
 
-        # Execute pattern
         while pattern.is_active:
-            # Reload pattern to check if still active
             pattern = crud.get_patrol_pattern_by_id(db, pattern_id)
             if not pattern or not pattern.is_active:
                 break
 
             for step in pattern_steps:
-                # Check if pattern still active before each step
                 pattern = crud.get_patrol_pattern_by_id(db, pattern_id)
                 if not pattern or not pattern.is_active:
                     break
 
-                # Move to position
                 if "preset_id" in step and step["preset_id"]:
-                    # Use preset
                     preset = crud.get_ptz_preset_by_id(db, step["preset_id"])
                     if preset:
                         await controller.goto_preset(preset.preset_number)
                         crud.increment_preset_usage(db, step["preset_id"])
                 else:
-                    # Use direct coordinates
                     await controller.move_absolute(
                         pan=step.get("pan", 0.0),
                         tilt=step.get("tilt", 0.0),
                         zoom=step.get("zoom", 0.5)
                     )
 
-                # Dwell at position
                 dwell_time = step.get("dwell_time", pattern.interval_seconds)
                 await asyncio.sleep(dwell_time)
 
-            # Check if loop is enabled
             if not pattern.loop_enabled:
                 crud.update_patrol_pattern(db, pattern_id, {"is_active": False})
                 crud.increment_patrol_run_count(db, pattern_id)
@@ -770,3 +864,192 @@ async def execute_patrol_pattern(camera_id: str, pattern_id: int):
         crud.update_patrol_pattern(db, pattern_id, {"is_active": False})
     finally:
         db.close()
+
+
+# ============================================================================
+# MULTI-VENDOR CAMERA EDGE AI & HARDWARE CONTROL ENDPOINTS
+# ============================================================================
+
+from backend.core.camera_edge_features import edge_manager
+
+
+class EdgeSettingsUpdateRequest(BaseModel):
+    """Request schema for updating camera Edge AI & Hardware controls"""
+    edge_ai_enabled: Optional[bool] = None
+    person_detection: Optional[bool] = None
+    vehicle_detection: Optional[bool] = None
+    pet_detection: Optional[bool] = None
+    package_detection: Optional[bool] = None
+    audio_alarm_detection: Optional[bool] = None
+    motion_detection: Optional[bool] = None
+    auto_tracking: Optional[bool] = None
+    privacy_mode: Optional[bool] = None
+    night_vision_mode: Optional[str] = Field(
+        None, description="Night vision mode: auto, ir, color, off"
+    )
+    wdr_enabled: Optional[bool] = None
+    status_led_enabled: Optional[bool] = None
+    trigger_recording_on_edge_ai: Optional[bool] = None
+    cooldown_seconds: Optional[int] = Field(None, ge=2, le=300)
+
+
+class SirenTriggerRequest(BaseModel):
+    """Request schema for triggering or stopping the camera's built-in siren"""
+    active: bool = Field(True, description="True to sound siren, False to stop")
+    duration_seconds: int = Field(5, ge=1, le=60, description="Auto-stop duration in seconds")
+
+
+class SimulatedEdgeEventRequest(BaseModel):
+    """Request schema for testing/injecting a camera Edge AI detection event"""
+    object_class: str = Field("person", description="person, vehicle, animal, package, or motion")
+    object_subclass: Optional[str] = Field(None, description="Optional subclass (e.g. person, car, pet)")
+    confidence: float = Field(0.95, ge=0.1, le=1.0)
+
+
+@router.get("/cameras/{camera_id}/edge/capabilities")
+async def get_camera_edge_capabilities(
+    camera_id: str,
+    refresh: bool = Query(False, description="Force re-probing hardware capabilities"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Probe and return a camera's built-in Edge AI and hardware capabilities
+    (ONVIF Events, Imaging/Night Vision, PTZ Auto-Tracking, Privacy Mode, Siren,
+    and vendor extensions for TP-Link Tapo, Hikvision, Dahua/Amcrest, Reolink, Axis).
+    """
+    camera = crud.get_camera_by_id(db, camera_id)
+    if not camera:
+        raise HTTPException(status_code=404, detail="Camera not found")
+
+    edge_manager.ensure_background_worker()
+    ctrl = edge_manager.get_controller(camera_id, camera.source)
+    summary = await ctrl.probe_capabilities(force=refresh)
+    return summary
+
+
+@router.put("/cameras/{camera_id}/edge/settings")
+async def update_camera_edge_settings(
+    camera_id: str,
+    settings_update: EdgeSettingsUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Update camera Edge AI event subscriptions and hardware settings (Smart Track,
+    Privacy Mode, Night Vision Mode, On-Camera AI Switches). Persists settings and
+    pushes supported changes directly to the camera hardware.
+    """
+    camera = crud.get_camera_by_id(db, camera_id)
+    if not camera:
+        raise HTTPException(status_code=404, detail="Camera not found")
+
+    edge_manager.ensure_background_worker()
+    ctrl = edge_manager.get_controller(camera_id, camera.source)
+    await ctrl.probe_capabilities(force=False)
+
+    updates = settings_update.dict(exclude_unset=True)
+    result = await ctrl.apply_hardware_settings(updates)
+
+    # Persist per-camera Edge AI config in SystemSettings so it survives restarts
+    try:
+        crud.set_system_setting(
+            db,
+            setting_key=f"edge_ai_config:{camera_id}",
+            setting_value=json.dumps(ctrl.settings.to_dict()),
+            setting_type="json",
+            description=f"Edge AI and hardware settings for {camera_id}",
+        )
+    except Exception:
+        pass
+
+    return {
+        "message": "Camera Edge AI & hardware settings updated",
+        **result,
+    }
+
+
+@router.post("/cameras/{camera_id}/edge/siren")
+async def trigger_camera_siren(
+    camera_id: str,
+    siren_req: SirenTriggerRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Trigger or silence the camera's built-in hardware siren/audio alarm."""
+    camera = crud.get_camera_by_id(db, camera_id)
+    if not camera:
+        raise HTTPException(status_code=404, detail="Camera not found")
+
+    ctrl = edge_manager.get_controller(camera_id, camera.source)
+    await ctrl.probe_capabilities(force=False)
+    res = await ctrl.trigger_siren(
+        active=siren_req.active,
+        duration_seconds=siren_req.duration_seconds,
+    )
+    return {
+        "message": "Siren activated" if siren_req.active else "Siren stopped",
+        **res,
+    }
+
+
+@router.post("/cameras/{camera_id}/edge/poll")
+async def poll_camera_edge_events_now(
+    camera_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Immediately poll the camera's Edge AI event stream and record any active detections."""
+    camera = crud.get_camera_by_id(db, camera_id)
+    if not camera:
+        raise HTTPException(status_code=404, detail="Camera not found")
+
+    edge_manager.ensure_background_worker()
+    ctrl = edge_manager.get_controller(camera_id, camera.source)
+    await ctrl.probe_capabilities(force=False)
+    events = await ctrl.poll_edge_ai_events_once()
+    recorded = []
+    for evt in events:
+        recorded.append(await edge_manager.record_edge_detection_event(camera_id, evt, ctrl))
+
+    return {
+        "camera_id": camera_id,
+        "polled_events": len(recorded),
+        "events": recorded,
+        "recent_events": ctrl.recent_events[:15],
+    }
+
+
+@router.post("/cameras/{camera_id}/edge/test-event")
+async def trigger_test_edge_event(
+    camera_id: str,
+    req: SimulatedEdgeEventRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Simulate/verify an Edge AI detection pipeline event (captures live snapshot from
+    the camera, records an `ObjectDetectionEvent` / `MotionDetectionEvent`, and
+    verifies end-to-end integration with the Detections page and recordings).
+    """
+    camera = crud.get_camera_by_id(db, camera_id)
+    if not camera:
+        raise HTTPException(status_code=404, detail="Camera not found")
+
+    ctrl = edge_manager.get_controller(camera_id, camera.source)
+    evt = {
+        "camera_id": camera_id,
+        "object_class": req.object_class,
+        "object_subclass": req.object_subclass or req.object_class,
+        "confidence": req.confidence,
+        "topic": f"onvif:RuleEngine/EdgeAI/{req.object_class.capitalize()}Detector",
+        "vendor": ctrl.vendor_hint,
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+    recorded = await edge_manager.record_edge_detection_event(camera_id, evt, ctrl)
+    ctrl.recent_events.insert(0, recorded)
+    return {
+        "message": f"Edge AI {req.object_class} detection recorded",
+        "event": recorded,
+    }
+

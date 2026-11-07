@@ -42,13 +42,33 @@ class WebSocketService {
    * @param {string} token - JWT authentication token
    */
   connect(token) {
-    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+    if (!token) {
+      return;
+    }
+
+    // Cancel any pending deferred disconnect (e.g., from React StrictMode unmount/remount)
+    if (this.disconnectTimeout) {
+      clearTimeout(this.disconnectTimeout);
+      this.disconnectTimeout = null;
+    }
+    this.isIntentionalClose = false;
+
+    if (
+      this.ws &&
+      this.token === token &&
+      (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)
+    ) {
       logger.log('WebSocket already connected or connecting');
       return;
     }
 
+    // If an old socket for a different token is open, close it cleanly first
+    if (this.ws) {
+      this._closeSocketGracefully(this.ws);
+      this.ws = null;
+    }
+
     this.token = token;
-    this.isIntentionalClose = false;
     
     // Determine WebSocket URL based on current location
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -59,16 +79,53 @@ class WebSocketService {
     logger.log('Connecting to WebSocket:', this.url.replace(token, '***'));
 
     try {
-      this.ws = new WebSocket(this.url);
+      const socket = new WebSocket(this.url);
+      this.ws = socket;
       
-      this.ws.onopen = this.handleOpen.bind(this);
-      this.ws.onmessage = this.handleMessage.bind(this);
-      this.ws.onerror = this.handleError.bind(this);
-      this.ws.onclose = this.handleClose.bind(this);
+      socket.onopen = () => {
+        if (this.ws !== socket) {
+          socket.close(1000, 'Superseded');
+          return;
+        }
+        this.handleOpen();
+      };
+      socket.onmessage = (event) => {
+        if (this.ws === socket) this.handleMessage(event);
+      };
+      socket.onerror = (event) => {
+        if (this.ws === socket) this.handleError(event);
+      };
+      socket.onclose = (event) => {
+        if (this.ws === socket) this.handleClose(event);
+      };
     } catch (error) {
       logger.error('Failed to create WebSocket:', error);
       this.updateStatus('error');
       this.scheduleReconnect();
+    }
+  }
+
+  _closeSocketGracefully(socket) {
+    if (!socket) return;
+    socket.onmessage = null;
+    socket.onerror = null;
+    socket.onclose = null;
+    if (socket.readyState === WebSocket.CONNECTING) {
+      // Closing a WebSocket while CONNECTING logs a console error in Chrome/Safari.
+      // Let the handshake finish and close immediately in onopen instead.
+      socket.onopen = () => {
+        try {
+          socket.close(1000, 'Client disconnect');
+        } catch (e) {
+          // Ignore close errors
+        }
+      };
+    } else if (socket.readyState === WebSocket.OPEN) {
+      try {
+        socket.close(1000, 'Client disconnect');
+      } catch (e) {
+        // Ignore close errors
+      }
     }
   }
 
@@ -282,8 +339,9 @@ class WebSocketService {
     this.stopPingInterval();
     
     if (this.ws) {
-      this.ws.close(1000, 'Client disconnect');
+      const socket = this.ws;
       this.ws = null;
+      this._closeSocketGracefully(socket);
     }
     
     this.updateStatus('disconnected');

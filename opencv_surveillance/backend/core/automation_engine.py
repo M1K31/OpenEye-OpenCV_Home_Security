@@ -90,7 +90,24 @@ def evaluate_rule_conditions(
         if current_day not in conditions['days_of_week']:
             logger.debug(f"Day {current_day} not in allowed days: {conditions['days_of_week']}")
             return False
-    
+
+    # Check policy-governed automatic scan grant validity
+    if 'scan_grant_valid' in conditions and conditions['scan_grant_valid']:
+        try:
+            from backend.core.ecosystem_hub_bridge import get_policy_engine, local_device_identity
+            sg_cfg = conditions['scan_grant_valid']
+            dev_id = sg_cfg.get('device_id') if isinstance(sg_cfg, dict) else None
+            dev_id = dev_id or local_device_identity()[0]
+            profile = sg_cfg.get('profile', 'quick') if isinstance(sg_cfg, dict) else 'quick'
+            pe = get_policy_engine()
+            valid, reason = pe.has_valid_auto_scan_grant(device_id=dev_id, profile=profile, initiator="openeye.automation")
+            if not valid:
+                logger.info(f"Scan grant invalid for device '{dev_id}': {reason}")
+                return False
+        except Exception as e:
+            logger.warning(f"Error evaluating scan_grant_valid condition: {e}")
+            return False
+
     # All conditions met
     return True
 
@@ -269,6 +286,109 @@ def execute_alert_action(
         }
 
 
+def execute_device_scan_action(
+    action_config: Dict[str, Any],
+    person_name: str,
+    camera_id: str,
+) -> Dict[str, Any]:
+    """Execute a device scan action governed by policy engine."""
+    from backend.core.ecosystem_hub_bridge import get_policy_engine, local_device_identity
+    device_id, fp = local_device_identity()
+    target_device = action_config.get("device_id") or device_id
+    profile = action_config.get("profile", "quick")
+    offline = bool(action_config.get("offline", False))
+    pe = get_policy_engine()
+
+    from ecosystem_policy.engine import ActionRequest
+    act_req = ActionRequest(
+        actor="openeye.automation",
+        action="device_scan",
+        action_class="investigate",
+        target={"device_id": target_device, "public_key_fingerprint": fp if target_device == device_id else None},
+        context={"profile": profile, "trigger": "automation", "camera_id": camera_id, "person_name": person_name},
+        authenticated=True,
+    )
+    decision = pe.decide(act_req)
+    if decision.result == "deny":
+        logger.warning(f"Device scan denied by policy: {decision.reason}")
+        return {
+            "type": "device_scan",
+            "success": False,
+            "error": decision.reason,
+            "status": "denied",
+        }
+
+    # Attempt to dispatch to ecosystem registry or local runner
+    from backend.core.ecosystem_hub_bridge import get_hub_client
+    hub_client = get_hub_client()
+    scan_id = None
+    if hub_client and getattr(hub_client, "is_connected", False):
+        try:
+            res = hub_client._request("POST", "/scans/run", json_data={
+                "device_id": target_device,
+                "profile": profile,
+                "offline": offline,
+                "initiator": "openeye.automation",
+            })
+            scan_id = res.get("scan_id")
+        except Exception as exc:
+            logger.warning(f"Failed dispatching scan to hub: {exc}")
+
+    logger.info(f"SCAN requested for {target_device} (profile: {profile}, scan_id: {scan_id})")
+    return {
+        "type": "device_scan",
+        "success": True,
+        "device_id": target_device,
+        "profile": profile,
+        "scan_id": scan_id,
+        "policy_decision": decision.result,
+    }
+
+
+def execute_scan_schedule_action(
+    action_config: Dict[str, Any],
+    person_name: str,
+    camera_id: str,
+) -> Dict[str, Any]:
+    """Configure or trigger scheduled scan for target endpoint."""
+    from backend.core.ecosystem_hub_bridge import get_policy_engine, local_device_identity
+    device_id, fp = local_device_identity()
+    target_device = action_config.get("device_id") or device_id
+    profile = action_config.get("profile", "quick")
+    pe = get_policy_engine()
+
+    valid, reason = pe.has_valid_auto_scan_grant(device_id=target_device, profile=profile, initiator="openeye.automation")
+    if not valid:
+        return {"type": "scan_schedule", "success": False, "error": f"No valid auto-scan grant: {reason}"}
+
+    logger.info(f"SCAN SCHEDULE verified for {target_device} (profile: {profile})")
+    return {"type": "scan_schedule", "success": True, "device_id": target_device, "profile": profile}
+
+
+def execute_ecosystem_freeze_action(
+    action_config: Dict[str, Any],
+    person_name: str,
+    camera_id: str,
+) -> Dict[str, Any]:
+    """Execute emergency Freeze from OpenEye automation."""
+    from backend.core.ecosystem_hub_bridge import get_policy_engine
+    pe = get_policy_engine()
+    reason = action_config.get("reason") or f"Emergency freeze triggered by camera {camera_id} (person: {person_name})"
+    state = pe.freeze(
+        initiated_by=f"openeye.automation:{camera_id}",
+        reason=reason,
+        channel="automation",
+    )
+    logger.warning(f"ECOSYSTEM FREEZE engaged by automation ({reason})")
+    return {
+        "type": "ecosystem_freeze",
+        "success": True,
+        "frozen": True,
+        "policy_version": state.get("policy_version"),
+        "reason": reason,
+    }
+
+
 def execute_action(
     action: Dict[str, Any],
     person_name: str,
@@ -304,6 +424,15 @@ def execute_action(
         
         elif action_type == 'alert':
             return execute_alert_action(action_config, person_name, camera_id, db)
+
+        elif action_type in ('device_scan', 'scan_request'):
+            return execute_device_scan_action(action_config, person_name, camera_id)
+
+        elif action_type == 'scan_schedule':
+            return execute_scan_schedule_action(action_config, person_name, camera_id)
+
+        elif action_type in ('ecosystem_freeze', 'freeze'):
+            return execute_ecosystem_freeze_action(action_config, person_name, camera_id)
         
         else:
             logger.warning(f"Unknown action type: {action_type}")

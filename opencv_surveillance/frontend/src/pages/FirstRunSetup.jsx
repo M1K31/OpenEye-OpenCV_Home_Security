@@ -17,7 +17,11 @@ const FirstRunSetup = ({ onComplete }) => {
     username: 'admin',
     email: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    hubRole: 'auto',
+    aupAccepted: false,
+    baselineSelfScan: false,
+    designateAutoScan: false
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -142,7 +146,11 @@ const FirstRunSetup = ({ onComplete }) => {
       const response = await axios.post('/api/setup/initialize', {
         username: formData.username,
         email: formData.email,
-        password: formData.password
+        password: formData.password,
+        hub_role: formData.hubRole,
+        aup_accepted: formData.aupAccepted,
+        baseline_self_scan: formData.baselineSelfScan,
+        designate_auto_scan: formData.designateAutoScan
       });
       
       if (response.data.success) {
@@ -298,6 +306,106 @@ const FirstRunSetup = ({ onComplete }) => {
                   helperText={errors.confirmPassword}
                   fullWidth
                 />
+              </div>
+
+              <div className="ecosystem-consent-section" style={{
+                marginTop: '1.5rem',
+                marginBottom: '1.5rem',
+                padding: '1rem',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                fontSize: '0.9rem'
+              }}>
+                <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '1rem' }}>🌐 Ecosystem Mesh & Policy Governance</h3>
+                <div className="form-group" style={{ marginBottom: '1rem' }}>
+                  <label htmlFor="hubRole" style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 500 }}>
+                    Ecosystem Mesh Role:
+                  </label>
+                  <select
+                    id="hubRole"
+                    name="hubRole"
+                    value={formData.hubRole}
+                    onChange={(e) => setFormData(prev => ({ ...prev, hubRole: e.target.value }))}
+                    style={{
+                      width: '100%',
+                      padding: '0.5rem',
+                      borderRadius: '6px',
+                      backgroundColor: 'rgba(0, 0, 0, 0.4)',
+                      color: 'inherit',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      minHeight: '44px'
+                    }}
+                  >
+                    <option value="auto">Auto (Participate & elect best Hub host)</option>
+                    <option value="host">Host (Prioritize hosting the Ecosystem Hub)</option>
+                    <option value="join">Join (Client only, connect to existing Hub)</option>
+                    <option value="standalone">Standalone (Local only, no mesh peering)</option>
+                  </select>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', minHeight: '44px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      name="aupAccepted"
+                      checked={formData.aupAccepted}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setFormData(prev => ({
+                          ...prev,
+                          aupAccepted: checked,
+                          baselineSelfScan: checked ? prev.baselineSelfScan : false,
+                          designateAutoScan: checked ? prev.designateAutoScan : false
+                        }));
+                      }}
+                      style={{ marginTop: '0.2rem', minWidth: '20px', minHeight: '20px' }}
+                    />
+                    <span>
+                      <strong>Accept Ecosystem Acceptable Use Policy (AUP v1.0)</strong>
+                      <br />
+                      <span style={{ fontSize: '0.8rem', opacity: 0.8 }}>
+                        Authorizes local cryptographic device enrollment for security telemetry and policy enforcement.
+                      </span>
+                    </span>
+                  </label>
+
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', minHeight: '44px', opacity: formData.aupAccepted ? 1 : 0.5, cursor: formData.aupAccepted ? 'pointer' : 'not-allowed' }}>
+                    <input
+                      type="checkbox"
+                      name="baselineSelfScan"
+                      disabled={!formData.aupAccepted}
+                      checked={formData.baselineSelfScan}
+                      onChange={(e) => setFormData(prev => ({ ...prev, baselineSelfScan: e.target.checked }))}
+                      style={{ marginTop: '0.2rem', minWidth: '20px', minHeight: '20px' }}
+                    />
+                    <span>
+                      <strong>Opt-in to initial baseline self-scan</strong>
+                      <br />
+                      <span style={{ fontSize: '0.8rem', opacity: 0.8 }}>
+                        Runs a read-only Zero-Breach-Toolkit self-audit upon completion to establish device baseline.
+                      </span>
+                    </span>
+                  </label>
+
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', minHeight: '44px', opacity: formData.aupAccepted ? 1 : 0.5, cursor: formData.aupAccepted ? 'pointer' : 'not-allowed' }}>
+                    <input
+                      type="checkbox"
+                      name="designateAutoScan"
+                      disabled={!formData.aupAccepted}
+                      checked={formData.designateAutoScan}
+                      onChange={(e) => setFormData(prev => ({ ...prev, designateAutoScan: e.target.checked }))}
+                      style={{ marginTop: '0.2rem', minWidth: '20px', minHeight: '20px' }}
+                    />
+                    <span>
+                      <strong>Designate for periodic automated scans</strong>
+                      <br />
+                      <span style={{ fontSize: '0.8rem', opacity: 0.8 }}>
+                        Grants explicit cryptographically bound authorization for scheduled quick scans by mesh peers.
+                      </span>
+                    </span>
+                  </label>
+                </div>
               </div>
 
               {errors.submit && (

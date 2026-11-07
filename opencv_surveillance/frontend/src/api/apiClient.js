@@ -31,6 +31,14 @@ const apiClient = axios.create({
  * Check if error is retryable
  */
 const isRetryableError = (error) => {
+  const reqUrl = error?.config?.url || '';
+
+  // Never auto-retry real-time PTZ motor commands: a delayed retry seconds
+  // after the user clicked/released causes unexpected physical camera movement.
+  if (reqUrl.includes('/ptz/')) {
+    return false;
+  }
+
   if (!error.response) {
     // Network errors (no response) are retryable
     return true;
@@ -38,12 +46,13 @@ const isRetryableError = (error) => {
 
   const status = error.response.status;
 
-  // Retry on server errors (5xx) and rate limiting (429)
-  if (status >= 500 || status === 429) {
+  // Do NOT auto-retry 429 (Too Many Requests): the backend rate-limit window is
+  // 60 seconds, so retrying 1-4 seconds later only multiplies 429 console errors
+  // by 4x and keeps the client throttled. Retry only transient 5xx server errors.
+  if (status >= 500) {
     return true;
   }
 
-  // Don't retry on client errors (4xx except 429)
   return false;
 };
 
