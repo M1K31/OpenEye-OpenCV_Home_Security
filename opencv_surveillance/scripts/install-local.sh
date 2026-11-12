@@ -9,6 +9,7 @@
 #   OPENEYE_VENV=<path>       Override the venv location (default: ~/.local/share/openeye/venv)
 #   OPENEYE_DATA_ROOT=<path>  Override the data root (default: ~/.local/share/openeye)
 #   OPENEYE_RECREATE_VENV=1   Delete and rebuild the venv instead of reusing it
+#   OPENEYE_STANDALONE=1      Do not install the shared ecosystem packages (never joins a hub)
 
 set -e  # Exit on error
 
@@ -281,14 +282,19 @@ install_python_deps() {
         pip install -r /tmp/oe_req_core.txt
     fi
 
-    # Shared ecosystem packages are an OPT-IN add-on, published to PyPI as
-    # appecosystem-client / -auth / -ai. They are deliberately not installed
-    # here: OpenEye runs standalone (the imports are guarded and the ecosystem
-    # routes answer 503 without them), so an installation that will never join
-    # an ecosystem should not carry the dependency. The summary at the end of
-    # this script tells the user how to add them — this block used to
-    # contradict that by silently path-installing whenever a sibling checkout
-    # happened to exist.
+    # Shared ecosystem packages. OpenEye is the ecosystem's observer, so it
+    # joins by default: the pinned PyPI releases in requirements-ecosystem.txt
+    # are installed unless OPENEYE_STANDALONE=1. Joining is still decided at
+    # runtime — with no hub reachable OpenEye simply runs on its own (the
+    # imports are guarded and the ecosystem routes answer 503 without them).
+    # (This used to be opt-in, when the policy and hub packages were not yet
+    # published and an install from PyPI could not join anything.)
+    if [ -z "${ECOSYSTEM_FROM_SOURCE:-}" ] && [ -z "${OPENEYE_STANDALONE:-}" ]; then
+        log_info "Installing shared ecosystem packages (set OPENEYE_STANDALONE=1 to skip)..."
+        pip install -r requirements-ecosystem.txt \
+            && log_success "Shared ecosystem packages installed" \
+            || log_warn "Ecosystem packages could not be installed; OpenEye will run standalone"
+    fi
     #
     # ECOSYSTEM_FROM_SOURCE=1 installs them EDITABLE from a local checkout, for
     # developing the packages themselves. It fails loudly when the checkout is
