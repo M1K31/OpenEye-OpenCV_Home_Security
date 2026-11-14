@@ -1984,16 +1984,19 @@ async def _get_caller_identity(request: Request, db: Session = Depends(get_db)) 
     try:
         from ecosystem_auth.tokens import SIGNATURE_HEADER
         from ecosystem_auth.middleware import authenticate_request
-        if request.headers.get(SIGNATURE_HEADER):
-            res = await authenticate_request(request, None)
-            return {
-                "auth_method": "hmac",
-                "principal": res.get("app_id", "peer"),
-                "is_admin": True,
-                "is_peer": True,
-            }
-    except Exception:
-        pass
+    except ImportError:
+        SIGNATURE_HEADER = None
+    if SIGNATURE_HEADER and request.headers.get(SIGNATURE_HEADER):
+        # A signature header is present: the peer exemption is granted only when
+        # that signature actually verifies. A verification failure must surface
+        # as a 401, not be swallowed and fall through to weaker auth.
+        res = await authenticate_request(request, None)
+        return {
+            "auth_method": "hmac",
+            "principal": res.get("app_id", "peer"),
+            "is_admin": True,
+            "is_peer": True,
+        }
 
     auth_header = request.headers.get("Authorization") or ""
     if auth_header.lower().startswith("bearer "):
@@ -2025,11 +2028,18 @@ async def _get_caller_identity(request: Request, db: Session = Depends(get_db)) 
             models.EcosystemConnection.is_active == True,
         ).first()
         if conn:
+            # A stored bearer ecosystem token identifies a connected app, not a
+            # human operator and not a cryptographically verified peer. It is
+            # NOT admin and does NOT get the step-up exemption: a privileged
+            # policy action needs a real admin with step-up, or an HMAC-signed
+            # peer request. (Earlier this granted is_admin+is_peer, which let a
+            # static token perform Freeze/Resume/approvals with no step-up.)
             return {
                 "auth_method": "ecosystem_token",
                 "principal": conn.app_name,
-                "is_admin": True,
-                "is_peer": True,
+                "role": "peer_service",
+                "is_admin": False,
+                "is_peer": False,
             }
 
     raise HTTPException(status_code=401, detail="Authentication required")
@@ -2043,20 +2053,26 @@ def _verify_step_up(caller: dict[str, Any], body: dict[str, Any], request: Reque
     if not caller.get("is_admin"):
         raise HTTPException(status_code=403, detail="Admin role required for privileged policy actions")
 
+    # The step-up factor must be the authenticated caller's own. A client cannot
+    # choose the operator_id, another operator's token is not accepted, and there
+    # is no shared "admin" fallback — otherwise one admin could act on another
+    # identity's second factor.
+    operator_id = str(caller.get("principal") or "").strip()
+    if not operator_id:
+        raise HTTPException(status_code=403, detail="Authenticated operator identity required for step-up")
+
     step_up = get_step_up_auth()
     token = str(body.get("step_up_token") or request.headers.get("X-Ecosystem-Step-Up") or "").strip()
     if token:
         claims = step_up.verify_step_up_token(token, required_scope="policy_admin")
-        if claims:
-            return (str(claims["sub"]), str(claims["amr"]), token)
+        if claims and str(claims.get("sub")) == operator_id:
+            return (operator_id, str(claims["amr"]), token)
 
-    operator_id = str(body.get("operator_id") or caller.get("principal") or "admin").strip()
     totp_code = str(body.get("totp_code") or body.get("step_up_credential") or "").strip()
     if totp_code and len(totp_code) == 6 and totp_code.isdigit():
-        for candidate in dict.fromkeys([operator_id, "admin"]):
-            issued = step_up.verify_totp_and_issue_token(candidate, totp_code, scope="policy_admin")
-            if issued:
-                return (candidate, "totp", str(issued["step_up_token"]))
+        issued = step_up.verify_totp_and_issue_token(operator_id, totp_code, scope="policy_admin")
+        if issued:
+            return (operator_id, "totp", str(issued["step_up_token"]))
 
     raise HTTPException(
         status_code=403,
@@ -2284,9 +2300,14 @@ async def enroll_step_up_totp(
         pass
 
     step_up = get_step_up_auth()
-    operator_id = str(body.get("operator_id") or caller.get("principal") or "admin").strip()
+    # Enrolment is bound to the authenticated admin's own identity; a client
+    # cannot choose the operator_id, and there is no shared "admin" fallback.
+    operator_id = str(caller.get("principal") or "").strip()
+    if not operator_id:
+        raise HTTPException(status_code=403, detail="Authenticated operator identity required for enrollment")
     existing = step_up.has_enrolled_factors(operator_id)
     if existing.get("totp"):
+        # Rotating an existing factor requires that operator's own current factor.
         _verify_step_up(caller, body, request)
     return step_up.enroll_totp(operator_id, issuer="OpenEye")
 
@@ -2307,7 +2328,10 @@ async def verify_step_up_totp(
         pass
 
     step_up = get_step_up_auth()
-    operator_id = str(body.get("operator_id") or caller.get("principal") or "admin").strip()
+    # Bound to the authenticated admin's own identity, not a client-chosen id.
+    operator_id = str(caller.get("principal") or "").strip()
+    if not operator_id:
+        raise HTTPException(status_code=403, detail="Authenticated operator identity required")
     code = str(body.get("totp_code") or "").strip()
     issued = step_up.verify_totp_and_issue_token(operator_id, code)
     if not issued:

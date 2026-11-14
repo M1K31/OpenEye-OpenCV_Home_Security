@@ -137,10 +137,9 @@ async def connect_ptz(
     conn_req = connection or PTZConnectionRequest()
     stored_info = extract_camera_connection_info(camera.source)
 
-    target_ip = (conn_req.camera_ip or "").strip() or stored_info.get("camera_ip", "")
-    target_user = conn_req.username if conn_req.username else stored_info.get("username", "")
-    target_pass = conn_req.password if conn_req.password else stored_info.get("password", "")
-    target_port = conn_req.port or 0
+    stored_ip = (stored_info.get("camera_ip") or "").strip()
+    requested_ip = (conn_req.camera_ip or "").strip()
+    target_ip = requested_ip or stored_ip
     vendor_hint = stored_info.get("vendor_hint", "generic")
 
     if not target_ip:
@@ -148,6 +147,31 @@ async def connect_ptz(
             status_code=400,
             detail="Camera IP address could not be determined from camera source; please provide camera_ip.",
         )
+
+    # Connecting to a host other than the camera's stored address is an override.
+    # The stored credentials belong to the stored host and must never be sent to
+    # a caller-chosen one (that would exfiltrate them via SSRF), so an override
+    # requires an administrator and credentials supplied in the request.
+    host_overridden = bool(requested_ip) and requested_ip != stored_ip
+    if host_overridden:
+        if getattr(current_user, "role", None) != "admin":
+            raise HTTPException(
+                status_code=403,
+                detail="Only an administrator may connect PTZ to a host other than the camera's stored address.",
+            )
+        if not (conn_req.username and conn_req.password):
+            raise HTTPException(
+                status_code=400,
+                detail="username and password must be supplied in the request when overriding the camera host; "
+                       "the camera's stored credentials are not used for a different host.",
+            )
+        target_user = conn_req.username
+        target_pass = conn_req.password
+    else:
+        # Same host as stored (or no override): stored credentials may fill in.
+        target_user = conn_req.username if conn_req.username else stored_info.get("username", "")
+        target_pass = conn_req.password if conn_req.password else stored_info.get("password", "")
+    target_port = conn_req.port or 0
 
     controller = get_ptz_controller(camera_id, conn_req.ptz_type or "auto")
     success = await controller.connect(
