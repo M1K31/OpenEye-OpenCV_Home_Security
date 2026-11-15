@@ -113,35 +113,70 @@ class HubResultReporter:
         return False
 
 
-def find_recorded_clip(camera_id: str, requested_at: datetime) -> dict[str, Any] | None:
-    """The clip that covers a recording window requested at `requested_at`, or None.
+# Slack at each end of a window: the processing loop starts and stops a clip on
+# the next frame, and timestamps are taken in different places.
+WINDOW_SLACK_SECONDS = 3.0
+# Clips the recorder split (it caps one at 300 s) still count as contiguous.
+CLIP_GAP_SECONDS = 2.0
 
-    A clip covers the window when it ended after the request: one started by
-    the request, or a motion recording the request extended.
+
+def clips_covering(clips: list[dict[str, Any]], start: datetime, end: datetime) -> dict[str, Any] | None:
+    """Whether `clips` (each {id, started_at, ended_at, duration_seconds}) cover [start, end].
+
+    Returns None when no clip overlaps the window; otherwise
+    {clip_id, clip_ids, started_at, duration_seconds, covers_window}, where
+    covers_window means contiguous clips run from the window's start to its end.
     """
+    slack, gap = timedelta(seconds=WINDOW_SLACK_SECONDS), timedelta(seconds=CLIP_GAP_SECONDS)
+    overlapping = sorted(
+        (c for c in clips if c.get("ended_at") and c.get("started_at")
+         and c["ended_at"] >= start and c["started_at"] <= end),
+        key=lambda c: c["started_at"],
+    )
+    if not overlapping:
+        return None
+    covered_until = None
+    covers = overlapping[0]["started_at"] <= start + slack
+    for clip in overlapping:
+        if covered_until is not None and clip["started_at"] > covered_until + gap:
+            covers = False
+        covered_until = max(covered_until or clip["ended_at"], clip["ended_at"])
+    covers = covers and covered_until >= end - slack
+    return {
+        "clip_id": overlapping[0]["id"],
+        "clip_ids": [c["id"] for c in overlapping],
+        "started_at": _utc_iso(overlapping[0]["started_at"]),
+        "duration_seconds": sum(float(c.get("duration_seconds") or 0) for c in overlapping),
+        "covers_window": bool(covers),
+    }
+
+
+def find_recorded_clip(camera_id: str, start: datetime, end: datetime) -> dict[str, Any] | None:
+    """The clips recorded on `camera_id` for the window [start, end]; see `clips_covering`."""
     from backend.database import models
     from backend.database.utils import get_db_context
 
-    naive = requested_at.astimezone(timezone.utc).replace(tzinfo=None) if requested_at.tzinfo else requested_at
+    def naive(dt: datetime) -> datetime:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None) if dt.tzinfo else dt
+
     with get_db_context() as db:
-        row = (
+        rows = (
             db.query(models.RecordingEvent)
             .filter(models.RecordingEvent.camera_id == camera_id)
             .filter(models.RecordingEvent.ended_at.isnot(None))
-            .filter(models.RecordingEvent.ended_at >= naive)
-            .order_by(models.RecordingEvent.ended_at.asc())
-            .first()
+            .filter(models.RecordingEvent.ended_at >= naive(start))
+            .filter(models.RecordingEvent.started_at <= naive(end))
+            .all()
         )
-        if row is None:
-            return None
-        return {
-            "clip_id": row.id,
-            "started_at": _utc_iso(row.started_at) if row.started_at else None,
-            "duration_seconds": row.duration_seconds,
-        }
+        clips = [
+            {"id": r.id, "started_at": r.started_at.replace(tzinfo=timezone.utc),
+             "ended_at": r.ended_at.replace(tzinfo=timezone.utc), "duration_seconds": r.duration_seconds}
+            for r in rows
+        ]
+    return clips_covering(clips, start, end)
 
 
-FindClip = Callable[[str, datetime], "dict[str, Any] | None"]
+FindClip = Callable[[str, datetime, datetime], "dict[str, Any] | None"]
 Reporter = Callable[..., Awaitable[bool]]
 
 
@@ -243,29 +278,34 @@ class OpenEyeCommandHandlers:
         return Accepted(f"clip:{ctx.command_id}")
 
     async def _finish_clip(self, command_id: str, camera_id: str, requested_at: datetime, duration: int) -> None:
-        """Wait for the clip to be written, then report it (or its absence) to the hub."""
+        """Wait until clips cover the whole requested window, then report them (or the shortfall)."""
+        window_end = requested_at + timedelta(seconds=duration)
         try:
             await self._sleep(duration + self._clip_grace)
             deadline = time.monotonic() + self._clip_deadline_extra
             clip = None
             while True:
-                clip = await asyncio.to_thread(self._find_clip, camera_id, requested_at)
-                if clip is not None or time.monotonic() >= deadline:
+                clip = await asyncio.to_thread(self._find_clip, camera_id, requested_at, window_end)
+                if (clip is not None and clip.get("covers_window")) or time.monotonic() >= deadline:
                     break
                 await self._sleep(self._clip_poll)
             if clip is None:
                 await self._report(command_id, "failed", error=f"no clip was recorded on camera {camera_id}")
                 return
-            await self._report(
-                command_id,
-                "completed",
-                result={
-                    "clip_id": clip["clip_id"],
-                    "camera_id": camera_id,
-                    "started_at": clip.get("started_at"),
-                    "duration_seconds": clip.get("duration_seconds", duration),
-                },
-            )
+            result = {
+                "clip_id": clip["clip_id"],
+                "clip_ids": clip.get("clip_ids", [clip["clip_id"]]),
+                "camera_id": camera_id,
+                "started_at": clip.get("started_at"),
+                "duration_seconds": clip.get("duration_seconds", duration),
+            }
+            if not clip.get("covers_window"):
+                await self._report(
+                    command_id, "failed", result=result,
+                    error=f"the clips on camera {camera_id} cover only part of the requested {duration}s",
+                )
+                return
+            await self._report(command_id, "completed", result=result)
         except asyncio.CancelledError:
             raise
         except Exception as exc:

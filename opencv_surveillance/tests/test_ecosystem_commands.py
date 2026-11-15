@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import pytest
@@ -75,7 +75,7 @@ def _handlers(tmp_path, cameras, *, reporter=None, find_clip=None, **kw):
         FakeManager(cameras),
         snapshots_dir=tmp_path / "cmd-snaps",
         reporter=reporter or FakeReporter(),
-        find_clip=find_clip or (lambda camera_id, since: None),
+        find_clip=find_clip or (lambda camera_id, start, end: None),
         now=lambda: FIXED_NOW,
         sleep=_no_sleep,
         **kw,
@@ -143,11 +143,12 @@ def test_record_clip_returns_accepted_then_reports_result(tmp_path):
     camera, reporter = FakeCamera(_frame()), FakeReporter()
     lookups: list[tuple] = []
 
-    def find_clip(camera_id, since):
-        lookups.append((camera_id, since))
+    def find_clip(camera_id, start, end):
+        lookups.append((camera_id, start, end))
         if len(lookups) < 2:
             return None  # not written yet on the first look
-        return {"clip_id": 42, "started_at": "2026-11-14T11:59:58+00:00", "duration_seconds": 10.5}
+        return {"clip_id": 42, "clip_ids": [42], "started_at": "2026-11-14T11:59:58+00:00",
+                "duration_seconds": 10.5, "covers_window": True}
 
     handlers = _handlers(tmp_path, {"front": camera}, reporter=reporter, find_clip=find_clip, clip_poll=0)
 
@@ -159,10 +160,10 @@ def test_record_clip_returns_accepted_then_reports_result(tmp_path):
 
     run(go())
     assert camera.recording_requests == [10]
-    assert lookups[0] == ("front", FIXED_NOW)
+    assert lookups[0] == ("front", FIXED_NOW, FIXED_NOW + timedelta(seconds=10))
     assert reporter.reports == [("01HCMD0000000000000000000C", "completed",
-                                 {"clip_id": 42, "camera_id": "front", "started_at": "2026-11-14T11:59:58+00:00",
-                                  "duration_seconds": 10.5}, None)]
+                                 {"clip_id": 42, "clip_ids": [42], "camera_id": "front",
+                                  "started_at": "2026-11-14T11:59:58+00:00", "duration_seconds": 10.5}, None)]
 
 
 def test_record_clip_failure_reports_failed(tmp_path):
@@ -292,3 +293,46 @@ def test_route_round_trip_through_fastapi(tmp_path):
         assert client.post("/ecosystem/commands", json=unsigned).status_code == 401
     finally:
         app.state.command_receiver = previous
+
+
+# ---- the clip must cover the whole requested window --------------------------------
+
+
+def _clip(id_, start_s, end_s):
+    return {"id": id_, "started_at": FIXED_NOW + timedelta(seconds=start_s),
+            "ended_at": FIXED_NOW + timedelta(seconds=end_s), "duration_seconds": end_s - start_s}
+
+
+WINDOW = (FIXED_NOW, FIXED_NOW + timedelta(seconds=120))
+
+
+@pytest.mark.parametrize("clips,covers,ids", [
+    ([_clip(1, 0, 121)], True, [1]),
+    ([_clip(1, -200, 100)], False, [1]),                       # a motion clip capped 100 s in
+    ([_clip(1, -299, 1)], False, [1]),                         # ends 1 s after the request
+    ([_clip(1, 0, 60), _clip(2, 61, 121)], True, [1, 2]),     # split by the recorder
+    ([_clip(1, 0, 50), _clip(2, 70, 121)], False, [1, 2]),    # a 20 s hole
+    ([_clip(1, 30, 121)], False, [1]),                         # started 30 s late
+])
+def test_clips_must_cover_the_requested_window(clips, covers, ids):
+    found = ec.clips_covering(clips, *WINDOW)
+    assert found["covers_window"] is covers and found["clip_ids"] == ids
+
+
+def test_no_overlapping_clip_is_none():
+    assert ec.clips_covering([_clip(1, -500, -400)], *WINDOW) is None
+
+
+def test_record_clip_partial_coverage_reports_failed_with_the_clips(tmp_path):
+    reporter = FakeReporter()
+    partial = {"clip_id": 9, "clip_ids": [9], "started_at": "x", "duration_seconds": 1.0, "covers_window": False}
+    handlers = _handlers(tmp_path, {"front": FakeCamera(_frame())}, reporter=reporter,
+                         find_clip=lambda c, a, b: partial, clip_deadline_extra=0)
+
+    async def go():
+        await handlers.record_clip(_ctx("camera.record_clip", {"camera_id": "front", "duration_seconds": 120}))
+        await asyncio.gather(*handlers._jobs)
+
+    run(go())
+    [(_cid, status, result, error)] = reporter.reports
+    assert status == "failed" and result["clip_ids"] == [9] and "only part" in error
