@@ -28,6 +28,12 @@ import httpx
 # have the endpoints that actually need ecosystem auth return 503 rather than
 # 500-ing the entire process at startup.
 try:
+    from backend.core.ecosystem_hub_bridge import _ensure_ecosystem_paths
+    _ensure_ecosystem_paths()
+except Exception:
+    pass
+
+try:
     from ecosystem_auth.tokens import sign_payload
     from ecosystem_auth.middleware import require_ecosystem_auth
     ECOSYSTEM_AUTH_AVAILABLE = True
@@ -714,7 +720,7 @@ async def receive_webhook(
         payload = auth.get("payload") if auth.get("auth_method") == "hmac" else await request.json()
 
         source = payload.get("source", "unknown")
-        event_type = payload.get("event_type", "unknown")
+        event_type = payload.get("event_type") or payload.get("type") or "unknown"
         
         logger.info(f"Webhook received from {source}: {event_type}")
         
@@ -722,10 +728,39 @@ async def receive_webhook(
         if event_type == "user_present":
             # User presence detected on MagicMirror
             logger.info(f"User presence from {source}: {payload.get('data', {})}")
+        elif event_type == "policy.freeze":
+            from backend.core.ecosystem_hub_bridge import get_policy_engine
+
+            event_data = payload.get("data") or payload.get("payload") or {}
+            reason = str(event_data.get("reason") or "Mesh emergency freeze")
+            state = get_policy_engine().freeze(
+                initiated_by=str(source),
+                channel="webhook",
+                reason=reason,
+            )
+            await broadcast_to_ecosystem({"type": "ecosystem_policy_state", "state": state})
+            return {"success": True, "message": "Freeze applied", "state": state}
         
         return {"success": True, "message": "Webhook processed"}
     except Exception as e:
         logger.error(f"Webhook processing error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/ecosystem/push")
+async def receive_federated_push(
+    request: Request,
+    auth: dict = Depends(require_ecosystem_auth),
+    db: Session = Depends(get_db),
+):
+    """Receive Hub-routed `notification-envelope.v1` alerts and fan out to OpenEye mobile/provider sinks."""
+    from backend.core.ecosystem_hub_bridge import deliver_federated_push
+
+    try:
+        envelope = auth.get("payload") if auth.get("auth_method") == "hmac" else await request.json()
+        return await deliver_federated_push(envelope, db=db)
+    except Exception as e:
+        logger.error(f"Federated push delivery error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -1909,4 +1944,436 @@ async def get_recording_playback(
         file_size_bytes=recording.file_size_bytes or 0,
         download_url=f"{server_host}/api/recordings/{recording_id}/download"
     )
+
+
+# ============================================================================
+# PHASE 3: POLICY ENGINE, STEP-UP 2FA & UNIFIED APPROVAL QUEUE
+# ============================================================================
+from typing import Any
+from fastapi.responses import FileResponse
+from backend.core.ecosystem_hub_bridge import (
+    get_policy_engine,
+    get_step_up_auth,
+    get_approval_queue,
+    resolve_ui_asset_path,
+    get_onboarding_consent,
+    record_onboarding_consent,
+)
+
+
+def _duration_to_seconds(raw: Any) -> tuple[int | None, bool]:
+    if raw == "until_revoked":
+        return None, True
+    if isinstance(raw, (int, float)):
+        return max(60, int(raw)), False
+    s = str(raw or "30m").strip().lower()
+    mapping = {"15m": 900, "30m": 1800, "1h": 3600, "4h": 14400}
+    if s in mapping:
+        return mapping[s], False
+    if s.endswith("m") and s[:-1].isdigit():
+        return max(60, int(s[:-1]) * 60), False
+    if s.endswith("h") and s[:-1].isdigit():
+        return max(60, int(s[:-1]) * 3600), False
+    if s.isdigit():
+        return max(60, int(s)), False
+    return 1800, False
+
+
+async def _get_caller_identity(request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Resolve caller identity from HMAC peer signature or Bearer token (JWT or ecosystem token)."""
+    try:
+        from ecosystem_auth.tokens import SIGNATURE_HEADER
+        from ecosystem_auth.middleware import authenticate_request
+    except ImportError:
+        SIGNATURE_HEADER = None
+    if SIGNATURE_HEADER and request.headers.get(SIGNATURE_HEADER):
+        # A signature header is present: the peer exemption is granted only when
+        # that signature actually verifies. A verification failure must surface
+        # as a 401, not be swallowed and fall through to weaker auth.
+        res = await authenticate_request(request, None)
+        return {
+            "auth_method": "hmac",
+            "principal": res.get("app_id", "peer"),
+            "is_admin": True,
+            "is_peer": True,
+        }
+
+    auth_header = request.headers.get("Authorization") or ""
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header.split(" ", 1)[1].strip()
+        try:
+            from backend.core.auth import SECRET_KEY, ALGORITHM
+            try:
+                import jwt
+            except ModuleNotFoundError:
+                from jose import jwt
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            username = payload.get("sub")
+            if username:
+                user = db.query(models.User).filter(models.User.username == username).first()
+                if user and user.is_active:
+                    return {
+                        "auth_method": "user_jwt",
+                        "principal": user.username,
+                        "role": user.role,
+                        "is_admin": user.role == "admin",
+                        "is_peer": False,
+                        "user": user,
+                    }
+        except Exception:
+            pass
+
+        conn = db.query(models.EcosystemConnection).filter(
+            models.EcosystemConnection.local_token == token,
+            models.EcosystemConnection.is_active == True,
+        ).first()
+        if conn:
+            # A stored bearer ecosystem token identifies a connected app, not a
+            # human operator and not a cryptographically verified peer. It is
+            # NOT admin and does NOT get the step-up exemption: a privileged
+            # policy action needs a real admin with step-up, or an HMAC-signed
+            # peer request. (Earlier this granted is_admin+is_peer, which let a
+            # static token perform Freeze/Resume/approvals with no step-up.)
+            return {
+                "auth_method": "ecosystem_token",
+                "principal": conn.app_name,
+                "role": "peer_service",
+                "is_admin": False,
+                "is_peer": False,
+            }
+
+    raise HTTPException(status_code=401, detail="Authentication required")
+
+
+def _verify_step_up(caller: dict[str, Any], body: dict[str, Any], request: Request) -> tuple[str, str, str | None]:
+    """Verify operator step-up for privileged actions. Returns 403 on missing/invalid step-up."""
+    if caller.get("is_peer"):
+        return (caller["principal"], "peer_hmac", None)
+
+    if not caller.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin role required for privileged policy actions")
+
+    # The step-up factor must be the authenticated caller's own. A client cannot
+    # choose the operator_id, another operator's token is not accepted, and there
+    # is no shared "admin" fallback — otherwise one admin could act on another
+    # identity's second factor.
+    operator_id = str(caller.get("principal") or "").strip()
+    if not operator_id:
+        raise HTTPException(status_code=403, detail="Authenticated operator identity required for step-up")
+
+    step_up = get_step_up_auth()
+    token = str(body.get("step_up_token") or request.headers.get("X-Ecosystem-Step-Up") or "").strip()
+    if token:
+        claims = step_up.verify_step_up_token(token, required_scope="policy_admin")
+        if claims and str(claims.get("sub")) == operator_id:
+            return (operator_id, str(claims["amr"]), token)
+
+    totp_code = str(body.get("totp_code") or body.get("step_up_credential") or "").strip()
+    if totp_code and len(totp_code) == 6 and totp_code.isdigit():
+        issued = step_up.verify_totp_and_issue_token(operator_id, totp_code, scope="policy_admin")
+        if issued:
+            return (operator_id, "totp", str(issued["step_up_token"]))
+
+    raise HTTPException(
+        status_code=403,
+        detail="Valid 6-digit TOTP 2FA or step-up token required for this privileged policy action",
+    )
+
+
+@router.get("/ecosystem/policy/ui/{asset_name}", include_in_schema=False)
+async def get_policy_ui_asset(asset_name: str):
+    """Serve shared `@appecosystem/ui-controls` bundle and Apple HIG theme CSS."""
+    path = resolve_ui_asset_path(asset_name)
+    if path is None:
+        raise HTTPException(status_code=404, detail="UI asset not found")
+    media_type = "application/javascript" if asset_name.endswith(".js") else "text/css"
+    return FileResponse(str(path), media_type=media_type)
+
+
+@router.get("/ecosystem/policy/ui/fonts/{font_name}", include_in_schema=False)
+async def get_policy_ui_font(font_name: str):
+    """Serve self-hosted typography fonts referenced by ecosystem-theme.css."""
+    path = resolve_ui_asset_path(f"fonts/{font_name}")
+    if path is None:
+        raise HTTPException(status_code=404, detail="UI font not found")
+    media_type = "font/woff2" if font_name.endswith(".woff2") else "application/octet-stream"
+    return FileResponse(str(path), media_type=media_type)
+
+
+@router.get("/ecosystem/policy/state")
+async def get_ecosystem_policy_state(
+    _caller: dict[str, Any] = Depends(_get_caller_identity),
+):
+    """Return canonical `policy-state.v1` JSON for `<ecosystem-policy-bar>`."""
+    return get_policy_engine().export_state()
+
+
+@router.post("/ecosystem/policy/freeze")
+async def post_ecosystem_policy_freeze(
+    request: Request,
+    caller: dict[str, Any] = Depends(_get_caller_identity),
+):
+    """Engage immediate emergency Freeze (permitted for any authenticated user or peer)."""
+    body: dict[str, Any] = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+
+    engine = get_policy_engine()
+    state = engine.freeze(
+        initiated_by=str(body.get("initiated_by") or caller.get("principal") or "openeye_operator"),
+        channel=str(body.get("channel") or "openeye_ui"),
+        reason=str(body.get("reason") or "Emergency Freeze triggered from OpenEye"),
+        acknowledged_devices=["openeye"],
+    )
+    await broadcast_to_ecosystem({"type": "ecosystem_policy_state", "state": state})
+    return state
+
+
+@router.post("/ecosystem/policy/resume")
+async def post_ecosystem_policy_resume(
+    request: Request,
+    caller: dict[str, Any] = Depends(_get_caller_identity),
+):
+    """Resume normal operations from Freeze (Admin + step-up TOTP/2FA or HMAC peer)."""
+    body: dict[str, Any] = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+
+    operator_id, auth_method, _ = _verify_step_up(caller, body, request)
+    state = get_policy_engine().resume(
+        operator_id=operator_id,
+        auth_method=auth_method,
+        reason=str(body.get("reason") or f"Operator {operator_id} resumed normal operation"),
+    )
+    await broadcast_to_ecosystem({"type": "ecosystem_policy_state", "state": state})
+    return state
+
+
+@router.post("/ecosystem/policy/restrictions/off")
+async def post_ecosystem_policy_restrictions_off(
+    request: Request,
+    caller: dict[str, Any] = Depends(_get_caller_identity),
+):
+    """Activate scoped, timed Restrictions: Off override (Admin + step-up TOTP/2FA or HMAC peer)."""
+    body: dict[str, Any] = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+
+    operator_id, auth_method, _ = _verify_step_up(caller, body, request)
+    scope = body.get("scope") if isinstance(body.get("scope"), dict) else {}
+    dur_sec, until_rev = _duration_to_seconds(
+        "until_revoked" if body.get("until_revoked") else body.get("duration", "30m")
+    )
+    try:
+        state = get_policy_engine().activate_restrictions_off(
+            issued_by=operator_id,
+            auth_method=auth_method,
+            reason=str(body.get("reason") or "Operator authorized scoped override"),
+            apps=list(scope.get("apps") or ["openeye"]),
+            devices=list(scope.get("devices") or ["local"]),
+            action_classes=list(scope.get("action_classes") or ["investigate", "system_change"]),
+            duration_seconds=dur_sec,
+            until_revoked=until_rev,
+            applied_devices=["openeye"],
+        )
+        await broadcast_to_ecosystem({"type": "ecosystem_policy_state", "state": state})
+        return state
+    except (ValueError, PermissionError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/ecosystem/policy/restrictions/on")
+async def post_ecosystem_policy_restrictions_on(
+    request: Request,
+    caller: dict[str, Any] = Depends(_get_caller_identity),
+):
+    """Restore conservative policy defaults (Admin or HMAC peer)."""
+    if not caller.get("is_admin") and not caller.get("is_peer"):
+        raise HTTPException(status_code=403, detail="Admin role required to modify policy")
+
+    body: dict[str, Any] = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+
+    state = get_policy_engine().restore_restrictions_on(
+        actor=caller.get("principal", "operator"),
+        reason=str(body.get("reason") or "Restored conservative policy"),
+    )
+    await broadcast_to_ecosystem({"type": "ecosystem_policy_state", "state": state})
+    return state
+
+
+@router.get("/ecosystem/approvals")
+async def get_ecosystem_approvals(
+    status_filter: Optional[str] = None,
+    limit: int = 100,
+    _caller: dict[str, Any] = Depends(_get_caller_identity),
+):
+    """List pending or historical approvals in the unified LocalApprovalQueue."""
+    records = get_approval_queue().list_approvals(status=status_filter, limit=limit)
+    return {"approvals": records}
+
+
+@router.post("/ecosystem/approvals/{approval_id}/approve")
+async def approve_ecosystem_checkpoint(
+    approval_id: str,
+    request: Request,
+    caller: dict[str, Any] = Depends(_get_caller_identity),
+):
+    """Approve a gated action checkpoint (Admin + step-up TOTP/2FA or HMAC peer)."""
+    body: dict[str, Any] = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+
+    operator_id, auth_method, token = _verify_step_up(caller, body, request)
+    engine = get_policy_engine()
+    queue = get_approval_queue()
+    try:
+        return queue.approve(
+            approval_id,
+            step_up_token=token,
+            resolved_by=operator_id,
+            auth_method=auth_method,
+            note=str(body.get("note") or ""),
+            is_frozen_fn=lambda: bool(engine.export_state().get("frozen")),
+        )
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Approval not found")
+    except PermissionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/ecosystem/approvals/{approval_id}/deny")
+async def deny_ecosystem_checkpoint(
+    approval_id: str,
+    request: Request,
+    caller: dict[str, Any] = Depends(_get_caller_identity),
+):
+    """Deny a gated action checkpoint (Admin + step-up TOTP/2FA or HMAC peer)."""
+    body: dict[str, Any] = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+
+    operator_id, auth_method, token = _verify_step_up(caller, body, request)
+    queue = get_approval_queue()
+    try:
+        return queue.deny(
+            approval_id,
+            step_up_token=token,
+            resolved_by=operator_id,
+            auth_method=auth_method,
+            note=str(body.get("note") or ""),
+        )
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Approval not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/ecosystem/auth/step-up/totp/enroll")
+async def enroll_step_up_totp(
+    request: Request,
+    caller: dict[str, Any] = Depends(_get_caller_identity),
+):
+    """Enroll an operator in step-up TOTP 2FA."""
+    if not caller.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin role required for TOTP enrollment")
+
+    body: dict[str, Any] = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+
+    step_up = get_step_up_auth()
+    # Enrolment is bound to the authenticated admin's own identity; a client
+    # cannot choose the operator_id, and there is no shared "admin" fallback.
+    operator_id = str(caller.get("principal") or "").strip()
+    if not operator_id:
+        raise HTTPException(status_code=403, detail="Authenticated operator identity required for enrollment")
+    existing = step_up.has_enrolled_factors(operator_id)
+    if existing.get("totp"):
+        # Rotating an existing factor requires that operator's own current factor.
+        _verify_step_up(caller, body, request)
+    return step_up.enroll_totp(operator_id, issuer="OpenEye")
+
+
+@router.post("/ecosystem/auth/step-up/totp/verify")
+async def verify_step_up_totp(
+    request: Request,
+    caller: dict[str, Any] = Depends(_get_caller_identity),
+):
+    """Verify a 6-digit TOTP code and issue a short-lived step-up token."""
+    if not caller.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin role required for step-up verification")
+
+    body: dict[str, Any] = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+
+    step_up = get_step_up_auth()
+    # Bound to the authenticated admin's own identity, not a client-chosen id.
+    operator_id = str(caller.get("principal") or "").strip()
+    if not operator_id:
+        raise HTTPException(status_code=403, detail="Authenticated operator identity required")
+    code = str(body.get("totp_code") or "").strip()
+    issued = step_up.verify_totp_and_issue_token(operator_id, code)
+    if not issued:
+        raise HTTPException(status_code=403, detail="Invalid or replayed TOTP code")
+    return issued
+
+
+@router.get("/ecosystem/onboarding/consent")
+async def get_ecosystem_onboarding_consent(
+    _caller: dict[str, Any] = Depends(_get_caller_identity),
+):
+    """Return persisted onboarding consent state (owner, device, AUP): authenticated callers only."""
+    return get_onboarding_consent()
+
+
+@router.post("/ecosystem/onboarding/consent")
+async def post_ecosystem_onboarding_consent(
+    request: Request,
+    caller: dict[str, Any] = Depends(_get_caller_identity),
+):
+    """Record explicit onboarding consent & AUP acceptance (Admin only)."""
+    if not caller.get("is_admin") and not caller.get("is_peer"):
+        raise HTTPException(status_code=403, detail="Admin role required to configure onboarding consent")
+
+    body: dict[str, Any] = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+
+    try:
+        return record_onboarding_consent(
+            owner=str(body.get("owner") or caller.get("principal") or "admin"),
+            hub_role=str(body.get("hub_role") or "auto"),
+            aup_accepted=bool(body.get("aup_accepted", False)),
+            aup_version=str(body.get("aup_version") or "1.0"),
+            baseline_self_scan=bool(body.get("baseline_self_scan", False)),
+            designate_auto_scan=bool(body.get("designate_auto_scan", False)),
+            auto_scan_profiles=body.get("auto_scan_profiles"),
+            device_id=body.get("device_id"),
+        )
+    except (ValueError, PermissionError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
 

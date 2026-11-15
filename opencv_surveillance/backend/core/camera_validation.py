@@ -62,6 +62,9 @@ def validate_rtsp_url(source: str) -> Tuple[bool, str]:
     Returns:
         Tuple of (is_valid, error_message)
     """
+    from backend.core.camera_security import decrypt_camera_source
+    source = decrypt_camera_source(source)
+
     # Check protocol
     if not source.startswith(('rtsp://', 'rtmp://', 'rtsps://')):
         return False, "Invalid protocol. Must be rtsp://, rtmp://, or rtsps://"

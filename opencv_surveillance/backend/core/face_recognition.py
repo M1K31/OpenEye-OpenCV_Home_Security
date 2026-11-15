@@ -1037,6 +1037,18 @@ class FaceRecognitionManager:
                 photo_count = 0
                 preview_photo_url = None
 
+            # Auto-remove and skip empty `unknown*` placeholder directories so
+            # retired placeholders never linger in the people listing.
+            from backend.core.face_clustering import AUTO_UNKNOWN_NAME
+            if AUTO_UNKNOWN_NAME.match(person_name) and photo_count == 0:
+                from backend.core.gallery import detected_dir, person_dir, uploaded_dir
+                for directory in (detected_dir(person_name), uploaded_dir(person_name), person_dir(person_name)):
+                    try:
+                        directory.rmdir()
+                    except OSError:
+                        pass
+                continue
+
             people.append({
                 "name": person_name,
                 "photo_count": photo_count,

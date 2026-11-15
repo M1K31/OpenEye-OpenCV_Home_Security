@@ -516,21 +516,28 @@ def reassign_face_detection(
         # fifty behave identically. They previously diverged: this one relabelled
         # and enrolled, the bulk one relabelled and did not, and neither moved
         # training data away from the person losing it.
-        from backend.core.person_reassignment import reassign
+        from backend.core.person_reassignment import reassign, prune_orphaned_placeholders
 
         result = reassign(db, [face_id], new_person_name,
                           dry_run=False, retrain=True)
 
-        # Keep the vacated cluster's count honest.
+        # Keep the vacated cluster's count honest, and remove it if it is now empty.
         if old_cluster_id:
             remaining_faces = db.query(models.FaceDetectionEvent).filter(
                 models.FaceDetectionEvent.cluster_id == old_cluster_id
             ).count()
-            db.query(models.FaceCluster).filter(
-                models.FaceCluster.id == old_cluster_id
-            ).update({models.FaceCluster.face_count: remaining_faces},
-                     synchronize_session=False)
+            if remaining_faces <= 0:
+                db.query(models.FaceCluster).filter(
+                    models.FaceCluster.id == old_cluster_id
+                ).delete(synchronize_session=False)
+            else:
+                db.query(models.FaceCluster).filter(
+                    models.FaceCluster.id == old_cluster_id
+                ).update({models.FaceCluster.face_count: remaining_faces},
+                         synchronize_session=False)
             db.commit()
+
+        prune_orphaned_placeholders(db, dry_run=False)
 
         return FaceReassignResponse(
             success=True,
@@ -581,6 +588,7 @@ def delete_face_detection(
 
     cluster_id = face_event.cluster_id
     snapshot = face_event.snapshot_path
+    old_person = face_event.person_name
 
     db.delete(face_event)
 
@@ -589,14 +597,23 @@ def delete_face_detection(
         remaining = db.query(models.FaceDetectionEvent).filter(
             models.FaceDetectionEvent.cluster_id == cluster_id
         ).count()
-        db.query(models.FaceCluster).filter(
-            models.FaceCluster.id == cluster_id
-        ).update({models.FaceCluster.face_count: remaining},
-                 synchronize_session=False)
+        if remaining <= 0:
+            db.query(models.FaceCluster).filter(
+                models.FaceCluster.id == cluster_id
+            ).delete(synchronize_session=False)
+        else:
+            db.query(models.FaceCluster).filter(
+                models.FaceCluster.id == cluster_id
+            ).update({models.FaceCluster.face_count: remaining},
+                     synchronize_session=False)
 
     db.commit()
 
     removed_file = _remove_snapshot_file(snapshot)
+    if old_person and old_person != "Unknown":
+        from backend.core.person_reassignment import rebuild_gallery, prune_orphaned_placeholders
+        rebuild_gallery(old_person, db, dry_run=False)
+        prune_orphaned_placeholders(db, dry_run=False)
 
     logger.info("Deleted face detection %s (cluster=%s, file_removed=%s)",
                 face_id, cluster_id, removed_file)
@@ -633,6 +650,7 @@ def bulk_delete_face_detections(
         raise HTTPException(status_code=404, detail="No matching faces found")
 
     affected_clusters = {f.cluster_id for f in face_events if f.cluster_id}
+    affected_people = {f.person_name for f in face_events if f.person_name and f.person_name != "Unknown"}
     snapshots = [f.snapshot_path for f in face_events]
     deleted_count = len(face_events)
 
@@ -644,14 +662,25 @@ def bulk_delete_face_detections(
         remaining = db.query(models.FaceDetectionEvent).filter(
             models.FaceDetectionEvent.cluster_id == cluster_id
         ).count()
-        db.query(models.FaceCluster).filter(
-            models.FaceCluster.id == cluster_id
-        ).update({models.FaceCluster.face_count: remaining},
-                 synchronize_session=False)
+        if remaining <= 0:
+            db.query(models.FaceCluster).filter(
+                models.FaceCluster.id == cluster_id
+            ).delete(synchronize_session=False)
+        else:
+            db.query(models.FaceCluster).filter(
+                models.FaceCluster.id == cluster_id
+            ).update({models.FaceCluster.face_count: remaining},
+                     synchronize_session=False)
 
     db.commit()
 
     files_removed = sum(1 for s in snapshots if _remove_snapshot_file(s))
+    if affected_people:
+        from backend.core.person_reassignment import rebuild_gallery, prune_orphaned_placeholders
+        for person_name in affected_people:
+            rebuild_gallery(person_name, db, dry_run=False)
+        prune_orphaned_placeholders(db, dry_run=False)
+
     not_found = len(request.face_ids) - deleted_count
 
     logger.info("Bulk-deleted %s detection(s); %s snapshot file(s) removed",
@@ -714,25 +743,31 @@ def bulk_reassign_face_detections(
         # reassign() rebuilds BOTH people's detected/ galleries from their own
         # detections and retrains them in the background. uploaded/ is never
         # touched.
-        from backend.core.person_reassignment import reassign
+        from backend.core.person_reassignment import reassign, prune_orphaned_placeholders
 
         result = reassign(db, list(request.face_ids), new_person_name,
                           dry_run=False, retrain=True)
         logger.info("Reassignment: %s", result.describe().replace("\n", " | "))
 
-        # Update face counts for affected clusters (batch update)
+        # Update face counts for affected clusters (and remove any vacated clusters)
         for cluster_id in affected_clusters:
             remaining_count = db.query(models.FaceDetectionEvent).filter(
                 models.FaceDetectionEvent.cluster_id == cluster_id
             ).count()
-            db.query(models.FaceCluster).filter(
-                models.FaceCluster.id == cluster_id
-            ).update(
-                {models.FaceCluster.face_count: remaining_count},
-                synchronize_session=False
-            )
+            if remaining_count <= 0:
+                db.query(models.FaceCluster).filter(
+                    models.FaceCluster.id == cluster_id
+                ).delete(synchronize_session=False)
+            else:
+                db.query(models.FaceCluster).filter(
+                    models.FaceCluster.id == cluster_id
+                ).update(
+                    {models.FaceCluster.face_count: remaining_count},
+                    synchronize_session=False
+                )
 
         db.commit()
+        prune_orphaned_placeholders(db, dry_run=False)
 
         errors = []
         if not_found_count > 0:

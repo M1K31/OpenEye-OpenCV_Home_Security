@@ -15,8 +15,11 @@ import secrets
 # working and the change stays confined to the import. The call surface is
 # identical: encode(payload, key, algorithm=...) and
 # decode(token, key, algorithms=[...]).
-import jwt
-from jwt import PyJWTError as JWTError
+try:
+    import jwt
+    from jwt import PyJWTError as JWTError
+except ModuleNotFoundError:
+    from jose import jwt, JWTError
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer

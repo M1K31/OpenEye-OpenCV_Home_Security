@@ -64,13 +64,14 @@ class EndpointRateLimiter(BaseHTTPMiddleware):
         # Write operations (moderate) - only for specific operations
         r"^/api/(cameras|faces|alerts|recordings)/.*/(delete|update)": "write",
 
-        # Streaming endpoints (generous)
+        # Streaming and real-time hardware control endpoints (generous)
         r"^/api/cameras/.*/stream": "stream",
+        r"^/api/cameras/.*/(ptz|edge)(/|$)": "stream",
         r"^/api/recordings/\d+/(download|stream)": "stream",  # Fixed: Match API recordings endpoints
         r"^/recordings/": "stream",  # Legacy static file mount
 
         # WebSocket (no limit)
-        r"^/ws/": "websocket",
+        r"^/(?:api/)?ws/": "websocket",
 
         # Everything else defaults based on HTTP method (see get_endpoint_category)
         # GET → "read", POST/PUT/DELETE/PATCH → "write"

@@ -1,22 +1,39 @@
 # Copyright (c) 2025 Mikel Smart
 # This file is part of OpenEye-OpenCV_Home_Security
 """
-Regression tests for camera discovery defects.
+Regression tests for camera discovery defects, vendor fingerprinting,
+cross-platform subnet/ARP discovery, and at-rest credential encryption.
 
-Covers three confirmed root causes:
+Covers confirmed root causes:
   1. USB discovery could not distinguish "no camera attached" from
      "OS denied camera permission", so a denied host reported success
      with zero cameras and no error.
   2. Network discovery reported any open TCP port as an RTSP camera,
      producing phantom cameras that then failed quick-add with a 400.
-  3. The statistics WebSocket parsed client frames with eval().
+  3. Spec-compliant cameras (like TP-Link Tapo) return 200 OK to OPTIONS
+     and only challenge with 401 + WWW-Authenticate realm on DESCRIBE.
+  4. Camera sources and embedded RTSP credentials must be encrypted at rest
+     in SQLite using Fernet while transparently decrypting on ORM read and
+     redacting passwords in API responses and logs.
+  5. The statistics WebSocket parsed client frames with eval().
 """
 import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
+from sqlalchemy import text
 
 from backend.core.camera_discovery import CameraDiscovery
+from backend.core.camera_security import (
+    ENCRYPTED_PREFIX,
+    decrypt_camera_source,
+    encrypt_camera_source,
+    inject_rtsp_credentials,
+    is_encrypted_source,
+    redact_url_credentials,
+    strip_url_credentials,
+)
+from backend.database import crud
 
 
 class TestUsbPermissionDetection:
@@ -32,7 +49,8 @@ class TestUsbPermissionDetection:
         discovery = CameraDiscovery()
 
         with patch.object(
-            discovery, "_enumerate_platform_cameras",
+            discovery,
+            "_enumerate_platform_cameras",
             return_value=[{"name": "HD Webcam C615", "index": 0}],
         ), patch("backend.core.camera_discovery.cv2.VideoCapture") as cap:
             cap.return_value.isOpened.return_value = False
@@ -68,13 +86,14 @@ class TestUsbPermissionDetection:
 
         def fake_capture(index, *args, **kwargs):
             cap = MagicMock()
-            cap.isOpened.return_value = (index == 0)
+            cap.isOpened.return_value = index == 0
             cap.read.return_value = (index == 0, frame if index == 0 else None)
             cap.get.return_value = 640
             return cap
 
         with patch.object(
-            discovery, "_enumerate_platform_cameras",
+            discovery,
+            "_enumerate_platform_cameras",
             return_value=[{"name": "HD Webcam C615", "index": 0}],
         ), patch(
             "backend.core.camera_discovery.cv2.VideoCapture",
@@ -97,6 +116,7 @@ class TestUsbPermissionDetection:
 
         def slow_capture(index, *args, **kwargs):
             import time
+
             time.sleep(0.05)
             cap = MagicMock()
             cap.isOpened.return_value = False
@@ -121,7 +141,7 @@ class TestUsbPermissionDetection:
 
 
 class TestRtspValidation:
-    """Network discovery must verify RTSP, not just an open TCP port."""
+    """Network discovery must verify RTSP, vendor realms, and auth requirements."""
 
     @pytest.mark.asyncio
     async def test_open_port_that_is_not_rtsp_is_rejected(self):
@@ -145,14 +165,50 @@ class TestRtspValidation:
         discovery = CameraDiscovery()
 
         async def fake_probe(ip, port, timeout=2.0):
-            return b'RTSP/1.0 401 Unauthorized\r\nWWW-Authenticate: Digest\r\n\r\n'
+            return b"RTSP/1.0 401 Unauthorized\r\nWWW-Authenticate: Digest\r\n\r\n"
 
-        with patch.object(discovery, "_rtsp_options_probe", fake_probe):
+        async def fake_port_open(ip, port, timeout=0.8):
+            return False
+
+        with patch.object(discovery, "_rtsp_options_probe", fake_probe), patch.object(
+            discovery, "_check_tcp_port_open", fake_port_open
+        ):
             result = await discovery._check_rtsp_port("192.168.50.20", 554)
 
         assert result is not None
         assert result["requires_auth"] is True
         assert result["ip"] == "192.168.50.20"
+
+    @pytest.mark.asyncio
+    async def test_tapo_camera_options_200_and_describe_401_detected(self):
+        """
+        TP-Link Tapo answers 200 OK to OPTIONS and 401 Unauthorized with
+        realm="TP-LINK IP-Camera" to DESCRIBE. Discovery must detect
+        requires_auth=True, identify TP-Link Tapo, and prioritize /stream1 and /stream2.
+        """
+        discovery = CameraDiscovery()
+
+        async def fake_probe(ip, port, timeout=2.0):
+            return (
+                b"RTSP/1.0 200 OK\r\n"
+                b"CSeq: 1\r\n"
+                b"Public: OPTIONS, DESCRIBE, SETUP, TEARDOWN, PLAY\r\n\r\n"
+                b"RTSP/1.0 401 Unauthorized\r\n"
+                b"CSeq: 2\r\n"
+                b'WWW-Authenticate: Basic realm="TP-LINK IP-Camera"\r\n'
+                b'WWW-Authenticate: Digest realm="TP-LINK IP-Camera", nonce="abc"\r\n\r\n'
+            )
+
+        with patch.object(discovery, "_rtsp_options_probe", fake_probe):
+            result = await discovery._check_rtsp_port("192.168.50.135", 554)
+
+        assert result is not None
+        assert result["ip"] == "192.168.50.135"
+        assert result["requires_auth"] is True
+        assert result["manufacturer"] == "TP-Link Tapo"
+        assert result["urls"][0] == "rtsp://192.168.50.135:554/stream1"
+        assert result["urls"][1] == "rtsp://192.168.50.135:554/stream2"
+        assert result["auto_config"]["source"] == "rtsp://192.168.50.135:554/stream1"
 
     @pytest.mark.asyncio
     async def test_closed_port_is_rejected(self):
@@ -165,6 +221,166 @@ class TestRtspValidation:
             result = await discovery._check_rtsp_port("192.168.50.99", 554)
 
         assert result is None
+
+    def test_subnet_deduplication_and_virtual_interface_filtering(self):
+        """
+        _get_local_subnets must ignore virtual/bridge/tunnel interfaces and
+        deduplicate identical subnets across multiple physical NICs (e.g. en0 + en1).
+        """
+        discovery = CameraDiscovery()
+        fake_ifaces = ["lo0", "en0", "bridge100", "en1", "utun13"]
+        fake_addrs = {
+            "lo0": {2: [{"addr": "127.0.0.1", "netmask": "255.0.0.0"}]},
+            "en0": {2: [{"addr": "192.168.50.73", "netmask": "255.255.255.0"}]},
+            "bridge100": {2: [{"addr": "192.168.105.1", "netmask": "255.255.255.0"}]},
+            "en1": {2: [{"addr": "192.168.50.61", "netmask": "255.255.255.0"}]},
+            "utun13": {2: [{"addr": "100.108.195.116", "netmask": "255.255.255.255"}]},
+        }
+
+        with patch.object(
+            discovery, "_get_primary_lan_ip", return_value="192.168.50.73"
+        ), patch("backend.core.camera_discovery.netifaces.interfaces", return_value=fake_ifaces), patch(
+            "backend.core.camera_discovery.netifaces.ifaddresses",
+            side_effect=lambda iface: fake_addrs[iface],
+        ), patch("backend.core.camera_discovery.netifaces.AF_INET", 2):
+            subnets = discovery._get_local_subnets()
+
+        assert subnets == ["192.168.50.0/24"]
+
+
+class TestCameraCredentialEncryption:
+    """Camera sources and RTSP credentials must be encrypted at rest and redacted in output."""
+
+    def test_encrypt_and_decrypt_roundtrip(self):
+        raw = "rtsp://tapo_admin:My$ecret@Pass!@192.168.50.135:554/stream1"
+        encrypted = encrypt_camera_source(raw)
+        assert is_encrypted_source(encrypted)
+        assert encrypted.startswith(ENCRYPTED_PREFIX)
+        assert "My$ecret" not in encrypted
+        assert "192.168.50.135" not in encrypted
+        assert decrypt_camera_source(encrypted) == raw
+
+    def test_inject_and_redact_special_char_credentials(self):
+        base = "rtsp://192.168.50.135:554/stream1"
+        injected = inject_rtsp_credentials(base, "tapo@user", "p@ss:w/rd$1")
+        assert injected == "rtsp://tapo%40user:p%40ss%3Aw%2Frd%241@192.168.50.135:554/stream1"
+        assert redact_url_credentials(injected) == "rtsp://tapo%40user:***@192.168.50.135:554/stream1"
+        assert strip_url_credentials(injected) == base
+
+    def test_database_stores_encrypted_ciphertext_at_rest(self, db_session):
+        plain_url = "rtsp://tapo_user:SuperSecret123@192.168.50.135:554/stream1"
+        crud.create_camera(
+            db_session,
+            {
+                "camera_id": "tapo_ encrypted_test",
+                "camera_type": "rtsp",
+                "source": plain_url,
+                "is_active": True,
+            },
+        )
+
+        # Raw SQLite value on disk must be encrypted (never plaintext)
+        raw_stored = db_session.execute(
+            text("SELECT source FROM cameras WHERE camera_id = :cid"),
+            {"cid": "tapo_ encrypted_test"},
+        ).scalar()
+        assert raw_stored is not None
+        assert raw_stored.startswith(ENCRYPTED_PREFIX)
+        assert "SuperSecret123" not in raw_stored
+
+        # ORM read must transparently decrypt back to the usable RTSP URL
+        cam = crud.get_camera_by_id(db_session, "tapo_ encrypted_test")
+        assert cam is not None
+        assert cam.source == plain_url
+
+
+class TestStreamRelayManager:
+    """Verify optional go2rtc / MediaMTX stream relay multiplexing and direct fallback."""
+
+    def test_sub_stream_url_inference_across_vendors(self):
+        from backend.core.stream_relay import infer_sub_stream_url
+
+        assert (
+            infer_sub_stream_url("rtsp://user:pass@192.168.50.135:554/stream1")
+            == "rtsp://user:pass@192.168.50.135:554/stream2"
+        )
+        assert (
+            infer_sub_stream_url("rtsp://admin:123@192.168.1.50:554/Streaming/Channels/101")
+            == "rtsp://admin:123@192.168.1.50:554/Streaming/Channels/102"
+        )
+        assert (
+            infer_sub_stream_url("rtsp://admin:123@192.168.1.60:554/cam/realmonitor?channel=1&subtype=0")
+            == "rtsp://admin:123@192.168.1.60:554/cam/realmonitor?channel=1&subtype=1"
+        )
+        assert (
+            infer_sub_stream_url("rtsp://admin:123@192.168.1.70:554/h264Preview_01_main")
+            == "rtsp://admin:123@192.168.1.70:554/h264Preview_01_sub"
+        )
+
+    def test_direct_fallback_when_no_relay_is_running(self):
+        from backend.core.stream_relay import StreamRelayManager
+
+        mgr = StreamRelayManager()
+        with patch.object(mgr, "_probe_go2rtc", return_value=False), patch.object(
+            mgr, "_probe_mediamtx", return_value=False
+        ):
+            resolved = mgr.resolve_capture_source(
+                "tapo_cam", "rtsp://user:secret@192.168.50.135:554/stream1"
+            )
+            status = mgr.get_status()
+
+        assert resolved == "rtsp://user:secret@192.168.50.135:554/stream1"
+        assert status["active_backend"] == "direct"
+        assert status["relay_active"] is False
+        assert "secret" not in str(status["streams"])
+
+    def test_go2rtc_registration_and_multiplex_urls(self):
+        from backend.core.stream_relay import StreamRelayManager
+
+        mgr = StreamRelayManager()
+        calls = []
+
+        def fake_http(method, url, payload=None, timeout=1.5):
+            calls.append((method, url, payload))
+            return 200, b"{}"
+
+        with patch.object(mgr, "_probe_go2rtc", return_value=True), patch.object(
+            mgr, "_http_request", side_effect=fake_http
+        ):
+            info = mgr.register_camera(
+                "tapo_front",
+                "rtsp://tapo_user:secret@192.168.50.135:554/stream1",
+            )
+
+        assert info.backend == "go2rtc"
+        assert info.rtsp_main_url == "rtsp://127.0.0.1:8554/tapo_front"
+        assert info.rtsp_sub_url == "rtsp://127.0.0.1:8554/tapo_front_sub"
+        assert info.webrtc_url == "http://127.0.0.1:1984/api/webrtc?src=tapo_front"
+        assert len(calls) == 2
+
+    def test_mediamtx_registration_with_source_on_demand(self):
+        from backend.core.stream_relay import StreamRelayManager
+
+        mgr = StreamRelayManager()
+        calls = []
+
+        def fake_http(method, url, payload=None, timeout=1.5):
+            calls.append((method, url, payload))
+            return 200, b"{}"
+
+        with patch.object(mgr, "_probe_go2rtc", return_value=False), patch.object(
+            mgr, "_probe_mediamtx", return_value=True
+        ), patch.object(mgr, "_http_request", side_effect=fake_http):
+            info = mgr.register_camera(
+                "tapo_backyard",
+                "rtsp://tapo_user:secret@192.168.50.135:554/stream1",
+                source_on_demand=True,
+            )
+
+        assert info.backend == "mediamtx"
+        assert info.rtsp_main_url == "rtsp://127.0.0.1:8554/tapo_backyard"
+        assert info.rtsp_sub_url == "rtsp://127.0.0.1:8554/tapo_backyard_sub"
+        assert calls[0][2]["sourceOnDemand"] is True
 
 
 class TestWebSocketMessageParsing:
@@ -188,7 +404,8 @@ class TestWebSocketMessageParsing:
         from backend.api.routes.websockets import parse_client_message
 
         assert parse_client_message("hello") == {
-            "type": "text", "content": "hello"
+            "type": "text",
+            "content": "hello",
         }
 
     def test_malformed_json_does_not_raise(self):
@@ -196,3 +413,38 @@ class TestWebSocketMessageParsing:
 
         result = parse_client_message('{"type": ')
         assert result["type"] == "text"
+
+
+class TestMultiVendorPTZAndEdgeAI:
+    """Verify multi-vendor PTZ auto-connection, Pan/Tilt-only ONVIF payloads, and Edge AI event ingestion."""
+
+    def test_extract_camera_connection_info_across_vendors(self):
+        from backend.core.camera_security import (
+            encrypt_camera_source,
+            extract_camera_connection_info,
+        )
+
+        enc_tapo = encrypt_camera_source(
+            "rtsp://tapo_user:My%40Secret%3APass@192.168.50.135:554/stream1"
+        )
+        info = extract_camera_connection_info(enc_tapo)
+        assert info["is_network_camera"] is True
+        assert info["camera_ip"] == "192.168.50.135"
+        assert info["username"] == "tapo_user"
+        assert info["password"] == "My@Secret:Pass"
+        assert info["vendor_hint"] == "tapo"
+
+        hik_info = extract_camera_connection_info(
+            "rtsp://admin:12345@192.168.1.64:554/Streaming/Channels/101"
+        )
+        assert hik_info["vendor_hint"] == "hikvision"
+
+        dahua_info = extract_camera_connection_info(
+            "rtsp://admin:12345@192.168.1.108:554/cam/realmonitor?channel=1&subtype=0"
+        )
+        assert dahua_info["vendor_hint"] == "dahua"
+
+        reolink_info = extract_camera_connection_info(
+            "rtsp://admin:12345@192.168.1.120:554/h264Preview_01_main"
+        )
+        assert reolink_info["vendor_hint"] == "reolink"

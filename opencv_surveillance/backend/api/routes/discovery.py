@@ -8,10 +8,17 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from pydantic import BaseModel
 from typing import List, Dict, Optional
 import logging
+import time
 from sqlalchemy.orm import Session
 
 from backend.core.camera_discovery import discovery_service
 from backend.core.camera_manager import manager as camera_manager
+from backend.core.camera_security import (
+    inject_rtsp_credentials,
+    redact_url_credentials,
+    strip_url_credentials,
+)
+from backend.core.camera_validation import validate_camera_source
 from backend.database.session import get_db
 from backend.database import crud
 
@@ -30,6 +37,8 @@ class CameraTestRequest(BaseModel):
 
     camera_type: str
     source: str
+    username: Optional[str] = None
+    password: Optional[str] = None
 
 
 class QuickAddRequest(BaseModel):
@@ -39,6 +48,8 @@ class QuickAddRequest(BaseModel):
     camera_type: str
     source: str
     name: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
     enabled: bool = True
 
 
@@ -56,14 +67,13 @@ async def discover_usb_cameras(db: Session = Depends(get_db)):
         cameras = result["cameras"]
 
         # Filter out cameras that are already added
-        # Get all existing camera sources from database
         existing_cameras = crud.get_cameras(db)
         existing_sources = {cam.source for cam in existing_cameras}
 
-        # Filter USB cameras - check if source (index as string) already exists
         filtered_cameras = [
-            cam for cam in cameras
-            if str(cam.get('index', '')) not in existing_sources
+            cam
+            for cam in cameras
+            if str(cam.get("index", "")) not in existing_sources
         ]
 
         filtered_count = len(cameras) - len(filtered_cameras)
@@ -71,7 +81,6 @@ async def discover_usb_cameras(db: Session = Depends(get_db)):
         if filtered_count > 0:
             message += f" ({filtered_count} already added)"
 
-        # A denial looks identical to an empty result unless we say so.
         if result["permission_denied"]:
             message = (
                 "No cameras could be opened, but the system reports "
@@ -91,8 +100,8 @@ async def discover_usb_cameras(db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error discovering USB cameras: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Discovery failed: {str(e)}")
+            status_code=500, detail=f"Discovery failed: {str(e)}"
+        )
 
 
 @router.post("/cameras/discover/network", status_code=200)
@@ -102,36 +111,28 @@ async def discover_network_cameras(
     """
     Discover RTSP/IP cameras on the local network.
 
-    This operation runs in the background as it may take 30-60 seconds.
-    Use the /cameras/discover/status endpoint to check progress.
-
-    Args:
-        request: Optional subnet to scan (e.g., "192.168.1.0/24")
-
-    Returns:
-        Confirmation that discovery has started
+    This operation runs in the background. Use /cameras/discover/status to
+    stream incremental and final discovery results.
     """
-    # Check if scan is stuck (over 2 minutes old) and auto-reset
-    import time
     if discovery_service.scanning:
-        scan_start = getattr(discovery_service, '_scan_start_time', 0)
+        scan_start = getattr(discovery_service, "_scan_start_time", 0)
         if time.time() - scan_start > 120:  # 2 minute timeout
             logger.warning("Network scan appears stuck, auto-resetting...")
             discovery_service.scanning = False
         else:
-            raise HTTPException(status_code=409,
-                                detail="Network scan already in progress")
+            raise HTTPException(
+                status_code=409, detail="Network scan already in progress"
+            )
 
-    # Record scan start time
+    discovery_service.scanning = True
+    discovery_service.discovered_cameras = []
     discovery_service._scan_start_time = time.time()
-
-    # Start discovery in background
     background_tasks.add_task(_run_network_discovery, request.subnet)
 
     return {
         "success": True,
         "message": "Network discovery started",
-        "note": "This may take 30-60 seconds. Use /cameras/discover/status to check progress",
+        "note": "Check /cameras/discover/status for live progress",
     }
 
 
@@ -139,8 +140,6 @@ async def discover_network_cameras(
 async def cancel_network_discovery():
     """
     Cancel an ongoing network discovery scan.
-
-    Use this if a scan appears stuck or you want to start a new scan.
     """
     was_scanning = discovery_service.scanning
     discovery_service.scanning = False
@@ -149,7 +148,11 @@ async def cancel_network_discovery():
     return {
         "success": True,
         "was_scanning": was_scanning,
-        "message": "Network scan cancelled" if was_scanning else "No scan was in progress"
+        "message": (
+            "Network scan cancelled"
+            if was_scanning
+            else "No scan was in progress"
+        ),
     }
 
 
@@ -158,11 +161,12 @@ async def _run_network_discovery(subnet: Optional[str]):
     try:
         cameras = await discovery_service.discover_network_cameras(subnet)
         discovery_service.discovered_cameras = cameras
-        logger.info(f"Network discovery completed. Found {len(cameras)} cameras")
+        logger.info(
+            f"Network discovery completed. Found {len(cameras)} cameras"
+        )
     except Exception as e:
         logger.error(f"Network discovery failed: {e}")
     finally:
-        # Always reset scanning flag when task completes
         discovery_service.scanning = False
         discovery_service._scan_start_time = 0
 
@@ -170,26 +174,27 @@ async def _run_network_discovery(subnet: Optional[str]):
 @router.get("/cameras/discover/status", status_code=200)
 async def get_discovery_status(db: Session = Depends(get_db)):
     """
-    Get the status of ongoing camera discovery.
+    Get the status of ongoing or completed camera discovery.
 
-    Returns:
-        Discovery status and any cameras found (excludes already-added cameras)
+    Returns incremental and final cameras found (excluding already-added cameras,
+    matching even when stored cameras have embedded credentials).
     """
     status = discovery_service.get_discovery_status()
 
-    # Get existing cameras to filter out
     existing_cameras = crud.get_cameras(db)
-    existing_sources = {cam.source for cam in existing_cameras}
+    existing_sources = set()
+    for cam in existing_cameras:
+        if cam.source:
+            existing_sources.add(cam.source)
+            stripped = strip_url_credentials(cam.source)
+            if stripped:
+                existing_sources.add(stripped)
 
-    # Filter discovered network cameras
-    # Network cameras use RTSP URLs as source, check if any of the URLs match
     filtered_cameras = []
-    if not status["scanning"]:
-        for cam in discovery_service.discovered_cameras:
-            # Check if any of the camera URLs are already in use
-            urls = cam.get('urls', [])
-            if not any(url in existing_sources for url in urls):
-                filtered_cameras.append(cam)
+    for cam in list(discovery_service.discovered_cameras):
+        urls = cam.get("urls", [])
+        if not any(url in existing_sources for url in urls):
+            filtered_cameras.append(cam)
 
     return {
         "scanning": status["scanning"],
@@ -202,20 +207,29 @@ async def get_discovery_status(db: Session = Depends(get_db)):
 async def test_camera_connection(request: CameraTestRequest):
     """
     Test if a camera configuration works before adding it.
-
-    Args:
-        request: Camera configuration to test
-
-    Returns:
-        Test results with success status
     """
     try:
-        result = await discovery_service.test_camera_connection(
-            {"camera_type": request.camera_type, "source": request.source}
-        )
+        final_source = request.source
+        if request.camera_type != "usb" and (request.username or request.password):
+            final_source = inject_rtsp_credentials(
+                request.source,
+                username=request.username,
+                password=request.password,
+            )
 
+        if request.camera_type in ("rtsp", "rtmp", "onvif", "usb", "mock"):
+            validate_camera_source(final_source, request.camera_type)
+
+        result = await discovery_service.test_camera_connection(
+            {
+                "camera_type": request.camera_type,
+                "source": final_source,
+            }
+        )
         return result
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error testing camera: {e}")
         raise HTTPException(status_code=500, detail=f"Test failed: {str(e)}")
@@ -223,77 +237,78 @@ async def test_camera_connection(request: CameraTestRequest):
 
 @router.post("/cameras/quick-add", status_code=201)
 async def quick_add_camera(
-        request: QuickAddRequest,
-        db: Session = Depends(get_db)):
+    request: QuickAddRequest, db: Session = Depends(get_db)
+):
     """
     Quickly add a discovered camera with auto-configured settings.
 
-    Saves camera to database AND starts it in camera_manager for persistence.
-
-    Args:
-        request: Camera configuration from discovery
-        db: Database session
-
-    Returns:
-        Success message with camera details
+    Injects URL-encoded credentials if provided, encrypts the source URL at rest
+    in SQLite, and starts the stream in camera_manager.
     """
     try:
-        # Check if camera already exists in database
         existing_camera = crud.get_camera_by_id(db, request.camera_id)
         if existing_camera:
             raise HTTPException(
-                status_code=400, detail=f"Camera '{request.camera_id}' already exists")
+                status_code=400,
+                detail=f"Camera '{request.camera_id}' already exists",
+            )
 
-        # Also check in-memory camera manager
         if camera_manager.get_camera(request.camera_id):
             raise HTTPException(
                 status_code=400,
                 detail=f"Camera '{request.camera_id}' is already running",
             )
 
-        # Test the camera connection first
+        final_source = request.source
+        if request.camera_type != "usb" and (request.username or request.password):
+            final_source = inject_rtsp_credentials(
+                request.source,
+                username=request.username,
+                password=request.password,
+            )
+
+        validate_camera_source(final_source, request.camera_type)
+
         test_result = await discovery_service.test_camera_connection(
-            {"camera_type": request.camera_type, "source": request.source}
+            {"camera_type": request.camera_type, "source": final_source}
         )
 
         if not test_result.get("success"):
-            error_msg = test_result.get('error', 'Unknown error')
+            error_msg = test_result.get("error", "Unknown error")
             raise HTTPException(
                 status_code=400,
                 detail=f"Camera test failed: {error_msg}",
             )
 
-        # Save to database FIRST for persistence
+        # Save to database FIRST for persistence (EncryptedCameraSource encrypts at rest)
         camera_data = {
             "camera_id": request.camera_id,
             "camera_type": request.camera_type,
-            "source": request.source,
-            "face_detection_enabled": True,  # Default settings
+            "source": final_source,
+            "face_detection_enabled": True,
             "motion_detection_enabled": True,
             "recording_enabled": True,
             "is_active": True,
         }
-        db_camera = crud.create_camera(db, camera_data)
+        crud.create_camera(db, camera_data)
 
-        # Then add to camera_manager to start streaming
         try:
             camera_manager.add_camera(
                 camera_id=request.camera_id,
                 camera_type=request.camera_type,
-                source=request.source,
+                source=final_source,
             )
 
-            # Verify it's running
             camera = camera_manager.get_camera(request.camera_id)
             if not camera or not camera.is_running:
-                # If camera fails to start, remove from database
                 crud.delete_camera(db, request.camera_id)
                 raise HTTPException(
                     status_code=500,
                     detail=f"Failed to start camera '{request.camera_id}'",
                 )
+        except HTTPException:
+            raise
         except Exception as e:
-            # If camera manager fails, remove from database
             crud.delete_camera(db, request.camera_id)
             raise HTTPException(
                 status_code=500, detail=f"Error starting camera: {str(e)}"
@@ -305,7 +320,7 @@ async def quick_add_camera(
             "camera": {
                 "camera_id": request.camera_id,
                 "type": request.camera_type,
-                "source": request.source,
+                "source": redact_url_credentials(final_source),
                 "status": "running",
             },
         }
@@ -315,17 +330,14 @@ async def quick_add_camera(
     except Exception as e:
         logger.error(f"Error adding camera: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to add camera: {str(e)}")
+            status_code=500, detail=f"Failed to add camera: {str(e)}"
+        )
 
 
 @router.get("/cameras/discover/help", status_code=200)
 async def get_discovery_help():
     """
     Get help information about camera discovery features.
-
-    Returns:
-        Helpful information about discovery methods and compatibility
     """
     return {
         "usb_discovery": {
@@ -334,20 +346,20 @@ async def get_discovery_help():
             "instructions": "Simply click 'Scan for USB Cameras' - no configuration needed",
         },
         "network_discovery": {
-            "description": "Scans local network for RTSP/IP cameras",
-            "protocols": ["RTSP"],
-            "ports_scanned": [554, 8554, 8080, 88],
-            "duration": "30-60 seconds",
+            "description": "Scans local network for RTSP/IP/ONVIF cameras using ARP-prioritized probing",
+            "protocols": ["RTSP", "ONVIF"],
+            "ports_scanned": [554, 8554, 8080, 88, 2020],
+            "duration": "1-15 seconds",
             "instructions": "Click 'Scan Network' to discover cameras on your local network",
-            "note": "Most IP cameras require username/password authentication",
+            "note": "Credentials are URL-encoded and encrypted at rest using Fernet",
         },
         "compatible_cameras": {
-            "usb": "Any USB webcam or built-in camera",
-            "rtsp": "Most modern IP cameras (Hikvision, Dahua, Amcrest, Reolink, etc.)",
-            "note": "Proprietary systems (Nest, Ring, Arlo) are not discoverable",
+            "usb": "Any USB webcam, built-in camera, or Apple Continuity Camera",
+            "rtsp": "TP-Link Tapo, Hikvision, Dahua, Amcrest, Reolink, Axis, Ubiquiti UniFi, Foscam, Generic ONVIF",
+            "note": "Cloud-only cameras without local RTSP (Ring, Arlo) are not discoverable",
         },
         "common_credentials": {
-            "note": "Try these if your camera requires authentication",
+            "note": "For TP-Link Tapo, use the Camera Account created in the Tapo app (Settings -> Advanced -> Camera Account)",
             "credentials": [
                 {"username": "admin", "password": "admin"},
                 {"username": "admin", "password": "12345"},
@@ -356,3 +368,14 @@ async def get_discovery_help():
             ],
         },
     }
+
+
+@router.get("/cameras/relay/status", status_code=200)
+async def get_stream_relay_status():
+    """
+    Get the status of the optional RTSP/WebRTC stream relay (go2rtc or MediaMTX).
+    """
+    from backend.core.stream_relay import stream_relay
+
+    return stream_relay.get_status()
+

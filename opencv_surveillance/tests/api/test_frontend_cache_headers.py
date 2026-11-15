@@ -38,7 +38,9 @@ class TestIndexIsAlwaysRevalidated:
     def test_root_is_not_cacheable_without_revalidation(self, client):
         response = client.get("/")
 
-        if response.status_code == 404:
+        if response.status_code == 404 or "text/html" not in response.headers.get("content-type", ""):
+            # Without frontend/dist, "/" answers API info as JSON and the SPA
+            # routes are not mounted: there is no index.html to cache.
             pytest.skip("frontend not built in this checkout")
 
         cache_control = response.headers.get("Cache-Control", "")
@@ -54,7 +56,9 @@ class TestIndexIsAlwaysRevalidated:
         """
         response = client.get("/faces")
 
-        if response.status_code == 404:
+        if response.status_code == 404 or "text/html" not in response.headers.get("content-type", ""):
+            # Without frontend/dist, "/" answers API info as JSON and the SPA
+            # routes are not mounted: there is no index.html to cache.
             pytest.skip("frontend not built in this checkout")
 
         assert "no-cache" in response.headers.get("Cache-Control", "")
@@ -66,7 +70,9 @@ class TestIndexIsAlwaysRevalidated:
         """
         response = client.get("/")
 
-        if response.status_code == 404:
+        if response.status_code == 404 or "text/html" not in response.headers.get("content-type", ""):
+            # Without frontend/dist, "/" answers API info as JSON and the SPA
+            # routes are not mounted: there is no index.html to cache.
             pytest.skip("frontend not built in this checkout")
 
         assert response.headers.get("ETag") or response.headers.get("Last-Modified")

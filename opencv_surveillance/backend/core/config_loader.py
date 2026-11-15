@@ -39,6 +39,8 @@ SECRET_KEYS = (
     "SECRET_KEY",
     "JWT_SECRET_KEY",
     "ECOSYSTEM_HMAC_SECRET",
+    "CAMERA_ENCRYPTION_KEY",
+    "NOTIFICATION_ENCRYPTION_KEY",
 )
 
 
@@ -90,6 +92,26 @@ def secure_permissions(path: Path) -> None:
         logger.warning("Could not restrict permissions on %s: %s", path, e)
 
 
+def _parse_env_file_fallback(path: Path, override: bool = False) -> None:
+    """Minimal stdlib .env loader used only when python-dotenv is unavailable."""
+    try:
+        for raw_line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            if line.startswith("export "):
+                line = line[len("export "):].strip()
+            key, val = line.split("=", 1)
+            key = key.strip()
+            val = val.strip()
+            if len(val) >= 2 and val[0] == val[-1] and val[0] in ("'", '"'):
+                val = val[1:-1]
+            if key and (override or key not in os.environ):
+                os.environ[key] = val
+    except OSError:
+        pass
+
+
 def load_configuration(data_root: Optional[Path] = None) -> List[Path]:
     """
     Load configuration files into the environment. Returns those actually read.
@@ -105,9 +127,8 @@ def load_configuration(data_root: Optional[Path] = None) -> List[Path]:
     """
     try:
         from dotenv import load_dotenv
-    except ImportError:  # pragma: no cover - python-dotenv is a hard dependency
-        logger.warning("python-dotenv not installed; skipping configuration files")
-        return []
+    except ImportError:  # pragma: no cover - fallback to stdlib parser
+        load_dotenv = _parse_env_file_fallback
 
     loaded: List[Path] = []
     for candidate in _candidate_files(data_root):

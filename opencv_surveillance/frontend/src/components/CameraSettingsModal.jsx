@@ -5,11 +5,12 @@ import apiClient from '../api/apiClient';
 import MotionZoneEditor from './MotionZoneEditor';
 import Switch from './Switch';
 import TwoWayAudio from './TwoWayAudio';
+import PTZControl from './PTZControl';
 import './CameraSettingsModal.css';
 import { describeApiError } from '../utils/apiError';
 
-const CameraSettingsModal = ({ camera, onClose, onSave }) => {
-  const [activeTab, setActiveTab] = useState('motion');
+const CameraSettingsModal = ({ camera, onClose, onSave, initialTab = 'motion' }) => {
+  const [activeTab, setActiveTab] = useState(initialTab || 'motion');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -64,6 +65,33 @@ const CameraSettingsModal = ({ camera, onClose, onSave }) => {
     overlay_font_color: camera?.overlay_font_color ?? 'white',
   });
 
+  // Multi-Vendor Camera Edge AI & Hardware Settings
+  const [edgeInfo, setEdgeInfo] = useState({
+    vendor: 'generic',
+    camera_ip: '',
+    onvif_port: 2020,
+    is_network_camera: true,
+    device_info: {},
+    capabilities: {},
+    recent_events: [],
+    loading: false,
+  });
+  const [edgeSettings, setEdgeSettings] = useState({
+    edge_ai_enabled: true,
+    person_detection: true,
+    vehicle_detection: true,
+    pet_detection: true,
+    package_detection: false,
+    audio_alarm_detection: false,
+    motion_detection: true,
+    auto_tracking: false,
+    privacy_mode: false,
+    night_vision_mode: 'auto',
+    trigger_recording_on_edge_ai: true,
+    cooldown_seconds: 10,
+  });
+  const [sirenBusy, setSirenBusy] = useState(false);
+
   // Initialize settings from camera prop (no API call needed - data already available!)
   useEffect(() => {
     if (camera) {
@@ -111,8 +139,88 @@ const CameraSettingsModal = ({ camera, onClose, onSave }) => {
 
       setError(null);
       setLoading(false);
+      loadEdgeCapabilities( false );
     }
   }, [camera]);
+
+  const loadEdgeCapabilities = async (refresh = false) => {
+    if (!camera?.camera_id) return;
+    setEdgeInfo((prev) => ({ ...prev, loading: true }));
+    try {
+      const res = await apiClient.get(
+        `/cameras/${camera.camera_id}/edge/capabilities?refresh=${refresh ? 'true' : 'false'}`
+      );
+      const data = res.data || {};
+      setEdgeInfo({
+        vendor: data.vendor || 'generic',
+        camera_ip: data.camera_ip || '',
+        onvif_port: data.onvif_port || 2020,
+        is_network_camera: Boolean(data.is_network_camera),
+        device_info: data.device_info || {},
+        capabilities: data.capabilities || {},
+        recent_events: data.recent_events || [],
+        loading: false,
+      });
+      if (data.settings) {
+        setEdgeSettings((prev) => ({ ...prev, ...data.settings }));
+      }
+    } catch (err) {
+      setEdgeInfo((prev) => ({ ...prev, loading: false }));
+    }
+  };
+
+  const handleSaveEdgeSettings = async () => {
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await apiClient.put(`/cameras/${camera.camera_id}/edge/settings`, edgeSettings);
+      if (res.data?.settings) {
+        setEdgeSettings((prev) => ({ ...prev, ...res.data.settings }));
+      }
+      setSuccess('Camera Edge AI & hardware settings saved!');
+      setTimeout(() => setSuccess(null), 4000);
+    } catch (err) {
+      setError(`Failed to save Edge AI settings: ${describeApiError(err)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTriggerSiren = async (active) => {
+    setSirenBusy(true);
+    setError(null);
+    try {
+      await apiClient.post(`/cameras/${camera.camera_id}/edge/siren`, {
+        active,
+        duration_seconds: 5,
+      });
+      setSuccess(active ? 'Camera siren triggered (5s auto-stop)' : 'Camera siren stopped');
+      setTimeout(() => setSuccess(null), 4000);
+    } catch (err) {
+      setError(`Siren command failed: ${describeApiError(err)}`);
+    } finally {
+      setSirenBusy(false);
+    }
+  };
+
+  const handleTestEdgeEvent = async (objectClass) => {
+    setSaving(true);
+    setError(null);
+    try {
+      await apiClient.post(`/cameras/${camera.camera_id}/edge/test-event`, {
+        object_class: objectClass,
+        confidence: 0.96,
+      });
+      setSuccess(`Recorded camera Edge AI ${objectClass} detection event!`);
+      await loadEdgeCapabilities(false);
+      setTimeout(() => setSuccess(null), 4000);
+    } catch (err) {
+      setError(`Failed to test Edge AI event: ${describeApiError(err)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleSaveMotionSettings = async () => {
     setSaving(true);
@@ -765,6 +873,167 @@ const CameraSettingsModal = ({ camera, onClose, onSave }) => {
     </div>
   );
 
+  const renderEdgeTab = () => {
+    const vendorNames = {
+      tapo: 'TP-Link Tapo (ONVIF + Smart AI)',
+      hikvision: 'Hikvision (ONVIF + ISAPI)',
+      dahua: 'Dahua / Amcrest (ONVIF + CGI)',
+      reolink: 'Reolink (ONVIF + AI State API)',
+      axis: 'Axis (ONVIF + VAPIX)',
+      generic: 'Standard ONVIF Profile S/T',
+    };
+    const vendorDisplay = vendorNames[edgeInfo.vendor] || vendorNames.generic;
+    const devModel = edgeInfo.device_info?.Model ? ` • ${edgeInfo.device_info.Model}` : '';
+
+    return (
+      <div className="settings-tab-content">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+          <div>
+            <h3 style={{ margin: 0 }}>Built-In Camera AI & Hardware Controls</h3>
+            <p className="settings-hint" style={{ marginTop: '4px' }}>
+              {vendorDisplay}{devModel}
+              {edgeInfo.camera_ip ? ` (${edgeInfo.camera_ip}:${edgeInfo.onvif_port})` : ''}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => loadEdgeCapabilities(true)}
+            disabled={edgeInfo.loading}
+          >
+            {edgeInfo.loading ? 'Probing…' : '🔄 Re-Probe Hardware'}
+          </button>
+        </div>
+
+        <div className="settings-section">
+          <Switch
+            checked={edgeSettings.edge_ai_enabled}
+            onChange={(checked) => setEdgeSettings({ ...edgeSettings, edge_ai_enabled: checked })}
+            label="Ingest On-Camera Edge AI Events (ONVIF / Native NPU)"
+            color="primary"
+          />
+          <p className="settings-hint">
+            Listens to the camera's built-in AI processor for Person, Vehicle, Pet, and Motion events—saving Mac CPU usage while logging detections directly into the Detections page and triggering recordings.
+          </p>
+        </div>
+
+        <div className="settings-section">
+          <h4 style={{ marginBottom: '10px' }}>On-Camera AI Detection Filters</h4>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+            <Switch
+              checked={edgeSettings.person_detection}
+              onChange={(checked) => setEdgeSettings({ ...edgeSettings, person_detection: checked })}
+              label="👤 Person / Human AI"
+            />
+            <Switch
+              checked={edgeSettings.vehicle_detection}
+              onChange={(checked) => setEdgeSettings({ ...edgeSettings, vehicle_detection: checked })}
+              label="🚗 Vehicle AI"
+            />
+            <Switch
+              checked={edgeSettings.pet_detection}
+              onChange={(checked) => setEdgeSettings({ ...edgeSettings, pet_detection: checked })}
+              label="🐾 Pet / Animal AI"
+            />
+            <Switch
+              checked={edgeSettings.package_detection}
+              onChange={(checked) => setEdgeSettings({ ...edgeSettings, package_detection: checked })}
+              label="📦 Package AI"
+            />
+            <Switch
+              checked={edgeSettings.audio_alarm_detection}
+              onChange={(checked) => setEdgeSettings({ ...edgeSettings, audio_alarm_detection: checked })}
+              label="🔊 Baby Cry / Bark / Glass Break"
+            />
+            <Switch
+              checked={edgeSettings.trigger_recording_on_edge_ai}
+              onChange={(checked) => setEdgeSettings({ ...edgeSettings, trigger_recording_on_edge_ai: checked })}
+              label="🎥 Auto-Record on Camera AI Event"
+            />
+          </div>
+        </div>
+
+        <div className="settings-section">
+          <h4 style={{ marginBottom: '10px' }}>Camera Hardware Features (Multi-Vendor & Tapo)</h4>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
+            <Switch
+              checked={edgeSettings.auto_tracking}
+              onChange={(checked) => setEdgeSettings({ ...edgeSettings, auto_tracking: checked })}
+              label="🏃 PTZ Smart Auto-Tracking (Follow Person)"
+            />
+            <Switch
+              checked={edgeSettings.privacy_mode}
+              onChange={(checked) => setEdgeSettings({ ...edgeSettings, privacy_mode: checked })}
+              label="🙈 Hardware Privacy Mask (Hide Lens)"
+            />
+          </div>
+
+          <div style={{ marginTop: '16px' }}>
+            <label className="settings-label">Night Vision / IR / Spotlight Mode</label>
+            <select
+              value={edgeSettings.night_vision_mode}
+              onChange={(e) => setEdgeSettings({ ...edgeSettings, night_vision_mode: e.target.value })}
+              className="form-select"
+            >
+              <option value="auto">Smart Auto (Switch IR / Color on Motion)</option>
+              <option value="ir">Infrared Night Vision (B&W IR LED)</option>
+              <option value="color">Full-Color Starlight / White Spotlight</option>
+              <option value="off">Day Mode Only (IR Filter Engaged)</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="settings-section">
+          <h4 style={{ marginBottom: '10px' }}>Built-In Siren & Edge AI Verification</h4>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={sirenBusy}
+              onClick={() => handleTriggerSiren(true)}
+            >
+              🚨 Trigger Siren (5s)
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={sirenBusy}
+              onClick={() => handleTriggerSiren(false)}
+            >
+              🔕 Stop Siren
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={saving}
+              onClick={() => handleTestEdgeEvent('person')}
+            >
+              🧪 Test Person AI Event
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={saving}
+              onClick={() => handleTestEdgeEvent('vehicle')}
+            >
+              🧪 Test Vehicle AI Event
+            </button>
+          </div>
+        </div>
+
+        <div className="settings-actions">
+          <button
+            onClick={handleSaveEdgeSettings}
+            disabled={saving}
+            className="btn btn-primary"
+          >
+            {saving ? 'Saving...' : 'Save Edge AI & Hardware Settings'}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   if (!camera) return null;
 
   // Escape closes this dialog. It renders its own overlay rather than using
@@ -843,6 +1112,18 @@ const CameraSettingsModal = ({ camera, onClose, onSave }) => {
           >
             Two-Way Audio
           </button>
+          <button
+            className={`settings-tab ${activeTab === 'ptz' ? 'active' : ''}`}
+            onClick={() => setActiveTab('ptz')}
+          >
+            🎮 PTZ & Viewer
+          </button>
+          <button
+            className={`settings-tab ${activeTab === 'edge' ? 'active' : ''}`}
+            onClick={() => setActiveTab('edge')}
+          >
+            🧠 Edge AI & Hardware
+          </button>
         </div>
 
         <div className="camera-settings-body">
@@ -865,10 +1146,21 @@ const CameraSettingsModal = ({ camera, onClose, onSave }) => {
                   return renderZonesTab();
                 case 'audio':
                   return renderAudioTab();
+                case 'ptz':
+                  return (
+                    <div className="settings-tab-content">
+                      <PTZControl
+                        cameraId={camera.camera_id}
+                        cameraName={camera.name || camera.camera_id}
+                      />
+                    </div>
+                  );
+                case 'edge':
+                  return renderEdgeTab();
                 default:
                   return null;
               }
-            }, [activeTab, motionSettings, recordingSettings, faceSettings, imageSettings, overlaySettings, camera.camera_id])
+            }, [activeTab, motionSettings, recordingSettings, faceSettings, imageSettings, overlaySettings, edgeSettings, edgeInfo, sirenBusy, saving, camera.camera_id, camera.name])
           )}
         </div>
       </div>

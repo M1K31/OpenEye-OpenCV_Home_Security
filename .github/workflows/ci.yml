@@ -9,7 +9,9 @@ on:
 jobs:
   test:
     name: Test Python ${{ matrix.python-version }}
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04, where Playwright ships no Chromium and
+    # setup-python has no 3.9. Move forward once both support the new image.
+    runs-on: ubuntu-24.04
     strategy:
       # Report every interpreter, do not cancel siblings on the first red one. With
       # the default fail-fast the matrix surfaced one version at a time: 3.11 failed
@@ -20,9 +22,10 @@ jobs:
       matrix:
         # 3.12 is what the shipped macOS bundle runs, and the Docker image
         # now matches it. It was absent here, so CI certified three versions
-        # and never the one users have. 3.9 stays because the developer
-        # machine still runs it; drop it once that moves.
-        python-version: ['3.9', '3.10', '3.11', '3.12']
+        # and never the one users have. 3.9 was dropped on 2026-11-15: the
+        # ecosystem packages (appecosystem-*) require Python 3.10+, so pip
+        # cannot install requirements-ecosystem.txt there at all.
+        python-version: ['3.10', '3.11', '3.12']
     
     steps:
     - name: Checkout code
@@ -37,9 +40,11 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        # Keyed by runner image and Python: a wheel built on another image (dlib
+        # built on ubuntu 26.04 needs glibc 2.43) must not be restored here.
+        key: ${{ runner.os }}-ubuntu24.04-py${{ matrix.python-version }}-pip-${{ hashFiles('**/requirements*.txt') }}
         restore-keys: |
-          ${{ runner.os }}-pip-
+          ${{ runner.os }}-ubuntu24.04-py${{ matrix.python-version }}-pip-
     
     - name: Install system dependencies
       run: |
@@ -114,7 +119,9 @@ jobs:
 
   docker-build-test:
     name: Test Docker Build
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04, where Playwright ships no Chromium and
+    # setup-python has no 3.9. Move forward once both support the new image.
+    runs-on: ubuntu-24.04
 
     steps:
     - name: Free up disk space

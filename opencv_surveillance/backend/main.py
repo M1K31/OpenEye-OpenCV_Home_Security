@@ -118,22 +118,22 @@ logger = logging.getLogger(__name__)
 shutdown_in_progress = False
 
 def signal_handler(signum, frame):
-    """Handle shutdown signals gracefully"""
+    """Mark shutdown in progress without raising SystemExit mid-request.
+
+    Uvicorn installs its own signal handlers to drain in-flight HTTP/streaming
+    connections and run the ASGI lifespan shutdown event cleanly. Calling
+    sys.exit(0) here raised SystemExit synchronously on the main thread,
+    severing active requests (ERR_CONNECTION_REFUSED / ERR_INCOMPLETE_CHUNKED_ENCODING)
+    and interrupting startup/shutdown lifespans.
+    """
     global shutdown_in_progress
     if shutdown_in_progress:
         logger.warning(f"Signal {signum} received but shutdown already in progress")
         return
-    
+
     signal_name = "SIGINT" if signum == signal.SIGINT else "SIGTERM"
     logger.info(f"Received {signal_name}, initiating graceful shutdown...")
     shutdown_in_progress = True
-    
-    # Trigger FastAPI shutdown
-    sys.exit(0)
-
-# Register signal handlers
-signal.signal(signal.SIGINT, signal_handler)
-signal.signal(signal.SIGTERM, signal_handler)
 
 # Initialize FastAPI application
 app = FastAPI(
@@ -145,22 +145,35 @@ app = FastAPI(
 )
 
 # Configure CORS - Load allowed origins from environment
-# v3.11.0: Added MagicMirror default port (8080) for ecosystem integration
-# v3.11.1: Support for dynamic ecosystem origins and custom ports
+# Include self port (8200) and other ecosystem dashboard origins
 CORS_ORIGINS_STR = os.getenv(
     "CORS_ORIGINS",
-    "http://localhost:8000,http://localhost:3000,http://localhost:8080,"
-    "http://127.0.0.1:8000,http://127.0.0.1:3000,http://127.0.0.1:8080"  # Dev defaults + MagicMirror
+    "http://localhost:8200,http://127.0.0.1:8200,"
+    "http://localhost:8500,http://127.0.0.1:8500,"
+    "http://localhost:8000,http://127.0.0.1:8000,"
+    "http://localhost:8089,http://127.0.0.1:8089,"
+    "http://localhost:8088,http://127.0.0.1:8088,"
+    "http://localhost:3000,http://127.0.0.1:3000,"
+    "http://localhost:5173,http://127.0.0.1:5173,"
+    "http://localhost:8080,http://127.0.0.1:8080"
 )
 CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS_STR.split(",") if origin.strip()]
+
+# Add runtime port from environment if set
+RUN_PORT = os.getenv("PORT", "8200")
+if RUN_PORT:
+    for prefix in ("http://localhost", "http://127.0.0.1"):
+        origin = f"{prefix}:{RUN_PORT}"
+        if origin not in CORS_ORIGINS:
+            CORS_ORIGINS.append(origin)
 
 # Add MagicMirror port from environment if set
 MAGICMIRROR_PORT = os.getenv("MAGICMIRROR_PORT")
 if MAGICMIRROR_PORT:
-    CORS_ORIGINS.extend([
-        f"http://localhost:{MAGICMIRROR_PORT}",
-        f"http://127.0.0.1:{MAGICMIRROR_PORT}"
-    ])
+    for prefix in ("http://localhost", "http://127.0.0.1"):
+        origin = f"{prefix}:{MAGICMIRROR_PORT}"
+        if origin not in CORS_ORIGINS:
+            CORS_ORIGINS.append(origin)
 
 # Ecosystem mode (audit F-08): a wildcard origin ('*') must never be combined
 # with allow_credentials=True — that exposes the authenticated API to any
@@ -384,6 +397,29 @@ async def startup_event():
     """
     logger.info("Starting OpenEye Surveillance System...")
 
+    # Guard against competing OpenEye instances (e.g. a launchd background agent
+    # respawning while start-local.sh already holds the service port) using a
+    # non-blocking exclusive file lock. Unlike probing the TCP port (which would
+    # collide with Uvicorn's own parent reloader socket when --reload is active),
+    # only the active ASGI worker process runs startup_event() and holds this lock.
+    try:
+        import fcntl
+        lock_path = Path(str(paths.data_dir)).resolve() / ".openeye_worker.lock"
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        lock_fh = open(lock_path, "w")
+        fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        lock_fh.write(str(os.getpid()))
+        lock_fh.flush()
+        app.state._worker_lock_fh = lock_fh
+        app.state.duplicate_instance_skipped = False
+    except (OSError, IOError) as lock_err:
+        logger.error(
+            f"Another OpenEye worker instance is already active ({lock_err}). "
+            "Skipping camera and scheduler initialization for this duplicate instance."
+        )
+        app.state.duplicate_instance_skipped = True
+        return
+
     # Tables first, migrations second. This order matters and used to be the
     # other way round.
     #
@@ -544,7 +580,6 @@ async def startup_event():
         logger.warning(f"Schema migration check failed (non-critical): {e}")
 
     # Enable query profiling if configured
-    import os
     if os.getenv("ENABLE_QUERY_PROFILING", "false").lower() == "true":
         logger.info("Enabling database query profiling...")
         from backend.middleware.query_profiler import enable_query_profiling
@@ -630,6 +665,35 @@ async def startup_event():
 
     # Load existing cameras from database
     logger.info("Loading cameras from database...")
+    # Ensure any legacy plaintext camera sources are encrypted at rest
+    try:
+        from sqlalchemy import text
+        from backend.core.camera_security import (
+            encrypt_camera_source,
+            is_encrypted_source,
+            redact_url_credentials,
+        )
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text("SELECT id, source FROM cameras WHERE source IS NOT NULL")
+            ).fetchall()
+            migrated_sources = 0
+            for row_id, raw_source in rows:
+                if raw_source and not is_encrypted_source(raw_source):
+                    conn.execute(
+                        text("UPDATE cameras SET source = :enc WHERE id = :id"),
+                        {"enc": encrypt_camera_source(raw_source), "id": row_id},
+                    )
+                    migrated_sources += 1
+            if migrated_sources:
+                conn.commit()
+                logger.info(
+                    f"🔒 Encrypted {migrated_sources} existing camera source(s) at rest"
+                )
+    except Exception as e:
+        logger.debug(f"Could not check legacy camera source encryption: {e}")
+        from backend.core.camera_security import redact_url_credentials
+
     # Load cameras SYNCHRONOUSLY here on the main thread. On macOS the camera open
     # goes through AVFoundation, which MUST be initialised on the process main thread
     # (the ASGI startup runs there) — opening it from a worker thread segfaults. The
@@ -661,7 +725,7 @@ async def startup_event():
                         failed_cameras.append({
                             "id": db_camera.camera_id,
                             "type": db_camera.camera_type,
-                            "source": db_camera.source,
+                            "source": redact_url_credentials(db_camera.source),
                             "reason": message
                         })
                         # Keep trying in the background. Without this a startup
@@ -679,7 +743,7 @@ async def startup_event():
                     failed_cameras.append({
                         "id": db_camera.camera_id,
                         "type": db_camera.camera_type,
-                        "source": db_camera.source,
+                        "source": redact_url_credentials(db_camera.source),
                         "reason": str(e)
                     })
                     camera_manager.register_pending_camera(
@@ -705,6 +769,25 @@ async def startup_event():
             logger.warning("=" * 60)
         else:
             logger.info(f"✓ All {loaded_count} camera(s) loaded successfully")
+
+        # Initialize Camera Edge AI & Hardware controllers for network cameras
+        try:
+            from backend.core.camera_edge_features import edge_manager
+
+            for db_camera in db_cameras:
+                ctrl = edge_manager.get_controller(db_camera.camera_id, db_camera.source)
+                saved_edge_cfg = system_settings.get(f"edge_ai_config:{db_camera.camera_id}")
+                if saved_edge_cfg:
+                    try:
+                        import json as _json
+                        parsed_cfg = _json.loads(saved_edge_cfg) if isinstance(saved_edge_cfg, str) else saved_edge_cfg
+                        if isinstance(parsed_cfg, dict):
+                            ctrl.update_source(db_camera.source, parsed_cfg)
+                    except Exception:
+                        pass
+            edge_manager.ensure_background_worker()
+        except Exception as edge_err:
+            logger.debug(f"Could not initialize Camera Edge AI manager at startup: {edge_err}")
 
     # Start statistics broadcaster
     logger.info("Starting statistics broadcaster...")
@@ -790,7 +873,8 @@ async def startup_event():
 
     # Ecosystem integration (standalone no-op when registry unavailable)
     try:
-        from ecosystem_client import EcosystemClient
+        from backend.core.ecosystem_hub_bridge import _ensure_ecosystem_paths, start_openeye_hub
+        _ensure_ecosystem_paths()
         from ecosystem_client.config import EcosystemConfig
         from backend.core.config import resolve_service_port
 
@@ -802,14 +886,11 @@ async def startup_event():
         eco_config = EcosystemConfig.from_env()
         eco_config.webhook_path = "/api/ecosystem/webhook"
 
-        eco = EcosystemClient(
-            service_name="openeye",
+        eco = await start_openeye_hub(
+            app,
             service_port=resolve_service_port(),  # same value the server binds
-            health_endpoint="/api/health",
-            priority=50,  # Fallback ecosystem manager
-            config=eco_config,
+            eco_config=eco_config,
         )
-        await eco.start()
         app.state.ecosystem = eco
         # start() now reports a failed registration at ERROR itself; this line
         # records the mode either way.
@@ -819,6 +900,16 @@ async def startup_event():
         # broken unnoticed. The application still runs without the ecosystem.
         logger.warning(f"Ecosystem client not available: {e}")
         app.state.ecosystem = None
+        app.state.ecosystem_hub = None
+
+    # Hub commands: snapshots and clips, only with a valid ecosystem secret.
+    app.state.command_receiver = None
+    try:
+        from backend.core.ecosystem_commands import build_receiver as build_command_receiver
+
+        app.state.command_receiver = build_command_receiver(camera_manager)
+    except Exception as e:
+        logger.warning(f"Hub commands are unavailable: {e}")
 
 
 @app.on_event("shutdown")
@@ -830,16 +921,24 @@ async def shutdown_event():
     global shutdown_in_progress
     shutdown_in_progress = True
 
+    if getattr(app.state, "duplicate_instance_skipped", False):
+        logger.info("Duplicate instance shutdown complete (no resources were claimed).")
+        return
+
     logger.info("=" * 60)
     logger.info("Shutting down OpenEye Surveillance System...")
     logger.info("=" * 60)
 
     # Ecosystem cleanup
-    if getattr(app.state, "ecosystem", None):
-        try:
-            await app.state.ecosystem.stop()
-        except Exception:
-            pass
+    try:
+        from backend.core.ecosystem_hub_bridge import stop_openeye_hub
+        await stop_openeye_hub(app)
+    except Exception:
+        if getattr(app.state, "ecosystem", None):
+            try:
+                await app.state.ecosystem.stop()
+            except Exception:
+                pass
 
     # Step 1: Stop face clustering scheduler
     try:
@@ -1019,6 +1118,17 @@ async def shutdown_event():
     except Exception as e:
         logger.error(f"✗ Error logging shutdown event: {e}")
 
+    # Release worker lock so the next reload worker can acquire it immediately
+    lock_fh = getattr(app.state, "_worker_lock_fh", None)
+    if lock_fh is not None:
+        try:
+            import fcntl
+            fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
+            lock_fh.close()
+        except Exception:
+            pass
+        app.state._worker_lock_fh = None
+
     logger.info("=" * 60)
     logger.info("OpenEye Surveillance System shutdown complete")
     logger.info("=" * 60)
@@ -1129,6 +1239,25 @@ app.include_router(objects.router, prefix="/api/objects", tags=["Object Detectio
 
 # v3.11.0: Ecosystem Integration - MagicMirror, mobile apps, cross-app sync
 app.include_router(ecosystem.router, prefix="/api", tags=["Ecosystem Integration"])
+
+
+# Hub commands (WP1b): POST /ecosystem/commands, where the hub forwards commands.
+# The CommandReceiver authenticates each one by its HMAC signature and runs
+# OpenEye's own policy gate; startup sets it only when a valid ecosystem secret
+# is configured. Without one this answers 404, as if the route did not exist.
+@app.post("/ecosystem/commands", include_in_schema=False)
+async def ecosystem_commands_endpoint(request: Request):
+    from fastapi.responses import JSONResponse
+
+    receiver = getattr(app.state, "command_receiver", None)
+    if receiver is None:
+        return JSONResponse({"detail": "Not Found"}, status_code=404)
+    try:
+        envelope = await request.json()
+    except Exception:
+        envelope = None
+    status_code, body = await receiver.handle(envelope)
+    return JSONResponse(body, status_code=status_code)
 
 # v3.11.4: Network Discovery with Fing integration
 app.include_router(
@@ -1267,6 +1396,28 @@ async def health_check():
         "face_recognition": "available",
         "database": "connected",
     }
+
+
+@app.get("/ui/{asset_name}", include_in_schema=False)
+async def get_ui_asset(asset_name: str):
+    """Serve shared `@appecosystem/ui-controls` bundle and Apple HIG theme CSS."""
+    from backend.core.ecosystem_hub_bridge import resolve_ui_asset_path
+    path = resolve_ui_asset_path(asset_name)
+    if path is None:
+        raise HTTPException(status_code=404, detail="UI asset not found")
+    media_type = "application/javascript" if asset_name.endswith(".js") else "text/css"
+    return FileResponse(str(path), media_type=media_type)
+
+
+@app.get("/ui/fonts/{font_name}", include_in_schema=False)
+async def get_ui_font(font_name: str):
+    """Serve self-hosted typography fonts referenced by ecosystem-theme.css."""
+    from backend.core.ecosystem_hub_bridge import resolve_ui_asset_path
+    path = resolve_ui_asset_path(f"fonts/{font_name}")
+    if path is None:
+        raise HTTPException(status_code=404, detail="UI font not found")
+    media_type = "font/woff2" if font_name.endswith(".woff2") else "application/octet-stream"
+    return FileResponse(str(path), media_type=media_type)
 
 
 @app.post("/ecosystem/events")

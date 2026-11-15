@@ -246,7 +246,7 @@ const DetectionsPage = () => {
     try {
       const response = await apiClient.get('/faces/people');
       const list = response.data?.data || response.data?.people || [];
-      setSavedPeople(list.map((p) => p.name).filter(Boolean));
+      setSavedPeople(list.map((p) => p.name).filter(isKnownPerson));
     } catch (err) {
       console.error('Failed to load saved profiles:', err);
     }
@@ -481,9 +481,10 @@ const DetectionsPage = () => {
   };
 
   // Assign the given detections to a person (existing or newly created).
-  // Snapshots are uploaded as training photos with auto_train so recognition
-  // works immediately; if any detection belongs to a cluster we also name the
-  // cluster (which relabels that identity's whole history).
+  // `POST /faces/history/bulk-reassign` moves the detection records, rebuilds
+  // both the source and target `detected/` galleries on the server, prunes any
+  // emptied `unknown*` placeholder, and retrains affected people in the
+  // background — keeping `uploaded/` strictly reserved for user-curated photos.
   const assignDetections = async (dets, personName, isNew) => {
     const name = (personName || '').trim();
     if (!name) return;
@@ -493,89 +494,39 @@ const DetectionsPage = () => {
         await apiClient.post('/faces/people', { name });
       }
 
-      // Reassign the selected detections themselves.
-      //
-      // This was missing, and its absence is why a reassignment could report
-      // success while nothing moved. The handler named any CLUSTER the
-      // selection belonged to and uploaded the snapshots as training photos,
-      // but never touched the detection rows. When the detections were not in
-      // a cluster — or when the cluster rename was refused by the guard that
-      // protects human-assigned names, added after one person's history was
-      // absorbed into another's — the rows kept pointing at the old person
-      // while the upload succeeded and the interface said it had worked.
-      //
-      // Done first, so a failure here surfaces as an error instead of being
-      // masked by the training upload that follows.
       const faceIds = dets.map(faceIdOf).filter(id => id !== null);
       if (faceIds.length === 0) {
-        // Refuse rather than continue. Every call site builds its own object,
-        // and when one omitted `id` this guard skipped the reassignment, let
-        // the photo upload below succeed, and reported "Assigned N detections"
-        // — so the interface confirmed an action it had not performed, and the
-        // detections stayed where they were. A missing id is a bug in the
-        // caller, not an empty selection, and it has to be visible.
         throw new Error(
           'Could not reassign: none of the selected detections is a face. ' +
           'Only face detections can be assigned to a person.'
         );
       }
-      await apiClient.post('/faces/history/bulk-reassign', {
+      const reassignRes = await apiClient.post('/faces/history/bulk-reassign', {
         face_ids: faceIds,
         new_person_name: name,
       });
-
-      // Name any clusters represented in the selection (relabels their history).
-      // Best-effort: the reassignment above is what the operator asked for, and
-      // a cluster whose name is protected must not fail the whole action.
-      const clusterIds = [...new Set(dets.map(d => d.cluster_id).filter(Boolean))];
-      for (const cid of clusterIds) {
-        try {
-          await apiClient.post(`/clusters/${cid}/assign-name`, { person_name: name });
-        } catch (e) {
-          console.warn('cluster assign-name failed for', cid, e);
-        }
-      }
-
-      // Upload each detection's snapshot as a training photo (auto_train=true).
-      const formData = new FormData();
-      let fileCount = 0;
-      for (const d of dets) {
-        const p = normalizeSnapshot(d.snapshot_path);
-        if (!p) continue;
-        try {
-          const resp = await fetch(`/data/snapshots/${p}`);
-          if (!resp.ok) continue;
-          const blob = await resp.blob();
-          formData.append('files', new File([blob], p.split('/').pop() || 'face.jpg', {
-            type: blob.type || 'image/jpeg',
-          }));
-          fileCount++;
-        } catch (e) {
-          console.warn('snapshot fetch failed for', p, e);
-        }
-      }
-
-      if (fileCount > 0) {
-        formData.append('auto_train', 'true');
-        await apiClient.post(
-          `/faces/people/${encodeURIComponent(name)}/photos`,
-          formData,
-          { headers: { 'Content-Type': 'multipart/form-data' } }
-        );
-      }
+      const updatedCount = reassignRes.data?.updated_count ?? faceIds.length;
 
       setAssignModal(null);
       clearSelection();
       await loadSavedPeople();
       alert(
-        `Assigned ${dets.length} detection${dets.length !== 1 ? 's' : ''} to "${name}".` +
-        (fileCount ? ` Trained on ${fileCount} photo${fileCount !== 1 ? 's' : ''}.` : '')
+        `Assigned ${updatedCount} detection${updatedCount !== 1 ? 's' : ''} to "${name}". `
+        + 'Gallery updated and training started in the background.'
       );
-      // Refresh the current view
+      // Refresh the current view; if we just emptied an unknown* placeholder
+      // or moved all of the selected person's detections, return to the People list.
       if (activeTab === 'people' && selectedPerson) {
-        loadPersonDetections(selectedPerson);
+        const remaining = personDetections.filter(d => !faceIds.includes(faceIdOf(d)));
+        if (!isKnownPerson(selectedPerson) && remaining.length === 0) {
+          setSelectedPerson(null);
+          setPersonDetections([]);
+          await loadData();
+        } else {
+          await loadPersonDetections(selectedPerson);
+        }
       } else {
-        loadData();
+        await loadData();
       }
     } catch (error) {
       console.error('Error assigning detections:', error);

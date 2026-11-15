@@ -136,7 +136,7 @@ async def get_routing(
     return {
         "default_provider": prof.get("default_provider", "ollama"),
         "task_providers": prof.get("task_providers") or {},
-        "allow_cloud_fallback": prof.get("allow_cloud_fallback", True),
+        "allow_cloud_fallback": prof.get("allow_cloud_fallback", False),
         "cloud": {k: bool(v.get("enabled")) for k, v in (prof.get("cloud") or {}).items()},
         "tasks": list(ROUTABLE_TASKS),
     }
