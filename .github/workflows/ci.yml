@@ -9,7 +9,9 @@ on:
 jobs:
   test:
     name: Test Python ${{ matrix.python-version }}
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04, where Playwright ships no Chromium and
+    # setup-python has no 3.9. Move forward once both support the new image.
+    runs-on: ubuntu-24.04
     strategy:
       # Report every interpreter, do not cancel siblings on the first red one. With
       # the default fail-fast the matrix surfaced one version at a time: 3.11 failed
@@ -114,7 +116,9 @@ jobs:
 
   docker-build-test:
     name: Test Docker Build
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04, where Playwright ships no Chromium and
+    # setup-python has no 3.9. Move forward once both support the new image.
+    runs-on: ubuntu-24.04
 
     steps:
     - name: Free up disk space
