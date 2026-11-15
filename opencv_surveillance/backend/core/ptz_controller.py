@@ -250,7 +250,8 @@ def send_http_or_soap_request(
     except Exception as exc:
         curl_bin = "/usr/bin/curl" if os.path.exists("/usr/bin/curl") else shutil.which("curl")
         if not curl_bin:
-            logger.debug("HTTP request to %s failed and curl unavailable: %s", _redact_url(url), type(exc).__name__)
+            # The URL is not logged at all: it can carry camera credentials.
+            logger.debug("PTZ HTTP request failed and curl is unavailable: %s", type(exc).__name__)
             return 0, type(exc).__name__
 
         # Single-pass curl first (no --anyauth double-roundtrip penalty when
@@ -329,7 +330,7 @@ def send_http_or_soap_request(
         except Exception as curl_exc:
             # The exception text can carry the curl command line, which includes
             # `--user user:password`: only its type is logged or returned.
-            logger.debug("curl fallback failed for %s: %s", _redact_url(url), type(curl_exc).__name__)
+            logger.debug("PTZ curl fallback failed: %s", type(curl_exc).__name__)
             return 0, type(curl_exc).__name__
 
 
