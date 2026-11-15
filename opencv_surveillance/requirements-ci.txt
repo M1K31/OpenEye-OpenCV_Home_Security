@@ -102,3 +102,9 @@ jinja2>=3.1.0
 
 
 
+
+# PostgreSQL driver: the documented path beyond a handful of cameras. Tests build
+# Postgres engines (URL pass-through, no SQLite pragmas), which needs the driver.
+psycopg2-binary>=2.9.9
+# SQLAlchemy 2.1+ resolves a bare postgresql:// URL to psycopg 3.
+psycopg[binary]>=3.2

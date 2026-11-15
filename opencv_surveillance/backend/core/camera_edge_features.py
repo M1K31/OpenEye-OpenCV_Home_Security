@@ -402,6 +402,8 @@ class CameraEdgeController:
             pass
 
         # Fallback: Try Tapo local HTTPS login (`/`) on port 443
+        # The Tapo local login takes the password's uppercase MD5 hex: the camera's
+        # protocol, not storage. Nothing is stored or logged.
         password_md5 = hashlib.md5((self.password or "").encode("utf-8")).hexdigest().upper()
         for pwd_candidate in (password_md5, self.password):
             login_payload = json.dumps(

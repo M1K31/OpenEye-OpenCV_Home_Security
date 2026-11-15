@@ -78,6 +78,8 @@ def build_wsse_security_header(
     nonce_b64 = base64.b64encode(raw_nonce).decode("ascii")
     now_utc = dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=time_offset_seconds)
     created = now_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+    # SHA-1 is what ONVIF's WS-Security PasswordDigest is defined as; the
+    # camera computes the same value to check it. Nothing is stored.
     digest_bytes = hashlib.sha1(
         raw_nonce + created.encode("utf-8") + (password or "").encode("utf-8")
     ).digest()
@@ -248,8 +250,8 @@ def send_http_or_soap_request(
     except Exception as exc:
         curl_bin = "/usr/bin/curl" if os.path.exists("/usr/bin/curl") else shutil.which("curl")
         if not curl_bin:
-            logger.debug("HTTP request to %s failed and curl unavailable: %s", url, exc)
-            return 0, str(exc)
+            logger.debug("HTTP request to %s failed and curl unavailable: %s", _redact_url(url), type(exc).__name__)
+            return 0, type(exc).__name__
 
         # Single-pass curl first (no --anyauth double-roundtrip penalty when
         # WS-UsernameToken is already embedded inside the SOAP XML body!)
@@ -325,8 +327,26 @@ def send_http_or_soap_request(
                         pass
             return code, content.strip()
         except Exception as curl_exc:
-            logger.debug("curl fallback failed for %s: %s", url, curl_exc)
-            return 0, str(curl_exc)
+            # The exception text can carry the curl command line, which includes
+            # `--user user:password`: only its type is logged or returned.
+            logger.debug("curl fallback failed for %s: %s", _redact_url(url), type(curl_exc).__name__)
+            return 0, type(curl_exc).__name__
+
+
+def _redact_url(url: str) -> str:
+    """`url` without any `user:password@` part, for logs."""
+    try:
+        from urllib.parse import urlsplit, urlunsplit
+
+        parts = urlsplit(str(url))
+        if parts.username or parts.password:
+            host = parts.hostname or ""
+            if parts.port:
+                host = f"{host}:{parts.port}"
+            return urlunsplit((parts.scheme, host, parts.path, parts.query, parts.fragment))
+        return str(url)
+    except Exception:
+        return "<url>"
 
 
 def send_onvif_soap(

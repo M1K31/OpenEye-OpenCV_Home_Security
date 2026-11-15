@@ -2340,8 +2340,10 @@ async def verify_step_up_totp(
 
 
 @router.get("/ecosystem/onboarding/consent")
-async def get_ecosystem_onboarding_consent():
-    """Return persisted onboarding consent state."""
+async def get_ecosystem_onboarding_consent(
+    _caller: dict[str, Any] = Depends(_get_caller_identity),
+):
+    """Return persisted onboarding consent state (owner, device, AUP): authenticated callers only."""
     return get_onboarding_consent()
 
 

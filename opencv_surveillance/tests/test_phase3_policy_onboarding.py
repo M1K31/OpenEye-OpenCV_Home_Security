@@ -77,8 +77,12 @@ def test_onboarding_consent_requires_aup_for_scanning():
 
     # PolicyEngine has valid auto scan grant
     engine = get_policy_engine()
-    ok, msg = engine.has_valid_auto_scan_grant("openeye-test-node", profile="quick")
-    assert ok is True
+    ok, msg = engine.has_valid_auto_scan_grant(
+        "openeye-test-node", profile="quick", public_key_fingerprint=rec["public_key_fingerprint"])
+    assert ok is True, msg
+    # Without the device key's fingerprint there is no grant (fail closed).
+    ok, _ = engine.has_valid_auto_scan_grant("openeye-test-node", profile="quick")
+    assert ok is False
 
 
 def test_freeze_and_step_up_resume():
@@ -141,6 +145,10 @@ def test_unified_approvals_mirroring():
 
 
 def test_ui_assets_endpoint():
+    from backend.core.ecosystem_hub_bridge import resolve_ui_asset_path
+
+    if resolve_ui_asset_path("ecosystem-theme.css") is None or resolve_ui_asset_path("ecosystem-ui-controls.js") is None:
+        pytest.skip("shared ecosystem UI assets are not provisioned in this environment")
     client = TestClient(test_app)
     res_css = client.get("/ui/ecosystem-theme.css")
     assert res_css.status_code == 200
@@ -151,9 +159,10 @@ def test_ui_assets_endpoint():
     assert "javascript" in res_js.headers.get("content-type", "")
 
 
-def test_onboarding_consent_endpoint():
-    client = TestClient(test_app)
-    res = client.get("/api/ecosystem/onboarding/consent")
+def test_onboarding_consent_endpoint(client, admin_auth_headers):
+    # The consent record names the owner and device: not for anonymous callers.
+    assert client.get("/api/ecosystem/onboarding/consent").status_code == 401
+    res = client.get("/api/ecosystem/onboarding/consent", headers=admin_auth_headers)
     assert res.status_code == 200
     data = res.json()
     assert "aup_accepted" in data

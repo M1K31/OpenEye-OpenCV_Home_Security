@@ -96,11 +96,17 @@ def evaluate_rule_conditions(
         try:
             from backend.core.ecosystem_hub_bridge import get_policy_engine, local_device_identity
             sg_cfg = conditions['scan_grant_valid']
+            local_id, local_fp = local_device_identity()
             dev_id = sg_cfg.get('device_id') if isinstance(sg_cfg, dict) else None
-            dev_id = dev_id or local_device_identity()[0]
+            dev_id = dev_id or local_id
             profile = sg_cfg.get('profile', 'quick') if isinstance(sg_cfg, dict) else 'quick'
             pe = get_policy_engine()
-            valid, reason = pe.has_valid_auto_scan_grant(device_id=dev_id, profile=profile, initiator="openeye.automation")
+            # The grant is bound to the device key it was enrolled with; this node
+            # can only present its own. A grant made on another key does not pass.
+            valid, reason = pe.has_valid_auto_scan_grant(
+                device_id=dev_id, profile=profile, initiator="openeye.automation",
+                public_key_fingerprint=local_fp,
+            )
             if not valid:
                 logger.info(f"Scan grant invalid for device '{dev_id}': {reason}")
                 return False
@@ -357,7 +363,9 @@ def execute_scan_schedule_action(
     profile = action_config.get("profile", "quick")
     pe = get_policy_engine()
 
-    valid, reason = pe.has_valid_auto_scan_grant(device_id=target_device, profile=profile, initiator="openeye.automation")
+    valid, reason = pe.has_valid_auto_scan_grant(
+        device_id=target_device, profile=profile, initiator="openeye.automation", public_key_fingerprint=fp,
+    )
     if not valid:
         return {"type": "scan_schedule", "success": False, "error": f"No valid auto-scan grant: {reason}"}
 

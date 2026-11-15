@@ -63,6 +63,15 @@ PUBLIC_ROUTES = {
     ("GET", "/api/ecosystem/cameras"),
     ("GET", "/api/ecosystem/stream/{camera_id}"),
     ("GET", "/api/ecosystem/snapshot/{camera_id}"),
+
+    # --- Shared ecosystem UI assets: static files the browser loads ----------
+    # The @appecosystem/ui-controls bundle, the theme CSS and its fonts, served
+    # from a fixed list of file names (resolve_ui_asset_path); no data, like
+    # /assets. They must load before a session exists to draw the policy bar.
+    ("GET", "/ui/{asset_name}"),
+    ("GET", "/ui/fonts/{font_name}"),
+    ("GET", "/api/ecosystem/policy/ui/{asset_name}"),
+    ("GET", "/api/ecosystem/policy/ui/fonts/{font_name}"),
     # Hub commands: each envelope is HMAC-signed and verified (signature, expiry,
     # replay, policy gate, hub-confirmed approval) by the CommandReceiver before
     # any handler runs; 404 when no ecosystem secret is configured.
@@ -76,6 +85,11 @@ PUBLIC_ROUTES = {
     ("WEBSOCKET", "/api/ecosystem/events"),
     ("WEBSOCKET", "/api/ws/statistics"),
 }
+
+# Public routes that exist only in some installs: the SPA catch-all is mounted
+# only when frontend/dist was built (CI does not build it). They are still
+# public by design where they exist; they just cannot be stale where they don't.
+CONDITIONAL_ROUTES = {("GET", "/{full_path:path}")}
 
 # Prefixes served to the browser rather than to API clients: the built frontend,
 # static assets and the OpenAPI docs.
@@ -157,6 +171,9 @@ def _has_auth_dependency(route, inherited_dependencies=()) -> bool:
         "get_current_user_media",
         "role_checker",             # produced by auth.require_role([...])
         "require_ecosystem_auth",   # HMAC — how appEcosystem authenticates
+        # Ecosystem policy routes: a verified HMAC peer signature or a valid
+        # user JWT / ecosystem token, else 401 (test_ecosystem_routes_refuse_anonymous).
+        "_get_caller_identity",
     }
     def _callable_of(dependency):
         """
@@ -218,7 +235,7 @@ def test_public_routes_list_has_no_stale_entries():
     silently re-open the new path, so fail when an entry stops matching.
     """
     live = set(_iter_api_routes())
-    stale = [entry for entry in PUBLIC_ROUTES if entry not in live]
+    stale = [entry for entry in PUBLIC_ROUTES if entry not in live and entry not in CONDITIONAL_ROUTES]
 
     assert not stale, (
         "PUBLIC_ROUTES contains entries that match no route: "
@@ -269,3 +286,38 @@ def test_audit_findings_stay_closed(client, method, path):
         f"{method} {path} answered {response.status_code} without credentials; "
         "this route was closed by the 2026-08-20 authorization audit."
     )
+
+
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        ("GET", "/api/ecosystem/approvals"),
+        ("GET", "/api/ecosystem/onboarding/consent"),
+        ("GET", "/api/ecosystem/policy/state"),
+        ("POST", "/api/ecosystem/approvals/any/approve"),
+        ("POST", "/api/ecosystem/approvals/any/deny"),
+        ("POST", "/api/ecosystem/auth/step-up/totp/enroll"),
+        ("POST", "/api/ecosystem/auth/step-up/totp/verify"),
+        ("POST", "/api/ecosystem/onboarding/consent"),
+        ("POST", "/api/ecosystem/policy/freeze"),
+        ("POST", "/api/ecosystem/policy/restrictions/off"),
+        ("POST", "/api/ecosystem/policy/restrictions/on"),
+        ("POST", "/api/ecosystem/policy/resume"),
+    ],
+)
+def test_ecosystem_routes_refuse_anonymous(client, method, path):
+    """
+    The sweep counts `_get_caller_identity` as an auth dependency. This is the
+    evidence that it is one: without a signature or a valid bearer token, each
+    of these routes answers 401 before doing anything.
+    """
+    response = client.request(method, path, json={})
+    assert response.status_code == 401, f"{method} {path} answered {response.status_code} anonymously"
+
+
+def test_ptz_logs_never_carry_url_credentials():
+    from backend.core.ptz_controller import _redact_url
+
+    assert _redact_url("http://admin:s3cret@192.168.1.20:8080/onvif/device_service") == \
+        "http://192.168.1.20:8080/onvif/device_service"
+    assert _redact_url("http://192.168.1.20/onvif") == "http://192.168.1.20/onvif"
