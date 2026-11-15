@@ -254,7 +254,13 @@ def get_onboarding_consent() -> dict[str, Any]:
 
 
 def build_openeye_capabilities() -> list[dict[str, Any]]:
-    """Capabilities contributed by OpenEye to the ecosystem mesh."""
+    """Capabilities contributed by OpenEye to the ecosystem mesh.
+
+    `camera.snapshot` and `camera.record_clip` carry the `inputs_schema` their
+    handlers in `ecosystem_commands` accept.
+    """
+    from backend.core.ecosystem_commands import RECORD_CLIP_SCHEMA, SNAPSHOT_SCHEMA
+
     return [
         {
             "capability": "camera.snapshot",
@@ -267,6 +273,7 @@ def build_openeye_capabilities() -> list[dict[str, Any]]:
             "cancellable": True,
             "idempotent": True,
             "offline_behavior": "run_local",
+            "inputs_schema": SNAPSHOT_SCHEMA,
         },
         {
             "capability": "camera.record_clip",
@@ -279,6 +286,7 @@ def build_openeye_capabilities() -> list[dict[str, Any]]:
             "cancellable": True,
             "idempotent": False,
             "offline_behavior": "run_local",
+            "inputs_schema": RECORD_CLIP_SCHEMA,
         },
         {
             "capability": "automation.trigger_rule",

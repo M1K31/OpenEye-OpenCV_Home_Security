@@ -63,6 +63,10 @@ PUBLIC_ROUTES = {
     ("GET", "/api/ecosystem/cameras"),
     ("GET", "/api/ecosystem/stream/{camera_id}"),
     ("GET", "/api/ecosystem/snapshot/{camera_id}"),
+    # Hub commands: each envelope is HMAC-signed and verified (signature, expiry,
+    # replay, policy gate, hub-confirmed approval) by the CommandReceiver before
+    # any handler runs; 404 when no ecosystem secret is configured.
+    ("POST", "/ecosystem/commands"),
 
     # --- WebSockets: authenticated before accept() ---------------------------
     # A WebSocket route cannot express auth as a dependency the way an HTTP
