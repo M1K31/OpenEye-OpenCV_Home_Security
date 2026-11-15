@@ -902,6 +902,15 @@ async def startup_event():
         app.state.ecosystem = None
         app.state.ecosystem_hub = None
 
+    # Hub commands: snapshots and clips, only with a valid ecosystem secret.
+    app.state.command_receiver = None
+    try:
+        from backend.core.ecosystem_commands import build_receiver as build_command_receiver
+
+        app.state.command_receiver = build_command_receiver(camera_manager)
+    except Exception as e:
+        logger.warning(f"Hub commands are unavailable: {e}")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -1230,6 +1239,25 @@ app.include_router(objects.router, prefix="/api/objects", tags=["Object Detectio
 
 # v3.11.0: Ecosystem Integration - MagicMirror, mobile apps, cross-app sync
 app.include_router(ecosystem.router, prefix="/api", tags=["Ecosystem Integration"])
+
+
+# Hub commands (WP1b): POST /ecosystem/commands, where the hub forwards commands.
+# The CommandReceiver authenticates each one by its HMAC signature and runs
+# OpenEye's own policy gate; startup sets it only when a valid ecosystem secret
+# is configured. Without one this answers 404, as if the route did not exist.
+@app.post("/ecosystem/commands", include_in_schema=False)
+async def ecosystem_commands_endpoint(request: Request):
+    from fastapi.responses import JSONResponse
+
+    receiver = getattr(app.state, "command_receiver", None)
+    if receiver is None:
+        return JSONResponse({"detail": "Not Found"}, status_code=404)
+    try:
+        envelope = await request.json()
+    except Exception:
+        envelope = None
+    status_code, body = await receiver.handle(envelope)
+    return JSONResponse(body, status_code=status_code)
 
 # v3.11.4: Network Discovery with Fing integration
 app.include_router(
