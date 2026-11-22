@@ -563,12 +563,61 @@ async def upload_photos(
                 break
 
             if not skip_validation:
+                import asyncio
                 import numpy as np
                 import cv2
+                from backend.core.face_recognition import _face_recognition_lock
 
-                nparr = np.frombuffer(content, np.uint8)
-                img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                if img is None:
+                def _validate_and_match_photo(raw_bytes: bytes):
+                    nparr = np.frombuffer(raw_bytes, np.uint8)
+                    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                    if img is None:
+                        return ("invalid_image", 0, None, None)
+
+                    rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                    with _face_recognition_lock:
+                        try:
+                            import face_recognition as fr
+                            locs = fr.face_locations(rgb_img)
+                        except Exception as e:
+                            logger.error(f"Face detection failed for {file.filename}: {e}")
+                            locs = []
+
+                        if not locs:
+                            return ("no_face", 0, None, None)
+
+                        m_result = "new_face"
+                        m_person = None
+                        m_conf = None
+                        try:
+                            encs = fr.face_encodings(rgb_img, locs)
+                            if encs and face_manager.known_face_encodings:
+                                encoding = encs[0]
+                                distances = fr.face_distance(
+                                    face_manager.known_face_encodings, encoding
+                                )
+                                best_idx = int(np.argmin(distances))
+                                best_distance = float(distances[best_idx])
+
+                                if best_distance < face_manager.recognition_threshold:
+                                    matched_name = face_manager.known_face_names[best_idx]
+                                    m_conf = round(1.0 - best_distance, 4)
+                                    if matched_name == person_name:
+                                        m_result = "existing_match"
+                                        m_person = matched_name
+                                    else:
+                                        m_result = "cross_match"
+                                        m_person = matched_name
+                        except Exception as e:
+                            logger.error(f"Face matching failed for {file.filename}: {e}")
+
+                        return (m_result, len(locs), m_person, m_conf)
+
+                match_result, face_count, matched_person, match_confidence = (
+                    await asyncio.to_thread(_validate_and_match_photo, content)
+                )
+
+                if match_result == "invalid_image":
                     photo_results.append(face_schema.PhotoValidationResult(
                         filename=file.filename, has_face=False,
                         match_result="invalid_image",
@@ -577,18 +626,7 @@ async def upload_photos(
                     rejected_count += 1
                     continue
 
-                rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
-                try:
-                    import face_recognition as fr
-                    face_locations = fr.face_locations(rgb_img)
-                except Exception as e:
-                    logger.error(f"Face detection failed for {file.filename}: {e}")
-                    face_locations = []
-
-                face_count = len(face_locations)
-
-                if face_count == 0:
+                if match_result == "no_face" or face_count == 0:
                     photo_results.append(face_schema.PhotoValidationResult(
                         filename=file.filename, has_face=False,
                         match_result="no_face",
@@ -598,37 +636,11 @@ async def upload_photos(
                     rejected_count += 1
                     continue
 
-                # Face found — check against known encodings
-                match_result = "new_face"
-                matched_person = None
-                match_confidence = None
-
-                try:
-                    face_encodings = fr.face_encodings(rgb_img, face_locations)
-                    if face_encodings and face_manager.known_face_encodings:
-                        encoding = face_encodings[0]
-                        distances = fr.face_distance(
-                            face_manager.known_face_encodings, encoding
-                        )
-                        best_idx = int(np.argmin(distances))
-                        best_distance = float(distances[best_idx])
-
-                        if best_distance < face_manager.recognition_threshold:
-                            matched_name = face_manager.known_face_names[best_idx]
-                            match_confidence = round(1.0 - best_distance, 4)
-
-                            if matched_name == person_name:
-                                match_result = "existing_match"
-                                matched_person = matched_name
-                            else:
-                                match_result = "cross_match"
-                                matched_person = matched_name
-                                warnings.append(
-                                    f"{file.filename}: Face matches '{matched_name}' "
-                                    f"({match_confidence:.1%}), not '{person_name}'"
-                                )
-                except Exception as e:
-                    logger.error(f"Face matching failed for {file.filename}: {e}")
+                if match_result == "cross_match" and matched_person:
+                    warnings.append(
+                        f"{file.filename}: Face matches '{matched_person}' "
+                        f"({match_confidence:.1%}), not '{person_name}'"
+                    )
 
                 # Save the photo (face was detected)
                 file_path = os.path.join(person_path, file.filename)

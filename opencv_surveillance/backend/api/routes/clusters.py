@@ -52,7 +52,13 @@ def cleanup_empty_cluster(db: Session, cluster: FaceCluster) -> bool:
         cluster_id = cluster.id
         cluster_label = cluster.label or f"#{cluster.id}"
         db.delete(cluster)
+        db.flush()
         logger.info(f"Auto-deleted empty cluster {cluster_id} ({cluster_label})")
+        try:
+            from backend.core.person_reassignment import prune_orphaned_placeholders
+            prune_orphaned_placeholders(db, dry_run=False)
+        except Exception as exc:
+            logger.warning(f"Placeholder prune after deleting empty cluster {cluster_id} failed: {exc}")
         return True
     return False
 
@@ -282,19 +288,27 @@ def assign_name_to_cluster(
                 detail=result["message"]
             )
         
-        # Schedule background training if images were copied
+        try:
+            from backend.core.person_reassignment import prune_orphaned_placeholders
+            prune_orphaned_placeholders(db, dry_run=False)
+        except Exception as exc:
+            logger.warning(f"Placeholder prune after cluster rename failed: {exc}")
+
+        # Schedule targeted per-person background training if images were copied
         if result.get("training_required"):
-            def train_in_background():
+            target_person = result.get("person_name") or request.person_name
+
+            def train_in_background(person_to_train: str):
                 try:
                     from backend.core.face_recognition import get_face_manager
                     face_manager = get_face_manager()
-                    face_manager.train_face_recognition()
-                    logger.info(f"Background training completed after assigning name to cluster {cluster_id}")
+                    face_manager.train_person(person_to_train)
+                    logger.info(f"Background training completed for '{person_to_train}' after assigning name to cluster {cluster_id}")
                 except Exception as e:
                     logger.error(f"Background training failed: {e}")
             
-            background_tasks.add_task(train_in_background)
-            logger.info(f"Scheduled background training for cluster {cluster_id}")
+            background_tasks.add_task(train_in_background, target_person)
+            logger.info(f"Scheduled background training for '{target_person}' (cluster {cluster_id})")
         
         return AssignNameResponse(**result)
         

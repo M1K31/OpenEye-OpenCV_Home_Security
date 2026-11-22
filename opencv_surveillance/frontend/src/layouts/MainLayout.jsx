@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import KeyboardShortcuts from '../components/KeyboardShortcuts';
+import EcosystemPolicyBanner from '../components/EcosystemPolicyBanner';
 import wsService from '../services/WebSocketService';
 import { getToken } from '../api/apiClient';
 import { logger } from '../utils/logger';
@@ -29,9 +30,6 @@ const MainLayout = ({ onLogout }) => {
 
     if (token) {
       logger.log('Initializing WebSocket connection with token...');
-      // Disconnect any existing connection first
-      wsService.disconnect();
-      // Connect with new token
       wsService.connect(token);
     } else {
       logger.warn('No token found, WebSocket not initialized');
@@ -105,6 +103,9 @@ const MainLayout = ({ onLogout }) => {
           </div>
         </div>
       </header>
+
+      {/* Apple HIG Ecosystem Policy & Freeze Control Bar */}
+      <EcosystemPolicyBanner viewMode="ambient" />
 
       {/* Split View Container */}
       <div className="split-view-container">

@@ -148,21 +148,40 @@ def prune_orphaned_placeholders(db, dry_run: bool = True) -> dict:
             from backend.core.face_recognition import get_face_manager
 
             manager = get_face_manager()
-            stale = [i for i, held in enumerate(manager.known_face_names)
-                     if held == name]
-            for index in reversed(stale):
-                del manager.known_face_encodings[index]
-                del manager.known_face_names[index]
-            if stale:
-                manager.save_encodings()
-                result["pruned"].append(
-                    f"{name}: dropped {len(stale)} encoding(s)")
-                logger.info("Dropped %d encoding(s) for placeholder '%s'",
-                            len(stale), name)
+            with _training_lock():
+                stale = [i for i, held in enumerate(manager.known_face_names)
+                         if held == name]
+                for index in reversed(stale):
+                    del manager.known_face_encodings[index]
+                    del manager.known_face_names[index]
+                if stale:
+                    manager.statistics["total_encodings"] = len(manager.known_face_encodings)
+                    manager.statistics["total_people"] = len(set(manager.known_face_names))
+                    manager.save_encodings()
+                    result["pruned"].append(
+                        f"{name}: dropped {len(stale)} encoding(s)")
+                    logger.info("Dropped %d encoding(s) for placeholder '%s'",
+                                len(stale), name)
         except Exception as exc:
             # The images are already gone, which is the larger half. Say so
             # rather than failing the whole prune.
             logger.warning("Could not drop encodings for '%s': %s", name, exc)
+
+        # Clean up any empty FaceCluster or Person record still carrying the
+        # retired placeholder name (best-effort so lightweight test doubles
+        # without full ORM support remain unaffected).
+        try:
+            from backend.database.models import FaceCluster, Person
+            if hasattr(db, "commit"):
+                db.query(FaceCluster).filter(
+                    FaceCluster.label == name
+                ).delete(synchronize_session=False)
+                db.query(Person).filter(
+                    Person.name == name
+                ).delete(synchronize_session=False)
+                db.commit()
+        except Exception as exc:
+            logger.debug("Optional DB record cleanup for placeholder '%s' skipped: %s", name, exc)
 
         result["pruned"].append(f"{name}: removed {len(images)} image(s)")
         logger.info(
@@ -170,6 +189,58 @@ def prune_orphaned_placeholders(db, dry_run: bool = True) -> dict:
             name, len(images))
 
     return result
+
+
+def _retire_if_empty_placeholder(person_name: str, final_count: int, db) -> None:
+    """Remove an auto-generated placeholder folder and its encodings once emptied."""
+    from backend.core.face_clustering import AUTO_UNKNOWN_NAME
+    from backend.core.gallery import detected_dir, images_in, person_dir, uploaded_dir
+    from backend.database.models import FaceCluster, FaceDetectionEvent, Person
+
+    if not AUTO_UNKNOWN_NAME.match(person_name or "") or final_count > 0:
+        return
+    if images_in(uploaded_dir(person_name)):
+        return
+
+    remaining_total = db.query(FaceDetectionEvent).filter(
+        FaceDetectionEvent.person_name == person_name
+    ).count()
+    if remaining_total > 0:
+        return
+
+    for directory in (detected_dir(person_name), uploaded_dir(person_name), person_dir(person_name)):
+        try:
+            directory.rmdir()
+        except OSError:
+            pass
+
+    try:
+        from backend.core.face_recognition import get_face_manager
+        manager = get_face_manager()
+        with _training_lock():
+            stale = [i for i, held in enumerate(manager.known_face_names)
+                     if held == person_name]
+            for index in reversed(stale):
+                del manager.known_face_encodings[index]
+                del manager.known_face_names[index]
+            if stale:
+                manager.statistics["total_encodings"] = len(manager.known_face_encodings)
+                manager.statistics["total_people"] = len(set(manager.known_face_names))
+                manager.save_encodings()
+    except Exception as exc:
+        logger.warning("Could not drop encodings for retired placeholder '%s': %s", person_name, exc)
+
+    try:
+        if hasattr(db, "commit"):
+            db.query(FaceCluster).filter(
+                FaceCluster.label == person_name
+            ).delete(synchronize_session=False)
+            db.query(Person).filter(
+                Person.name == person_name
+            ).delete(synchronize_session=False)
+            db.commit()
+    except Exception as exc:
+        logger.debug("Optional DB record cleanup for placeholder '%s' skipped: %s", person_name, exc)
 
 
 def rebuild_gallery(person_name: str, db, dry_run: bool = True) -> int:
@@ -187,10 +258,15 @@ def rebuild_gallery(person_name: str, db, dry_run: bool = True) -> int:
     back. That is the intended meaning of derived: the gallery reflects the
     detections, not the other way round.
     """
-    from backend.core.face_clustering import _resolve_snapshot_path
-    from backend.core.gallery import detected_dir, ensure_layout, images_in
+    from backend.core.face_clustering import AUTO_UNKNOWN_NAME, _resolve_snapshot_path
+    from backend.core.gallery import (
+        detected_dir,
+        ensure_layout,
+        images_in,
+    )
     from backend.database.models import FaceDetectionEvent
 
+    is_placeholder = bool(AUTO_UNKNOWN_NAME.match(person_name or ""))
     ensure_layout(person_name)
     target_dir = detected_dir(person_name)
 
@@ -218,14 +294,20 @@ def rebuild_gallery(person_name: str, db, dry_run: bool = True) -> int:
 
     existing = {p.name: p for p in images_in(target_dir)}
 
-    # Refuse to empty a gallery that still has images.
+    # Refuse to empty a REAL person's gallery that still has images.
     #
-    # If a person has no snapshot-carrying detections but their gallery is full,
-    # something upstream is wrong — a rename in flight, a half-finished
-    # reassignment — and "delete everything" is far more likely to be a mistake
-    # than an instruction. This happened: a rebuild run while Mikel's detections
-    # had just been renamed away took his gallery from 205 images to 0.
-    if not wanted and existing:
+    # If a confirmed person has no snapshot-carrying detections but their
+    # gallery is full, something upstream is wrong — a rename in flight, a
+    # half-finished reassignment — and "delete everything" is far more likely
+    # to be a mistake than an instruction. This happened: a rebuild run while
+    # Mikel's detections had just been renamed away took his gallery from 205
+    # images to 0.
+    #
+    # By contrast, an `unknownN` placeholder is *expected* to empty out when all
+    # of its detections are assigned to a real person — keeping its derived
+    # gallery alive would leave the placeholder competing with the person it
+    # just became.
+    if not wanted and existing and not is_placeholder:
         logger.warning(
             "Refusing to empty %s's gallery: %s image(s) present but no "
             "snapshot-carrying detections. Fix the detections first.",
@@ -255,6 +337,8 @@ def rebuild_gallery(person_name: str, db, dry_run: bool = True) -> int:
                 logger.warning("Could not remove stale gallery image %s: %s", path, e)
 
     final = len(images_in(target_dir))
+    _retire_if_empty_placeholder(person_name, final, db)
+
     logger.debug("Rebuilt %s: %s wanted, %s copied, %s held",
                  person_name, len(wanted), copied, final)
     return final
@@ -262,11 +346,19 @@ def rebuild_gallery(person_name: str, db, dry_run: bool = True) -> int:
 
 def _retrain(people: List[str]) -> None:
     """Retrain the given people. Runs on a worker thread."""
+    from backend.core.face_clustering import AUTO_UNKNOWN_NAME
     from backend.core.face_recognition import get_face_manager
+    from backend.core.gallery import count_images, person_dir
 
     manager = get_face_manager()
     for person in people:
         try:
+            # Skip placeholders that were emptied and retired during reassignment
+            if AUTO_UNKNOWN_NAME.match(person or "") and (
+                not person_dir(person).exists() or count_images(person) == 0
+            ):
+                logger.info("Skipping retrain for retired placeholder '%s'", person)
+                continue
             result = manager.train_person(person)
             logger.info("Retrained '%s' after reassignment: %s", person, result)
         except Exception as e:

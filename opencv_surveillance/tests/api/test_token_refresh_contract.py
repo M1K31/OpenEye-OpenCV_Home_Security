@@ -37,9 +37,9 @@ from fastapi.testclient import TestClient
 from backend.main import app
 
 
-@pytest.fixture
-def client():
-    return TestClient(app)
+# `client` is conftest's: the app with get_db bound to a test database that has
+# the schema. A bare TestClient(app) hit an empty database ("no such table:
+# refresh_tokens") and failed with a 500 instead of answering the request.
 
 
 class TestTheTokenIsReadFromTheBody:

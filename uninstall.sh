@@ -70,8 +70,12 @@ if [ -x "$OPENCV_DIR/stop.sh" ]; then
     run "\"$OPENCV_DIR/stop.sh\" >/dev/null 2>&1 || true"
 fi
 run "pkill -f 'uvicorn.*backend.main:app' 2>/dev/null || true"
-PORT_PID="$(lsof -ti:"$PORT" 2>/dev/null || true)"
-[ -n "$PORT_PID" ] && run "kill -9 $PORT_PID 2>/dev/null || true"
+# LISTENers only. A bare `lsof -ti:PORT` also returns every process that merely
+# holds a CONNECTION to the port — e.g. the ecosystem registry's health check —
+# and this script used to SIGKILL those too. One PID per line is collapsed so a
+# second listener is not passed to the shell as a command of its own.
+PORT_PID="$(lsof -nP -iTCP:"$PORT" -sTCP:LISTEN -t 2>/dev/null | tr '\n' ' ' || true)"
+[ -n "${PORT_PID// /}" ] && run "kill -9 $PORT_PID 2>/dev/null || true"
 
 # 2. Remove the OS service.
 echo -e "${BLUE}[2/5] Removing service...${NC}"

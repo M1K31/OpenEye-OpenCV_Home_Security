@@ -122,6 +122,9 @@ class TestSecrets:
         """These are the values that must survive a migration."""
         assert set(config_loader.SECRET_KEYS) == {
             "SECRET_KEY", "JWT_SECRET_KEY", "ECOSYSTEM_HMAC_SECRET",
+            # Encrypt stored camera credentials and notification settings: losing
+            # either on a migration makes that data unreadable.
+            "CAMERA_ENCRYPTION_KEY", "NOTIFICATION_ENCRYPTION_KEY",
         }
 
     def test_secrets_load_from_the_config_file(self, tmp_path):

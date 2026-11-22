@@ -8,6 +8,7 @@ Provides connection lifecycle management, authentication, and event broadcasting
 
 import asyncio
 import logging
+import os
 from typing import Dict, Set, Optional
 from datetime import datetime
 from fastapi import WebSocket, WebSocketDisconnect
@@ -60,7 +61,7 @@ class WebSocketConnectionManager:
     - Automatic cleanup of stale connections
     """
 
-    def __init__(self, max_connections_per_user: int = 5):
+    def __init__(self, max_connections_per_user: int = 25):
         self.active_connections: Dict[str, WebSocketConnection] = {}
         self.user_connections: Dict[int, Set[str]] = {}
         self.max_connections_per_user = max_connections_per_user
@@ -85,16 +86,21 @@ class WebSocketConnectionManager:
             bool: True if connection accepted, False if rate limited
         """
         async with self._lock:
-            # Check rate limiting
-            user_connection_count = len(
-                self.user_connections.get(
-                    user_id, set()))
-            if user_connection_count >= self.max_connections_per_user:
-                logger.warning(
-                    f"User {username} (ID: {user_id}) exceeded max connections "
-                    f"({self.max_connections_per_user})"
+            # Check connection capacity per user and evict oldest if needed
+            existing_user_conns = self.user_connections.get(user_id, set())
+            if len(existing_user_conns) >= self.max_connections_per_user:
+                logger.info(
+                    f"User {username} (ID: {user_id}) reached max connections "
+                    f"({self.max_connections_per_user}); recycling oldest connection."
                 )
-                return False
+                oldest_conn_id = next(iter(existing_user_conns))
+                oldest_conn = self.active_connections.pop(oldest_conn_id, None)
+                if oldest_conn:
+                    try:
+                        await oldest_conn.websocket.close(code=1000, reason="Replaced by new connection")
+                    except Exception:
+                        pass
+                existing_user_conns.discard(oldest_conn_id)
 
             # Accept the connection
             await websocket.accept()
@@ -293,7 +299,9 @@ class WebSocketConnectionManager:
 
 
 # Global singleton instance
-ws_manager = WebSocketConnectionManager(max_connections_per_user=5)
+ws_manager = WebSocketConnectionManager(
+    max_connections_per_user=int(os.getenv("WS_MAX_CONNECTIONS_PER_USER", "25"))
+)
 
 
 async def broadcast_statistics_update(statistics: dict):

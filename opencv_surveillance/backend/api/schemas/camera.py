@@ -4,9 +4,10 @@
 Pydantic schemas for Camera API endpoints
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 from typing import Optional
 from datetime import datetime
+from backend.core.camera_security import redact_url_credentials
 
 
 class CameraBase(BaseModel):
@@ -183,6 +184,11 @@ class CameraResponse(CameraBase):
     # not running. The client needs the difference to show "disconnected" instead
     # of a broken image.
     is_running: bool = False
+
+    @field_serializer("source")
+    def serialize_source(self, value: str) -> str:
+        """Mask embedded passwords in API responses while preserving host/path."""
+        return redact_url_credentials(value) or value
 
     class Config:
         from_attributes = True

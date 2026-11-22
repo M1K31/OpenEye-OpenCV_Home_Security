@@ -25,7 +25,7 @@ Because OpenEye is self-hosted, the following categories are processed **on infr
 |----------|----------|----------------|---------|
 | Video & images | Live streams, recorded clips, snapshots | Your local storage (`data/`, configured recordings dir) | Core surveillance function |
 | Biometric / face data | Face encodings, face clusters, recognition labels | Local encrypted/permissioned files & local DB | Optional face-recognition feature (opt-in) |
-| Camera & network config | Camera IPs, RTSP URLs, credentials, discovery results | Local DB + `.env` (permission `0600`) | Device connectivity |
+| Camera & network config | Camera IPs, RTSP URLs, credentials (encrypted at rest via Fernet), discovery results | Local DB (`enc:v1:...`) + `.env` (permission `0600`) | Device connectivity |
 | Account data | Username, hashed password (bcrypt), 2FA secret, JWT session tokens | Local DB / browser | Authentication |
 | Operational logs | Audit logs, event timelines, error logs | Local `logs/` | Security auditing & debugging |
 
@@ -71,7 +71,14 @@ Depending on your jurisdiction (GDPR, CCPA/CPRA, etc.) you may have rights to ac
 
 Surveillance laws vary. As the operator you are responsible for compliance with local recording-consent, notification-signage, biometric-consent (e.g., BIPA), and data-protection laws. OpenEye provides tools, not legal advice.
 
-## 11. Platform-specific disclosures
+## 11. Ecosystem Integration, Forensic Scanning & Emergency Freeze
+
+When OpenEye participates in the **appEcosystem** mesh:
+- **Explicit Scan Designation Only**: Automated or camera-event-triggered forensic scanning (`device_scan` action) strictly checks `PolicyEngine.has_valid_auto_scan_grant()`. Merely seeing an unknown person or connecting a new Wi-Fi device never triggers a scan unless an authorized administrator previously accepted the Acceptable Use Policy (AUP) and explicitly designated that device.
+- **Emergency Freeze Trigger**: In the event of a verified physical perimeter breach or security incident, OpenEye automations or the user UI can broadcast an `ecosystem_freeze` action. This halts interruptible mutations across the local network. Unfreezing requires administrative step-up authentication.
+- **Redacted Summaries**: Only high-level event classifications (`security.person_detected`) and redacted summaries are broadcast on the local event bus.
+
+## 12. Platform-specific disclosures
 
 - **Direct download (the current and only channel):** This policy governs the official build. Forks and modifications are the responsibility of whoever distributes them.
 
