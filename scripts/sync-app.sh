@@ -43,9 +43,10 @@ for arg in "$@"; do
 done
 
 [ -d "$SRC" ]     || { echo -e "${RED}Source not found: $SRC${NC}"; exit 1; }
-[ -d "$APP_DIR" ] || { echo -e "${RED}Install not found: $APP_DIR${NC}
-Run the installer first — this script updates an existing install, it does not
-create one."; exit 1; }
+if [ ! -d "$APP_DIR" ]; then
+    echo -e "${YELLOW}Install directory not found: $APP_DIR. Initializing...${NC}"
+    mkdir -p "$APP_DIR"
+fi
 command -v rsync >/dev/null || { echo -e "${RED}rsync is required${NC}"; exit 1; }
 
 # What never belongs in an install.

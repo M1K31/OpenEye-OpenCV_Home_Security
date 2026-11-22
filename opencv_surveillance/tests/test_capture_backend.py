@@ -66,7 +66,7 @@ def test_no_call_site_opens_a_device_without_the_helper():
         if path.name == "capture_backend.py":
             continue                                # the helper itself
         try:
-            tree = ast.parse(path.read_text())
+            tree = ast.parse(path.read_text(encoding="utf-8"))
         except SyntaxError:
             continue
 
@@ -106,7 +106,7 @@ def test_the_scan_finds_the_call_sites_it_is_meant_to():
     total = 0
     for path in BACKEND.rglob("*.py"):
         try:
-            tree = ast.parse(path.read_text())
+            tree = ast.parse(path.read_text(encoding="utf-8"))
         except SyntaxError:
             continue
         total += sum(

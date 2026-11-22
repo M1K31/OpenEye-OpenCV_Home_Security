@@ -50,33 +50,34 @@ const isReplayable = (config) =>
 const isRetryableError = (error) => {
   const { config, response } = error;
 
-  // No config means the failure happened before a request was built — in the
-  // request interceptor. There is nothing to replay.
   if (!config) {
     return false;
   }
 
+  const reqUrl = config.url || '';
+
+  // Never auto-retry real-time PTZ motor commands: a delayed retry seconds
+  // after the user clicked/released causes unexpected physical camera movement.
+  if (reqUrl.includes('/ptz/')) {
+    return false;
+  }
+
   if (!response) {
-    // A network error is ambiguous: the server may have processed the request
-    // and lost the response. Only safe methods may be replayed.
     return isReplayable(config);
   }
 
   const status = response.status;
 
-  // 429 is the one unambiguous case: the server rejected the request without
-  // acting on it, so replaying any method is safe.
+  // 429: the server rejected without acting — safe for any method.
   if (status === 429) {
     return true;
   }
 
-  // 5xx is ambiguous in the same way as a network error — a 500 can be raised
-  // after the write committed — so the same restriction applies.
+  // 5xx is ambiguous — the write may have committed — so only safe methods.
   if (status >= 500) {
     return isReplayable(config);
   }
 
-  // Don't retry on client errors (4xx except 429)
   return false;
 };
 

@@ -2,26 +2,68 @@
 # This file is part of OpenEye-OpenCV_Home_Security
 """
 Camera Discovery Service
-Discovers RTSP/IP cameras on network and USB cameras connected to the system.
+Discovers RTSP/IP/ONVIF cameras on the network and USB cameras connected to the system.
+Supports macOS, Linux, Windows, and containerized environments.
 """
-import cv2
-import glob
-import json
-import os
-import socket
-import platform
-import logging
 import asyncio
+import glob
+import ipaddress
+import json
+import logging
+import os
+import platform
+import re
+import socket
 import subprocess
 import time
-from typing import List, Dict, Optional
 from datetime import datetime
 import ipaddress
+from pathlib import Path
+from typing import Dict, List, Optional, Set, Tuple
+
+import cv2
+
+from backend.core.camera_security import (
+    decrypt_camera_source,
+    inject_rtsp_credentials,
+    redact_url_credentials,
+)
 
 import psutil
 from backend.core.capture_backend import open_local_device
 
 logger = logging.getLogger(__name__)
+
+# Virtual, loopback, tunnel, and container bridge interfaces that should not be
+# swept during automatic LAN camera discovery.
+IGNORED_INTERFACE_PREFIXES = (
+    "lo",
+    "utun",
+    "tun",
+    "tap",
+    "bridge",
+    "vmenet",
+    "docker",
+    "br-",
+    "veth",
+    "awdl",
+    "llw",
+    "anpi",
+    "gif",
+    "stf",
+    "ap",
+    "nan",
+    "wg",
+    "tailscale",
+    "wsl",
+    "vethernet",
+    "virbr",
+    "vmnet",
+    " vboxnet",
+)
+
+# CGNAT / Tailscale range (100.64.0.0/10)
+CGNAT_NETWORK = ipaddress.ip_network("100.64.0.0/10")
 
 
 class CameraDiscovery:
@@ -33,37 +75,24 @@ class CameraDiscovery:
     MAX_CAMERA_INDEX = 11
 
     # How long to keep asking a device for its first frame once it has opened.
-    #
-    # A webcam delivers on the first read. An iPhone used as a Continuity Camera
-    # does not: opening the device only *starts* the handshake — the phone shows
-    # its "camera in use" notice and takes seconds to begin streaming. Calling
-    # read() exactly once dropped the phone right as it was waking up.
-    #
-    # Two budgets, because one flat value was wrong in both directions. A single
-    # 12s wait made a routine discovery sweep take 51.8s once a listed device
-    # stopped answering: every dead index paid the full timeout and held a worker
-    # thread while doing it. A sweep therefore uses the short budget, and the long
-    # one is spent only where a human is waiting on a specific device — adding a
-    # camera, testing a connection — or on a device already known to be slow.
     FIRST_FRAME_TIMEOUT = float(os.environ.get("OPENEYE_FIRST_FRAME_TIMEOUT", "12"))
     FIRST_FRAME_TIMEOUT_SWEEP = float(
-        os.environ.get("OPENEYE_FIRST_FRAME_TIMEOUT_SWEEP", "1.5"))
+        os.environ.get("OPENEYE_FIRST_FRAME_TIMEOUT_SWEEP", "1.5")
+    )
     FIRST_FRAME_POLL_INTERVAL = 0.25
 
-    # Anything slower than this to produce its first frame is remembered and gets
-    # the patient budget on later sweeps, so a Continuity Camera stays findable
-    # without every empty index costing 12s.
     SLOW_START_THRESHOLD = 0.75
-
-    # The OS device list changes while the service runs — phones arrive and leave,
-    # cables are pulled. Caching it for the process lifetime meant discovery kept
-    # reporting "the system reports 2 attached" long after one had gone, and kept
-    # probing an index that no longer existed. Short TTL: long enough to spare
-    # system_profiler once per index during a sweep, short enough to notice.
     DEVICE_LIST_TTL = float(os.environ.get("OPENEYE_DEVICE_LIST_TTL", "10"))
 
+    # Network scan tuning
+    NETWORK_SCAN_CONCURRENCY = int(
+        os.environ.get("OPENEYE_NETWORK_SCAN_CONCURRENCY", "64")
+    )
+    ARP_HOST_TIMEOUT = float(os.environ.get("OPENEYE_ARP_PROBE_TIMEOUT", "1.5"))
+    SWEEP_HOST_TIMEOUT = float(os.environ.get("OPENEYE_SWEEP_PROBE_TIMEOUT", "0.55"))
+
     def __init__(self):
-        self.discovered_cameras = []
+        self.discovered_cameras: List[Dict] = []
         self.scanning = False
         self._authorization_primed = False
         self._macos_camera_cache = None
@@ -89,7 +118,9 @@ class CameraDiscovery:
             if system == "Darwin":
                 output = subprocess.run(
                     ["system_profiler", "-json", "SPCameraDataType"],
-                    capture_output=True, text=True, timeout=15,
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
                 ).stdout
                 entries = json.loads(output).get("SPCameraDataType", [])
                 return [
@@ -100,8 +131,10 @@ class CameraDiscovery:
             if system == "Linux":
                 nodes = sorted(glob.glob("/dev/video*"))
                 return [
-                    {"name": f"Video device {node}",
-                     "index": int(node.rsplit("video", 1)[-1])}
+                    {
+                        "name": f"Video device {node}",
+                        "index": int(node.rsplit("video", 1)[-1]),
+                    }
                     for node in nodes
                     if node.rsplit("video", 1)[-1].isdigit()
                 ]
@@ -155,13 +188,7 @@ class CameraDiscovery:
             capture_output=True, text=True, timeout=20,
         )
 
-        names, seen = [], set()
-        for line in completed.stdout.splitlines():
-            name = line.strip()
-            # Both classes can report the same device; keep the first.
-            if name and name not in seen:
-                seen.add(name)
-                names.append(name)
+        names = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
 
         if not names:
             logger.info(
@@ -174,14 +201,6 @@ class CameraDiscovery:
     def _prime_macos_authorization(self) -> None:
         """
         Give macOS one chance to raise the camera permission dialog.
-
-        AVFoundation refuses to request authorization from a worker thread
-        ("can not spin main run loop from other thread"), so this runs inline
-        on the calling thread. It is attempted once per process and is a no-op
-        off macOS. Whether a dialog actually appears is up to the OS: a process
-        with no application bundle, or one started by launchd, is denied
-        without any prompt, which is why discovery still reports the denial
-        explicitly rather than relying on this succeeding.
         """
         self._authorization_primed = True
 
@@ -194,45 +213,36 @@ class CameraDiscovery:
             cap.release()
             if not authorized:
                 logger.debug(
-                    "macOS did not grant camera access on the priming probe")
+                    "macOS did not grant camera access on the priming probe"
+                )
         except Exception as e:
             logger.debug(f"Camera authorization priming failed: {e}")
 
     def _probe_index(self, index: int, patient: bool = False) -> Optional[Dict]:
         """
         Blocking probe of a single camera index. Runs in a worker thread.
-
-        Args:
-            index: camera index to probe.
-            patient: spend the long first-frame budget. Set when a human is
-                waiting on this specific device (adding or testing a camera).
-                A background sweep leaves it False so a dead index costs ~1.5s
-                instead of 12s — the difference between a 3s discovery call and
-                the 51.8s one observed once a listed phone stopped answering.
-
-        Returns camera info if the index yields a readable frame, else None.
         """
         cap = None
         identity = self._describe_device(index)
         label = identity.get("name") or f"index {index}"
         uid = identity.get("uid")
 
-        # A device that has already been seen to warm up slowly keeps the patient
-        # budget on every sweep, so a Continuity Camera does not become
-        # undiscoverable just because sweeps got faster.
         if uid and uid in self._slow_start_uids:
             patient = True
-        budget = self.FIRST_FRAME_TIMEOUT if patient else self.FIRST_FRAME_TIMEOUT_SWEEP
+        budget = (
+            self.FIRST_FRAME_TIMEOUT
+            if patient
+            else self.FIRST_FRAME_TIMEOUT_SWEEP
+        )
         try:
             cap = open_local_device(index)
             if not cap.isOpened():
-                # Logged at INFO, not DEBUG: when a camera the OS clearly lists
-                # cannot be opened, that fact is the whole diagnosis and it needs
-                # to be visible in the normal log. Silence here is what made an
-                # earlier camera outage so slow to pin down.
                 logger.info(
                     "Camera probe: index %s (%s) is listed by the OS but "
-                    "VideoCapture could not open it", index, label)
+                    "VideoCapture could not open it",
+                    index,
+                    label,
+                )
                 return None
             logger.info("Camera probe: index %s (%s) opened", index, label)
 
@@ -240,10 +250,6 @@ class CameraDiscovery:
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             fps = int(cap.get(cv2.CAP_PROP_FPS))
 
-            # Wait for the first frame rather than demanding one immediately. See
-            # FIRST_FRAME_TIMEOUT: a Continuity Camera opens straight away but only
-            # starts streaming once the phone has woken, so a single read() rejected
-            # it every time. Anything that opens deserves the chance to warm up.
             deadline = time.monotonic() + budget
             first_frame_after = None
             started = time.monotonic()
@@ -255,20 +261,21 @@ class CameraDiscovery:
                 if time.monotonic() >= deadline:
                     logger.info(
                         "Camera probe: index %s (%s) opened but produced no frame "
-                        "within %.1fs%s", index, label, budget,
-                        "" if patient else " (sweep budget; a slow device is "
-                                           "retried patiently when added)")
+                        "within %.1fs%s",
+                        index,
+                        label,
+                        budget,
+                        ""
+                        if patient
+                        else " (sweep budget; a slow device is "
+                        "retried patiently when added)",
+                    )
                     return None
                 time.sleep(self.FIRST_FRAME_POLL_INTERVAL)
 
-            # Remember devices that need time, so later sweeps stay patient with
-            # this one specifically rather than with every index.
             if uid and first_frame_after >= self.SLOW_START_THRESHOLD:
                 self._slow_start_uids.add(uid)
 
-            # Re-read the geometry from the delivered frame. A device that is still
-            # negotiating reports placeholder dimensions, so the CAP_PROP values
-            # taken before the first frame can be wrong (or 0x0).
             if frame is not None and getattr(frame, "shape", None):
                 height, width = frame.shape[0], frame.shape[1]
 
@@ -282,8 +289,6 @@ class CameraDiscovery:
                 "fps": fps if fps > 0 else 30,
                 "status": "available",
                 "warmup_seconds": round(first_frame_after, 2),
-                # A device that needed a noticeable warm-up is almost certainly a
-                # Continuity Camera; surface it so the UI can explain the delay.
                 "slow_start": first_frame_after >= self.SLOW_START_THRESHOLD,
                 "auto_config": {
                     "camera_id": f"usb_camera_{index}",
@@ -308,14 +313,6 @@ class CameraDiscovery:
     async def discover_usb_cameras_detailed(self) -> Dict:
         """
         Discover USB and built-in cameras, reporting why a device was missed.
-
-        OpenCV reports a permission denial exactly the same way it reports an
-        empty slot: VideoCapture.isOpened() returns False and nothing is
-        raised. Cross-referencing against the OS device list turns that silent
-        failure into an actionable message.
-
-        Returns:
-            {"cameras": [...], "warnings": [...], "permission_denied": bool}
         """
         logger.info("Starting USB camera discovery...")
 
@@ -330,27 +327,16 @@ class CameraDiscovery:
                 ", ".join(c["name"] for c in platform_cameras),
             )
 
-        # AVFoundation can only raise its permission dialog from the thread
-        # running the main loop, so the very first probe is deliberately not
-        # sent to the executor. Skipping this would mean the prompt could
-        # never appear, even when the process is entitled to show one.
         if platform_cameras and not self._authorization_primed:
             self._prime_macos_authorization()
 
-        # Prefer the indices the OS actually reported. Blind-probing 0..10
-        # costs seconds per absent index and, on macOS, emits a stream of
-        # AVFoundation authorization warnings for slots that never existed.
         if platform_cameras:
             indices = [c["index"] for c in platform_cameras]
         else:
             indices = list(range(self.MAX_CAMERA_INDEX))
 
-        # Probe off the event loop; VideoCapture blocks for seconds per index
-        # and would otherwise stall every other request, including WebSocket
-        # handshakes.
         results = await asyncio.gather(
-            *(loop.run_in_executor(None, self._probe_index, i)
-              for i in indices)
+            *(loop.run_in_executor(None, self._probe_index, i) for i in indices)
         )
         usb_cameras = [cam for cam in results if cam]
 
@@ -370,10 +356,12 @@ class CameraDiscovery:
         for cam in usb_cameras:
             logger.info(
                 f"Found USB camera at index {cam['index']}: "
-                f"{cam['resolution']} @ {cam['fps']}fps")
+                f"{cam['resolution']} @ {cam['fps']}fps"
+            )
 
         logger.info(
-            f"USB camera discovery complete. Found {len(usb_cameras)} cameras")
+            f"USB camera discovery complete. Found {len(usb_cameras)} cameras"
+        )
 
         return {
             "cameras": usb_cameras,
@@ -415,12 +403,12 @@ class CameraDiscovery:
     def _list_macos_cameras(self) -> List[Dict]:
         """
         Names and unique IDs of every camera macOS knows about, in system order.
-
-        Cached for the life of the service: system_profiler takes ~1s, and probing
-        calls this once per index.
         """
-        if (self._macos_camera_cache is not None
-                and (time.monotonic() - self._macos_camera_cache_at) < self.DEVICE_LIST_TTL):
+        if (
+            self._macos_camera_cache is not None
+            and (time.monotonic() - self._macos_camera_cache_at)
+            < self.DEVICE_LIST_TTL
+        ):
             return self._macos_camera_cache
 
         cameras: List[Dict] = []
@@ -428,14 +416,18 @@ class CameraDiscovery:
             try:
                 out = subprocess.run(
                     ["system_profiler", "SPCameraDataType", "-json"],
-                    capture_output=True, text=True, timeout=15,
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
                 ).stdout
                 for entry in json.loads(out).get("SPCameraDataType", []):
-                    cameras.append({
-                        "name": entry.get("_name"),
-                        "uid": entry.get("spcamera_unique-id"),
-                        "model": entry.get("spcamera_model-id"),
-                    })
+                    cameras.append(
+                        {
+                            "name": entry.get("_name"),
+                            "uid": entry.get("spcamera_unique-id"),
+                            "model": entry.get("spcamera_model-id"),
+                        }
+                    )
             except Exception as e:
                 logger.debug("Could not enumerate macOS cameras: %s", e)
 
@@ -444,19 +436,7 @@ class CameraDiscovery:
         return cameras
 
     def _describe_device(self, index: int) -> Dict:
-        """
-        Best-effort real name and unique ID for an OpenCV camera index.
-
-        IMPORTANT — this is a positional guess, not an exact mapping. OpenCV's
-        AVFoundation backend addresses cameras by index and exposes no identifier,
-        so the only thing available is to line its indices up against the order
-        system_profiler reports. That order has matched in practice, but nothing
-        guarantees it, which is why the uid is recorded as a *hint* for detecting
-        drift rather than as something to open a camera by.
-
-        Returns empty values when the platform is not macOS or the lookup fails;
-        callers fall back to the index-based label.
-        """
+        """Best-effort real name and unique ID for an OpenCV camera index."""
         cameras = self._list_macos_cameras()
         if 0 <= index < len(cameras):
             return cameras[index]
@@ -478,71 +458,127 @@ class CameraDiscovery:
         self, subnet: Optional[str] = None, timeout: int = 60
     ) -> List[Dict]:
         """
-        Discover RTSP/IP cameras on the local network.
+        Discover RTSP/IP/ONVIF cameras on the local network.
 
-        Args:
-            subnet: Optional subnet to scan (e.g., '192.168.1.0/24')
-                   If None, will scan all local subnets
-            timeout: Maximum time in seconds for the entire scan (default: 60)
+        Uses a two-phase architecture:
+          1. ARP/neighbor cache priority probe (finds active cameras in <1s).
+          2. Semaphore-bounded subnet sweep for any silent/uncached hosts.
 
-        Returns:
-            List of discovered network cameras (returns partial results if timeout)
+        Updates `self.discovered_cameras` incrementally as devices respond so
+        `/api/cameras/discover/status` always reflects live progress.
         """
         logger.info(
-            f"Starting network camera discovery... (timeout: {timeout}s)")
+            f"Starting network camera discovery... (timeout: {timeout}s)"
+        )
         self.scanning = True
-        network_cameras = []
+        network_cameras: List[Dict] = []
+        self.discovered_cameras = network_cameras
+        seen_endpoints: Set[Tuple[str, int]] = set()
+        own_ips = self._get_own_ips()
+
+        async def _record_result(result: Optional[Dict]) -> None:
+            if not result or isinstance(result, Exception):
+                return
+            key = (result["ip"], int(result["port"]))
+            if key in seen_endpoints:
+                return
+            seen_endpoints.add(key)
+            network_cameras.append(result)
+            logger.info(
+                "Found %s at %s:%s",
+                result.get("name", "camera"),
+                result["ip"],
+                result["port"],
+            )
 
         async def _do_scan():
-            """Inner function to perform the actual scan"""
             try:
-                # Get local subnets if none specified
-                if subnet is None:
-                    subnets = self._get_local_subnets()
-                else:
-                    subnets = [subnet]
-
+                subnets = [subnet] if subnet else self._get_local_subnets()
                 logger.info(f"Scanning subnets: {subnets}")
 
-                # Common RTSP ports
                 rtsp_ports = [554, 8554, 8080, 88]
+                semaphore = asyncio.Semaphore(self.NETWORK_SCAN_CONCURRENCY)
+
+                async def _bounded_check(
+                    ip_str: str, port: int, probe_timeout: float
+                ) -> Optional[Dict]:
+                    if not self.scanning:
+                        return None
+                    async with semaphore:
+                        if not self.scanning:
+                            return None
+                        res = await self._check_rtsp_port(
+                            ip_str, port, timeout=probe_timeout
+                        )
+                        if res:
+                            await _record_result(res)
+                        return res
 
                 for subnet_cidr in subnets:
+                    if not self.scanning:
+                        break
                     network = ipaddress.ip_network(subnet_cidr, strict=False)
 
-                    # Limit scanning to reasonable subnet sizes
+                    # If a /16 or /20 was passed directly, narrow to a /24
                     if network.num_addresses > 256:
                         logger.warning(
-                            f"Subnet {subnet_cidr} too large, skipping")
+                            f"Subnet {subnet_cidr} too large, skipping"
+                        )
                         continue
 
-                    # Scan each IP in the subnet
-                    tasks = []
-                    for ip in network.hosts():
-                        for port in rtsp_ports:
-                            tasks.append(self._check_rtsp_port(str(ip), port))
+                    all_hosts = [
+                        str(ip)
+                        for ip in network.hosts()
+                        if str(ip) not in own_ips
+                    ]
 
-                    # Run scans concurrently (in batches to avoid overwhelming
-                    # network)
-                    batch_size = 50
-                    for i in range(0, len(tasks), batch_size):
-                        batch = tasks[i: i + batch_size]
-                        results = await asyncio.gather(*batch, return_exceptions=True)
+                    # Phase 1: Probe ARP-known active hosts first (e.g. 192.168.50.135)
+                    arp_ips = await self._get_arp_priority_ips(network, own_ips)
+                    if arp_ips:
+                        logger.info(
+                            "Phase 1: Probing %d ARP-active host(s) in %s first",
+                            len(arp_ips),
+                            subnet_cidr,
+                        )
+                        phase1_coros = [
+                            _bounded_check(ip_str, port, self.ARP_HOST_TIMEOUT)
+                            for ip_str in arp_ips
+                            for port in rtsp_ports
+                        ]
+                        await asyncio.gather(
+                            *phase1_coros, return_exceptions=True
+                        )
 
-                        for result in results:
-                            if result and not isinstance(result, Exception):
-                                network_cameras.append(result)
-                                logger.info(f"Found camera at {result['ip']}:{result['port']}")
+                    # Phase 2: Sweep remaining hosts in the subnet
+                    arp_set = set(arp_ips)
+                    remaining_hosts = [
+                        ip_str for ip_str in all_hosts if ip_str not in arp_set
+                    ]
+                    if remaining_hosts and self.scanning:
+                        phase2_coros = [
+                            _bounded_check(
+                                ip_str, port, self.SWEEP_HOST_TIMEOUT
+                            )
+                            for ip_str in remaining_hosts
+                            for port in rtsp_ports
+                        ]
+                        await asyncio.gather(
+                            *phase2_coros, return_exceptions=True
+                        )
 
             except Exception as e:
                 logger.error(f"Error during network discovery: {e}")
 
         try:
-            # Run scan with timeout
             await asyncio.wait_for(_do_scan(), timeout=timeout)
-            logger.info(f"Network camera discovery complete. Found {len(network_cameras)} cameras")
+            logger.info(
+                f"Network camera discovery complete. Found {len(network_cameras)} cameras"
+            )
         except asyncio.TimeoutError:
-            logger.warning(f"Network scan timed out after {timeout}s. Returning {len(network_cameras)} cameras found so far")
+            logger.warning(
+                f"Network scan timed out after {timeout}s. "
+                f"Returning {len(network_cameras)} cameras found so far"
+            )
         except Exception as e:
             logger.error(f"Unexpected error during network discovery: {e}")
         finally:
@@ -550,76 +586,299 @@ class CameraDiscovery:
 
         return network_cameras
 
-    # Subnets large enough that scanning them is not worth attempting.
-    #
-    # A /16 is 65,534 addresses; probing each for an RTSP port takes far longer
-    # than anyone will wait, and the scan's own timeout would cut it off having
-    # covered a fraction. Docker's default bridge hands out a /16, and corporate
-    # networks often do too, so this is common rather than exotic.
-    MAX_SCAN_PREFIX = 22          # /22 is 1,022 hosts
+    def _get_own_ips(self) -> Set[str]:
+        """Return set of IPv4 addresses assigned to this host (via psutil)."""
+        ips: Set[str] = {"127.0.0.1"}
+        try:
+            for _iface, addresses in psutil.net_if_addrs().items():
+                for addr in addresses:
+                    if addr.family == socket.AF_INET and addr.address:
+                        ips.add(addr.address)
+        except Exception:
+            pass
+        return ips
+
+    def _get_primary_lan_ip(self) -> Optional[str]:
+        """
+        Determine the primary outbound LAN IPv4 address via a non-transmitting
+        UDP socket connect across macOS, Linux, and Windows.
+        """
+        s = None
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.settimeout(0.2)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            if ip and not ip.startswith("127."):
+                return ip
+        except Exception:
+            pass
+        finally:
+            if s is not None:
+                try:
+                    s.close()
+                except Exception:
+                    pass
+        return None
 
     def _get_local_subnets(self) -> List[str]:
         """
-        The local IPv4 subnets worth scanning for cameras.
+        Get deduplicated physical/LAN subnets to scan across macOS, Linux, and Windows.
 
         Uses psutil rather than netifaces. netifaces was unmaintained from 2021
         and published no Windows wheel past CPython 3.8, so on 3.12 pip had to
-        build it with MSVC — it was the single thing preventing the application
-        from importing on Windows. psutil returns the same interface addresses
-        and netmasks, is already a required dependency, and ships wheels for
-        every platform this project supports.
+        build it with MSVC. psutil returns the same interface addresses and
+        netmasks, is already a required dependency, and ships wheels for every
+        platform this project supports.
+
+        Places the primary outbound LAN subnet first and excludes virtual bridges,
+        VPN tunnels, link-local, and CGNAT ranges.
         """
         subnets: List[str] = []
+        seen: Set[str] = set()
+
+        def _add_subnet(ip_str: str, netmask_str: str) -> None:
+            try:
+                ip_obj = ipaddress.ip_address(ip_str)
+                if (
+                    ip_obj.is_loopback
+                    or ip_obj.is_link_local
+                    or ip_obj in CGNAT_NETWORK
+                ):
+                    return
+                network = ipaddress.ip_network(
+                    f"{ip_str}/{netmask_str}", strict=False
+                )
+                if network.num_addresses <= 2:
+                    return
+                if network.num_addresses > 256:
+                    network = ipaddress.ip_network(f"{ip_str}/24", strict=False)
+                cidr = str(network)
+                if cidr not in seen:
+                    seen.add(cidr)
+                    subnets.append(cidr)
+            except Exception:
+                pass
+
+        primary_ip = self._get_primary_lan_ip()
+        if primary_ip:
+            _add_subnet(primary_ip, "255.255.255.0")
 
         try:
             for interface, addresses in psutil.net_if_addrs().items():
-                for address in addresses:
-                    if address.family != socket.AF_INET:
+                if interface.lower().startswith(IGNORED_INTERFACE_PREFIXES):
+                    continue
+                for addr in addresses:
+                    if addr.family != socket.AF_INET:
                         continue
-
-                    ip, netmask = address.address, address.netmask
-                    if not ip or not netmask:
-                        continue
-
-                    # Loopback has nothing to find. Link-local means the
-                    # interface never got a lease — common on Windows for a
-                    # disconnected adapter, and scanning it only wastes the
-                    # scan's time budget.
-                    if ip.startswith("127.") or ip.startswith("169.254."):
-                        continue
-
-                    try:
-                        network = ipaddress.ip_network(f"{ip}/{netmask}", strict=False)
-                    except ValueError:
-                        continue
-
-                    if network.prefixlen < self.MAX_SCAN_PREFIX:
-                        logger.info(
-                            "Skipping %s on %s: %s addresses is too many to probe. "
-                            "Add cameras on this network by RTSP URL.",
-                            network, interface, network.num_addresses - 2,
-                        )
-                        continue
-
-                    subnets.append(str(network))
-
+                    ip, netmask = addr.address, addr.netmask
+                    if ip and netmask and not ip.startswith("127."):
+                        _add_subnet(ip, netmask)
         except Exception as e:
             logger.error("Could not enumerate network interfaces: %s", e)
 
         if not subnets:
-            logger.warning(
-                "No scannable IPv4 subnet found; falling back to 192.168.1.0/24. "
-                "If your cameras are elsewhere, add them by RTSP URL."
-            )
             subnets = ["192.168.1.0/24"]
 
         return subnets
+
+    async def _get_arp_priority_ips(
+        self, network: ipaddress.IPv4Network, own_ips: Set[str]
+    ) -> List[str]:
+        """
+        Extract reachable IPv4 hosts in `network` from the OS ARP/neighbor cache.
+        Supports Linux (/proc/net/arp + ip neigh), macOS (arp -a), and Windows (arp -a).
+        """
+        found: List[str] = []
+        seen: Set[str] = set()
+
+        def _consider(ip_candidate: str) -> None:
+            if ip_candidate in seen or ip_candidate in own_ips:
+                return
+            try:
+                ip_obj = ipaddress.ip_address(ip_candidate)
+                if ip_obj in network and ip_obj != network.broadcast_address and ip_obj != network.network_address:
+                    seen.add(ip_candidate)
+                    found.append(ip_candidate)
+            except ValueError:
+                pass
+
+        # Fast path on Linux: /proc/net/arp
+        proc_arp = Path("/proc/net/arp")
+        if proc_arp.is_file():
+            try:
+                for line in proc_arp.read_text(errors="ignore").splitlines()[1:]:
+                    parts = line.split()
+                    # Flags 0x0 means incomplete; 0x2 means complete
+                    if len(parts) >= 4 and parts[2] != "0x0" and parts[3] != "00:00:00:00:00:00":
+                        _consider(parts[0])
+            except Exception:
+                pass
+
+        # Cross-platform `arp -a` (macOS, Windows, Linux fallback)
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "arp",
+                "-a",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=2.5)
+            for line in stdout.decode("utf-8", "replace").splitlines():
+                lower = line.lower()
+                if "incomplete" in lower or "ff:ff:ff:ff:ff:ff" in lower or "ff-ff-ff-ff-ff-ff" in lower:
+                    continue
+                # Match macOS/Linux `(192.168.50.135) at 18:69:45:a6:ea:c9` or
+                # Windows `192.168.50.135   18-69-45-a6-ea-c9   dynamic`
+                ip_match = re.search(r"\b(\d{1,3}(?:\.\d{1,3}){3})\b", line)
+                mac_match = re.search(
+                    r"\b([0-9a-fA-F]{1,2}(?:[:-][0-9a-fA-F]{1,2}){5})\b", line
+                )
+                if ip_match and mac_match:
+                    _consider(ip_match.group(1))
+        except Exception as e:
+            logger.debug(f"ARP table lookup skipped: {e}")
+
+        return found
+
+    async def _check_tcp_port_open(
+        self, ip: str, port: int, timeout: float = 0.8
+    ) -> bool:
+        """Quick check whether a TCP port is open on `ip`."""
+        writer = None
+        try:
+            _, writer = await asyncio.wait_for(
+                asyncio.open_connection(ip, port), timeout=timeout
+            )
+            return True
+        except Exception:
+            return False
+        finally:
+            if writer is not None:
+                try:
+                    writer.close()
+                    await writer.wait_closed()
+                except Exception:
+                    pass
+
+    def _identify_rtsp_vendor(
+        self, ip: str, port: int, response_text: str, onvif_2020_open: bool = False
+    ) -> Dict:
+        """
+        Identify camera manufacturer, model family, and optimal stream URLs
+        from RTSP headers (`WWW-Authenticate` realm, `Server`) and open ports.
+        """
+        realm_match = re.search(
+            r'realm="([^"]+)"', response_text, re.IGNORECASE
+        )
+        server_match = re.search(
+            r"^Server:\s*(.+)$", response_text, re.IGNORECASE | re.MULTILINE
+        )
+        realm = realm_match.group(1).strip() if realm_match else ""
+        server = server_match.group(1).strip() if server_match else ""
+        fingerprint = f"{realm} {server}".lower()
+
+        if "tp-link" in fingerprint or "tapo" in fingerprint or onvif_2020_open:
+            manufacturer = "TP-Link Tapo"
+            name = f"TP-Link Tapo Camera ({ip})"
+            urls = [
+                f"rtsp://{ip}:{port}/stream1",
+                f"rtsp://{ip}:{port}/stream2",
+                f"rtsp://{ip}:{port}/live",
+            ]
+            auth_hint = (
+                "Enter the Camera Account username & password created in the "
+                "Tapo app (Camera Settings → Advanced Settings → Camera Account)."
+            )
+        elif any(k in fingerprint for k in ("hikvision", "dvrdvs", "app-webs", "hik")):
+            manufacturer = "Hikvision"
+            name = f"Hikvision Camera ({ip})"
+            urls = [
+                f"rtsp://{ip}:{port}/Streaming/Channels/101",
+                f"rtsp://{ip}:{port}/Streaming/Channels/102",
+                f"rtsp://{ip}:{port}/h264/ch1/main/av_stream",
+                f"rtsp://{ip}:{port}/stream1",
+            ]
+            auth_hint = "Enter your Hikvision camera admin username and password."
+        elif any(k in fingerprint for k in ("dahua", "amcrest", "lorex")):
+            manufacturer = "Dahua / Amcrest"
+            name = f"Dahua/Amcrest Camera ({ip})"
+            urls = [
+                f"rtsp://{ip}:{port}/cam/realmonitor?channel=1&subtype=0",
+                f"rtsp://{ip}:{port}/cam/realmonitor?channel=1&subtype=1",
+                f"rtsp://{ip}:{port}/live",
+                f"rtsp://{ip}:{port}/stream1",
+            ]
+            auth_hint = "Enter your Dahua/Amcrest camera username and password."
+        elif "reolink" in fingerprint:
+            manufacturer = "Reolink"
+            name = f"Reolink Camera ({ip})"
+            urls = [
+                f"rtsp://{ip}:{port}/h264Preview_01_main",
+                f"rtsp://{ip}:{port}/h264Preview_01_sub",
+                f"rtsp://{ip}:{port}/Preview_01_main",
+                f"rtsp://{ip}:{port}/stream1",
+            ]
+            auth_hint = "Enter your Reolink camera username and password."
+        elif "axis" in fingerprint:
+            manufacturer = "Axis"
+            name = f"Axis Camera ({ip})"
+            urls = [
+                f"rtsp://{ip}:{port}/axis-media/media.amp",
+                f"rtsp://{ip}:{port}/mpeg4/media.amp",
+                f"rtsp://{ip}:{port}/stream1",
+            ]
+            auth_hint = "Enter your Axis camera ONVIF/RTSP credentials."
+        elif "unifi" in fingerprint or "ubnt" in fingerprint or "ubiquiti" in fingerprint:
+            manufacturer = "Ubiquiti UniFi"
+            name = f"UniFi Camera ({ip})"
+            urls = [
+                f"rtsp://{ip}:{port}/s0",
+                f"rtsp://{ip}:{port}/s1",
+                f"rtsp://{ip}:{port}/live",
+            ]
+            auth_hint = "Use the RTSP stream URL enabled in UniFi Protect."
+        elif "foscam" in fingerprint:
+            manufacturer = "Foscam"
+            name = f"Foscam Camera ({ip})"
+            urls = [
+                f"rtsp://{ip}:{port}/videoMain",
+                f"rtsp://{ip}:{port}/videoSub",
+                f"rtsp://{ip}:{port}/stream1",
+            ]
+            auth_hint = "Enter your Foscam camera username and password."
+        else:
+            manufacturer = realm or server or "Generic RTSP / ONVIF"
+            name = f"IP Camera at {ip}"
+            urls = [
+                f"rtsp://{ip}:{port}/stream1",
+                f"rtsp://{ip}:{port}/stream2",
+                f"rtsp://{ip}:{port}/stream",
+                f"rtsp://{ip}:{port}/h264",
+                f"rtsp://{ip}:{port}/live",
+                f"rtsp://{ip}:{port}/Streaming/Channels/101",
+                f"rtsp://{ip}:{port}/cam/realmonitor?channel=1&subtype=0",
+                f"rtsp://{ip}:{port}/h264Preview_01_main",
+            ]
+            auth_hint = (
+                "Enter the camera's RTSP/ONVIF username and password if "
+                "authentication is required."
+            )
+
+        return {
+            "manufacturer": manufacturer,
+            "name": name,
+            "urls": urls,
+            "realm": realm or None,
+            "server": server or None,
+            "auth_hint": auth_hint,
+        }
 
     async def _check_rtsp_port(
         self, ip: str, port: int, timeout: float = 1.0
     ) -> Optional[Dict]:
         """
-        Check if an IP:port combination responds to RTSP.
+        Check if an IP:port combination responds to RTSP and fingerprint its vendor.
 
         Args:
             ip: IP address to check
@@ -638,37 +897,49 @@ class CameraDiscovery:
             if not response or not response.startswith(b"RTSP/"):
                 if response:
                     logger.debug(
-                        f"{ip}:{port} is open but does not speak RTSP; ignoring")
+                        f"{ip}:{port} is open but does not speak RTSP; ignoring"
+                    )
                 return None
 
-            status_line = response.split(b"\r\n", 1)[0].decode(
-                "ascii", "replace")
-            requires_auth = b" 401 " in response or b" 403 " in response
+            response_text = response.decode("ascii", "replace")
+            status_line = response_text.split("\r\n", 1)[0]
+            requires_auth = (
+                b" 401 " in response
+                or b" 403 " in response
+                or b"WWW-Authenticate:" in response
+            )
 
-            common_urls = [
-                f"rtsp://{ip}:{port}/stream",
-                f"rtsp://{ip}:{port}/stream1",
-                f"rtsp://{ip}:{port}/h264",
-                f"rtsp://{ip}:{port}/live",
-                f"rtsp://{ip}:{port}/cam/realmonitor?channel=1&subtype=0",
-            ]
+            # Check if Tapo/ONVIF port 2020 is open when realm wasn't already explicit
+            onvif_2020_open = False
+            if "tp-link" not in response_text.lower() and port == 554:
+                onvif_2020_open = await self._check_tcp_port_open(
+                    ip, 2020, timeout=0.4
+                )
+
+            vendor_info = self._identify_rtsp_vendor(
+                ip, port, response_text, onvif_2020_open=onvif_2020_open
+            )
+            common_urls = vendor_info["urls"]
 
             note = (
-                "RTSP server confirmed. Credentials are required; enter the "
-                "camera's username and password when adding it."
+                f"RTSP server confirmed ({vendor_info['manufacturer']}). "
+                f"{vendor_info['auth_hint']}"
                 if requires_auth
-                else "RTSP server confirmed. The stream path may still need "
-                     "adjusting for this camera model."
+                else "RTSP server confirmed. Select a stream path and enter credentials if required."
             )
 
             return {
                 "type": "rtsp",
                 "ip": ip,
                 "port": port,
-                "name": f"IP Camera at {ip}",
+                "onvif_port": 2020 if (onvif_2020_open or vendor_info["manufacturer"] == "TP-Link Tapo") else None,
+                "manufacturer": vendor_info["manufacturer"],
+                "realm": vendor_info["realm"],
+                "name": vendor_info["name"],
                 "urls": common_urls,
                 "status": "available",
                 "requires_auth": requires_auth,
+                "auth_hint": vendor_info["auth_hint"],
                 "rtsp_response": status_line,
                 "auto_config": {
                     "camera_id": f'rtsp_camera_{ip.replace(".", "_")}',
@@ -685,24 +956,98 @@ class CameraDiscovery:
 
         return None
 
+    async def _curl_rtsp_fallback(
+        self, ip: str, port: int, timeout: float = 2.0
+    ) -> Optional[bytes]:
+        """
+        macOS Local Network TCC / ARP fallback using Apple's signed /usr/bin/curl.
+
+        When OpenEye runs under launchd on macOS Sequoia without an .app bundle,
+        third-party Python binaries can receive EHOSTUNREACH (Errno 65) on LAN
+        sockets while system binaries like /usr/bin/curl are permitted.
+        """
+        if platform.system() != "Darwin":
+            return None
+        try:
+            max_time = str(max(1, int(round(timeout))))
+            proc = await asyncio.create_subprocess_exec(
+                "/usr/bin/curl",
+                "-is",
+                "--max-time",
+                max_time,
+                f"rtsp://{ip}:{port}/",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await asyncio.wait_for(
+                proc.communicate(), timeout=timeout + 1.0
+            )
+            if not stdout or not stdout.startswith(b"RTSP/"):
+                return None
+
+            if b" 401 " in stdout or b" 403 " in stdout:
+                return stdout
+
+            # Follow up with DESCRIBE via curl to capture 401 + WWW-Authenticate realm
+            proc_desc = await asyncio.create_subprocess_exec(
+                "/usr/bin/curl",
+                "-is",
+                "--max-time",
+                max_time,
+                "-X",
+                "DESCRIBE",
+                f"rtsp://{ip}:{port}/stream1",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            desc_out, _ = await asyncio.wait_for(
+                proc_desc.communicate(), timeout=timeout + 1.0
+            )
+            if desc_out:
+                return stdout + b"\r\n" + desc_out
+            return stdout
+        except Exception:
+            return None
+
     async def _rtsp_options_probe(
         self, ip: str, port: int, timeout: float = 2.0
     ) -> Optional[bytes]:
         """
-        Send an RTSP OPTIONS request and return the raw reply.
+        Send an RTSP OPTIONS request (followed by DESCRIBE if OPTIONS returns 200 OK)
+        and return the raw reply bytes.
 
-        A genuine RTSP server answers with a "RTSP/1.0 <code>" status line even
-        when it rejects the request for lack of credentials, which is what
-        distinguishes a camera from any other service on the same port.
-
-        Returns:
-            Raw response bytes, or None if the port is closed or silent.
+        Many spec-compliant cameras (such as TP-Link Tapo) answer `OPTIONS` with
+        `RTSP/1.0 200 OK` without requiring credentials, and only challenge with
+        `401 Unauthorized` + `WWW-Authenticate: Basic realm="TP-LINK IP-Camera"`
+        when a client sends `DESCRIBE`. Combining both responses accurately detects
+        both authentication requirements and the device's vendor realm.
         """
+        import errno
+
         writer = None
         try:
-            reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(ip, port), timeout=timeout
-            )
+            try:
+                reader, writer = await asyncio.wait_for(
+                    asyncio.open_connection(ip, port), timeout=timeout
+                )
+            except OSError as first_err:
+                # On macOS, a cold ARP entry or multi-NIC subnet can raise
+                # EHOSTUNREACH (Errno 65) on the first SYN while ARP resolves.
+                if getattr(first_err, "errno", None) in (
+                    errno.EHOSTUNREACH,
+                    errno.ENETUNREACH,
+                    65,
+                ):
+                    await asyncio.sleep(0.15)
+                    try:
+                        reader, writer = await asyncio.wait_for(
+                            asyncio.open_connection(ip, port), timeout=timeout
+                        )
+                    except OSError:
+                        return await self._curl_rtsp_fallback(ip, port, timeout)
+                else:
+                    return None
+
             request = (
                 f"OPTIONS rtsp://{ip}:{port} RTSP/1.0\r\n"
                 f"CSeq: 1\r\n"
@@ -711,7 +1056,36 @@ class CameraDiscovery:
             ).encode("ascii")
             writer.write(request)
             await writer.drain()
-            return await asyncio.wait_for(reader.read(1024), timeout=timeout)
+            opt_resp = await asyncio.wait_for(
+                reader.read(1024), timeout=max(timeout, 1.0)
+            )
+            if not opt_resp or not opt_resp.startswith(b"RTSP/"):
+                return opt_resp
+
+            # If OPTIONS already revealed 401/403, no second round-trip is needed
+            if b" 401 " in opt_resp or b" 403 " in opt_resp:
+                return opt_resp
+
+            # Send DESCRIBE to detect stream-level authentication & vendor realm
+            desc_req = (
+                f"DESCRIBE rtsp://{ip}:{port}/stream1 RTSP/1.0\r\n"
+                f"CSeq: 2\r\n"
+                f"Accept: application/sdp\r\n"
+                f"User-Agent: OpenEye-Discovery\r\n"
+                f"\r\n"
+            ).encode("ascii")
+            try:
+                writer.write(desc_req)
+                await writer.drain()
+                desc_resp = await asyncio.wait_for(
+                    reader.read(1024), timeout=max(timeout, 1.0)
+                )
+                if desc_resp:
+                    return opt_resp + b"\r\n" + desc_resp
+            except Exception:
+                pass
+
+            return opt_resp
         except (asyncio.TimeoutError, ConnectionRefusedError, OSError):
             return None
         finally:
@@ -726,100 +1100,120 @@ class CameraDiscovery:
         """
         Test if an RTSP URL is valid by attempting to open it with OpenCV.
         Runs in a thread pool to avoid blocking the event loop.
-
-        Args:
-            url: RTSP URL to test
-            timeout: Timeout in seconds
-
-        Returns:
-            True if stream is accessible, False otherwise
         """
         def _blocking_test():
             try:
-                cap = cv2.VideoCapture(url)
+                os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp|stimeout;5000000")
+                cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
                 cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, int(timeout * 1000))
                 is_opened = cap.isOpened()
                 cap.release()
                 return is_opened
             except Exception as e:
-                logger.debug(f"Error testing RTSP stream {url}: {e}")
+                logger.debug(
+                    f"Error testing RTSP stream {redact_url_credentials(url)}: {e}"
+                )
                 return False
 
         try:
-            # Run blocking OpenCV operation in thread pool
             loop = asyncio.get_event_loop()
             return await asyncio.wait_for(
                 loop.run_in_executor(None, _blocking_test),
-                timeout=timeout + 1.0  # Extra second for executor overhead
+                timeout=timeout + 1.0,
             )
         except asyncio.TimeoutError:
-            logger.debug(f"RTSP stream test timed out: {url}")
+            logger.debug(
+                f"RTSP stream test timed out: {redact_url_credentials(url)}"
+            )
             return False
         except Exception as e:
-            logger.debug(f"Error testing RTSP stream {url}: {e}")
+            logger.debug(
+                f"Error testing RTSP stream {redact_url_credentials(url)}: {e}"
+            )
             return False
 
     async def test_camera_connection(self, camera_config: Dict) -> Dict:
         """
         Test if a camera configuration works.
 
-        Args:
-            camera_config: Camera configuration dict with 'type' and 'source'
-
-        Returns:
-            Test result with status and details
+        Runs blocking OpenCV capture operations in a thread pool executor so the
+        FastAPI event loop remains responsive during RTSP handshakes.
         """
         try:
             camera_type = camera_config.get(
-                "camera_type", camera_config.get("type"))
+                "camera_type", camera_config.get("type")
+            )
             source = camera_config.get("source")
+            username = camera_config.get("username")
+            password = camera_config.get("password")
 
             if not source:
                 return {"success": False, "error": "No source specified"}
 
-            # Convert source to appropriate type
             if camera_type == "usb":
-                source = int(source)
+                resolved_source = int(source)
+            else:
+                resolved_source = decrypt_camera_source(str(source))
+                if username or password:
+                    resolved_source = inject_rtsp_credentials(
+                        resolved_source, username=username, password=password
+                    )
 
-            # Try to open the camera
-            cap = cv2.VideoCapture(source)
+            def _blocking_probe() -> Dict:
+                cap = None
+                try:
+                    if camera_type == "usb":
+                        cap = cv2.VideoCapture(resolved_source)
+                    else:
+                        os.environ.setdefault(
+                            "OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp"
+                        )
+                        cap = cv2.VideoCapture(resolved_source, cv2.CAP_FFMPEG)
 
-            if not cap.isOpened():
-                cap.release()
-                return {"success": False, "error": "Failed to open camera"}
+                    if not cap or not cap.isOpened():
+                        return {
+                            "success": False,
+                            "error": (
+                                "Failed to open camera stream. Verify the stream URL "
+                                "and camera username/password."
+                                if camera_type != "usb"
+                                else "Failed to open camera"
+                            ),
+                        }
 
-            # Wait for a frame rather than demanding one immediately — same
-            # reasoning as _probe_index. A single read here rejected a Continuity
-            # Camera that discovery had *just* listed as available, so adding the
-            # phone failed with "Failed to read from camera" even though the
-            # device was fine and simply mid-wake.
-            deadline = time.monotonic() + self.FIRST_FRAME_TIMEOUT
-            started = time.monotonic()
-            frame = None
-            while True:
-                ret, frame = cap.read()
-                if ret and frame is not None:
-                    break
-                if time.monotonic() >= deadline:
-                    cap.release()
+                    deadline = time.monotonic() + self.FIRST_FRAME_TIMEOUT
+                    started = time.monotonic()
+                    frame = None
+                    while True:
+                        ret, frame = cap.read()
+                        if ret and frame is not None:
+                            break
+                        if time.monotonic() >= deadline:
+                            return {
+                                "success": False,
+                                "error": (
+                                    f"Opened the camera but received no frame within "
+                                    f"{self.FIRST_FRAME_TIMEOUT:.0f}s"
+                                ),
+                            }
+                        time.sleep(self.FIRST_FRAME_POLL_INTERVAL)
+
+                    warmup = time.monotonic() - started
                     return {
-                        "success": False,
-                        "error": (
-                            f"Opened the camera but received no frame within "
-                            f"{self.FIRST_FRAME_TIMEOUT:.0f}s"
-                        ),
+                        "success": True,
+                        "message": "Camera connection successful",
+                        "resolution": f"{frame.shape[1]}x{frame.shape[0]}",
+                        "warmup_seconds": round(warmup, 2),
                     }
-                time.sleep(self.FIRST_FRAME_POLL_INTERVAL)
+                finally:
+                    if cap is not None:
+                        try:
+                            cap.release()
+                        except Exception:
+                            pass
 
-            warmup = time.monotonic() - started
-            cap.release()
-
-            return {
-                "success": True,
-                "message": "Camera connection successful",
-                "resolution": f"{frame.shape[1]}x{frame.shape[0]}",
-                "warmup_seconds": round(warmup, 2),
-            }
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(None, _blocking_probe)
 
         except Exception as e:
             return {"success": False, "error": str(e)}

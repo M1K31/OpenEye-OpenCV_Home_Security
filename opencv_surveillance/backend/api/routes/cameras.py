@@ -122,6 +122,16 @@ def list_cameras(
     }
 
 
+def _is_camera_live(camera) -> bool:
+    """True when a camera instance is running and its capture has not died."""
+    if not camera or not getattr(camera, "is_running", False):
+        return False
+    capture_dead = getattr(camera, "_capture_dead", None)
+    if capture_dead is not None and hasattr(capture_dead, "is_set") and capture_dead.is_set():
+        return False
+    return True
+
+
 def _with_runtime_state(db_camera):
     """
     Attach live `is_running` to a camera row on its way out of the API.
@@ -136,7 +146,7 @@ def _with_runtime_state(db_camera):
     """
     try:
         running = camera_manager.get_camera(db_camera.camera_id)
-        db_camera.is_running = bool(running and getattr(running, "is_running", False))
+        db_camera.is_running = _is_camera_live(running)
     except Exception:
         # Never let a status lookup break listing cameras.
         db_camera.is_running = False
@@ -183,8 +193,12 @@ def patch_camera(
 
     # Validate camera source if being updated
     if "source" in update_data:
-        camera_type = update_data.get("camera_type", db_camera.camera_type)
-        validate_camera_source(update_data["source"], camera_type)
+        from backend.core.camera_security import redact_url_credentials
+        if update_data["source"] == redact_url_credentials(db_camera.source):
+            update_data.pop("source")
+        else:
+            camera_type = update_data.get("camera_type", db_camera.camera_type)
+            validate_camera_source(update_data["source"], camera_type)
 
     # CRITICAL FIX: Recalculate min_contour_area when motion_sensitivity changes
     # Motion sensitivity scale (1-10) maps inversely to min_contour_area
@@ -273,8 +287,13 @@ def update_camera(
 
     # Validate camera source if being updated
     if "source" in update_data:
-        camera_type = update_data.get("camera_type", db_camera.camera_type)
-        validate_camera_source(update_data["source"], camera_type)
+        from backend.core.camera_security import redact_url_credentials
+        if update_data["source"] == redact_url_credentials(db_camera.source):
+            # Redacted placeholder echoed back by UI; preserve existing decrypted source
+            update_data.pop("source")
+        else:
+            camera_type = update_data.get("camera_type", db_camera.camera_type)
+            validate_camera_source(update_data["source"], camera_type)
 
     # CRITICAL FIX: Recalculate min_contour_area when motion_sensitivity changes
     # Motion sensitivity scale (1-10) maps inversely to min_contour_area
@@ -602,11 +621,7 @@ def get_camera_status(camera_id: str, db: Session = Depends(get_db), current_use
     status_data = {
         "camera_id": camera_id,
         "is_active": db_camera.is_active,
-        "is_running": (
-            active_camera is not None and active_camera.is_running
-            if active_camera
-            else False
-        ),
+        "is_running": _is_camera_live(active_camera),
         "fps": None,
         "last_frame_time": None,
         "error_message": None,
@@ -656,29 +671,29 @@ async def generate_frames(camera_id: str):
     The camera's own capture loop produces frames; this only consumes them.
     """
     camera = camera_manager.get_camera(camera_id)
-    if not camera:
-        logger.error(f"Camera '{camera_id}' not found in camera manager")
-        return
-    if not camera.is_running:
-        logger.error(f"Camera '{camera_id}' is not running")
+    if not _is_camera_live(camera):
+        logger.info(f"Camera '{camera_id}' is not currently live; closing stream")
         return
 
     last_seq = None
     last_offline_render = 0.0
 
     try:
-        while True:
-            published = camera.get_published_frame(since_seq=last_seq, timeout=1.0)
+        while _is_camera_live(camera) and camera_manager.get_camera(camera_id) is camera:
+            # Non-blocking check (timeout=0.0) so this async generator never blocks
+            # the main asyncio event loop thread inside threading.Condition.wait().
+            published = camera.get_published_frame(since_seq=last_seq, timeout=0.0)
 
             if published is not None:
                 frame, _motion, last_seq = published
             else:
-                # Nothing new. Keep the connection alive but stop pretending:
-                # once the frame is stale, say so. Serving the last good frame
-                # forever is what made a dead camera look healthy.
+                if not _is_camera_live(camera):
+                    break
+                # Nothing new yet. Yield control to the asyncio event loop and
+                # only render an offline frame once the published frame is stale.
                 age = camera.seconds_since_last_frame()
-                if age is not None and age < STREAM_STALE_AFTER_SECONDS:
-                    await asyncio.sleep(0.05)
+                if age is None or age < STREAM_STALE_AFTER_SECONDS:
+                    await asyncio.sleep(0.04)
                     continue
 
                 now = time.time()
@@ -695,15 +710,18 @@ async def generate_frames(camera_id: str):
                 continue
 
             frame_bytes = buffer.tobytes()
-            # MJPEG stream format
-            yield (
+            header = (
                 b"--frame\r\n"
-                b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n"
+                b"Content-Type: image/jpeg\r\n"
+                + f"Content-Length: {len(frame_bytes)}\r\n\r\n".encode("ascii")
             )
+            yield header + frame_bytes + b"\r\n"
             await asyncio.sleep(0.033)  # Limit to ~30 FPS
+    except (asyncio.CancelledError, GeneratorExit):
+        return
     except Exception as e:
         logger.error(f"Error generating frames for camera {camera_id}: {e}")
-        raise
+        return
 
 
 @router.get("/{camera_id}/stream")
@@ -723,7 +741,7 @@ def stream_video(camera_id: str, db: Session = Depends(get_db), current_user = D
         )
 
     active_camera = camera_manager.get_camera(camera_id)
-    if not active_camera:
+    if not _is_camera_live(active_camera):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Camera '{camera_id}' is not running",
@@ -732,6 +750,11 @@ def stream_video(camera_id: str, db: Session = Depends(get_db), current_user = D
     return StreamingResponse(
         generate_frames(camera_id),
         media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

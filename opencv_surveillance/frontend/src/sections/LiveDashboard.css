@@ -1360,12 +1360,201 @@ html.aquasecurity-theme .fullscreen-info-item {
     gap: 8px;
   }
 
-  .fullscreen-info-item {
-    font-size: 12px;
-  }
-
   .fullscreen-status-badge {
     font-size: 12px;
     padding: 6px 12px;
   }
 }
+
+/* ===================
+   DASHBOARD QUICK PTZ HUD & PTZ STUDIO MODAL
+   =================== */
+.dashboard-ptz-hud {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 12;
+  background: rgba(15, 23, 42, 0.78);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  padding: 10px;
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  min-width: 190px;
+}
+
+.dashboard-ptz-hud-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.dashboard-ptz-hud-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dashboard-ptz-studio-btn {
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(59, 130, 246, 0.55);
+  background: rgba(59, 130, 246, 0.25);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dashboard-ptz-studio-btn:hover {
+  background: rgba(59, 130, 246, 0.85);
+}
+
+.dashboard-ptz-close-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dashboard-ptz-close-btn:hover {
+  background: rgba(239, 68, 68, 0.8);
+}
+
+.dashboard-ptz-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dashboard-ptz-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 34px);
+  grid-template-rows: repeat(3, 34px);
+  gap: 4px;
+}
+
+.dashboard-ptz-pad button {
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s ease;
+}
+
+.dashboard-ptz-pad button:hover {
+  background: rgba(59, 130, 246, 0.85);
+  border-color: rgba(59, 130, 246, 0.95);
+  transform: scale(1.06);
+}
+
+.dashboard-ptz-pad button:active {
+  transform: scale(0.95);
+}
+
+.dashboard-ptz-pad button.home-btn {
+  background: rgba(16, 185, 129, 0.28);
+  border-color: rgba(16, 185, 129, 0.55);
+}
+
+.dashboard-ptz-zoom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.dashboard-ptz-zoom span {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.8;
+}
+
+.dashboard-ptz-zoom button {
+  width: 36px;
+  height: 34px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s ease;
+}
+
+.dashboard-ptz-zoom button:hover {
+  background: rgba(59, 130, 246, 0.85);
+  border-color: rgba(59, 130, 246, 0.95);
+}
+
+.dashboard-ptz-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10002;
+  padding: 20px;
+  overflow: auto;
+}
+
+.dashboard-ptz-modal-container {
+  background: var(--bg-panel, #111827);
+  border: 1px solid var(--border-panel, rgba(255, 255, 255, 0.15));
+  border-radius: 14px;
+  max-width: 1180px;
+  width: 100%;
+  max-height: 92vh;
+  overflow: auto;
+  position: relative;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+}
+
+.dashboard-ptz-modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: var(--color-error, #ef4444);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  z-index: 10;
+}
+

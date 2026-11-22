@@ -37,7 +37,7 @@ def _optional_packages() -> set:
 
     They appear as ("name", "description") pairs in its optional-feature list.
     """
-    text = MANAGE.read_text()
+    text = MANAGE.read_text(encoding="utf-8")
     start = text.index("Optional features")
     window = text[start:start + 2000]
     return {m.group(1) for m in re.finditer(r'\(\s*"([a-zA-Z_][\w]*)"\s*,\s*"', window)}
@@ -46,7 +46,7 @@ def _optional_packages() -> set:
 def _module_level_imports(path: pathlib.Path):
     """Top-level imports only — those inside a try or a function are guarded."""
     try:
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
     except SyntaxError:
         return
     for node in tree.body:                      # body only: not nested in try/def

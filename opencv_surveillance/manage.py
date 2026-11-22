@@ -178,6 +178,8 @@ def _is_openeye(proc) -> bool:
     signals a second OpenEye instance running from a different directory —
     a development checkout beside an installed copy is a supported layout.
     """
+    if proc.pid == os.getpid():
+        return False
     try:
         cmdline = " ".join(proc.cmdline())
     except Exception:

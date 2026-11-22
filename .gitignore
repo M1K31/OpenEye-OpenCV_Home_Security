@@ -73,6 +73,13 @@ docs/archived-releases/
 *.backup
 *.bak
 *.tmp
+backups/
+opencv_surveillance/backups/
+
+# Runtime state (regenerated at run time; never shipped to end users)
+runtime.json
+opencv_surveillance/runtime.json
+opencv_surveillance/.venv/
 
 # IDE
 .vscode/
@@ -138,7 +145,8 @@ build/
 !/docs/deployment/LINUX_SYSTEMD_SERVICE.md
 !/docs/development/
 /docs/development/*
-!/docs/development/WEBSOCKET_IMPLEMENTATION.md
+# WEBSOCKET_IMPLEMENTATION.md is an internal dev note (not code-referenced) — kept local, not shipped.
+# ADR-001-csrf.md stays: it is code-referenced and must be readable by anyone reading the code.
 # Cited by backend/main.py:210 as the justification for CSRF being off.
 # A decision the code points at must be readable by anyone reading the code.
 !/docs/development/ADR-001-csrf.md

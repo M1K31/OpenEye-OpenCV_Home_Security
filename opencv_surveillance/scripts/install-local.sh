@@ -9,6 +9,7 @@
 #   OPENEYE_VENV=<path>       Override the venv location (default: ~/.local/share/openeye/venv)
 #   OPENEYE_DATA_ROOT=<path>  Override the data root (default: ~/.local/share/openeye)
 #   OPENEYE_RECREATE_VENV=1   Delete and rebuild the venv instead of reusing it
+#   OPENEYE_STANDALONE=1      Do not install the shared ecosystem packages (never joins a hub)
 
 set -e  # Exit on error
 
@@ -105,21 +106,32 @@ detect_os() {
 check_python() {
     log_info "Checking Python installation..."
     
-    if command -v python3 &> /dev/null; then
-        PYTHON_VERSION=$(python3 --version | cut -d' ' -f2)
-        PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d'.' -f1)
-        PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d'.' -f2)
-        
-        if [ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -ge 8 ]; then
-            log_success "Python $PYTHON_VERSION found"
-            PYTHON_CMD="python3"
-        else
-            log_error "Python 3.8+ required, found $PYTHON_VERSION"
-            exit 1
+    # The backend needs Python >= 3.10 (it uses `X | None` annotations that are
+    # evaluated at import time). Plain `python3` is not good enough: on macOS it
+    # is usually the Command Line Tools' 3.9, which installs every dependency
+    # "successfully" and then crashes on startup with
+    #   TypeError: unsupported operand type(s) for |: 'type' and 'NoneType'
+    # So pick the first interpreter that actually meets the minimum. 3.12 leads
+    # because the pinned lock file targets it. PYTHON_BIN overrides the search.
+    PYTHON_CMD=""
+    local candidate
+    for candidate in ${PYTHON_BIN:-} python3.12 python3.11 python3.13 python3.10 python3; do
+        command -v "$candidate" &> /dev/null || continue
+        if "$candidate" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
+            PYTHON_CMD="$candidate"
+            break
         fi
+    done
+
+    if [ -n "$PYTHON_CMD" ]; then
+        PYTHON_VERSION=$("$PYTHON_CMD" --version | cut -d' ' -f2)
+        log_success "Python $PYTHON_VERSION found ($PYTHON_CMD)"
     else
-        log_error "Python 3 not found"
-        log_info "Please install Python 3.8 or higher"
+        log_error "Python 3.10 or newer is required, and none was found on PATH."
+        if command -v python3 &> /dev/null; then
+            log_info "python3 here is $(python3 --version 2>&1 | cut -d' ' -f2), which is too old."
+        fi
+        log_info "Install one (macOS: brew install python@3.12) or set PYTHON_BIN=/path/to/python3.x"
         exit 1
     fi
 }
@@ -179,8 +191,15 @@ setup_venv() {
     log_info "Creating virtual environment at $VENV (internal disk)..."
     mkdir -p "$(dirname "$VENV")"
     if [ -d "$VENV" ]; then
-        # Idempotent default: keep the existing venv unless asked to recreate.
-        if [ -n "${OPENEYE_RECREATE_VENV:-}" ]; then
+        # Idempotent default: keep the existing venv unless asked to recreate —
+        # or unless it was built with a Python that is too old to run the
+        # backend, in which case reusing it just reproduces the startup crash.
+        local venv_ok=1
+        if ! "$VENV/bin/python3" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
+            venv_ok=0
+            log_warn "Existing virtual environment uses an unsupported Python; rebuilding it."
+        fi
+        if [ -n "${OPENEYE_RECREATE_VENV:-}" ] || [ "$venv_ok" -eq 0 ]; then
             log_info "Removing existing virtual environment..."
             rm -rf "$VENV"
             $PYTHON_CMD -m venv "$VENV"
@@ -264,21 +283,13 @@ install_python_deps() {
     fi
 
     # Face recognition, attempted by default.
-    #
-    # dlib and face_recognition moved out of requirements.txt because dlib has
-    # no Windows wheel and compiles for hours on ARM, so requiring them made a
-    # stock Windows `pip install` fail outright and a Raspberry Pi install take
-    # hours. That split is right — but it must not mean a capable machine
-    # quietly loses the feature, which is what happened when this script was
-    # left installing requirements.txt alone.
-    #
-    # So: try it, and let the outcome decide. A machine with a compiler and a
-    # wheel gets face recognition exactly as before. One without gets a clear
-    # message and a working install, because every call site is guarded by
-    # FACE_RECOGNITION_AVAILABLE.
+    # dlib has no Windows wheel and compiles for hours on ARM, so it moved out
+    # of requirements.txt. Try it here; a machine without a compiler gets a
+    # clear message and a working install, because every call site is guarded
+    # by FACE_RECOGNITION_AVAILABLE.
     log_info "Installing face recognition (optional; needs dlib)..."
     if pip install -r requirements-face-recognition.txt; then
-        log_ok "Face recognition installed"
+        log_success "Face recognition installed"
         FACE_RECOGNITION_INSTALLED=1
     else
         FACE_RECOGNITION_INSTALLED=0
@@ -287,14 +298,15 @@ install_python_deps() {
         log_warn "To add it later:  ./install-deps.sh"
     fi
 
-    # Shared ecosystem packages are an OPT-IN add-on, published to PyPI as
-    # appecosystem-client / -auth / -ai. They are deliberately not installed
-    # here: OpenEye runs standalone (the imports are guarded and the ecosystem
-    # routes answer 503 without them), so an installation that will never join
-    # an ecosystem should not carry the dependency. The summary at the end of
-    # this script tells the user how to add them — this block used to
-    # contradict that by silently path-installing whenever a sibling checkout
-    # happened to exist.
+    # Shared ecosystem packages. OpenEye joins by default: the pinned PyPI
+    # releases in requirements-ecosystem.txt are installed unless
+    # OPENEYE_STANDALONE=1. With no hub reachable OpenEye runs on its own.
+    if [ -z "${ECOSYSTEM_FROM_SOURCE:-}" ] && [ -z "${OPENEYE_STANDALONE:-}" ]; then
+        log_info "Installing shared ecosystem packages (set OPENEYE_STANDALONE=1 to skip)..."
+        pip install -r requirements-ecosystem.txt \
+            && log_success "Shared ecosystem packages installed" \
+            || log_warn "Ecosystem packages could not be installed; OpenEye will run standalone"
+    fi
     #
     # ECOSYSTEM_FROM_SOURCE=1 installs them EDITABLE from a local checkout, for
     # developing the packages themselves. It fails loudly when the checkout is
@@ -310,6 +322,8 @@ install_python_deps() {
         pip install -e "$ECO_ROOT/auth/python" \
                     -e "$ECO_ROOT/packages/ecosystem-client" \
                     -e "$ECO_ROOT/packages/ecosystem-ai" \
+                    -e "$ECO_ROOT/packages/ecosystem-hub" \
+                    -e "$ECO_ROOT/packages/ecosystem-policy" \
             && log_success "Shared ecosystem packages installed (editable, from source)" \
             || { log_error "Editable ecosystem install failed"; return 1; }
     fi
@@ -319,7 +333,7 @@ install_python_deps() {
     # and the AegisSIEM daemon are available to OpenEye. Runtime only: the daemon
     # is NOT started here (launchd owns it; a second start vector would let two
     # daemons share one SQLite state dir). Never fatal.
-    CYBER="${CYBER_AGENTS_PATH:-${ECOSYSTEM_BASE_PATH:-$PROJECT_DIR/../..}/CybersecurityTeam/cyber-agents}"
+    CYBER="${CYBER_AGENTS_PATH:-${ECOSYSTEM_BASE_PATH:-$PROJECT_DIR/../..}/cyber-agents}"
     if [ -n "${OPENEYE_SKIP_CYBER_AGENTS:-}" ]; then
         log_info "OPENEYE_SKIP_CYBER_AGENTS=1 — skipping cyber-agents setup"
     elif [ -x "$CYBER/scripts/install-local.sh" ]; then
@@ -610,6 +624,7 @@ create_systemd_service() {
   <key>WorkingDirectory</key><string>$APP_DIR</string>
   <key>EnvironmentVariables</key><dict>
     <key>ECOSYSTEM_SERVICE_PORT</key><string>$PORT</string>
+    <key>OPENCV_FFMPEG_CAPTURE_OPTIONS</key><string>rtsp_transport;tcp|stimeout;5000000</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <!-- Restart only on a CRASH (non-zero exit), not on a clean stop. Unconditional

@@ -91,25 +91,24 @@ PYTHON_VERSION=$($PYTHON_CMD --version)
 echo "✅ $PYTHON_VERSION"
 echo ""
 
-# Generate secret keys if .env doesn't exist
-if [ ! -f ".env" ]; then
-    echo "🔐 Generating secret keys..."
-    SECRET_KEY=$($PYTHON_CMD -c "import secrets; print(secrets.token_hex(32))")
-    JWT_SECRET=$($PYTHON_CMD -c "import secrets; print(secrets.token_hex(32))")
-    
-    cat > .env << EOF
-SECRET_KEY=$SECRET_KEY
-JWT_SECRET_KEY=$JWT_SECRET
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-EOF
-    echo "✅ Secret keys generated in .env"
-    echo ""
-fi
 
-# Check if the service port is already in use
+
+# Stop any launchd-managed OpenEye service so it does not compete with this
+# foreground instance for port $PORT or local USB camera hardware every 10s.
+LAUNCHD_LABEL="com.smartindustries.openeye"
+LAUNCHD_PLIST="$HOME/Library/LaunchAgents/$LAUNCHD_LABEL.plist"
+launchctl bootout "gui/$(id -u)/$LAUNCHD_LABEL" 2>/dev/null \
+    || launchctl unload "$LAUNCHD_PLIST" 2>/dev/null \
+    || true
+
+# Also terminate any orphaned uvicorn reloader supervisor processes before
+# checking the port, because killing only the child worker on $PORT leaves the
+# parent reloader alive to respawn a competing worker.
+pkill -f "uvicorn.*backend.main:app" 2>/dev/null || true
+
+# Check if the service port is already in use (LISTEN only)
 check_port() {
-    if lsof -i :$PORT >/dev/null 2>&1; then
+    if lsof -ti:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
         return 0  # Port is in use
     else
         return 1  # Port is free
@@ -119,18 +118,19 @@ check_port() {
 if check_port; then
     echo "⚠️  Port $PORT is already in use!"
     echo ""
-    echo "   Process(es) using port $PORT:"
-    lsof -i :$PORT | head -5
+    echo "   Process(es) listening on port $PORT:"
+    lsof -ti:"$PORT" -sTCP:LISTEN | head -5
     echo ""
 
     # Ask user what to do
-    read -p "   Would you like to kill the process(es) using port $PORT? [y/N] " response
+    read -p "   Would you like to kill the process(es) listening on port $PORT? [y/N] " response
     case "$response" in
         [yY][eE][sS]|[yY])
             echo ""
-            echo "   Killing processes on port $PORT..."
-            # Get PIDs of processes using the port (skip header line)
-            PIDS=$(lsof -ti :$PORT 2>/dev/null)
+            echo "   Killing server on port $PORT..."
+            pkill -9 -f "uvicorn.*backend.main:app" 2>/dev/null || true
+            # Get PIDs of processes listening on the port
+            PIDS=$(lsof -ti:"$PORT" -sTCP:LISTEN 2>/dev/null)
             if [ -n "$PIDS" ]; then
                 for pid in $PIDS; do
                     echo "   Killing PID $pid..."
@@ -160,22 +160,17 @@ export KMP_DUPLICATE_LIB_OK=TRUE
 export OMP_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
+export OPENCV_FFMPEG_CAPTURE_OPTIONS="rtsp_transport;tcp|stimeout;5000000"
 
 # Start uvicorn in background and capture PID
-# Use venv's python to run uvicorn module
-#
-# --reload is NOT passed by default, and adding it back unscoped would break
-# recording. On a source checkout backend/core/paths.py resolves DATA_ROOT to
-# the application directory, so recordings, snapshots and the database are
-# written inside the very tree the reloader watches: every captured event
-# restarted the server, mid-recording, releasing the cameras with it.
-#
-# Set OPENEYE_DEV_RELOAD=true to enable it for development. The watch is then
-# confined to backend/, so writing a recording no longer triggers it.
+# --reload is off by default: on a source checkout DATA_ROOT is the
+# application directory, so recordings restart the reloader mid-capture.
+# Set OPENEYE_DEV_RELOAD=true for development; the watch is then confined
+# to backend/ so runtime writes do not trigger it.
 RELOAD_ARGS=()
 if [ "${OPENEYE_DEV_RELOAD:-false}" = "true" ]; then
     echo "   ⚠ OPENEYE_DEV_RELOAD=true — auto-reload on, watching backend/ only"
-    RELOAD_ARGS=(--reload --reload-dir backend)
+    RELOAD_ARGS=(--reload --reload-dir "$(pwd)/backend" --reload-include "*.py" --reload-exclude "*.pyc" --reload-exclude "__pycache__")
 fi
 
 $PYTHON_CMD -m uvicorn backend.main:app --host 0.0.0.0 --port "$PORT" "${RELOAD_ARGS[@]}" &

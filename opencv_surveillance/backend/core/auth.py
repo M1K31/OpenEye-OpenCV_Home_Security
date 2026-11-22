@@ -15,8 +15,11 @@ import secrets
 # working and the change stays confined to the import. The call surface is
 # identical: encode(payload, key, algorithm=...) and
 # decode(token, key, algorithms=[...]).
-import jwt
-from jwt import PyJWTError as JWTError
+try:
+    import jwt
+    from jwt import PyJWTError as JWTError
+except ModuleNotFoundError:
+    from jose import jwt, JWTError
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
@@ -262,10 +265,7 @@ def token_is_superseded(payload: dict, user) -> bool:
     if current is None:
         return False
 
-    issued_under = payload.get("tv")
-    if issued_under is None:
-        return False
-
+    issued_under = payload.get("tv", 0)
     return issued_under != current
 
 

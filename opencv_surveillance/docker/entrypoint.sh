@@ -70,7 +70,7 @@ fi
 # Display configuration
 echo "================================================"
 echo "Configuration:"
-echo "  Database: ${DATABASE_URL:-sqlite (default)}"
+echo "  Database: $(echo "${DATABASE_URL:-sqlite (default)}" | sed 's|://[^@]*@|://***@|; s|\?.*||')"
 echo "  Log Level: ${LOG_LEVEL:-INFO}"
 echo "  Workers: ${WORKERS:-1}"
 echo "  Face Recognition: ${ENABLE_FACE_RECOGNITION:-true}"

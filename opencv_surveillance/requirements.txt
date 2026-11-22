@@ -169,6 +169,7 @@ scipy>=1.10.0  # Required by scikit-learn (face clustering)
 
 # PostgreSQL (Phase 6 - Production Database) - FREE & OPEN SOURCE
 psycopg2-binary>=2.9.9  # PostgreSQL adapter
+psycopg[binary]>=3.2  # SQLAlchemy 2.1+ uses psycopg 3 for a bare postgresql:// URL
 
 # Redis (Phase 6 - Caching) - FREE & OPEN SOURCE
 redis>=5.0.1  # Redis client

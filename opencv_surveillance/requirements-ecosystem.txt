@@ -23,6 +23,8 @@
 # (`import ecosystem_client`). The prefix stands in for a PyPI organization
 # namespace, which is not available to this project yet.
 
-appecosystem-client==0.3.1   # service registration, discovery, event publishing
+appecosystem-client==0.4.0   # service registration, discovery, event publishing
 appecosystem-auth==0.4.0     # peer authentication, shared identity
-appecosystem-ai==0.1.0       # AI provider bridge used by the ecosystem AI routes
+appecosystem-ai==0.1.1       # AI provider bridge used by the ecosystem AI routes
+appecosystem-policy==0.3.0   # policy engine, step-up auth, approvals
+appecosystem-hub==0.2.0      # hub runtime: capabilities, notifications, outbox, command receiver

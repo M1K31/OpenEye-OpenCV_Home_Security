@@ -146,6 +146,24 @@ services:
     # =========================================================================
     # network_mode: host  # Uncomment this and comment out 'networks:' below
 
+  # Optional RTSP / WebRTC Stream Relay (go2rtc - MIT License)
+  # Multiplexes a single camera RTSP connection across OpenCV, FFmpeg recording,
+  # and low-latency WebRTC browser streams (including TP-Link Tapo two-way audio).
+  # Enable with: docker compose --profile relay up -d
+  go2rtc:
+    image: alexxit/go2rtc:latest
+    container_name: openeye-go2rtc
+    profiles:
+      - relay
+    ports:
+      - "1984:1984"       # HTTP API & WebRTC UI
+      - "8554:8554"       # Local RTSP relay port
+      - "8555:8555/tcp"   # WebRTC TCP candidates
+      - "8555:8555/udp"   # WebRTC UDP candidates
+    restart: unless-stopped
+    networks:
+      - openeye-network
+
 networks:
   openeye-network:
     driver: bridge

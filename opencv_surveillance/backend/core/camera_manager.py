@@ -67,6 +67,10 @@ from backend.core.capture_policy import (
 from backend.database.utils import get_db_context
 
 
+from backend.core.camera_security import decrypt_camera_source, redact_url_credentials
+from backend.core.stream_relay import stream_relay
+
+
 class Camera(ABC):
     """
     Enhanced Camera base class with granular controls.
@@ -85,7 +89,11 @@ class Camera(ABC):
         enable_face_detection: bool = True,
         db_settings: Optional[Dict[str, Any]] = None,
     ):
-        self.source = source
+        decrypted_source = decrypt_camera_source(source)
+        self.upstream_source = decrypted_source
+        self.source = stream_relay.resolve_capture_source(
+            camera_id or "camera", decrypted_source
+        )
         self.camera_id = camera_id
         self.capture = None
         self.is_running = False
@@ -1367,15 +1375,16 @@ class RTSPCamera(Camera):
 
     # Local device: consecutive failed reads before the capture is declared dead.
     FATAL_AFTER_FAILURES = int(os.getenv("OPENEYE_FATAL_AFTER_FAILURES", "3"))
-    # Network stream: ~3s of stall at the loop's ~10fps before giving up.
+    # Network stream: ~12s of stall at the loop's ~10fps before giving up (prevents
+    # brief Wi-Fi/PTZ keyframe pauses on RTSP cameras from marking the stream Unavailable).
     FATAL_AFTER_FAILURES_STREAM = int(
-        os.getenv("OPENEYE_FATAL_AFTER_FAILURES_STREAM", "30"))
+        os.getenv("OPENEYE_FATAL_AFTER_FAILURES_STREAM", "120"))
 
     # How long a reopen may spend waiting for its first frame before being
     # discarded as not actually working.
     REOPEN_PROVE_SECONDS = float(os.getenv("OPENEYE_REOPEN_PROVE_SECONDS", "2"))
     REOPEN_PROVE_SECONDS_STREAM = float(
-        os.getenv("OPENEYE_REOPEN_PROVE_SECONDS_STREAM", "10"))
+        os.getenv("OPENEYE_REOPEN_PROVE_SECONDS_STREAM", "12"))
 
     def _is_stream_source(self) -> bool:
         """
@@ -1477,7 +1486,7 @@ class RTSPCamera(Camera):
             kind = "USB/local index"
         except (ValueError, TypeError):
             kind = "stream URL"
-        return f"{self.camera_id} ({kind} {self.source})"
+        return f"{self.camera_id} ({kind} {redact_url_credentials(self.source)})"
 
     def _note_frame_failure(self):
         """
@@ -1595,6 +1604,10 @@ class RTSPCamera(Camera):
                 else:
                     capture = open_local_device(device_index)
             except (ValueError, TypeError):
+                if isinstance(self.source, str) and str(self.source).startswith(("rtsp://", "rtsps://", "http://", "https://")):
+                    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
+                        "rtsp_transport;tcp|fflags;nobuffer|flags;low_delay|max_delay;250000|stimeout;8000000"
+                    )
                 if CAPTURE_ISOLATION:
                     capture = CaptureClient(
                         source=self.source, camera_id=self.camera_id or "camera",
@@ -1602,6 +1615,10 @@ class RTSPCamera(Camera):
                     capture.start()
                 else:
                     capture = cv2.VideoCapture(self.source, cv2.CAP_FFMPEG)
+                    try:
+                        capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                    except Exception:
+                        pass
         except Exception as e:
             logger.warning("Reopen of %s raised %s", self._describe_self(), e)
             return False
@@ -1663,7 +1680,10 @@ class RTSPCamera(Camera):
         # Claim the capture. From here on get_frame() refuses any other thread,
         # so the only path to VideoCapture.read() is this loop.
         self._capture_owner_thread = threading.get_ident()
-        frame_interval = 1.0 / 10  # Process at ~10 FPS for efficiency
+        # Drain network RTSP streams at ~28 FPS so FFmpeg's internal ring buffer
+        # never falls 2-4 seconds behind real time during PTZ movements, while
+        # heavy motion/face AI still runs only when video_processor.should_process_frame() is True.
+        frame_interval = (1.0 / 28.0) if self._is_stream_source() else (1.0 / 10.0)
 
         while not self._stop_background.is_set():
             try:
@@ -1764,10 +1784,20 @@ class RTSPCamera(Camera):
         # every attempt so a slow open never looks like a hang. Once granted, the
         # permission persists and the open succeeds on the first attempt.
         _is_darwin = sys.platform == "darwin"
+        try:
+            int(self.source)
+            _is_local_device = True
+        except (ValueError, TypeError):
+            _is_local_device = False
+
+        # Network/RTSP cameras (like TP-Link Tapo) may take 3-5 seconds to release a
+        # previous RTSP session after a server restart; give streams 4 attempts.
         max_attempts = int(os.getenv("OPENEYE_CAMERA_OPEN_ATTEMPTS", "0") or 0) or (
-            8 if _is_darwin else 3
+            8 if (_is_darwin and _is_local_device) else (3 if _is_local_device else 4)
         )
-        retry_delay = float(os.getenv("OPENEYE_CAMERA_OPEN_RETRY_DELAY", "2"))
+        retry_delay = float(
+            os.getenv("OPENEYE_CAMERA_OPEN_RETRY_DELAY", "2" if _is_local_device else "1.5")
+        )
         for attempt in range(1, max_attempts + 1):
             try:
                 # Try to convert to int - if successful, it's a USB device
@@ -1789,7 +1819,17 @@ class RTSPCamera(Camera):
                     self.capture = open_local_device(device_index)
             except (ValueError, TypeError):
                 # Not a number, assume it's an RTSP URL or device path
-                logger.info("Camera %s: connecting to stream %s", self.camera_id, self.source)
+                logger.info(
+                    "Camera %s: connecting to stream %s (attempt %s/%s)",
+                    self.camera_id,
+                    redact_url_credentials(self.source),
+                    attempt,
+                    max_attempts,
+                )
+                if isinstance(self.source, str) and str(self.source).startswith(("rtsp://", "rtsps://", "http://", "https://")):
+                    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
+                        "rtsp_transport;tcp|fflags;nobuffer|flags;low_delay|max_delay;250000|stimeout;8000000"
+                    )
                 if CAPTURE_ISOLATION:
                     self.capture = CaptureClient(
                         source=self.source, camera_id=self.camera_id or "camera",
@@ -1797,23 +1837,30 @@ class RTSPCamera(Camera):
                     self.capture.start()
                 else:
                     self.capture = cv2.VideoCapture(self.source, cv2.CAP_FFMPEG)
+                    try:
+                        self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                    except Exception:
+                        pass
 
             if self.capture is not None and self.capture.isOpened():
                 break
             logger.warning(
                 "Camera %s: open attempt %s/%s failed for %s (device listed by the OS: %s)",
-                self.camera_id, attempt, max_attempts, self.source,
+                self.camera_id, attempt, max_attempts, redact_url_credentials(self.source),
                 self._device_listed_by_os())
             if self.capture is not None:
                 self.capture.release()
             if attempt < max_attempts:
-                if _is_darwin and attempt == 1:
+                if _is_darwin and _is_local_device and attempt == 1:
                     print("  (macOS: if a camera-permission dialog is showing, click "
                           "Allow — retrying while you respond)")
                 time.sleep(retry_delay)
 
         if self.capture is None or not self.capture.isOpened():
-            print(f"Error: Could not open camera source: {self.source} after {max_attempts} attempts")
+            print(
+                f"Error: Could not open camera source: "
+                f"{redact_url_credentials(self.source)} after {max_attempts} attempts"
+            )
             if _is_darwin:
                 print("  macOS camera access is required for local cameras. Launch "
                       "OpenEye.app (or run ./start.sh from a Terminal) and approve the "
@@ -1862,6 +1909,7 @@ class RTSPCamera(Camera):
             print(f"⚠️ [BACKGROUND] Background processing disabled for camera {self.camera_id}")
 
     def stop(self):
+        self.is_running = False
         # Stop background processing thread first
         if self._background_thread and self._background_thread.is_alive():
             print(f"🛑 [BACKGROUND] Stopping background processor for {self.camera_id}...")
@@ -1874,10 +1922,15 @@ class RTSPCamera(Camera):
 
         if self.recorder.is_recording:
             self.recorder.stop()
-        if self.is_running and self.capture:
-            self.capture.release()
-        self.is_running = False
-        print("RTSP camera stopped.")
+        with self._frame_lock:
+            if self.capture:
+                try:
+                    self.capture.release()
+                except Exception as e:
+                    logger.warning("Error releasing capture for %s: %s", self.camera_id, e)
+                finally:
+                    self.capture = None
+        print(f"Camera {self.camera_id} stopped.")
 
     def get_frame(self):
         # A dead capture is never read from again. Checked before everything
@@ -1902,16 +1955,37 @@ class RTSPCamera(Camera):
         if not self.is_running or self.capture is None or not self.capture.isOpened():
             return None, False
 
-        # Check if we should process this frame based on FPS target
-        if not self.video_processor.should_process_frame():
+        # Check if we should run heavy AI/motion processing on this tick
+        should_process_ai = self.video_processor.should_process_frame()
+        if not should_process_ai and not self._is_stream_source():
             return None, False
 
         # Thread-safe frame capture and processing
+        # For RTSP/HTTP network streams, ALWAYS read/drain the socket even on non-AI
+        # ticks and publish the fresh frame immediately so live viewing and PTZ feedback
+        # stay real-time (<100ms latency) instead of accumulating a multi-second FFmpeg buffer.
         with self._frame_lock:
             capture = self.capture
             if capture is None:
                 return None, False
             ret, frame = capture.read()
+
+        if ret and frame is not None and not should_process_ai:
+            self._note_frame_success()
+            quick_frame = self.video_processor.process_frame(frame)
+            if self.image_processor.has_adjustments():
+                quick_frame = self.image_processor.process(quick_frame)
+            quick_frame = render_overlay(
+                quick_frame,
+                overlay_enabled=self.overlay_enabled,
+                timestamp_enabled=self.overlay_timestamp_enabled,
+                custom_text=self.overlay_custom_text,
+                position=self.overlay_position,
+                font_size=self.overlay_font_size,
+                font_color=self.overlay_font_color,
+            )
+            self._publish_frame(quick_frame, self.motion_detected)
+            return quick_frame, self.motion_detected
         if not ret:
             # With an isolated capture, "no new frame right now" is not a
             # failure. The worker takes a moment to open the device after spawn,
@@ -2397,7 +2471,7 @@ class CameraManager:
                 if camera_type == "usb":
                     msg = f"USB camera '{camera_id}' (device {source}) unavailable - device may be disconnected"
                 elif camera_type == "rtsp":
-                    msg = f"RTSP camera '{camera_id}' ({source}) unavailable - stream unreachable"
+                    msg = f"RTSP camera '{camera_id}' ({redact_url_credentials(source)}) unavailable - stream unreachable"
                 else:
                     msg = f"Camera '{camera_id}' failed to start - source unavailable"
                 print(msg)
@@ -2414,6 +2488,10 @@ class CameraManager:
             if camera_id in self.cameras:
                 self.cameras[camera_id].stop()
                 del self.cameras[camera_id]
+                try:
+                    stream_relay.unregister_camera(camera_id)
+                except Exception:
+                    pass
                 print(f"Camera '{camera_id}' removed.")
 
     def reload_camera_settings(self, camera_id: str):

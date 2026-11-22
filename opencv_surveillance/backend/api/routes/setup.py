@@ -21,11 +21,17 @@ router = APIRouter(tags=["setup"])
 
 
 class SetupInitializeRequest(BaseModel):
-    """Request model for initializing admin account."""
+    """Request model for initializing admin account and optional ecosystem onboarding consent."""
 
     username: str = Field(..., min_length=3, max_length=50)
     email: EmailStr
     password: str = Field(...)
+    hub_role: str = Field(default="auto")
+    aup_accepted: bool = Field(default=False)
+    aup_version: str = Field(default="1.0")
+    baseline_self_scan: bool = Field(default=False)
+    designate_auto_scan: bool = Field(default=False)
+    auto_scan_profiles: list[str] = Field(default_factory=lambda: ["quick"])
 
     @field_validator("password")
     @classmethod
@@ -103,6 +109,17 @@ async def initialize_setup(
                 detail="Email is already registered",
             )
 
+        if (request.designate_auto_scan or request.baseline_self_scan) and not request.aup_accepted:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Explicit Acceptable Use Policy (AUP) consent is required before enabling baseline or automatic scanning.",
+            )
+        if request.hub_role not in ("auto", "host", "join", "standalone"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="hub_role must be one of: auto, host, join, standalone",
+            )
+
         # Create admin user
         hashed_pw = hash_password(request.password)
         admin_user = User(
@@ -117,6 +134,22 @@ async def initialize_setup(
         db.commit()
         db.refresh(admin_user)
 
+        onboarding_consent = None
+        try:
+            from backend.core.ecosystem_hub_bridge import record_onboarding_consent
+
+            onboarding_consent = record_onboarding_consent(
+                owner=admin_user.username,
+                hub_role=request.hub_role,
+                aup_accepted=request.aup_accepted,
+                aup_version=request.aup_version,
+                baseline_self_scan=request.baseline_self_scan,
+                designate_auto_scan=request.designate_auto_scan,
+                auto_scan_profiles=request.auto_scan_profiles,
+            )
+        except ModuleNotFoundError:
+            onboarding_consent = None
+
         return {
             "success": True,
             "message": "Admin account created successfully",
@@ -126,6 +159,7 @@ async def initialize_setup(
                 "email": admin_user.email,
                 "role": admin_user.role,
             },
+            "onboarding_consent": onboarding_consent,
         }
 
     except HTTPException:
