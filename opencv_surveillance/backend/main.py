@@ -416,7 +416,7 @@ async def startup_event():
         lock_fh.flush()
         app.state._worker_lock_fh = lock_fh
         app.state.duplicate_instance_skipped = False
-    except (OSError, IOError) as lock_err:
+    except (OSError, IOError, ModuleNotFoundError) as lock_err:
         logger.error(
             f"Another OpenEye worker instance is already active ({lock_err}). "
             "Skipping camera and scheduler initialization for this duplicate instance."

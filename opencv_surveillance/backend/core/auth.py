@@ -265,7 +265,9 @@ def token_is_superseded(payload: dict, user) -> bool:
     if current is None:
         return False
 
-    issued_under = payload.get("tv", 0)
+    issued_under = payload.get("tv")
+    if issued_under is None:
+        return False
     return issued_under != current
 
 

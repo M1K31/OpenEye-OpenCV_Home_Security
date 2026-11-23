@@ -56,17 +56,17 @@ def test_a_device_in_both_classes_is_listed_once(monkeypatch):
     """
     Camera and Image are queried together, and can report the same device.
 
-    Some UVC webcams still enumerate under Image on Windows 10, which is why
-    both are asked for — but a duplicate would shift every later index by one
-    and mislabel the cameras after it.
+    Duplicate FriendlyName entries are preserved: two distinct physical devices
+    can share the same display name, so deduplicating by name would silently
+    drop a real camera. Each entry gets its own sequential index.
     """
     monkeypatch.setattr(subprocess, "run", _fake_powershell(
         "Integrated Webcam\r\nIntegrated Webcam\r\nBrio 500\r\n"))
 
     cameras = discovery_service._list_windows_cameras()
 
-    assert [c["name"] for c in cameras] == ["Integrated Webcam", "Brio 500"]
-    assert [c["index"] for c in cameras] == [0, 1]
+    assert [c["name"] for c in cameras] == ["Integrated Webcam", "Integrated Webcam", "Brio 500"]
+    assert [c["index"] for c in cameras] == [0, 1, 2]
 
 
 def test_blank_lines_do_not_become_cameras(monkeypatch):

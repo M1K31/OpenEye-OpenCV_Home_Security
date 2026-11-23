@@ -126,13 +126,17 @@ def test_oversized_subnets_are_not_scanned():
     allows, so it would cover a fraction and report that as a complete result.
     Docker's default bridge is a /16 and corporate networks often are too, so
     this is the common case rather than an exotic one.
+
+    The code clamps any subnet larger than /24 down to /24 inline rather than
+    exposing a class-level constant.
     """
+    import ipaddress
+
     from backend.core import camera_discovery
 
     for subnet in camera_discovery.discovery_service._get_local_subnets():
-        import ipaddress
         network = ipaddress.ip_network(subnet)
-        assert network.prefixlen >= camera_discovery.CameraDiscovery.MAX_SCAN_PREFIX, (
+        assert network.prefixlen >= 24, (
             f"{subnet} has {network.num_addresses} addresses; too many to probe"
         )
 
@@ -173,6 +177,7 @@ def test_an_interface_with_no_netmask_is_skipped_not_fatal(monkeypatch):
     """psutil reports netmask=None for some interfaces; that must not raise."""
     import socket
     from collections import namedtuple
+    from unittest.mock import patch
 
     from backend.core import camera_discovery
 
@@ -182,5 +187,6 @@ def test_an_interface_with_no_netmask_is_skipped_not_fatal(monkeypatch):
         "en0":   [Addr(socket.AF_INET, "192.168.8.20", "255.255.255.0", None, None)],
     })
 
-    subnets = camera_discovery.discovery_service._get_local_subnets()
+    with patch.object(camera_discovery.discovery_service, "_get_primary_lan_ip", return_value=None):
+        subnets = camera_discovery.discovery_service._get_local_subnets()
     assert subnets == ["192.168.8.0/24"]
