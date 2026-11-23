@@ -407,16 +407,20 @@ async def startup_event():
     # collide with Uvicorn's own parent reloader socket when --reload is active),
     # only the active ASGI worker process runs startup_event() and holds this lock.
     try:
-        import fcntl
         lock_path = Path(str(paths.data_dir)).resolve() / ".openeye_worker.lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         lock_fh = open(lock_path, "w")
-        fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if sys.platform == "win32":
+            import msvcrt
+            msvcrt.locking(lock_fh.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         lock_fh.write(str(os.getpid()))
         lock_fh.flush()
         app.state._worker_lock_fh = lock_fh
         app.state.duplicate_instance_skipped = False
-    except (OSError, IOError, ModuleNotFoundError) as lock_err:
+    except (OSError, IOError) as lock_err:
         logger.error(
             f"Another OpenEye worker instance is already active ({lock_err}). "
             "Skipping camera and scheduler initialization for this duplicate instance."
