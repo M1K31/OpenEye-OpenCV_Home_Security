@@ -551,7 +551,13 @@ class PlaybackManager:
         try:
             # Generate output path
             if output_name:
-                clip_path = self.clips_dir / output_name
+                # Same untrusted join as the route above. Guarded here too:
+                # this is a module-level API and nothing guarantees every
+                # future caller validates first.
+                from backend.utils.safe_paths import safe_child
+
+                clip_path = safe_child(
+                    self.clips_dir, output_name, what="output_name")
             else:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 clip_path = self.clips_dir / f"clip_{timestamp}.mp4"

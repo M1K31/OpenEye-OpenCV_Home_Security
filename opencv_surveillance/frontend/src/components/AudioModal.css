@@ -147,16 +147,8 @@
   }
 }
 
-/* Dark theme support */
-[data-theme="dark"] .audio-modal-container {
-  background-color: var(--bg-panel, #1a1f2e);
-}
-
-[data-theme="dark"] .audio-modal-footer {
-  background-color: var(--bg-secondary, #0f1319);
-  border-top-color: var(--border-panel, rgba(255, 255, 255, 0.1));
-}
-
-[data-theme="dark"] .audio-modal-header {
-  border-bottom-color: var(--border-panel, rgba(255, 255, 255, 0.1));
-}
+/* A [data-theme="dark"] block lived here and never applied — nothing sets that
+   attribute. It is not restored, because it was also redundant: each rule set
+   the same token the base rule above already sets (--bg-panel, --bg-secondary,
+   --border-panel), differing only in its hardcoded fallback. Those tokens are
+   defined per theme, so the base rules are already correct everywhere. */

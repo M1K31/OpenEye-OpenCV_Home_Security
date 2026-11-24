@@ -5,20 +5,48 @@
 
 ## 🚀 Quick Start
 
+### Any platform — `manage.py`
+
+One command that works the same on Windows, macOS and Linux. Use this in
+preference to the shell scripts below, which are POSIX-only.
+
+```
+python opencv_surveillance/manage.py doctor    # check this machine can run OpenEye
+python opencv_surveillance/manage.py start     # start the server
+python opencv_surveillance/manage.py status    # running? on which port? which PID?
+python opencv_surveillance/manage.py logs      # tail the log
+python opencv_surveillance/manage.py stop      # stop it gracefully
+python opencv_surveillance/manage.py restart
+```
+
+`doctor` is the one to reach for first when something is wrong: it reports every
+prerequisite and optional feature, says which are missing, and names the fix.
+
+On Windows use backslashes: `python opencv_surveillance\manage.py doctor`
+
+### macOS and Linux — shell scripts
+
 ```bash
 # Start Server
 cd /path/to/OpenEye-OpenCV_Home_Security
 ./start-local.sh
 
-# Stop Server
-lsof -ti:8000 | xargs kill -9
+# Stop Server (graceful — prefer this to killing the process)
+./stop-server.sh
 
 # View Logs
 tail -f server.log
 
-# Run Tests
-./test_application.sh
+# Install optional features (face recognition, object detection, audio)
+./install-deps.sh        # macOS / Linux
+# Windows:
+# powershell -ExecutionPolicy Bypass -File install-deps.ps1
 ```
+
+> `stop-server.sh` checks that the process on the port is actually OpenEye
+> before stopping it, so it will not interfere with other software. Killing the
+> port directly skips the shutdown that releases cameras and closes the
+> database cleanly.
 
 ---
 

@@ -17,17 +17,20 @@ import socket
 import subprocess
 import time
 from datetime import datetime
+import ipaddress
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 import cv2
-import netifaces
 
 from backend.core.camera_security import (
     decrypt_camera_source,
     inject_rtsp_credentials,
     redact_url_credentials,
 )
+
+import psutil
+from backend.core.capture_backend import open_local_device
 
 logger = logging.getLogger(__name__)
 
@@ -137,24 +140,63 @@ class CameraDiscovery:
                 ]
 
             if system == "Windows":
-                ps_cmd = [
-                    "powershell",
-                    "-NoProfile",
-                    "-Command",
-                    "Get-CimInstance Win32_PnPEntity | "
-                    "Where-Object { $_.PNPClass -in @('Camera','Image') } | "
-                    "Select-Object -ExpandProperty Name",
-                ]
-                out = subprocess.run(
-                    ps_cmd, capture_output=True, text=True, timeout=10
-                ).stdout
-                names = [line.strip() for line in out.splitlines() if line.strip()]
-                return [{"name": name, "index": i} for i, name in enumerate(names)]
+                return self._list_windows_cameras()
 
         except Exception as e:
             logger.debug(f"Platform camera enumeration unavailable: {e}")
 
         return []
+
+    def _list_windows_cameras(self) -> List[Dict]:
+        """
+        Names of the video devices Windows knows about.
+
+        Windows returned nothing at all before this: the branches above covered
+        macOS and Linux, so discovery reported "no cameras" on Windows whether
+        one was attached or not — and could not tell that apart from a device it
+        was refused access to, which is the whole reason this method exists.
+
+        Get-PnpDevice rather than a Python dependency. It is built into Windows
+        8 and later, needs nothing installed, and matches how the other two
+        branches work — a subprocess asking the operating system. The
+        alternative, pygrabber, would add a package for one call.
+
+        A CAVEAT that matters, and which the macOS branch shares: PnP
+        enumeration order is not guaranteed to match the DirectShow index order
+        OpenCV uses. The names here are reliable; pairing name to index is a
+        best guess. Probing is the authority — discover_usb_cameras opens each
+        index and reports what actually answered — so a wrong pairing shows up
+        as a name against the wrong camera, not as a missing or phantom device.
+
+        The `Image` class is queried alongside `Camera` because some UVC webcams
+        still enumerate there on Windows 10. Scanners live in `Image` too, so a
+        flatbed may appear in this list; it will simply fail to open when probed,
+        which costs one attempt and no correctness.
+        """
+        script = (
+            "$ErrorActionPreference='SilentlyContinue';"
+            "Get-PnpDevice -Class Camera,Image -PresentOnly"
+            " | Where-Object { $_.Status -eq 'OK' }"
+            " | Select-Object -ExpandProperty FriendlyName"
+        )
+        completed = subprocess.run(
+            # powershell.exe, not pwsh: 5.1 ships with Windows, PowerShell 7 is
+            # an optional install. -NoProfile keeps a user's profile out of it
+            # and is faster; -NonInteractive means it can never sit waiting for
+            # input inside a background service.
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+            capture_output=True, text=True, timeout=20,
+        )
+
+        names = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+
+        if not names:
+            logger.info(
+                "Windows reports no video devices. If a camera is attached, "
+                "check Settings > Privacy & security > Camera."
+            )
+
+        return [{"name": name, "index": i} for i, name in enumerate(names)]
 
     def _prime_macos_authorization(self) -> None:
         """
@@ -166,7 +208,7 @@ class CameraDiscovery:
             return
 
         try:
-            cap = cv2.VideoCapture(0)
+            cap = open_local_device(0)
             authorized = cap.isOpened()
             cap.release()
             if not authorized:
@@ -193,7 +235,7 @@ class CameraDiscovery:
             else self.FIRST_FRAME_TIMEOUT_SWEEP
         )
         try:
-            cap = cv2.VideoCapture(index)
+            cap = open_local_device(index)
             if not cap.isOpened():
                 logger.info(
                     "Camera probe: index %s (%s) is listed by the OS but "
@@ -348,6 +390,13 @@ class CameraDiscovery:
             return (
                 "On Linux, ensure the service account is a member of the "
                 "'video' group and that /dev/video* is readable."
+            )
+        if system == "Windows":
+            return (
+                "On Windows, allow camera access in Settings > Privacy & "
+                "security > Camera, and make sure 'Let desktop apps access "
+                "your camera' is on — that second switch is separate and is "
+                "what blocks a Python process even when the first is enabled."
             )
         return "Check the operating system's camera privacy settings."
 
@@ -538,15 +587,13 @@ class CameraDiscovery:
         return network_cameras
 
     def _get_own_ips(self) -> Set[str]:
-        """Return set of IPv4 addresses assigned to this host."""
+        """Return set of IPv4 addresses assigned to this host (via psutil)."""
         ips: Set[str] = {"127.0.0.1"}
         try:
-            for interface in netifaces.interfaces():
-                addrs = netifaces.ifaddresses(interface)
-                for addr_info in addrs.get(netifaces.AF_INET, []):
-                    ip = addr_info.get("addr")
-                    if ip:
-                        ips.add(ip)
+            for _iface, addresses in psutil.net_if_addrs().items():
+                for addr in addresses:
+                    if addr.family == socket.AF_INET and addr.address:
+                        ips.add(addr.address)
         except Exception:
             pass
         return ips
@@ -578,6 +625,12 @@ class CameraDiscovery:
         """
         Get deduplicated physical/LAN subnets to scan across macOS, Linux, and Windows.
 
+        Uses psutil rather than netifaces. netifaces was unmaintained from 2021
+        and published no Windows wheel past CPython 3.8, so on 3.12 pip had to
+        build it with MSVC. psutil returns the same interface addresses and
+        netmasks, is already a required dependency, and ships wheels for every
+        platform this project supports.
+
         Places the primary outbound LAN subnet first and excludes virtual bridges,
         VPN tunnels, link-local, and CGNAT ranges.
         """
@@ -596,8 +649,6 @@ class CameraDiscovery:
                 network = ipaddress.ip_network(
                     f"{ip_str}/{netmask_str}", strict=False
                 )
-                # If netmask is /32 (point-to-point) skip; if larger than /24 (e.g. /16),
-                # narrow to the /24 containing the host's IP so discovery stays fast.
                 if network.num_addresses <= 2:
                     return
                 if network.num_addresses > 256:
@@ -609,26 +660,22 @@ class CameraDiscovery:
             except Exception:
                 pass
 
-        # 1. Prioritize the primary outbound route subnet first
         primary_ip = self._get_primary_lan_ip()
         if primary_ip:
             _add_subnet(primary_ip, "255.255.255.0")
 
-        # 2. Enumerate netifaces interfaces (filtering out virtual/tunnel bridges)
         try:
-            for interface in netifaces.interfaces():
-                iface_lower = interface.lower()
-                if iface_lower.startswith(IGNORED_INTERFACE_PREFIXES):
+            for interface, addresses in psutil.net_if_addrs().items():
+                if interface.lower().startswith(IGNORED_INTERFACE_PREFIXES):
                     continue
-                addrs = netifaces.ifaddresses(interface)
-                if netifaces.AF_INET in addrs:
-                    for addr_info in addrs[netifaces.AF_INET]:
-                        ip = addr_info.get("addr")
-                        netmask = addr_info.get("netmask")
-                        if ip and netmask and not ip.startswith("127."):
-                            _add_subnet(ip, netmask)
+                for addr in addresses:
+                    if addr.family != socket.AF_INET:
+                        continue
+                    ip, netmask = addr.address, addr.netmask
+                    if ip and netmask and not ip.startswith("127."):
+                        _add_subnet(ip, netmask)
         except Exception as e:
-            logger.error(f"Error getting local subnets: {e}")
+            logger.error("Could not enumerate network interfaces: %s", e)
 
         if not subnets:
             subnets = ["192.168.1.0/24"]

@@ -228,21 +228,21 @@ class TestRtspValidation:
         deduplicate identical subnets across multiple physical NICs (e.g. en0 + en1).
         """
         discovery = CameraDiscovery()
-        fake_ifaces = ["lo0", "en0", "bridge100", "en1", "utun13"]
+        import socket
+        from collections import namedtuple
+
+        Addr = namedtuple("Addr", "family address netmask broadcast ptp")
         fake_addrs = {
-            "lo0": {2: [{"addr": "127.0.0.1", "netmask": "255.0.0.0"}]},
-            "en0": {2: [{"addr": "192.168.50.73", "netmask": "255.255.255.0"}]},
-            "bridge100": {2: [{"addr": "192.168.105.1", "netmask": "255.255.255.0"}]},
-            "en1": {2: [{"addr": "192.168.50.61", "netmask": "255.255.255.0"}]},
-            "utun13": {2: [{"addr": "100.108.195.116", "netmask": "255.255.255.255"}]},
+            "lo0":       [Addr(socket.AF_INET, "127.0.0.1",       "255.0.0.0",       None, None)],
+            "en0":       [Addr(socket.AF_INET, "192.168.50.73",   "255.255.255.0",   None, None)],
+            "bridge100": [Addr(socket.AF_INET, "192.168.105.1",   "255.255.255.0",   None, None)],
+            "en1":       [Addr(socket.AF_INET, "192.168.50.61",   "255.255.255.0",   None, None)],
+            "utun13":    [Addr(socket.AF_INET, "100.108.195.116", "255.255.255.255", None, None)],
         }
 
         with patch.object(
             discovery, "_get_primary_lan_ip", return_value="192.168.50.73"
-        ), patch("backend.core.camera_discovery.netifaces.interfaces", return_value=fake_ifaces), patch(
-            "backend.core.camera_discovery.netifaces.ifaddresses",
-            side_effect=lambda iface: fake_addrs[iface],
-        ), patch("backend.core.camera_discovery.netifaces.AF_INET", 2):
+        ), patch("backend.core.camera_discovery.psutil.net_if_addrs", return_value=fake_addrs):
             subnets = discovery._get_local_subnets()
 
         assert subnets == ["192.168.50.0/24"]

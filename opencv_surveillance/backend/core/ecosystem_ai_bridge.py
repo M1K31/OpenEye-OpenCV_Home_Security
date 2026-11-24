@@ -35,6 +35,28 @@ def _make_profile_client():
         # Fail-closed: without a shared secret we cannot authenticate reads.
         return None
 
+    # A weak secret is refused on the same footing as a missing one.
+    #
+    # The API route that manages this secret validates it (hex, 32-128 chars,
+    # see routes/settings.py), but setting the environment variable directly —
+    # in .env, in compose, or in a shell — bypassed that entirely and the value
+    # was used to sign peer requests as-is. Since it authenticates requests
+    # BETWEEN devices, a guessable one lets anything on the network impersonate
+    # this installation to its peers.
+    #
+    # Fail closed rather than warn: peering silently disabled is recoverable and
+    # visible in the log, peering running on a guessable key is neither.
+    from backend.core.auth import is_weak_secret
+
+    if is_weak_secret(secret):
+        logger.error(
+            "ECOSYSTEM_HMAC_SECRET is empty, too short (under 32 characters) or a "
+            "known placeholder. Ecosystem peering is disabled rather than signed "
+            "with a guessable key. Generate one with `openssl rand -hex 32` and "
+            "set the same value on every peer."
+        )
+        return None
+
     def signer(method: str, url: str, body: Optional[dict]) -> dict:
         return sign_request(method, url, secret, body)
 

@@ -8,6 +8,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
+pytest.importorskip("ecosystem_policy", reason="appecosystem-policy not installed")
+pytest.importorskip("ecosystem_client", reason="appecosystem-client not installed")
+
 from backend.core.automation_engine import (
     evaluate_rule_conditions,
     execute_action,

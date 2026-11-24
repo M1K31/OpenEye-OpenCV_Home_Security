@@ -47,11 +47,55 @@ from backend.core.config import (
 _KNOWN_WEAK_KEYS = {
     "",
     "your-secret-key",
+    "your-secret-key-change-in-production",   # docker-compose.yml default
+    "your-jwt-secret-key",                    # docker-compose.yml default
     "dev-secret-key",
     "dev-secret-key-change-in-production",
+    "dev-jwt-key-change-in-production",       # setup_notification_encryption.py
     "change-me",
     "changeme",
 }
+
+# Fragments that mark a key as a placeholder, whatever the surrounding wording.
+#
+# The exact-match set above is not sufficient on its own, and this is not
+# hypothetical: it listed "your-secret-key" while docker-compose.yml shipped
+# "your-secret-key-change-in-production" and "your-jwt-secret-key". Neither
+# matched, so `docker compose up` with no .env signed every token with a string
+# published in this repository, and anyone who could reach the port could mint
+# an admin JWT. The guard was correct when written and the defaults were
+# reworded in another file afterwards.
+#
+# Substrings are what stop that recurring. A future placeholder does not need
+# anyone to remember this list.
+_WEAK_KEY_MARKERS = (
+    "your-secret", "your-jwt", "change-in-production", "changeme", "change-me",
+    "dev-secret", "dev-jwt", "placeholder", "example", "insecure",
+    "not-for-production", "test-key", "secret-key-here", "xxxx",
+)
+
+# HS256 signs with a 256-bit key. Anything shorter than 32 characters is below
+# that and is brute-forceable offline from a single captured token, so length is
+# refused on the same footing as a known placeholder.
+_MINIMUM_KEY_LENGTH = 32
+
+
+def is_weak_secret(value: Optional[str]) -> bool:
+    """
+    True when a key must not be used to sign tokens.
+
+    Refuses three things: an empty value, a published or placeholder-looking
+    constant, and a key too short for the signing algorithm. Case-insensitive,
+    because a placeholder does not become strong by being capitalised.
+    """
+    if not value:
+        return True
+    candidate = value.strip().lower()
+    if candidate in _KNOWN_WEAK_KEYS:
+        return True
+    if any(marker in candidate for marker in _WEAK_KEY_MARKERS):
+        return True
+    return len(candidate) < _MINIMUM_KEY_LENGTH
 
 
 def _load_or_create_secret_key() -> str:
@@ -68,12 +112,12 @@ def _load_or_create_secret_key() -> str:
          still random, still never the published constant.
     """
     env_key = os.getenv("SECRET_KEY")
-    if env_key and env_key not in _KNOWN_WEAK_KEYS:
+    if env_key and not is_weak_secret(env_key):
         return env_key
 
     if env_key:
         logger.warning(
-            "SECRET_KEY is a known weak/placeholder value; generating a "
+            "SECRET_KEY is empty, too short, or a known placeholder; generating a "
             "per-install key instead."
         )
 
@@ -87,7 +131,7 @@ def _load_or_create_secret_key() -> str:
     try:
         if key_file.exists():
             existing = key_file.read_text().strip()
-            if existing and existing not in _KNOWN_WEAK_KEYS:
+            if existing and not is_weak_secret(existing):
                 return existing
 
         key_file.parent.mkdir(parents=True, exist_ok=True)
@@ -109,17 +153,30 @@ def _load_or_create_secret_key() -> str:
         return secrets.token_hex(64)
 
 
+# Retained so the older private name keeps resolving.
+_is_weak_key = is_weak_secret
+
 SECRET_KEY = _load_or_create_secret_key()
 
-# JWT signing key. Falls back to SECRET_KEY when a separate key is not provided;
-# both are now guaranteed strong (never a published constant).
+# The key every token in this application is signed and verified with.
+#
+# This was previously computed and then never used: all four jwt.encode/decode
+# call sites passed SECRET_KEY, so setting JWT_SECRET_KEY changed nothing while
+# .env.example, docker-compose.yml, DOCKER.md and setup-production.sh all told
+# operators to set it. Someone rotating it after a suspected compromise, to
+# invalidate every issued token, invalidated none — which is worse than not
+# offering the control at all.
+#
+# It falls back to SECRET_KEY when unset, so an installation that never set it
+# is unaffected by this becoming real. An installation that DID set it signs
+# with a different key than before and its users sign in once more.
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 if not JWT_SECRET_KEY:
     JWT_SECRET_KEY = SECRET_KEY
     logger.info("JWT_SECRET_KEY not set; deriving it from SECRET_KEY.")
-elif JWT_SECRET_KEY in _KNOWN_WEAK_KEYS:
+elif is_weak_secret(JWT_SECRET_KEY):
     logger.warning(
-        "JWT_SECRET_KEY is a known weak/placeholder value; deriving from "
+        "JWT_SECRET_KEY is empty, too short, or a known placeholder; deriving from "
         "SECRET_KEY instead."
     )
     JWT_SECRET_KEY = SECRET_KEY
@@ -144,8 +201,14 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
         expire = datetime.now(timezone.utc) + expires_delta
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=15)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    # `iat` is informational. `tv` is the one that matters: get_current_user
+    # refuses a token whose version no longer matches the user's, which is what
+    # ends other sessions when a password changes.
+    to_encode.update({
+        "exp": expire,
+        "iat": datetime.now(timezone.utc).replace(microsecond=0),
+    })
+    encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 
@@ -185,6 +248,29 @@ def hash_password(password: str) -> str:
     return hashed.decode("utf-8")
 
 
+def token_is_superseded(payload: dict, user) -> bool:
+    """
+    True when this token was issued under a superseded token version.
+
+    Revoking refresh tokens does not reach an access token that has already been
+    issued — it remains valid until `exp`, thirty minutes by default. So
+    changing a password left every other signed-in session working for the rest
+    of that window.
+
+    Tokens issued before this feature carry no `tv`. They are accepted rather
+    than refused: rejecting them would sign out every user on upgrade for no
+    security gain, since they expire inside the access-token window anyway.
+    """
+    current = getattr(user, "token_version", None)
+    if current is None:
+        return False
+
+    issued_under = payload.get("tv")
+    if issued_under is None:
+        return False
+    return issued_under != current
+
+
 async def get_current_user(
     token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
 ) -> user_schema.User:
@@ -208,7 +294,7 @@ async def get_current_user(
     )
 
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
@@ -217,6 +303,9 @@ async def get_current_user(
 
     user = crud.get_user_by_username(db, username=username)
     if user is None:
+        raise credentials_exception
+
+    if token_is_superseded(payload, user):
         raise credentials_exception
 
     return user
@@ -278,7 +367,7 @@ async def get_current_user_media(
         raise credentials_exception
 
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
@@ -287,6 +376,8 @@ async def get_current_user_media(
 
     user = crud.get_user_by_username(db, username=username)
     if user is None:
+        raise credentials_exception
+    if token_is_superseded(payload, user):
         raise credentials_exception
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
@@ -367,7 +458,8 @@ def create_tokens(
     # Create short-lived access token (30 minutes)
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
+        data={"sub": user.username, "tv": getattr(user, "token_version", 0) or 0},
+        expires_delta=access_token_expires,
     )
 
     # Create long-lived refresh token (7 days)

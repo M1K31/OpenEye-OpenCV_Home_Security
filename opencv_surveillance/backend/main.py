@@ -28,14 +28,13 @@ patch_face_recognition_models()
 import uvicorn
 import logging
 import asyncio
-import signal
 import sys
 import os
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, WebSocket, Request, Depends
+from fastapi import FastAPI, HTTPException, WebSocket, Request, Depends, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 # Load configuration BEFORE importing any other backend.* module. auth.py,
 # database.session and others read os.getenv(...) at import time; if this runs
 # after those imports the values are ignored (it previously ran ~55 lines too
@@ -53,6 +52,7 @@ load_configuration()
 
 from backend.database.session import engine, SessionLocal
 from backend.core.auth import get_current_active_user, get_current_user_media
+from sqlalchemy import text
 from backend.database.utils import get_db_context
 from backend.database import models, alert_models
 from backend.api.routes import (
@@ -97,6 +97,7 @@ from backend.core.scheduled_tasks import get_scheduled_tasks_manager
 from backend.middleware.rate_limiter import RateLimiter
 from backend.middleware.endpoint_rate_limiter import EndpointRateLimiter
 from backend.middleware.csrf_protection import CSRFProtection
+from backend.utils.safe_paths import UnsafePathError
 from backend.middleware.security import (
     SecurityHeadersMiddleware,
     IPWhitelistMiddleware,
@@ -114,26 +115,12 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-# Global shutdown flag
-shutdown_in_progress = False
-
-def signal_handler(signum, frame):
-    """Mark shutdown in progress without raising SystemExit mid-request.
-
-    Uvicorn installs its own signal handlers to drain in-flight HTTP/streaming
-    connections and run the ASGI lifespan shutdown event cleanly. Calling
-    sys.exit(0) here raised SystemExit synchronously on the main thread,
-    severing active requests (ERR_CONNECTION_REFUSED / ERR_INCOMPLETE_CHUNKED_ENCODING)
-    and interrupting startup/shutdown lifespans.
-    """
-    global shutdown_in_progress
-    if shutdown_in_progress:
-        logger.warning(f"Signal {signum} received but shutdown already in progress")
-        return
-
-    signal_name = "SIGINT" if signum == signal.SIGINT else "SIGTERM"
-    logger.info(f"Received {signal_name}, initiating graceful shutdown...")
-    shutdown_in_progress = True
+# Signals are uvicorn's to handle, not this module's.
+#
+# uvicorn installs its own handlers that set should_exit, which ends the serve
+# loop and runs the ASGI shutdown event properly. A module-level sys.exit(0)
+# handler would bypass that, severing active connections and skipping cleanup.
+# We only track whether shutdown was requested, for code that needs to check.
 
 # Initialize FastAPI application
 app = FastAPI(
@@ -234,6 +221,23 @@ _CSRF_ENABLED = os.getenv("ENABLE_CSRF_PROTECTION", "false").lower() == "true"
 if _CSRF_ENABLED:
     app.add_middleware(CSRFProtection)
     logger.info("CSRF protection enabled (ENABLE_CSRF_PROTECTION=true)")
+
+# A request-supplied name that would have escaped its directory is a bad
+# request, not a server fault.
+#
+# backend.utils.safe_paths raises UnsafePathError from gallery.person_dir, which
+# sits under six routes that take {person_name} from the URL. Without a handler
+# that surfaces as an unhandled exception — a 500, and a stack trace in the log
+# for what is really a client sending "../..". Registered centrally so every
+# current and future call site is covered rather than six try/except blocks that
+# have to be remembered.
+@app.exception_handler(UnsafePathError)
+async def _unsafe_path_handler(request: Request, exc: UnsafePathError):
+    logger.warning("Rejected unsafe path from %s on %s: %s",
+                   request.client.host if request.client else "unknown",
+                   request.url.path, exc)
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
+
 
 # Performance monitoring middleware
 app.add_middleware(
@@ -403,11 +407,15 @@ async def startup_event():
     # collide with Uvicorn's own parent reloader socket when --reload is active),
     # only the active ASGI worker process runs startup_event() and holds this lock.
     try:
-        import fcntl
         lock_path = Path(str(paths.data_dir)).resolve() / ".openeye_worker.lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         lock_fh = open(lock_path, "w")
-        fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if sys.platform == "win32":
+            import msvcrt
+            msvcrt.locking(lock_fh.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         lock_fh.write(str(os.getpid()))
         lock_fh.flush()
         app.state._worker_lock_fh = lock_fh
@@ -918,8 +926,6 @@ async def shutdown_event():
     Enhanced shutdown sequence - ensures all resources are properly cleaned up.
     Addresses issue where daemon threads and processes remain running after shutdown.
     """
-    global shutdown_in_progress
-    shutdown_in_progress = True
 
     if getattr(app.state, "duplicate_instance_skipped", False):
         logger.info("Duplicate instance shutdown complete (no resources were claimed).")
@@ -1384,17 +1390,79 @@ async def api_root(request: Request):
 
 
 @app.get("/api/health")
-async def health_check():
+async def health_check(response: Response):
     """
-    Health check endpoint
+    Report whether this instance is actually working.
+
+    It used to answer `"database": "connected"` and
+    `"face_recognition": "available"` as string literals, checking neither. The
+    Dockerfile's HEALTHCHECK curls this endpoint, so a container whose database
+    had gone reported itself healthy indefinitely and orchestration had no
+    reason to restart it. A health check that cannot fail is not a health check.
+
+    Two states are distinguished on purpose:
+
+    * **unhealthy** — the database is unreachable. The application cannot serve
+      anything meaningful, so this answers 503 and `curl -f` fails, which is what
+      makes the container restart.
+    * **degraded** — an OPTIONAL feature is unavailable, face recognition being
+      the usual one. That is a supported configuration, not a fault: it is
+      reported so an operator can see it, and the status code stays 200 so
+      nothing restarts a container that is working as configured.
+
+    Kept deliberately cheap. `scripts/health-watch.sh` exists because this
+    endpoint was once observed taking 24-40 seconds, and a health check that
+    hangs is indistinguishable from the outage it is meant to detect. The
+    database probe is a single `SELECT 1` on a short-lived connection.
+
+    Public by design (it is in PUBLIC_ROUTES), so it reports state and never
+    detail — no exception text, no paths, no connection strings.
     """
-    active_cameras = len(camera_manager.cameras)
+    checks = {}
+    healthy = True
+
+    # Database: the one dependency whose absence means this instance is useless.
+    try:
+        def _probe_db():
+            with get_db_context() as db:
+                db.execute(text("SELECT 1")).scalar()
+
+        from starlette.concurrency import run_in_threadpool
+        await run_in_threadpool(_probe_db)
+        checks["database"] = "connected"
+    except Exception as exc:
+        # Logged in full, reported as one word. This response is unauthenticated.
+        logger.error("Health check: database unreachable: %s", exc)
+        checks["database"] = "unreachable"
+        healthy = False
+
+    # Optional features: reported, never fatal.
+    try:
+        from backend.core.face_recognition import FACE_RECOGNITION_AVAILABLE
+        checks["face_recognition"] = (
+            "available" if FACE_RECOGNITION_AVAILABLE else "not_installed")
+    except Exception:
+        checks["face_recognition"] = "not_installed"
+
+    try:
+        active_cameras = len(camera_manager.cameras)
+    except Exception:
+        active_cameras = 0
+
+    degraded = checks.get("face_recognition") == "not_installed"
+
+    if not healthy:
+        # 503 so the Dockerfile HEALTHCHECK's `curl -f` fails and the container
+        # is restarted, instead of sitting there reporting success.
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        status_text = "unhealthy"
+    else:
+        status_text = "degraded" if degraded else "healthy"
 
     return {
-        "status": "healthy",
+        "status": status_text,
         "active_cameras": active_cameras,
-        "face_recognition": "available",
-        "database": "connected",
+        **checks,
     }
 
 
@@ -1529,9 +1597,30 @@ if __name__ == "__main__":
     port = resolve_service_port()
     host = SERVICE_BIND_HOST
 
+    # The auto-reloader is OFF unless asked for, and watches only the code when
+    # it is on.
+    #
+    # It used to be unconditional, and on a source checkout that is actively
+    # harmful rather than merely wasteful. paths.is_source_checkout() makes
+    # DATA_ROOT the application directory, so recordings, snapshots and the
+    # database are all written INSIDE the tree the reloader watches — every
+    # captured event restarted the server, mid-recording, releasing the cameras
+    # as it went. A surveillance system that restarts whenever it records
+    # something is the least useful failure available.
+    #
+    # reload_dirs confines the watch to backend/ so that enabling it
+    # deliberately does not reintroduce the same loop.
+    dev_reload = os.getenv("OPENEYE_DEV_RELOAD", "false").lower() == "true"
+    if dev_reload:
+        logger.warning(
+            "OPENEYE_DEV_RELOAD is set: the auto-reloader is on and watching "
+            "backend/ only. Do not use this to run a real installation."
+        )
+
     uvicorn.run(
         "backend.main:app",
         host=host,
         port=port,
-        reload=True,
+        reload=dev_reload,
+        reload_dirs=["backend"] if dev_reload else None,
         log_level="info")

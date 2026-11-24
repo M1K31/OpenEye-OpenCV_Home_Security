@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 import numpy as np
 import pytest
 
+pytest.importorskip("ecosystem_client", reason="ecosystem packages not installed")
 from ecosystem_client.contracts import build_command_envelope, validate_against_schema
 from ecosystem_hub import CommandContext, CommandFailed, CommandReceiver
 from ecosystem_policy import PolicyEngine

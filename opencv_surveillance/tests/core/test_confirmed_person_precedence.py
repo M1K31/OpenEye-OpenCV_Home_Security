@@ -67,7 +67,17 @@ class FakeManager:
 
 
 @pytest.fixture
-def engine():
+def clustering():
+    """
+    The clustering service under test.
+
+    Named `clustering`, not `engine`. conftest defines an `engine` fixture that
+    is a SQLAlchemy engine, and a fixture of the same name holding an entirely
+    different kind of object silently replaces it for this module — so a test
+    here that asked for a database engine would receive a
+    FaceClusteringService, and the failure would look like anything but a naming
+    collision.
+    """
     return FaceClusteringService()
 
 
@@ -105,7 +115,7 @@ def mikel_base():
 
 class TestAKnownPersonIsRecognised:
     def test_a_cluster_of_the_same_face_adopts_their_name(
-            self, engine, mikel_base, monkeypatch):
+            self, clustering, mikel_base, monkeypatch):
         gallery = encodings_near(mikel_base, 40, 0.20, seed=1)
         monkeypatch.setattr("backend.core.face_recognition.get_face_manager",
                             lambda: FakeManager(["Mikel"] * 40, gallery))
@@ -113,10 +123,10 @@ class TestAKnownPersonIsRecognised:
         centroid = np.mean(encodings_near(mikel_base, 10, 0.20, seed=2), axis=0)
         db = FakeDB([FakePerson("Mikel")])
 
-        assert engine._match_confirmed_person(db, centroid) == "Mikel"
+        assert clustering._match_confirmed_person(db, centroid) == "Mikel"
 
     def test_the_nearest_person_wins_when_several_are_known(
-            self, engine, mikel_base, monkeypatch):
+            self, clustering, mikel_base, monkeypatch):
         rng = np.random.default_rng(7)
         other_base = rng.normal(size=128)
 
@@ -129,11 +139,11 @@ class TestAKnownPersonIsRecognised:
         centroid = np.mean(encodings_near(mikel_base, 10, 0.20, seed=5), axis=0)
         db = FakeDB([FakePerson("Mikel"), FakePerson("Yalena")])
 
-        assert engine._match_confirmed_person(db, centroid) == "Mikel"
+        assert clustering._match_confirmed_person(db, centroid) == "Mikel"
 
 
 class TestAStrangerStaysAStranger:
-    def test_a_different_face_is_not_claimed(self, engine, mikel_base, monkeypatch):
+    def test_a_different_face_is_not_claimed(self, clustering, mikel_base, monkeypatch):
         """
         The error that matters. Claiming a stranger for a real profile trains
         that profile on somebody else's face, which is silent and compounding —
@@ -146,11 +156,11 @@ class TestAStrangerStaysAStranger:
         stranger = a_different_face(mikel_base, seed=99)
         centroid = np.mean(encodings_near(stranger, 10, 0.10, seed=7), axis=0)
 
-        assert engine._match_confirmed_person(FakeDB([FakePerson("Mikel")]),
+        assert clustering._match_confirmed_person(FakeDB([FakePerson("Mikel")]),
                                               centroid) is None
 
     def test_one_lucky_frame_cannot_hand_over_a_cluster(
-            self, engine, mikel_base, monkeypatch):
+            self, clustering, mikel_base, monkeypatch):
         """
         Scoring on the single nearest encoding would let one coincidental frame
         claim a whole cluster, so the score is the mean of the ten nearest.
@@ -164,13 +174,13 @@ class TestAStrangerStaysAStranger:
         monkeypatch.setattr("backend.core.face_recognition.get_face_manager",
                             lambda: FakeManager(["Mikel"] * len(gallery), gallery))
 
-        assert engine._match_confirmed_person(FakeDB([FakePerson("Mikel")]),
+        assert clustering._match_confirmed_person(FakeDB([FakePerson("Mikel")]),
                                               centroid) is None
 
 
 class TestOnlyConfirmedPeopleQualify:
     def test_an_auto_placeholder_is_never_adopted(
-            self, engine, mikel_base, monkeypatch):
+            self, clustering, mikel_base, monkeypatch):
         """
         unknown1 is exactly what this exists to stop creating. Adopting it
         would reinstate the loop rather than break it.
@@ -182,10 +192,10 @@ class TestOnlyConfirmedPeopleQualify:
         centroid = np.mean(encodings_near(mikel_base, 10, 0.20, seed=11), axis=0)
         db = FakeDB([FakePerson("unknown1", origin="cluster")])
 
-        assert engine._match_confirmed_person(db, centroid) is None
+        assert clustering._match_confirmed_person(db, centroid) is None
 
     def test_an_unconfirmed_cluster_person_is_not_adopted(
-            self, engine, mikel_base, monkeypatch):
+            self, clustering, mikel_base, monkeypatch):
         gallery = encodings_near(mikel_base, 40, 0.20, seed=12)
         monkeypatch.setattr("backend.core.face_recognition.get_face_manager",
                             lambda: FakeManager(["Someone"] * 40, gallery))
@@ -193,25 +203,25 @@ class TestOnlyConfirmedPeopleQualify:
         centroid = np.mean(encodings_near(mikel_base, 10, 0.20, seed=13), axis=0)
         db = FakeDB([FakePerson("Someone", origin="cluster")])
 
-        assert engine._match_confirmed_person(db, centroid) is None
+        assert clustering._match_confirmed_person(db, centroid) is None
 
 
 class TestDegradesQuietly:
-    def test_no_people_at_all(self, engine, monkeypatch):
+    def test_no_people_at_all(self, clustering, monkeypatch):
         monkeypatch.setattr("backend.core.face_recognition.get_face_manager",
                             lambda: FakeManager([], []))
-        assert engine._match_confirmed_person(FakeDB([]), np.zeros(128)) is None
+        assert clustering._match_confirmed_person(FakeDB([]), np.zeros(128)) is None
 
-    def test_a_person_with_no_encodings_yet(self, engine, monkeypatch):
+    def test_a_person_with_no_encodings_yet(self, clustering, monkeypatch):
         monkeypatch.setattr("backend.core.face_recognition.get_face_manager",
                             lambda: FakeManager([], []))
         db = FakeDB([FakePerson("Mikel")])
-        assert engine._match_confirmed_person(db, np.zeros(128)) is None
+        assert clustering._match_confirmed_person(db, np.zeros(128)) is None
 
-    def test_mismatched_manager_state_is_refused(self, engine, monkeypatch):
+    def test_mismatched_manager_state_is_refused(self, clustering, monkeypatch):
         """Names and encodings out of step means nothing can be trusted."""
         monkeypatch.setattr("backend.core.face_recognition.get_face_manager",
                             lambda: FakeManager(["Mikel", "Yalena"],
                                                 [np.zeros(128)]))
         db = FakeDB([FakePerson("Mikel")])
-        assert engine._match_confirmed_person(db, np.zeros(128)) is None
+        assert clustering._match_confirmed_person(db, np.zeros(128)) is None

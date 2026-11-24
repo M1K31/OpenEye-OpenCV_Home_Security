@@ -2002,12 +2002,12 @@ async def _get_caller_identity(request: Request, db: Session = Depends(get_db)) 
     if auth_header.lower().startswith("bearer "):
         token = auth_header.split(" ", 1)[1].strip()
         try:
-            from backend.core.auth import SECRET_KEY, ALGORITHM
+            from backend.core.auth import JWT_SECRET_KEY, ALGORITHM
             try:
                 import jwt
             except ModuleNotFoundError:
                 from jose import jwt
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
             username = payload.get("sub")
             if username:
                 user = db.query(models.User).filter(models.User.username == username).first()

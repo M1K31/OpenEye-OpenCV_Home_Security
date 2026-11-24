@@ -1,6 +1,7 @@
 # Copyright (c) 2025 Mikel Smart
 # This file is part of OpenEye-OpenCV_Home_Security
 from sqlalchemy.orm import Session
+import hashlib
 from datetime import datetime, timedelta
 from typing import List, Optional
 
@@ -695,6 +696,23 @@ def increment_patrol_run_count(db: Session, pattern_id: int) -> bool:
 # ============================================================================
 
 
+def hash_refresh_token(token: str) -> str:
+    """
+    The stored form of a refresh token.
+
+    Refresh tokens are bearer credentials and are stored only as a digest, so
+    that reading the database does not hand over working sessions. The lookup
+    path hashes the presented token and compares digests, which is why this is
+    the single place the transformation is defined — a second, subtly different
+    implementation would silently fail every refresh.
+
+    SHA-256 rather than a password hash on purpose: the input is 512 bits of
+    output from secrets.token_urlsafe(64), not a human-chosen secret, so there
+    is no guessing attack for a slow KDF to frustrate and no salt to add.
+    """
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
 def create_refresh_token(
     db: Session,
     user_id: int,
@@ -730,7 +748,7 @@ def create_refresh_token(
 
     db_token = models.RefreshToken(
         user_id=user_id,
-        token=token,
+        token_hash=hash_refresh_token(token),
         expires_at=expires_at,
         device_info=device_info,
         ip_address=ip_address,
@@ -754,7 +772,7 @@ def get_refresh_token(db: Session, token: str) -> Optional[models.RefreshToken]:
     """
     return (
         db.query(models.RefreshToken)
-        .filter(models.RefreshToken.token == token)
+        .filter(models.RefreshToken.token_hash == hash_refresh_token(token))
         .first()
     )
 

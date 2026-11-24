@@ -1,0 +1,118 @@
+# Regenerate the Linux dependency lock the Docker image builds from.
+#
+# WHY THIS EXISTS
+#
+# requirements.lock is resolved on macOS/arm64 and says so in its own header:
+# "Linux and Docker need their own lock generated on that platform; do not
+# assume this file resolves there." That Linux lock was never generated, so the
+# Dockerfile's optional-glob COPY never matched and every image build fell
+# through to resolving requirements.txt fresh from PyPI:
+#
+#     COPY requirements.linux-py312.loc[k] ./
+#     ...
+#     echo "No lock found; resolving from requirements.txt"
+#
+# Two builds of the same commit could therefore ship different software — the
+# exact problem the lock was introduced to end, still present for the only build
+# path most users consume.
+#
+# Resolved on ubuntu-latest with CPython 3.12 to match the Dockerfile. Run it
+# after changing requirements.txt, review the diff, and commit the result.
+
+name: Regenerate the Linux lock
+
+on:
+  workflow_dispatch:
+  # Also on a change to the inputs, so a pull request that edits them carries
+  # the regenerated lock for review rather than leaving the image to drift.
+  pull_request:
+    paths:
+      - 'opencv_surveillance/requirements.txt'
+      - 'opencv_surveillance/requirements-ecosystem.txt'
+      - 'opencv_surveillance/requirements-face-recognition.txt'
+
+permissions:
+  contents: read
+
+jobs:
+  lock:
+    name: Resolve for linux / cp312
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 3.12 because that is what the Dockerfile and the shipped macOS bundle
+      # run. A lock resolved on another version is not the one users get.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pip-tools
+        run: python -m pip install --upgrade pip pip-tools
+
+      - name: Resolve
+        working-directory: opencv_surveillance
+        run: |
+          # --strip-extras keeps the output installable by plain pip.
+          # Hashes are deliberately NOT generated: several dependencies here
+          # publish platform-specific wheels, and a hash set resolved on this
+          # runner would refuse to install on any other architecture — the arm64
+          # image among them. Pinned versions give reproducibility; hashes would
+          # give a build that only works on x86_64.
+          # --allow-unsafe includes setuptools and wheel, which pip-compile
+          # otherwise omits as build tooling. That omission is not harmless
+          # here: requirements.txt caps setuptools below 82 because
+          # face_recognition_models imports pkg_resources at module load, and
+          # python:3.12-slim ships NO setuptools at all. A lock without it
+          # installs cleanly and then leaves face recognition quietly disabled,
+          # because the models package cannot import.
+          pip-compile --strip-extras --allow-unsafe --quiet \
+            --output-file=requirements.linux-py312.lock \
+            requirements.txt
+
+      - name: Show what changed
+        working-directory: opencv_surveillance
+        run: |
+          if git diff --quiet -- requirements.linux-py312.lock; then
+            echo "Lock is unchanged."
+          else
+            echo "::notice::The Linux lock changed. Review and commit it."
+            git --no-pager diff -- requirements.linux-py312.lock
+          fi
+
+      # The point of the job: the lock must actually install and the
+      # application must import against it. A lock that resolves but cannot be
+      # installed is worse than none, because the Dockerfile now depends on it.
+      - name: Verify the lock installs and the application imports
+        working-directory: opencv_surveillance
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            libglib2.0-0 libgl1 libgomp1 ffmpeg
+          python -m venv /tmp/verify
+          /tmp/verify/bin/pip install --quiet --upgrade pip
+          /tmp/verify/bin/pip install --quiet -r requirements.linux-py312.lock
+          # Face recognition is optional and absent here on purpose: startup
+          # must tolerate that, which is what ec0fcb2 fixed.
+          /tmp/verify/bin/python -c "import backend.main; print('application imports against the lock')"
+          # setuptools must be pinned below 82 by the lock itself. Asserted
+          # because the failure it prevents is silent: face recognition would
+          # install and then not work.
+          /tmp/verify/bin/python - <<'PY'
+          import importlib.util, sys
+          from importlib.metadata import version
+          assert importlib.util.find_spec("pkg_resources"), (
+              "pkg_resources is absent: the lock did not pin setuptools, so "
+              "face_recognition_models cannot import and face recognition "
+              "would be silently disabled"
+          )
+          major = int(version("setuptools").split(".")[0])
+          assert major < 82, f"setuptools {major} removed pkg_resources"
+          print(f"setuptools {version('setuptools')} pinned; pkg_resources present")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: requirements-linux-py312-lock
+          path: opencv_surveillance/requirements.linux-py312.lock
+          if-no-files-found: error

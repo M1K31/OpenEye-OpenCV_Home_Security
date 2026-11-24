@@ -26,7 +26,8 @@ frame with no faces, which is most of them, still costs nothing.
 import numpy as np
 import pytest
 
-from backend.core.face_recognition import get_face_manager
+from backend.core.face_recognition import FACE_RECOGNITION_AVAILABLE, get_face_manager
+
 
 
 @pytest.fixture
@@ -54,6 +55,28 @@ class TestTheSourceFrameSurvives:
         assert np.array_equal(frame, before), "the frame was modified"
         assert annotated is frame, "a copy was taken when nothing was drawn"
 
+    # Needs the real library, and says so two ways.
+    #
+    # This test monkeypatches `fr._face_recognition.face_locations` to stub a
+    # detection. When face_recognition is not installed that attribute is None,
+    # so the patch raised "AttributeError: None has no attribute
+    # 'face_locations'" — a failure that reads like a bug in the code under test
+    # and is not.
+    #
+    # skipif is what protects it: absence is the default for a developer install
+    # since dlib became optional, and for the Windows CI job, where dlib has no
+    # wheel at all. The `face` marker is carried too, so `-m "not face"`
+    # deselects it, which is how that job filters.
+    #
+    # Deliberately NOT applied to the whole module: the test above needs no
+    # library — it asserts the cheap path where nothing is drawn — and skipping
+    # it would lose that everywhere the library is absent, which is exactly
+    # where cheapness matters most.
+    @pytest.mark.face
+    @pytest.mark.skipif(
+        not FACE_RECOGNITION_AVAILABLE,
+        reason="needs face_recognition; it is optional and absent here",
+    )
     def test_drawing_never_writes_to_the_caller_frame(self, manager, monkeypatch):
         """
         The regression itself.

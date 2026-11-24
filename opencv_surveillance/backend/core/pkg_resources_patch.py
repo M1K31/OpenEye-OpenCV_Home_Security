@@ -27,17 +27,13 @@ def patch_face_recognition_models():
 
     This function should be called before importing face_recognition.
     """
-    # Check if face_recognition_models is already imported
     try:
         if "face_recognition_models" in sys.modules:
-            # Already imported, patch it in place
             module = sys.modules["face_recognition_models"]
         else:
-            # Import it fresh
             import face_recognition_models as module
-    except ModuleNotFoundError:
-        # Optional package: not installed in lean/test environments
-        return
+    except (ImportError, ModuleNotFoundError):
+        return False
 
     # Get the package path using importlib.resources
     try:

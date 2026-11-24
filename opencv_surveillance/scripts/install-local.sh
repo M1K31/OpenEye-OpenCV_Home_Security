@@ -282,13 +282,25 @@ install_python_deps() {
         pip install -r /tmp/oe_req_core.txt
     fi
 
-    # Shared ecosystem packages. OpenEye is the ecosystem's observer, so it
-    # joins by default: the pinned PyPI releases in requirements-ecosystem.txt
-    # are installed unless OPENEYE_STANDALONE=1. Joining is still decided at
-    # runtime — with no hub reachable OpenEye simply runs on its own (the
-    # imports are guarded and the ecosystem routes answer 503 without them).
-    # (This used to be opt-in, when the policy and hub packages were not yet
-    # published and an install from PyPI could not join anything.)
+    # Face recognition, attempted by default.
+    # dlib has no Windows wheel and compiles for hours on ARM, so it moved out
+    # of requirements.txt. Try it here; a machine without a compiler gets a
+    # clear message and a working install, because every call site is guarded
+    # by FACE_RECOGNITION_AVAILABLE.
+    log_info "Installing face recognition (optional; needs dlib)..."
+    if pip install -r requirements-face-recognition.txt; then
+        log_success "Face recognition installed"
+        FACE_RECOGNITION_INSTALLED=1
+    else
+        FACE_RECOGNITION_INSTALLED=0
+        log_warn "Face recognition NOT installed — dlib could not be built here."
+        log_warn "Everything else works; face detection and recognition are disabled."
+        log_warn "To add it later:  ./install-deps.sh"
+    fi
+
+    # Shared ecosystem packages. OpenEye joins by default: the pinned PyPI
+    # releases in requirements-ecosystem.txt are installed unless
+    # OPENEYE_STANDALONE=1. With no hub reachable OpenEye runs on its own.
     if [ -z "${ECOSYSTEM_FROM_SOURCE:-}" ] && [ -z "${OPENEYE_STANDALONE:-}" ]; then
         log_info "Installing shared ecosystem packages (set OPENEYE_STANDALONE=1 to skip)..."
         pip install -r requirements-ecosystem.txt \
@@ -765,6 +777,16 @@ print_completion() {
     # Both optional sets are named here rather than left to be discovered. The
     # base install deliberately omits them, and someone who wanted object
     # detection would otherwise conclude it was broken rather than not installed.
+    echo ""
+    # Face recognition is ATTEMPTED during install, unlike the two below, so it
+    # is only listed here when it actually failed — otherwise the summary would
+    # tell a user to install something they already have.
+    if [ "${FACE_RECOGNITION_INSTALLED:-0}" -eq 0 ]; then
+        echo ""
+        echo "Face recognition is DISABLED — dlib could not be built on this machine."
+        echo "  Everything else works. To add it:"
+        echo "      ./install-deps.sh"
+    fi
     echo ""
     echo "Optional add-ons (not installed):"
     echo "  Object detection (YOLO — several GB, needs ENABLE_OBJECT_DETECTION=true):"

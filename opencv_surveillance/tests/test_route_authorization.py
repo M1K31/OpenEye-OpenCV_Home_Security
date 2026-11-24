@@ -17,6 +17,8 @@ authenticated, or this test fails and someone has to justify the exception by
 adding it to PUBLIC_ROUTES below.
 """
 
+import pathlib
+
 import pytest
 from fastapi.routing import APIRoute, APIWebSocketRoute
 

@@ -139,7 +139,10 @@
 .spinner {
   width: 40px;
   height: 40px;
-  border: 4px solid rgba(0, 0, 0, 0.1);
+  /* Every theme in themes.css has a dark --bg-panel, so a black overlay is
+     invisible here. This used to be corrected by a [data-theme="dark"] rule
+     that never applied, because nothing sets that attribute. */
+  border: 4px solid rgba(255, 255, 255, 0.1);
   border-left-color: var(--theme-primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
@@ -287,7 +290,8 @@
 .level-bar-container {
   width: 100%;
   height: 8px;
-  background-color: rgba(0, 0, 0, 0.1);
+  /* Light overlay: the track sits on a dark panel in every theme. */
+  background-color: rgba(255, 255, 255, 0.1);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -472,7 +476,8 @@
 }
 
 .diagnostics-toggle:hover {
-  background-color: rgba(0, 0, 0, 0.05);
+  /* Light overlay, as above. */
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 /* Diagnostics Panel */
@@ -537,22 +542,10 @@
   }
 }
 
-/* Theme-specific overrides */
-/* These will use CSS variables defined in themes.css */
-[data-theme="dark"] .two-way-audio {
-  background-color: var(--bg-panel, #1a1f2e);
-  border-color: var(--border-panel, rgba(255, 255, 255, 0.1));
-}
-
-[data-theme="dark"] .spinner {
-  border-color: rgba(255, 255, 255, 0.1);
-  border-left-color: var(--theme-primary);
-}
-
-[data-theme="dark"] .level-bar-container {
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-[data-theme="dark"] .diagnostics-toggle:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-}
+/* Theme overrides used to live here, keyed on [data-theme="dark"].
+   Nothing in the application ever set that attribute — ThemeContext applies
+   `.<name>-theme` CLASSES to <html> and <body> — so the block never matched and
+   these elements kept their light-theme values on a dark panel. The values it
+   carried were the correct ones and have been promoted into the base rules
+   above; the selector is gone rather than repaired, because every theme here is
+   dark and there is no second case to switch on. */

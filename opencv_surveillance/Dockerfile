@@ -51,28 +51,35 @@ WORKDIR /build
 
 # Copy and install Python dependencies.
 #
-# The lock is preferred when present. Without it the image resolved fresh from
-# PyPI on every build, so two builds of the same commit could ship different
-# software — which is not hypothetical: the macOS bundle was found running
-# fastapi 0.141 while the test suite validated 0.128.
+# The lock is required, not preferred.
 #
-# requirements.txt remains the fallback so a missing or stale lock cannot break
-# the build; it describes intent, the lock describes the exact set.
-COPY requirements.txt requirements-ecosystem.txt ./
-COPY requirements.linux-py312.loc[k] ./
+# It used to be optional, and the file it named did not exist — so every build
+# resolved fresh from PyPI and two builds of the same commit could ship
+# different software. That is not hypothetical: the macOS bundle was found
+# running fastapi 0.141 while the test suite validated 0.128.
+#
+# A stale lock is now a visible problem — regenerate it with the "Regenerate the
+# Linux lock" workflow. A missing one is a build failure, where before it was
+# invisible.
+COPY requirements.txt requirements-ecosystem.txt requirements-face-recognition.txt ./
+# Named directly, not as an optional glob. The glob form
+# (`requirements.linux-py312.loc[k]`) silently matched nothing for as long as
+# the file did not exist, so the fallback below ran on every build and the image
+# was never actually pinned. A missing lock is now a build failure, which is
+# what it should always have been once one existed.
+COPY requirements.linux-py312.lock ./
 # setuptools is NOT upgraded here. It is pinned below 82 because that
 # release removed pkg_resources, which face_recognition_models imports at
 # module load. Upgrading it here used to be harmless only because
 # installing requirements.txt downgraded it again; installing from the
 # lock does not, so the upgrade would leave the image unable to start.
 RUN pip install --user --no-cache-dir --upgrade pip wheel && \
-    if [ -f requirements.linux-py312.lock ]; then \
-        echo "Installing from requirements.linux-py312.lock" && \
-        pip install --user --no-cache-dir -r requirements.linux-py312.lock; \
-    else \
-        echo "No lock found; resolving from requirements.txt" && \
-        pip install --user --no-cache-dir -r requirements.txt; \
-    fi && \
+    # From the lock, always. There is no longer a fallback to requirements.txt:
+    # that fallback was the reason the image was unpinned, because it ran every
+    # time. requirements.txt remains the human-edited statement of intent and
+    # the input the lock is regenerated from; it is not what gets installed.
+    echo "Installing from requirements.linux-py312.lock" && \
+    pip install --user --no-cache-dir -r requirements.linux-py312.lock && \
     # Ecosystem packages now come from PyPI instead of a git URL pinned to a
     # commit SHA. That pin named the PRE-RENAME distribution `ecosystem-auth`,
     # which ships the same `ecosystem_auth` module as the published
@@ -83,7 +90,16 @@ RUN pip install --user --no-cache-dir --upgrade pip wheel && \
     # changing the build). PyPI releases are immutable per version, so the
     # equivalent control here is the version floor in requirements-ecosystem.txt;
     # pin exact versions there if you want byte-identical rebuilds.
-    pip install --user --no-cache-dir -r requirements-ecosystem.txt
+    pip install --user --no-cache-dir -r requirements-ecosystem.txt && \
+    # Face recognition, installed explicitly because it is no longer in the
+    # base set. dlib has no Windows wheel and compiles for hours on ARM, so
+    # requirements.txt makes it opt-in for the developer `pip install` path.
+    #
+    # The image keeps it: a container is expected to have the same features as
+    # the application bundles, and this is a Linux build where dlib resolves
+    # normally. Dropping it here would silently remove face recognition from
+    # every Docker deployment, which is not what making it optional was for.
+    pip install --user --no-cache-dir -r requirements-face-recognition.txt
 
 # ============================================
 # Stage 3: Runtime - Minimal production image

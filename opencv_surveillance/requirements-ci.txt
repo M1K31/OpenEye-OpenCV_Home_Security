@@ -28,6 +28,19 @@ python-dotenv>=1.0.0
 # Computer Vision & Face Recognition
 opencv-contrib-python>=4.8.1.78,<4.11  # Constrained for numpy<2 compatibility
 numpy>=1.24.0,<2.0.0  # Constrained to <2 for dlib compatibility
+# dlib and face_recognition stay HERE, deliberately, even though they left
+# requirements.txt.
+#
+# This file is not an install path anyone takes; it is what the Linux CI job
+# installs. That job runs `pytest tests/` with no marker filter, so it is the
+# ONLY place the face-recognition code path is actually exercised. Removing
+# them to match requirements.txt would make six face-marked tests skip and
+# leave the feature tested nowhere.
+#
+# The user-facing split is unaffected: requirements.txt makes them optional so
+# a stock Windows `pip install` stops failing on dlib and a Raspberry Pi
+# install stops taking hours, and the Windows CI job installs requirements.txt
+# precisely to prove that path works.
 face_recognition>=1.3.0
 pillow>=10.1.0
 scikit-learn>=1.3.0

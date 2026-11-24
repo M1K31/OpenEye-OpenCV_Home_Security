@@ -163,16 +163,17 @@ export OPENBLAS_NUM_THREADS=1
 export OPENCV_FFMPEG_CAPTURE_OPTIONS="rtsp_transport;tcp|stimeout;5000000"
 
 # Start uvicorn in background and capture PID
-# Scope --reload-dir strictly to "$APP_RUN_DIR/backend" so Uvicorn's file watcher
-# only monitors backend Python source files and never sees runtime writes in
-# data/, faces/, recordings/, logs/, or surveillance.db-wal.
-APP_RUN_DIR="$(pwd)"
-$PYTHON_CMD -m uvicorn backend.main:app --host 0.0.0.0 --port "$PORT" \
-    --reload \
-    --reload-dir "$APP_RUN_DIR/backend" \
-    --reload-include "*.py" \
-    --reload-exclude "*.pyc" \
-    --reload-exclude "__pycache__" &
+# --reload is off by default: on a source checkout DATA_ROOT is the
+# application directory, so recordings restart the reloader mid-capture.
+# Set OPENEYE_DEV_RELOAD=true for development; the watch is then confined
+# to backend/ so runtime writes do not trigger it.
+RELOAD_ARGS=()
+if [ "${OPENEYE_DEV_RELOAD:-false}" = "true" ]; then
+    echo "   ⚠ OPENEYE_DEV_RELOAD=true — auto-reload on, watching backend/ only"
+    RELOAD_ARGS=(--reload --reload-dir "$(pwd)/backend" --reload-include "*.py" --reload-exclude "*.pyc" --reload-exclude "__pycache__")
+fi
+
+$PYTHON_CMD -m uvicorn backend.main:app --host 0.0.0.0 --port "$PORT" "${RELOAD_ARGS[@]}" &
 UVICORN_PID=$!
 
 echo "   ✓ Server started with PID: $UVICORN_PID"

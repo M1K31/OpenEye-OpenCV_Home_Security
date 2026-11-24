@@ -543,7 +543,22 @@ async def export_video_clip(
         clips_dir.mkdir(parents=True, exist_ok=True)
 
         if request.output_name:
-            output_path = clips_dir / request.output_name
+            # output_name is an unvalidated string from the request body.
+            # pathlib's "/" does not sanitise: "../../data/openeye.db" escapes
+            # the clips directory, and an ABSOLUTE value such as
+            # "/etc/cron.d/x" discards clips_dir entirely. ffmpeg then writes
+            # there with -y, which overwrites without asking.
+            #
+            # The route requires only get_current_active_user, which does not
+            # check role, so the lowest-privilege account could reach it.
+            from backend.utils.safe_paths import UnsafePathError, safe_child
+
+            try:
+                output_path = safe_child(
+                    clips_dir, request.output_name, what="output_name")
+            except UnsafePathError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
         else:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_path = clips_dir / f"clip_{recording.camera_id}_{timestamp}.mp4"
@@ -567,11 +582,15 @@ async def export_video_clip(
         )
 
         if result.returncode != 0:
-            logger.error(f"FFmpeg error: {result.stderr}")
+            # Logged in full, reported in summary. ffmpeg's stderr carries
+            # absolute server paths and reveals the filesystem layout, which
+            # does not belong in an API response.
+            logger.error("FFmpeg failed exporting clip (rc=%s): %s",
+                         result.returncode, result.stderr)
             return ClipExportResponse(
                 success=False,
                 clip_path=None,
-                message=f"FFmpeg error: {result.stderr}"
+                message="Clip export failed. See the server log for details."
             )
 
         return ClipExportResponse(

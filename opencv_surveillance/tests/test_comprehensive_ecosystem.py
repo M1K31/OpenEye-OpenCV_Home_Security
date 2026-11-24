@@ -199,7 +199,7 @@ class TestHighPriorityFixes:
     def test_h5_no_bare_except_in_ecosystem_routes(self):
         """ecosystem.py must not contain bare 'except:' blocks."""
         route_file = Path(__file__).parent.parent / "backend" / "api" / "routes" / "ecosystem.py"
-        content = route_file.read_text()
+        content = route_file.read_text(encoding="utf-8")
         lines = content.split("\n")
         bare_excepts = [
             (i + 1, line) for i, line in enumerate(lines)
@@ -255,7 +255,7 @@ class TestMediumPriorityFixes:
     def test_m1_no_aiohttp_import_in_routes(self):
         """ecosystem.py must not import aiohttp."""
         route_file = Path(__file__).parent.parent / "backend" / "api" / "routes" / "ecosystem.py"
-        content = route_file.read_text()
+        content = route_file.read_text(encoding="utf-8")
         assert "import aiohttp" not in content
         assert "import httpx" in content
 
@@ -264,7 +264,7 @@ class TestMediumPriorityFixes:
     def test_m4_like_wildcards_escaped(self):
         """Face search must escape % and _ in person_name."""
         route_file = Path(__file__).parent.parent / "backend" / "api" / "routes" / "ecosystem.py"
-        content = route_file.read_text()
+        content = route_file.read_text(encoding="utf-8")
         assert 'replace("%", "\\\\%")' in content or "replace('%', '\\\\%')" in content
 
     # -- L-1: Pattern matching --
@@ -384,7 +384,19 @@ class TestStatisticsN1Fix:
 class TestFaceRecognition:
     """Test face detection and recognition using real photos."""
 
-    PHOTOS_DIR = Path("/Users/mikelsmart/Desktop/TestPhotos")
+    # Where the optional real-photo fixtures live.
+    #
+    # This was one developer's home directory, hardcoded. That embeds a username
+    # in a tracked file — the same leak `.gitignore` untracks `pytest-of-*` to
+    # avoid — and it meant these tests could only ever run on one machine:
+    # everywhere else the skip below fired and nobody noticed the coverage was
+    # unreachable.
+    #
+    # Point OPENEYE_TEST_PHOTOS_DIR at a folder of JPEGs to run them.
+    PHOTOS_DIR = Path(
+        os.environ.get("OPENEYE_TEST_PHOTOS_DIR")
+        or Path(__file__).resolve().parent / "fixtures" / "photos"
+    )
 
     @pytest.fixture
     def face_images(self):
@@ -843,7 +855,7 @@ class TestPrivacyAndPermissions:
         """docker-compose.yml should document device passthrough."""
         compose_file = Path(__file__).parent.parent / "docker-compose.yml"
         if compose_file.exists():
-            content = compose_file.read_text()
+            content = compose_file.read_text(encoding="utf-8")
             assert "/dev/video" in content, \
                 "docker-compose.yml should document video device passthrough"
 

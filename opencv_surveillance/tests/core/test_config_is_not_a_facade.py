@@ -145,7 +145,7 @@ def _is_read_somewhere(name, config_text):
 
 
 def test_no_new_unread_configuration_settings():
-    config_text = CONFIG.read_text()
+    config_text = CONFIG.read_text(encoding="utf-8")
     unread = {n for n in _defined_constants(config_text)
               if not _is_read_somewhere(n, config_text)}
 
@@ -160,7 +160,7 @@ def test_no_new_unread_configuration_settings():
 
 def test_the_inert_list_has_no_stale_entries():
     """Wiring one up (or deleting it) should require removing it from the list."""
-    config_text = CONFIG.read_text()
+    config_text = CONFIG.read_text(encoding="utf-8")
     defined = _defined_constants(config_text)
 
     now_read = {n for n in KNOWN_INERT if n in defined and _is_read_somewhere(n, config_text)}
@@ -176,7 +176,7 @@ def test_the_inert_list_has_no_stale_entries():
 
 def test_password_policy_settings_are_actually_enforced():
     """The part of the facade already repaired, pinned so it cannot regress."""
-    config_text = CONFIG.read_text()
+    config_text = CONFIG.read_text(encoding="utf-8")
     for name in ("MIN_PASSWORD_LENGTH", "MAX_PASSWORD_LENGTH", "REQUIRE_UPPERCASE",
                  "REQUIRE_LOWERCASE", "REQUIRE_DIGIT", "REQUIRE_SPECIAL_CHAR"):
         assert _is_read_somewhere(name, config_text), f"{name} is not read anywhere"

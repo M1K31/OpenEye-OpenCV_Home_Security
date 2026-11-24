@@ -137,6 +137,23 @@ install_dependencies() {
     fi
     rm -f "$PIP_LOG"
 
+    # Face recognition, attempted by default — see the note in
+    # scripts/install-local.sh. dlib left requirements.txt so that a stock
+    # Windows install and a Raspberry Pi install stop failing on it, not so
+    # that capable machines lose the feature. A failure here is not fatal:
+    # every call site is guarded by FACE_RECOGNITION_AVAILABLE.
+    echo "  Installing face recognition (optional; needs dlib)..."
+    FACE_LOG="$(mktemp)"
+    if pip install -r requirements-face-recognition.txt > "$FACE_LOG" 2>&1; then
+        echo -e "${GREEN}  ✓ Face recognition installed${NC}"
+        rm -f "$FACE_LOG"
+    else
+        echo -e "${YELLOW}  ⚠ Face recognition NOT installed — dlib could not be built here.${NC}"
+        echo "     Everything else works; face detection and recognition are disabled."
+        echo "     To add it later:  ./install-deps.sh"
+        echo "     Log: $FACE_LOG"
+    fi
+
     # Shared ecosystem packages are an OPT-IN add-on, published to PyPI as
     # appecosystem-client / -auth / -ai. Deliberately not installed here:
     # OpenEye runs standalone (guarded imports; the ecosystem routes answer 503

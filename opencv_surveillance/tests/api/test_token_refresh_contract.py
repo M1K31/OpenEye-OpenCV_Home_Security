@@ -32,14 +32,11 @@ at all. These tests check the shape of the request instead.
 """
 
 import pytest
-from fastapi.testclient import TestClient
 
 from backend.main import app
 
-
-# `client` is conftest's: the app with get_db bound to a test database that has
-# the schema. A bare TestClient(app) hit an empty database ("no such table:
-# refresh_tokens") and failed with a 500 instead of answering the request.
+# `client` comes from conftest — it wires get_db to the test database.
+# A bare TestClient(app) would hit an empty database and fail.
 
 
 class TestTheTokenIsReadFromTheBody:

@@ -24,7 +24,7 @@ import jwt
 from jwt import PyJWTError as JWTError
 
 from backend.core.websocket_manager import ws_manager
-from backend.core.auth import get_current_active_user, SECRET_KEY, ALGORITHM
+from backend.core.auth import get_current_active_user, JWT_SECRET_KEY, ALGORITHM
 from backend.database.session import get_db, SessionLocal
 from backend.database.models import User
 
@@ -62,7 +62,7 @@ def verify_token(token: str, db: Session) -> Optional[User]:
         User object if valid, None otherwise
     """
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
             return None
