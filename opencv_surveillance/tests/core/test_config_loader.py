@@ -138,16 +138,19 @@ class TestSecrets:
         assert os.environ["JWT_SECRET_KEY"] == "j"
         assert os.environ["ECOSYSTEM_HMAC_SECRET"] == "h"
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX file permissions do not apply on Windows")
     def test_permission_check_flags_a_readable_secrets_file(self, tmp_path):
         path = _write(tmp_path / "config.env", SECRET_KEY="s")
         os.chmod(path, 0o644)
         assert config_loader.check_permissions(path) is False
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX file permissions do not apply on Windows")
     def test_permission_check_accepts_owner_only(self, tmp_path):
         path = _write(tmp_path / "config.env", SECRET_KEY="s")
         os.chmod(path, 0o600)
         assert config_loader.check_permissions(path) is True
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX file permissions do not apply on Windows")
     def test_a_loose_secrets_file_still_loads_but_warns(self, tmp_path, caplog):
         """Refusing to start would be worse than loading and complaining."""
         path = _write(tmp_path / "config.env", SECRET_KEY="s")

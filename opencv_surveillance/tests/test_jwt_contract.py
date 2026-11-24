@@ -47,7 +47,7 @@ def _tamper_payload(token: str, changes: dict) -> str:
 def test_a_token_round_trips():
     """The basic contract: what we sign, we can read back."""
     token = auth.create_access_token({"sub": "alice"})
-    payload = auth.jwt.decode(token, auth.SECRET_KEY, algorithms=[auth.ALGORITHM])
+    payload = auth.jwt.decode(token, auth.JWT_SECRET_KEY, algorithms=[auth.ALGORITHM])
     assert payload["sub"] == "alice"
 
 
@@ -55,14 +55,14 @@ def test_an_expired_token_is_refused():
     """Expiry must be enforced by the library, not by calling code."""
     token = auth.create_access_token({"sub": "alice"}, expires_delta=timedelta(seconds=-30))
     with pytest.raises(auth.JWTError):
-        auth.jwt.decode(token, auth.SECRET_KEY, algorithms=[auth.ALGORITHM])
+        auth.jwt.decode(token, auth.JWT_SECRET_KEY, algorithms=[auth.ALGORITHM])
 
 
 def test_a_token_signed_with_another_key_is_refused():
     """A signature from a key we do not hold proves nothing."""
     token = auth.jwt.encode({"sub": "mallory"}, "not-our-secret", algorithm=auth.ALGORITHM)
     with pytest.raises(auth.JWTError):
-        auth.jwt.decode(token, auth.SECRET_KEY, algorithms=[auth.ALGORITHM])
+        auth.jwt.decode(token, auth.JWT_SECRET_KEY, algorithms=[auth.ALGORITHM])
 
 
 def test_a_tampered_payload_is_refused():
@@ -70,7 +70,7 @@ def test_a_tampered_payload_is_refused():
     token = auth.create_access_token({"sub": "alice"})
     forged = _tamper_payload(token, {"sub": "admin"})
     with pytest.raises(auth.JWTError):
-        auth.jwt.decode(forged, auth.SECRET_KEY, algorithms=[auth.ALGORITHM])
+        auth.jwt.decode(forged, auth.JWT_SECRET_KEY, algorithms=[auth.ALGORITHM])
 
 
 def test_an_unsigned_token_is_refused():
@@ -88,14 +88,14 @@ def test_an_unsigned_token_is_refused():
     unsigned = f"{header}.{payload}."
 
     with pytest.raises(auth.JWTError):
-        auth.jwt.decode(unsigned, auth.SECRET_KEY, algorithms=[auth.ALGORITHM])
+        auth.jwt.decode(unsigned, auth.JWT_SECRET_KEY, algorithms=[auth.ALGORITHM])
 
 
 def test_garbage_is_refused_rather_than_crashing():
     """Malformed input must raise the error type callers already handle."""
     for junk in ("", "not-a-token", "a.b.c", "..."):
         with pytest.raises(auth.JWTError):
-            auth.jwt.decode(junk, auth.SECRET_KEY, algorithms=[auth.ALGORITHM])
+            auth.jwt.decode(junk, auth.JWT_SECRET_KEY, algorithms=[auth.ALGORITHM])
 
 
 def test_decode_is_always_given_an_explicit_algorithm_list():

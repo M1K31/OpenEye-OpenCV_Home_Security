@@ -27,6 +27,7 @@ from backend.core.auth import (
     create_tokens,
     refresh_access_token,
     SECRET_KEY,
+    JWT_SECRET_KEY,
     ALGORITHM,
 )
 from backend.api.schemas.user import User
@@ -99,7 +100,7 @@ class TestAccessToken:
         assert isinstance(token, str)
 
         # Decode and verify
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
         assert payload["sub"] == "testuser"
         assert "exp" in payload
 
@@ -112,7 +113,7 @@ class TestAccessToken:
         assert token is not None
 
         # Decode and verify default expiry
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
         assert payload["sub"] == "testuser"
 
         # Check expiry is approximately 15 minutes from now
@@ -129,7 +130,7 @@ class TestAccessToken:
 
         token = create_access_token(data)
 
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
         assert payload["sub"] == "testuser"
         assert payload["role"] == "admin"
         assert payload["email"] == "test@example.com"
@@ -230,7 +231,7 @@ class TestGetCurrentUser:
         mock_db = MagicMock()
 
         # Create token without 'sub' claim
-        token = jwt.encode({"user": "testuser"}, SECRET_KEY, algorithm=ALGORITHM)
+        token = jwt.encode({"user": "testuser"}, JWT_SECRET_KEY, algorithm=ALGORITHM)
 
         with pytest.raises(HTTPException) as exc_info:
             await get_current_user(token=token, db=mock_db)
@@ -377,7 +378,7 @@ class TestCreateTokens:
         assert tokens["expires_in"] == 30 * 60  # 30 minutes in seconds
 
         # Verify access token is valid JWT
-        payload = jwt.decode(tokens["access_token"], SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(tokens["access_token"], JWT_SECRET_KEY, algorithms=[ALGORITHM])
         assert payload["sub"] == "testuser"
 
         # Verify refresh token was stored in database

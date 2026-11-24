@@ -268,7 +268,7 @@ class TestResolveUnderDataRoot:
         """An external drive stays where the user put it."""
         from backend.core.paths import resolve_under_data_root
 
-        external = Path("/Volumes/Locker2/openeye/recordings")
+        external = Path("D:/openeye/recordings" if sys.platform == "win32" else "/Volumes/Locker2/openeye/recordings")
         assert resolve_under_data_root(external, tmp_path / "root") == external
 
     def test_result_is_stable_across_working_directories(self, tmp_path, monkeypatch):

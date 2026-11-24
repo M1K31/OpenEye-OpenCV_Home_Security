@@ -24,6 +24,7 @@ so Docker and CI are unaffected.
 import logging
 import os
 import stat
+import sys
 from pathlib import Path
 from typing import List, Optional
 
@@ -77,6 +78,8 @@ def check_permissions(path: Path) -> bool:
     Reported rather than enforced on load: silently changing the permissions of
     a file the user wrote is worse than telling them about it.
     """
+    if sys.platform == "win32":
+        return True
     try:
         mode = stat.S_IMODE(path.stat().st_mode)
     except OSError:

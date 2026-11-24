@@ -12,6 +12,7 @@ advertised port match the listening one.
 
 import os
 import socket
+import sys
 
 import pytest
 
@@ -36,7 +37,8 @@ class TestPortSelection:
         there is no terminal in which to read the complaint.
         """
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as taken:
-            taken.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            if sys.platform != "win32":
+                taken.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             taken.bind(("0.0.0.0", 0))
             busy = taken.getsockname()[1]
             taken.listen(1)
