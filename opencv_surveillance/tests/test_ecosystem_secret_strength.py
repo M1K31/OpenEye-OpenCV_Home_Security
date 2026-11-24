@@ -97,7 +97,7 @@ def test_ci_supplies_a_secret_the_application_would_accept():
     if not workflow.exists():
         pytest.skip("ci.yml not present")
 
-    found = re.findall(r'ECOSYSTEM_HMAC_SECRET:\s*"([^"]+)"', workflow.read_text())
+    found = re.findall(r'ECOSYSTEM_HMAC_SECRET:\s*"([^"]+)"', workflow.read_text(encoding="utf-8"))
     assert found, "ci.yml no longer sets ECOSYSTEM_HMAC_SECRET"
     for value in found:
         assert not is_weak_secret(value), (

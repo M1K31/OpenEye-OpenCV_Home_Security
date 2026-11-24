@@ -11,6 +11,7 @@ rather than half-finish.
 """
 
 import os
+import sys
 import types
 from pathlib import Path
 
@@ -261,8 +262,9 @@ class TestMigrating:
         sm.migrate(plan)
 
         config = roots.data / "config.env"
-        assert "SECRET_KEY=abc" in config.read_text()
-        assert oct(config.stat().st_mode)[-3:] == "600"
+        assert "SECRET_KEY=abc" in config.read_text(encoding="utf-8")
+        if sys.platform != "win32":
+            assert oct(config.stat().st_mode)[-3:] == "600"
         # The original is copied, not moved: an unmigrated rollback still works.
         assert (roots.app / ".env").exists()
 
@@ -286,7 +288,7 @@ class TestMigrating:
                              current_paths=_paths_stub(), database_path=None)
         sm.migrate(plan)
 
-        text = (roots.data / "config.env").read_text()
+        text = (roots.data / "config.env").read_text(encoding="utf-8")
         # Secrets and unrelated settings survive untouched.
         assert "SECRET_KEY=keep-me" in text
         assert "ECOSYSTEM_REGISTRY_URL=http://localhost:8500" in text
@@ -396,4 +398,5 @@ class TestExportImport:
 
         sm.export_data(roots.tmp / "export", data_root=roots.data)
 
-        assert oct((roots.tmp / "export" / "config.env").stat().st_mode)[-3:] == "600"
+        if sys.platform != "win32":
+            assert oct((roots.tmp / "export" / "config.env").stat().st_mode)[-3:] == "600"

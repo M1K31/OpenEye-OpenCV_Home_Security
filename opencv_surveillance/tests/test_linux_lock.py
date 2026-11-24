@@ -30,7 +30,7 @@ DOCKERFILE = ROOT / "Dockerfile"
 
 def _pins() -> dict:
     pins = {}
-    for line in LOCK.read_text().splitlines():
+    for line in LOCK.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
             continue
@@ -52,7 +52,7 @@ def test_the_lock_exists():
 def test_every_requirement_is_pinned():
     """A lock with a range in it is not a lock."""
     unpinned = [
-        line.strip() for line in LOCK.read_text().splitlines()
+        line.strip() for line in LOCK.read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.strip().startswith("#")
         and "==" not in line and not line.startswith(" ")
     ]
@@ -106,7 +106,7 @@ def test_the_dockerfile_requires_the_lock():
     # explain why it went, and a naive substring check flags that prose — which
     # it did on first run.
     directives = "\n".join(
-        line for line in DOCKERFILE.read_text().splitlines()
+        line for line in DOCKERFILE.read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.strip().startswith("#")
     )
     assert "requirements.linux-py312.loc[k]" not in directives, (
@@ -131,7 +131,7 @@ def test_key_pins_match_the_macos_lock():
         pytest.skip("macOS lock not present")
 
     mac_pins = {}
-    for line in macos.read_text().splitlines():
+    for line in macos.read_text(encoding="utf-8").splitlines():
         match = re.match(r"^([A-Za-z0-9._-]+)==([^\s;]+)", line.strip())
         if match:
             mac_pins[match.group(1).lower().replace("_", "-")] = match.group(2)

@@ -86,7 +86,7 @@ class TestTheDependencySplit:
         assert path.exists(), f"{name} is missing"
         return [
             line.strip()
-            for line in path.read_text().splitlines()
+            for line in path.read_text(encoding="utf-8").splitlines()
             if line.strip() and not line.strip().startswith("#")
         ]
 

@@ -35,7 +35,7 @@ def test_no_route_pulls_a_session_from_the_generator():
     """
     import ast
 
-    tree = ast.parse(SETUP.read_text())
+    tree = ast.parse(SETUP.read_text(encoding="utf-8"))
     offenders = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
@@ -57,7 +57,7 @@ def test_no_route_pulls_a_session_from_the_generator():
 
 
 def test_the_routes_declare_the_session_as_a_dependency():
-    text = SETUP.read_text()
+    text = SETUP.read_text(encoding="utf-8")
     assert text.count("db: Session = Depends(get_db)") >= 2, (
         "both setup routes should receive the session as a dependency"
     )

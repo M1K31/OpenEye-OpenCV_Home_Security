@@ -69,6 +69,6 @@ def test_ffmpeg_stderr_is_not_returned_to_the_client():
     reaching the branch needs a real ffmpeg failure.
     """
     source = Path(__file__).resolve().parents[1] / "backend/api/routes/timeline.py"
-    text = source.read_text()
+    text = source.read_text(encoding="utf-8")
     assert 'message=f"FFmpeg error: {result.stderr}"' not in text
     assert "See the server log for details" in text

@@ -47,7 +47,7 @@ def _log_event_keywords():
     """Every (file, line, kwarg) passed to a log_event(...) call in the backend."""
     for path in BACKEND.rglob("*.py"):
         try:
-            tree = ast.parse(path.read_text(), filename=str(path))
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         except SyntaxError:            # not our problem here
             continue
         for node in ast.walk(tree):

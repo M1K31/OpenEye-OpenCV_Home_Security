@@ -4,6 +4,9 @@ from __future__ import annotations
 import os
 import pytest
 from pathlib import Path
+
+pytest.importorskip("ecosystem_policy", reason="appecosystem-policy not installed")
+pytest.importorskip("ecosystem_client", reason="appecosystem-client not installed")
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.testclient import TestClient

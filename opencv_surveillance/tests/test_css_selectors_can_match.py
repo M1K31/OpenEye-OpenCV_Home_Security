@@ -54,7 +54,7 @@ def _attribute_selectors_in_css():
     """Every [attr=...] selector used in a stylesheet, with its file and line."""
     found = []
     for path in sorted(FRONTEND.rglob("*.css")):
-        for number, line in enumerate(_strip_css_comments(path.read_text()).splitlines(), 1):
+        for number, line in enumerate(_strip_css_comments(path.read_text(encoding="utf-8")).splitlines(), 1):
             for match in re.finditer(r'\[([a-zA-Z-]+)\s*[~|^$*]?=', line):
                 attribute = match.group(1)
                 # Attributes the browser or the markup owns, not the app's state.
@@ -102,7 +102,7 @@ def test_no_stylesheet_keys_on_an_attribute_nothing_sets():
 def test_the_theme_mechanism_is_classes_not_attributes():
     """Pin the mechanism the CSS has to agree with."""
     context = FRONTEND / "context" / "ThemeContext.jsx"
-    text = context.read_text()
+    text = context.read_text(encoding="utf-8")
     assert "classList.add" in text, "ThemeContext no longer applies theme classes"
     assert "setAttribute('data-theme'" not in text and \
            'setAttribute("data-theme"' not in text, (
@@ -124,7 +124,7 @@ def test_dark_surface_overlays_are_light(stylesheet, selector):
     a black overlay is invisible. The correct values existed only inside the
     unreachable block; they are now in the base rules.
     """
-    text = _strip_css_comments((FRONTEND / stylesheet).read_text())
+    text = _strip_css_comments((FRONTEND / stylesheet).read_text(encoding="utf-8"))
     start = text.index(selector + " {")
     body = text[start:text.index("}", start)]
     assert "rgba(0, 0, 0" not in body, (

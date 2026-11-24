@@ -51,7 +51,7 @@ def _is_fixture(node) -> bool:
 
 
 def _conftest_fixture_names() -> set:
-    tree = ast.parse(CONFTEST.read_text())
+    tree = ast.parse(CONFTEST.read_text(encoding="utf-8"))
     return {
         node.name for node in tree.body
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and _is_fixture(node)
@@ -60,7 +60,7 @@ def _conftest_fixture_names() -> set:
 
 def _module_level_fixtures(path: pathlib.Path):
     """Fixtures defined at module scope — not those nested inside a class."""
-    tree = ast.parse(path.read_text())
+    tree = ast.parse(path.read_text(encoding="utf-8"))
     for node in tree.body:                      # body only: no class members
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and _is_fixture(node):
             yield node.name, node.lineno

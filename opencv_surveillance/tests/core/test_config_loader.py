@@ -12,6 +12,7 @@ without an obvious error). Nothing raises.
 
 import os
 import stat
+import sys
 
 import pytest
 
@@ -173,5 +174,6 @@ class TestSecrets:
 
         config_loader.secure_permissions(path)
 
-        mode = stat.S_IMODE(path.stat().st_mode)
-        assert mode == 0o600
+        if sys.platform != "win32":
+            mode = stat.S_IMODE(path.stat().st_mode)
+            assert mode == 0o600

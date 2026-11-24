@@ -104,7 +104,7 @@ class TestRuntimeState:
         path = app_entry.write_runtime_state(tmp_path, 8207)
 
         import json
-        state = json.loads(path.read_text())
+        state = json.loads(path.read_text(encoding="utf-8"))
         assert state["port"] == 8207
         assert state["url"] == "http://localhost:8207"
         assert state["pid"] == os.getpid()

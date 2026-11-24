@@ -161,6 +161,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install -r requirements-ecosystem.txt
           pip install pytest pytest-asyncio pytest-timeout pytest-cov
 
       - name: Import the application

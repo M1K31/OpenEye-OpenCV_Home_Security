@@ -83,7 +83,7 @@ def test_the_reloader_is_not_on_by_default():
     import re
 
     source = pathlib.Path(__file__).resolve().parents[1] / "backend/main.py"
-    text = source.read_text()
+    text = source.read_text(encoding="utf-8")
 
     assert not re.search(r"^\s*reload=True", text, re.M), (
         "uvicorn.run is called with reload=True unconditionally"
