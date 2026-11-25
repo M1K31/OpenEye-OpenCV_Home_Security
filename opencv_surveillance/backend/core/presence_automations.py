@@ -2,16 +2,22 @@
 
 Turns owner-authored presence rules ("who is where") into safe, policy-gated
 actions across three families:
-1. Restrict access on an unknown person (`access.restrict_zone` / `access.release_zone`)
-   - Hard life-safety invariant: NEVER lock an egress or life-safety door
-   - Mandatory TTL + one-tap manual release (manual release ALWAYS works, even under Freeze)
-   - Multi-frame confirmation (`unknown_min_frames`) + false-unknown lockout suppression
-     (known person in zone, recent manual release grace window, or guests-expected mode)
+1. Restrict access on an unknown person (`access.restrict_zone`)
+   - `access.release_zone` is an operator/timer-only release operation (never
+     triggered automatically by camera rules) and ALWAYS works, even under Freeze.
+   - Hard life-safety invariant: NEVER lock an egress or life-safety door.
+   - Mandatory bounded TTL + background expiry monitor + one-tap manual release.
+   - Requires >= 2 distinct unknown frames (`unknown_min_frames >= 2`) + false-unknown
+     lockout suppression (known person in zone, recent manual release grace, or
+     guests-expected mode).
+   - Per-zone locking serializes restrict/release; Freeze is re-checked before
+     every individual door command.
 2. Presence-triggered vulnerability scans (`scan.request`)
    - Default is NO scan. Requires BOTH recorded owner consent/AUP acceptance AND
-     ecosystem owner approval (standing auto-scan designation or per-run approval)
-   - Per-device and per-zone cooldowns
-3. Infrastructure by identity (lights, music, climate)
+     a valid standing auto-scan designation or verified approval record.
+   - Independent per-device AND per-zone cooldowns recorded ONLY after hub acceptance.
+3. Infrastructure by identity (`infrastructure.control`)
+   - Requires recognised identity meeting `min_confidence` and a configured actuator.
 
 Privacy: notifications carry `"unknown person in <zone>"` + deep link, NEVER raw
 face images or host snapshot paths. Under Emergency Freeze, all automations stop
@@ -19,8 +25,10 @@ EXCEPT `release_zone`.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
@@ -67,11 +75,13 @@ class PresenceRule:
 
 @dataclass
 class ActiveRestriction:
+    restriction_id: str
     zone: str
     doors_locked: list[str]
     rule_id: str
     created_at: float
     expires_at: float
+    pending_recovery: list[str] = field(default_factory=list)
     released: bool = False
     released_by: str | None = None
     released_at: float | None = None
@@ -86,6 +96,7 @@ class PresenceEvent:
     confidence: float = 0.0
     known_present_in_zone: bool = False
     snapshot_ref: str | None = None  # Kept local on host; NEVER placed in notifications
+    frame_id: str | None = None
     timestamp: float = field(default_factory=time.time)
 
 
@@ -96,16 +107,20 @@ class PresenceAutomationEngine:
         self,
         *,
         policy_engine: Any = None,
+        approval_queue: Any = None,
         hub_client: Any = None,
         notification_fn: Callable[[dict[str, Any]], Awaitable[Any]] | None = None,
         door_controller: Callable[[str, str], Awaitable[bool]] | None = None,
+        infrastructure_controller: Callable[[str, str], Awaitable[bool]] | None = None,
         clock: Callable[[], float] = time.time,
         manual_release_grace_seconds: int = 300,
     ):
         self.policy_engine = policy_engine
+        self.approval_queue = approval_queue
         self.hub_client = hub_client
         self._notify = notification_fn
         self._door_controller = door_controller
+        self._infra_controller = infrastructure_controller
         self._clock = clock
         self.manual_release_grace_seconds = max(30, int(manual_release_grace_seconds))
 
@@ -116,9 +131,44 @@ class PresenceAutomationEngine:
         self.face_consents: dict[str, dict[str, Any]] = {}
         self.firing_log: list[dict[str, Any]] = []
 
+        self._zone_locks: dict[str, asyncio.Lock] = {}
         self._unknown_frame_streaks: dict[str, int] = {}
+        self._last_frame_ids: dict[str, str] = {}
         self._last_manual_release: dict[str, float] = {}
-        self._scan_cooldowns: dict[str, float] = {}
+        self._device_scan_cooldowns: dict[str, float] = {}
+        self._zone_scan_cooldowns: dict[str, float] = {}
+        self._expiry_task: asyncio.Task[Any] | None = None
+
+    def _zone_lock(self, zone: str) -> asyncio.Lock:
+        if zone not in self._zone_locks:
+            self._zone_locks[zone] = asyncio.Lock()
+        return self._zone_locks[zone]
+
+    # ---- Background Expiry Lifecycle ----
+
+    def start_expiry_monitor(self, interval_seconds: float = 5.0) -> None:
+        """Start an independent background timer to lift expired restrictions without waiting for events."""
+        if self._expiry_task is not None and not self._expiry_task.done():
+            return
+
+        async def _loop() -> None:
+            while True:
+                await asyncio.sleep(max(0.5, float(interval_seconds)))
+                try:
+                    await self.expire_due_restrictions()
+                except Exception as exc:
+                    logger.warning("Presence expiry sweep error: %r", exc)
+
+        self._expiry_task = asyncio.create_task(_loop())
+
+    async def stop_expiry_monitor(self) -> None:
+        if self._expiry_task is not None:
+            self._expiry_task.cancel()
+            try:
+                await self._expiry_task
+            except asyncio.CancelledError:
+                pass
+            self._expiry_task = None
 
     # ---- Configuration & Consent ----
 
@@ -167,40 +217,94 @@ class PresenceAutomationEngine:
         ttl_seconds: int = 900,
     ) -> dict[str, Any]:
         """Lock non-egress doors in `zone` for a bounded TTL. Refuses egress/life-safety doors."""
-        if self._is_frozen():
-            return {"status": "skipped_frozen", "zone": zone, "doors_locked": [], "egress_skipped": []}
+        if self._door_controller is None:
+            return {
+                "status": "controller_unavailable",
+                "zone": zone,
+                "doors_locked": [],
+                "egress_skipped": [],
+            }
 
-        zone_doors = [d for d in self.doors.values() if d.zone == zone]
-        doors_locked: list[str] = []
-        egress_skipped: list[str] = []
+        async with self._zone_lock(zone):
+            if self._is_frozen():
+                return {"status": "skipped_frozen", "zone": zone, "doors_locked": [], "egress_skipped": []}
 
-        for door in zone_doors:
-            if door.is_protected_egress():
-                egress_skipped.append(door.door_id)
-                continue
-            ok = True
-            if self._door_controller is not None:
-                ok = bool(await self._door_controller(door.door_id, "lock"))
-            if ok:
-                doors_locked.append(door.door_id)
+            now = self._clock()
+            existing = self.active_restrictions.get(zone)
+            if existing is not None and not existing.released and now < existing.expires_at:
+                # Preserve existing restriction & its original expiry deadline (never renew on repeat frames)
+                return {
+                    "status": "already_restricted",
+                    "zone": zone,
+                    "restriction_id": existing.restriction_id,
+                    "doors_locked": list(existing.doors_locked),
+                    "egress_skipped": [],
+                    "expires_at": existing.expires_at,
+                }
 
-        now = self._clock()
-        clamped_ttl = max(60, min(int(ttl_seconds), 86400))
-        if doors_locked:
-            self.active_restrictions[zone] = ActiveRestriction(
-                zone=zone,
-                doors_locked=doors_locked,
-                rule_id=rule_id,
-                created_at=now,
-                expires_at=now + clamped_ttl,
+            zone_doors = [d for d in self.doors.values() if d.zone == zone]
+            clamped_ttl = max(60, min(int(ttl_seconds), 86400))
+            restriction_id = f"restr-{uuid.uuid4().hex[:12]}"
+            egress_skipped: list[str] = []
+            record: ActiveRestriction | None = None
+            frozen_mid_loop = False
+
+            for door in zone_doors:
+                if door.is_protected_egress():
+                    egress_skipped.append(door.door_id)
+                    continue
+                # Re-check Freeze BEFORE every single door command
+                if self._is_frozen():
+                    frozen_mid_loop = True
+                    break
+                try:
+                    ok = bool(await self._door_controller(door.door_id, "lock"))
+                except Exception as exc:
+                    logger.warning("Door lock for %s failed with unknown outcome: %r", door.door_id, exc)
+                    # Track unknown outcome in pending_recovery so release_zone still attempts unlock
+                    if record is None:
+                        record = ActiveRestriction(
+                            restriction_id=restriction_id,
+                            zone=zone,
+                            doors_locked=[],
+                            pending_recovery=[door.door_id],
+                            rule_id=rule_id,
+                            created_at=now,
+                            expires_at=now + clamped_ttl,
+                        )
+                        self.active_restrictions[zone] = record
+                    else:
+                        record.pending_recovery.append(door.door_id)
+                    continue
+
+                if ok:
+                    # Record each confirmed lock immediately before awaiting next door
+                    if record is None:
+                        record = ActiveRestriction(
+                            restriction_id=restriction_id,
+                            zone=zone,
+                            doors_locked=[door.door_id],
+                            rule_id=rule_id,
+                            created_at=now,
+                            expires_at=now + clamped_ttl,
+                        )
+                        self.active_restrictions[zone] = record
+                    else:
+                        record.doors_locked.append(door.door_id)
+
+            doors_locked = list(record.doors_locked) if record else []
+            status = (
+                "partial_frozen" if (frozen_mid_loop and doors_locked)
+                else ("skipped_frozen" if frozen_mid_loop else ("restricted" if doors_locked else "no_lockable_doors"))
             )
-        return {
-            "status": "restricted" if doors_locked else "no_lockable_doors",
-            "zone": zone,
-            "doors_locked": doors_locked,
-            "egress_skipped": egress_skipped,
-            "ttl_seconds": clamped_ttl,
-        }
+            return {
+                "status": status,
+                "zone": zone,
+                "restriction_id": record.restriction_id if record else None,
+                "doors_locked": doors_locked,
+                "egress_skipped": egress_skipped,
+                "ttl_seconds": clamped_ttl,
+            }
 
     async def release_zone(
         self,
@@ -208,43 +312,80 @@ class PresenceAutomationEngine:
         *,
         released_by: str = "operator",
         manual: bool = True,
+        expected_restriction_id: str | None = None,
     ) -> dict[str, Any]:
         """One-tap release for a restricted zone. ALWAYS permitted, even under Emergency Freeze."""
-        now = self._clock()
-        if manual:
-            self._last_manual_release[zone] = now
+        async with self._zone_lock(zone):
+            now = self._clock()
+            if manual:
+                self._last_manual_release[zone] = now
 
-        active = self.active_restrictions.get(zone)
-        if active is None or active.released:
-            return {"status": "already_clear", "zone": zone, "doors_released": []}
+            active = self.active_restrictions.get(zone)
+            if active is None or active.released:
+                return {"status": "already_clear", "zone": zone, "doors_released": [], "doors_failed": []}
+            if expected_restriction_id is not None and active.restriction_id != expected_restriction_id:
+                return {"status": "superseded", "zone": zone, "doors_released": [], "doors_failed": []}
 
-        released_doors: list[str] = []
-        for door_id in active.doors_locked:
-            if self._door_controller is not None:
-                await self._door_controller(door_id, "unlock")
-            released_doors.append(door_id)
+            targets = list(dict.fromkeys([*active.doors_locked, *active.pending_recovery]))
+            released_doors: list[str] = []
+            failed_doors: list[str] = []
 
-        active.released = True
-        active.released_by = released_by
-        active.released_at = now
-        self.active_restrictions.pop(zone, None)
-        return {
-            "status": "released",
-            "zone": zone,
-            "doors_released": released_doors,
-            "released_by": released_by,
-        }
+            for door_id in targets:
+                if self._door_controller is None:
+                    failed_doors.append(door_id)
+                    continue
+                try:
+                    ok = bool(await self._door_controller(door_id, "unlock"))
+                except Exception as exc:
+                    logger.warning("Failed unlocking door %s in zone %s: %r", door_id, zone, exc)
+                    ok = False
+                if ok:
+                    released_doors.append(door_id)
+                else:
+                    failed_doors.append(door_id)
+
+            if failed_doors:
+                # Retain failed doors on active restriction for retry (even under Freeze)
+                active.doors_locked = list(failed_doors)
+                active.pending_recovery = []
+                return {
+                    "status": "partial_release",
+                    "zone": zone,
+                    "doors_released": released_doors,
+                    "doors_failed": failed_doors,
+                    "released_by": released_by,
+                }
+
+            active.released = True
+            active.released_by = released_by
+            active.released_at = now
+            self.active_restrictions.pop(zone, None)
+            return {
+                "status": "released",
+                "zone": zone,
+                "doors_released": released_doors,
+                "doors_failed": [],
+                "released_by": released_by,
+            }
 
     async def expire_due_restrictions(self) -> list[dict[str, Any]]:
-        """Lift any active zone restrictions whose TTL has elapsed."""
+        """Lift any active zone restrictions whose TTL has elapsed (isolating per-zone failures)."""
         now = self._clock()
-        expired_zones = [
-            zone for zone, r in list(self.active_restrictions.items())
+        expired = [
+            (zone, r.restriction_id)
+            for zone, r in list(self.active_restrictions.items())
             if not r.released and now >= r.expires_at
         ]
         results: list[dict[str, Any]] = []
-        for zone in expired_zones:
-            results.append(await self.release_zone(zone, released_by="ttl_expiry", manual=False))
+        for zone, restr_id in expired:
+            results.append(
+                await self.release_zone(
+                    zone,
+                    released_by="ttl_expiry",
+                    manual=False,
+                    expected_restriction_id=restr_id,
+                )
+            )
         return results
 
     # ---- Presence Event Evaluation ----
@@ -259,6 +400,12 @@ class PresenceAutomationEngine:
             return [{"status": "skipped_frozen", "zone": event.zone}]
 
         is_unknown = not event.person_name or event.person_name.strip().lower() == "unknown"
+        # Deduplicate repeated delivery of the same frame_id per zone
+        if event.frame_id is not None and self._last_frame_ids.get(event.zone) == event.frame_id:
+            return [{"status": "duplicate_frame", "zone": event.zone, "frame_id": event.frame_id}]
+        if event.frame_id is not None:
+            self._last_frame_ids[event.zone] = event.frame_id
+
         if is_unknown:
             self._unknown_frame_streaks[event.zone] = self._unknown_frame_streaks.get(event.zone, 0) + 1
         else:
@@ -269,16 +416,19 @@ class PresenceAutomationEngine:
             if not rule.enabled or rule.zone != event.zone:
                 continue
 
+            has_restrict = any(str(a.get("type") or "") == "access.restrict_zone" for a in rule.actions)
+            required_unknown_frames = max(2, rule.unknown_min_frames) if has_restrict else max(1, rule.unknown_min_frames)
+
             # Match check + confidence / multi-frame confirmation
             if rule.person_match == "unknown":
                 if not is_unknown:
                     continue
-                if self._unknown_frame_streaks.get(event.zone, 0) < max(1, rule.unknown_min_frames):
+                if self._unknown_frame_streaks.get(event.zone, 0) < required_unknown_frames:
                     outcomes.append({
                         "rule_id": rule.rule_id,
                         "status": "awaiting_frames",
                         "frames_seen": self._unknown_frame_streaks[event.zone],
-                        "frames_required": rule.unknown_min_frames,
+                        "frames_required": required_unknown_frames,
                     })
                     continue
             elif rule.person_match.startswith("known:"):
@@ -302,8 +452,13 @@ class PresenceAutomationEngine:
             for action in rule.actions:
                 act_type = str(action.get("type") or "")
 
-                if act_type == "access.restrict_zone":
-                    # False-unknown lockout suppression
+                if act_type == "access.release_zone":
+                    rule_results.append({
+                        "action": act_type,
+                        "status": "rejected",
+                        "reason": "access.release_zone is operator/timer-only and cannot be triggered by a camera rule",
+                    })
+                elif act_type == "access.restrict_zone":
                     recent_release = (
                         now - self._last_manual_release.get(event.zone, 0.0)
                     ) < self.manual_release_grace_seconds
@@ -330,7 +485,6 @@ class PresenceAutomationEngine:
                     rule_results.append({"action": act_type, **res})
 
                 elif act_type == "infrastructure.control":
-                    # Convenience actions (lights/music/climate) run immediately; physical access forbidden here
                     subsystem = str(action.get("subsystem") or "lights").lower()
                     if subsystem in ("door", "lock", "access", "alarm"):
                         rule_results.append({
@@ -338,28 +492,30 @@ class PresenceAutomationEngine:
                             "status": "denied",
                             "reason": "Physical access must use access.restrict_zone",
                         })
-                    else:
+                    elif is_unknown or event.confidence < rule.min_confidence:
+                        rule_results.append({
+                            "action": act_type,
+                            "status": "below_confidence",
+                            "reason": "Recognised identity above min_confidence required for infrastructure control",
+                        })
+                    elif self._infra_controller is None:
                         rule_results.append({
                             "action": act_type,
                             "subsystem": subsystem,
-                            "command": action.get("command", "on"),
-                            "status": "executed",
+                            "status": "controller_unavailable",
+                        })
+                    else:
+                        cmd = str(action.get("command") or "on")
+                        ok = bool(await self._infra_controller(subsystem, cmd))
+                        rule_results.append({
+                            "action": act_type,
+                            "subsystem": subsystem,
+                            "command": cmd,
+                            "status": "executed" if ok else "failed",
                         })
 
-            # Privacy-preserving notification (zero raw face images or host snapshot paths)
-            if self._notify is not None and rule_results:
-                label = "unknown person" if is_unknown else str(event.person_name)
-                await self._notify({
-                    "type": "notify.presence",
-                    "source_app": "openeye",
-                    "severity": "high" if is_unknown else "low",
-                    "title": f"{label.title()} in {event.zone}",
-                    "body": f"{label} detected in {event.zone} (rule {rule.rule_id}).",
-                    "deep_link": f"/openeye/zones/{event.zone}",
-                    "dedupe_key": f"presence:{rule.rule_id}:{event.zone}:{int(now // 60)}",
-                })
-
-            firing_entry = {
+            # Record audit entry BEFORE notification so a notification failure never erases the outcome
+            firing_entry: dict[str, Any] = {
                 "rule_id": rule.rule_id,
                 "zone": event.zone,
                 "camera_id": event.camera_id,
@@ -369,7 +525,29 @@ class PresenceAutomationEngine:
                 "timestamp": now,
             }
             self.firing_log.append(firing_entry)
-            outcomes.append({"rule_id": rule.rule_id, "status": "fired", "results": rule_results})
+
+            # Privacy-preserving notification (zero raw face images or host snapshot paths)
+            notification_error: str | None = None
+            if self._notify is not None and rule_results:
+                label = "unknown person" if is_unknown else str(event.person_name)
+                try:
+                    await self._notify({
+                        "type": "notify.presence",
+                        "source_app": "openeye",
+                        "severity": "high" if is_unknown else "low",
+                        "title": f"{label.title()} in {event.zone}",
+                        "body": f"{label} detected in {event.zone} (rule {rule.rule_id}).",
+                        "deep_link": f"/openeye/zones/{event.zone}",
+                        "dedupe_key": f"presence:{rule.rule_id}:{event.zone}:{int(now // 60)}",
+                    })
+                except Exception as exc:
+                    notification_error = str(exc)
+                    logger.warning("Presence notification failed for rule %s: %r", rule.rule_id, exc)
+
+            outcome: dict[str, Any] = {"rule_id": rule.rule_id, "status": "fired", "results": rule_results}
+            if notification_error is not None:
+                outcome["notification_error"] = notification_error
+            outcomes.append(outcome)
 
         return outcomes
 
@@ -380,25 +558,33 @@ class PresenceAutomationEngine:
         event: PresenceEvent,
         now: float,
     ) -> dict[str, Any]:
-        """Queue `scan.request` ONLY for devices with recorded consent AND owner approval."""
+        """Queue `scan.request` ONLY for devices with recorded consent AND verified owner approval."""
         device_id = str(action.get("device_id") or "").strip()
         profile = str(action.get("profile") or "quick").strip().lower()
         if not device_id:
             return {"status": "skipped", "reason": "missing device_id"}
 
-        # Per-device and per-zone cooldown check
-        cooldown_key = f"{event.zone}:{device_id}"
-        last_ts = self._scan_cooldowns.get(cooldown_key, 0.0)
-        if last_ts and (now - last_ts) < rule.cooldown_seconds:
+        # Independent per-device AND per-zone cooldown checks
+        dev_last = self._device_scan_cooldowns.get(device_id, 0.0)
+        if dev_last and (now - dev_last) < rule.cooldown_seconds:
             return {
                 "status": "cooldown_active",
+                "scope": "device",
                 "device_id": device_id,
-                "retry_after_seconds": int(rule.cooldown_seconds - (now - last_ts)),
+                "retry_after_seconds": int(rule.cooldown_seconds - (now - dev_last)),
+            }
+        zone_last = self._zone_scan_cooldowns.get(event.zone, 0.0)
+        if zone_last and (now - zone_last) < rule.cooldown_seconds:
+            return {
+                "status": "cooldown_active",
+                "scope": "zone",
+                "device_id": device_id,
+                "retry_after_seconds": int(rule.cooldown_seconds - (now - zone_last)),
             }
 
         # Enforce BOTH Global Constraint conditions:
         # 1) Recorded device owner consent / AUP acceptance (never assumed)
-        # 2) Ecosystem owner standing auto-scan grant or explicit per-run approval
+        # 2) Ecosystem owner standing auto-scan grant OR verified approval queue record
         if self.policy_engine is None:
             return {"status": "awaiting_consent", "device_id": device_id, "reason": "No policy engine configured"}
 
@@ -423,26 +609,47 @@ class PresenceAutomationEngine:
                 profile=profile,
                 initiator="openeye_presence",
             )
+
+        verified_approval = False
         approved_ref = action.get("approved_ref")
-        if not has_grant and not approved_ref:
+        if not has_grant and isinstance(approved_ref, str) and approved_ref.strip() and self.approval_queue is not None:
+            lookup = getattr(self.approval_queue, "get", None)
+            if callable(lookup):
+                rec = lookup(approved_ref.strip())
+                if (
+                    isinstance(rec, dict)
+                    and rec.get("status") == "approved"
+                    and rec.get("action") == "scan.request"
+                    and (rec.get("target") or {}).get("identifier") == device_id
+                ):
+                    verified_approval = True
+
+        if not has_grant and not verified_approval:
             return {
                 "status": "awaiting_approval",
                 "device_id": device_id,
-                "reason": "Device has consent but lacks standing auto-scan designation or per-run owner approval",
+                "reason": "Device has consent but lacks standing auto-scan designation or verified owner approval",
             }
 
-        self._scan_cooldowns[cooldown_key] = now
-        if self.hub_client is not None and hasattr(self.hub_client, "invoke"):
-            resp = await self.hub_client.invoke(
-                capability="scan.request",
-                target={"scope": "local", "identifier": device_id},
-                parameters={
-                    "target_device": device_id,
-                    "profile": profile,
-                    "offline": True,
-                    "public_key_fingerprint": enrolled.get("public_key_fingerprint"),
-                },
-                rationale=f"WP11 presence rule {rule.rule_id} in {event.zone}",
-            )
-            return {"status": "scan_queued", "device_id": device_id, "hub_response": resp}
-        return {"status": "scan_queued", "device_id": device_id}
+        # Require an actual hub client; NEVER fabricate `scan_queued` or record cooldown when hub is absent
+        if self.hub_client is None or not hasattr(self.hub_client, "invoke"):
+            return {"status": "hub_unavailable", "device_id": device_id, "reason": "Ecosystem hub client unavailable"}
+
+        resp = await self.hub_client.invoke(
+            capability="scan.request",
+            target={"scope": "local", "identifier": device_id},
+            parameters={
+                "target_device": device_id,
+                "profile": profile,
+                "offline": True,
+                "public_key_fingerprint": enrolled.get("public_key_fingerprint"),
+            },
+            rationale=f"WP11 presence rule {rule.rule_id} in {event.zone}",
+        )
+        if not isinstance(resp, dict) or resp.get("status") in ("failed", "denied", "provider_unavailable"):
+            return {"status": "hub_rejected", "device_id": device_id, "hub_response": resp}
+
+        # Record BOTH device and zone cooldowns ONLY after hub acceptance
+        self._device_scan_cooldowns[device_id] = now
+        self._zone_scan_cooldowns[event.zone] = now
+        return {"status": "scan_queued", "device_id": device_id, "hub_response": resp}
