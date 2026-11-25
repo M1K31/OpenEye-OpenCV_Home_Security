@@ -666,6 +666,15 @@ UI Design Inspiration:
 
 **Made with ❤️ by Smart Industries LLC** | **100% Free Forever** | **No Subscriptions**
 
+## 🛡️ Presence Automations (`appEcosystem` Integration)
+
+OpenEye supports owner-defined presence automation rules (`opencv_surveillance/backend/core/presence_automations.py`) executing through the shared ecosystem policy and approval controls:
+
+1. **Restrict Access on Unknown Person (`access.restrict_zone` / `access.release_zone`)**: Requires multi-frame unknown-person confirmation, suppresses false unknowns (known-person presence, recent manual release, or guests-expected mode), **never locks life-safety or egress doors**, enforces TTL auto-release, and provides operator-only one-tap release with partial-release retry.
+2. **Presence-Triggered Vulnerability Scans (`scan.request`)**: Queues scans only for designated devices that have both recorded owner/AUP consent **and** verified ecosystem owner approval, respecting separate per-device and per-zone cooldowns.
+3. **Identity-Driven Infrastructure (`infrastructure.control`)**: Triggers low-risk `observe` convenience actions (lights, media) for known identities while holding any physical access change to containment safety rules.
+4. **Freeze Preemption**: All automations halt immediately under an active mesh Freeze except operator-initiated release.
+
 ## 📦 Deployment Notes
 
 ### Raspberry Pi Deployment
