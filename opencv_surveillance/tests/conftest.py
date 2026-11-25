@@ -11,10 +11,40 @@ import os
 # tests pass enabled=True explicitly so the throttling path is still covered.
 os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
 
+import urllib.error
+import urllib.request
+import httpx
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
+
+_GUARD_MESSAGE = "blocked by the test-suite network guard (use @pytest.mark.allow_network to opt out)"
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "allow_network: let this test open real HTTP connections")
+
+
+@pytest.fixture(autouse=True)
+def _no_real_http(request, monkeypatch):
+    """Refuse real outbound HTTP during tests so runs never touch live local services."""
+    if request.node.get_closest_marker("allow_network"):
+        return
+
+    def _blocked_sync(self, req):
+        raise httpx.ConnectError(f"{req.url}: {_GUARD_MESSAGE}", request=req)
+
+    async def _blocked_async(self, req):
+        raise httpx.ConnectError(f"{req.url}: {_GUARD_MESSAGE}", request=req)
+
+    def _blocked_urlopen(url, *args, **kwargs):
+        target = getattr(url, "full_url", url)
+        raise urllib.error.URLError(f"{target}: {_GUARD_MESSAGE}")
+
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", _blocked_sync)
+    monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", _blocked_async)
+    monkeypatch.setattr(urllib.request, "urlopen", _blocked_urlopen)
 
 from backend.database.session import Base
 from backend.database import models
